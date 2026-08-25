@@ -43,7 +43,8 @@ stays `conditional` and states why. With a pin, a key that does not match is
 
 ### 3. A repeated ref hid the amount that was unaccounted for — fixed
 
-Reported by Pablo Play.
+Reported by Pablo Play, with a written repro in
+[issue #1](https://github.com/dogrucanemek-alt/cedulon/issues/1).
 
 A settlement injected under an existing receipt's ref sent both entries down
 the duplicate-ref path, which skipped them from the ref-keyed match. The audit
@@ -105,13 +106,30 @@ than failing. The defect was that nothing surfaced it; that is now fixed. Making
 an unpinned audit fail outright would be a normative change and is not one this
 implementation should make on its own.
 
-Two further observations, not yet addressed:
+Two further observations, not yet addressed. Both reporters agreed these are
+the right next controls, so they are queued for -01 alongside the normative
+items below:
 
 - The pin is compared as normalized PEM text rather than as SPKI DER bytes, so
   a rail that publishes the same key in another encoding would be reported as a
   mismatch.
 - Nothing checks that the rows inside an extract fall within the window the
-  extract declares.
+  extract declares. Every settlement row outside that window should be a named
+  finding.
+
+## Round 1 verification, by the reporters
+
+Both reporters re-ran the repair independently rather than take the claim.
+
+Iman Schrock verified commit `bdddc4c` from a clean worktree: TypeScript
+passed, all 97 tests passed, and the audit exposed the conditional guarantee
+and its warning as described. Iman declined the offer to add the attached test
+file, on the grounds that cases 18–25 already cover both findings.
+
+Pablo Play re-ran the original repro against the same commit before filing
+issue #1, so the issue records the behaviour before and after the fix rather
+than the original report alone. The output now names the gap:
+`ref x402-real settled 8 USD against 1 USD receipted; 7 USD unaccounted`.
 
 ## What -00 already required
 
