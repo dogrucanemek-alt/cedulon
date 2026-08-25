@@ -170,6 +170,7 @@ manifest, receipt, and delivery hash. Cedulon does not adjudicate.
 | MUST-T8-4 | The Dispute Evidence Bundle MUST NOT be described as an arbitral award or escrow release. |
 | SHOULD-T8-5 | Manifests SHOULD reference an AP2 mandate hash when one exists. |
 | MAY-T8-6 | Parties MAY add an optional escrow actor as a third-party role interface; this project MUST NOT implement custody. |
+| MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
 
 ### T9 — PII leakage into the transparency log
 

@@ -3,7 +3,7 @@
 
 
 Network Working Group                                        E. C. Dogru
-Internet-Draft                                               Independent
+Internet-Draft                           VERAX TEKNOLOJI LIMITED SIRKETI
 Intended status: Informational                            25 August 2026
 Expires: 26 February 2027
 
@@ -298,12 +298,12 @@ Internet-Draft                   Cedulon                     August 2026
       | manifestHash    | SHA-256 of the signed manifest, or       |
       |                 | absent when no-manifest is true          |
       +-----------------+------------------------------------------+
-      | no-manifest     | Boolean; MUST be true if and only if     |
+      | noManifest      | Boolean; MUST be true if and only if     |
       |                 | manifestHash is absent                   |
       +-----------------+------------------------------------------+
       | x402PaymentRef  | Optional rail payment reference          |
       +-----------------+------------------------------------------+
-      | timestamp       | POSIX milliseconds                       |
+      | timestampMs     | POSIX milliseconds                       |
       +-----------------+------------------------------------------+
       | nonce           | Unique spend nonce                       |
       +-----------------+------------------------------------------+
@@ -595,7 +595,7 @@ Internet-Draft                   Cedulon                     August 2026
    Parties MAY name an escrow actor in a Trade Manifest as a third-party
    role that holds funds under rules outside this protocol (MAY-T8-6).
    Implementations of this specification MUST NOT take custody or
-   operate escrow MUST-T8-custody.
+   operate escrow (MUST-T8-custody).
 
 13.  IANA Considerations
 
@@ -694,17 +694,17 @@ Internet-Draft                   Cedulon                     August 2026
 
 Acknowledgments
 
-   Field survey notes are recorded in the companion repository.  This
-   -00 seed is not an IETF working-group item.
+   Field survey notes, the threat-model trace table, and a reference
+   implementation with a runnable verification suite are recorded in the
+   companion repository at https://github.com/dogrucanemek-alt/cedulon
+   (https://github.com/dogrucanemek-alt/cedulon).  This -00 seed is not
+   an IETF working-group item.
 
 Author's Address
 
    Emek Can Dogru
-   Independent
-
-
-
-
+   VERAX TEKNOLOJI LIMITED SIRKETI
+   Email: e.dogru@conarium.dev
 
 
 

@@ -25,7 +25,9 @@ author:
   -
     ins: E. C. Dogru
     name: Emek Can Dogru
-    org: Independent
+    org: VERAX TEKNOLOJI LIMITED SIRKETI
+    country: Turkiye
+    email: e.dogru@conarium.dev
 normative:
   RFC2119:
   RFC8174:
@@ -219,9 +221,9 @@ Claims (`MUST-T4-3`, `MUST-T4-4`):
 | currency | Currency identifier |
 | policyHash | SHA-256 of the canonical policy document |
 | manifestHash | SHA-256 of the signed manifest, or absent when `no-manifest` is true |
-| no-manifest | Boolean; MUST be true if and only if `manifestHash` is absent |
+| noManifest | Boolean; MUST be true if and only if `manifestHash` is absent |
 | x402PaymentRef | Optional rail payment reference |
-| timestamp | POSIX milliseconds |
+| timestampMs | POSIX milliseconds |
 | nonce | Unique spend nonce |
 | prevReceiptHash | Optional previous receipt hash (`SHOULD-T4-5`) |
 
@@ -436,7 +438,7 @@ Checkpoint suppression (T11):
 Parties MAY name an escrow actor in a Trade Manifest as a third-party role
 that holds funds under rules outside this protocol (`MAY-T8-6`).
 Implementations of this specification MUST NOT take custody or operate
-escrow `MUST-T8-custody`.
+escrow (`MUST-T8-custody`).
 
 # IANA Considerations
 
@@ -458,5 +460,7 @@ defines rail-extract completeness.
 # Acknowledgments
 {:numbered="false"}
 
-Field survey notes are recorded in the companion repository. This -00 seed
-is not an IETF working-group item.
+Field survey notes, the threat-model trace table, and a reference
+implementation with a runnable verification suite are recorded in the
+companion repository at <https://github.com/dogrucanemek-alt/cedulon>.
+This -00 seed is not an IETF working-group item.
