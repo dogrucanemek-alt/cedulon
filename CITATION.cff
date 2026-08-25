@@ -8,6 +8,10 @@ authors:
 repository-code: "https://github.com/dogrucanemek-alt/cedulon"
 url: "https://cedulon.com"
 license: Apache-2.0
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22099792
+    description: "Archived -00 release (commit e0b4ac8)"
 keywords:
   - agent commerce
   - audit

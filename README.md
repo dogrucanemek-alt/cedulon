@@ -59,8 +59,8 @@ Brand names come from `packages/core/src/brand.ts` only.
 
 ## How to cite
 
-Citation metadata is in `CITATION.cff`. A DOI for archived releases
-will be added here once minted.
+Citation metadata is in `CITATION.cff`. The archived -00 release is
+published as https://doi.org/10.5281/zenodo.22099792
 
 ## License
 

@@ -35,5 +35,6 @@ a40abf847ae122f780b88f9019a2d761aec2d12a459356f8e78945d622f7edbe  draft-dogru-ce
 800f2985a881d451bf6446476741e5816efc769e75fac976c34d99485bf1882f  draft-dogru-cedulon-streaming-00.xml
 ```
 
-A DOI for the archived repository snapshot will be added here once
-minted.
+Archived repository snapshot (this commit's tree as
+`cedulon-00-release-e0b4ac8.zip`, md5 `b80ed228bcaea04a2f1b2887072263f6`):
+https://doi.org/10.5281/zenodo.22099792
