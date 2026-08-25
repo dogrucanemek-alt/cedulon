@@ -17,6 +17,9 @@ import {
   signReceipt,
   type SignedReceipt,
 } from "@cedulon/receipts";
+import { RailLedger, type RailSettlement } from "./rail.ts";
+
+export { RailLedger, type RailSettlement } from "./rail.ts";
 
 export type AdapterKeys = {
   receiptPrivatePem: string;
@@ -66,12 +69,29 @@ export function challenge(req: SpendRequest): PayResult {
   return deny402(req, "payment-required");
 }
 
-export function unguardedSettle(input: PayInput, keys: AdapterKeys, nowMs: number): PayResult {
+export function unguardedSettle(
+  input: PayInput,
+  keys: AdapterKeys,
+  nowMs: number,
+  ledger?: RailLedger,
+): PayResult {
   const naive = naivePayAlwaysAllow(null, input.req);
   if (!naive.allow) {
     return challenge(input.req);
   }
-  return issue(input, keys, nowMs, "unguarded");
+  return issue(input, keys, nowMs, "unguarded", null, null, ledger);
+}
+
+/** Rail settles with no Cedulon receipt. The audit extract still lists it. */
+export function bypassRailOnly(input: PayInput, nowMs: number, ledger: RailLedger): RailSettlement {
+  const row: RailSettlement = {
+    ref: `bypass-${input.req.nonce}`,
+    amount: input.req.amount.toString(),
+    currency: input.req.currency,
+    timestampMs: nowMs,
+  };
+  ledger.record(row);
+  return row;
 }
 
 export function gatedSettle(
@@ -111,7 +131,28 @@ export function gatedSettle(
       return deny402(input.req, consumed.reason);
     }
   }
-  return issue(input, keys, nowMs, `x402-${input.req.nonce}`, prevReceiptHash, engine);
+  return issue(input, keys, nowMs, `x402-${input.req.nonce}`, prevReceiptHash, engine, undefined);
+}
+
+export function gatedSettleWithLedger(
+  engine: PolicyEngine | null,
+  input: PayInput,
+  keys: AdapterKeys,
+  nowMs: number,
+  ledger: RailLedger,
+  prevReceiptHash: string | null = null,
+): PayResult {
+  const result = gatedSettle(engine, input, keys, nowMs, prevReceiptHash);
+  if (result.status === 200) {
+    const ref = result.receipt.claims.x402PaymentRef ?? `x402-${input.req.nonce}`;
+    ledger.record({
+      ref,
+      amount: result.receipt.claims.amount,
+      currency: result.receipt.claims.currency,
+      timestampMs: result.receipt.claims.timestampMs,
+    });
+  }
+  return result;
 }
 
 function issue(
@@ -121,10 +162,19 @@ function issue(
   x402Ref: string,
   prevReceiptHash: string | null = null,
   engine: PolicyEngine | null = null,
+  ledger?: RailLedger,
 ): PayResult {
   const policyHash = engine
     ? sha256Hex(canonical(policyDocument(engine.policy)))
     : sha256Hex("no-policy");
+  if (ledger) {
+    ledger.record({
+      ref: x402Ref,
+      amount: input.req.amount.toString(),
+      currency: input.req.currency,
+      timestampMs: nowMs,
+    });
+  }
   const receipt = signReceipt(
     {
       payer: input.payer,
