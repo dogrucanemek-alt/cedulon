@@ -9,8 +9,11 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "customConditions": ["development"],
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@cedulon/*": ["packages/*/src/index.ts"]
+    }
   },
   "include": ["packages/**/*.ts", "examples/**/*.ts", "tests/**/*.ts"]
 }

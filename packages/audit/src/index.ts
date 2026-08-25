@@ -1,3 +1,5 @@
+import { createPublicKey } from "node:crypto";
+
 import {
   findCheckpointChainBreak,
   findEquivocation,
@@ -27,6 +29,7 @@ export type FindingCode =
   | "extract-key-mismatch"
   | "extract-scope-mismatch"
   | "extract-settlement-mismatch"
+  | "trust-key-unreadable"
   | "malformed-amount"
   | "countersign-bad"
   | "ok";
@@ -369,8 +372,33 @@ export function findEquivocationFinding(checkpoints: SignedCheckpoint[]): Findin
   };
 }
 
-function normalizePem(pem: string): string {
-  return pem.replace(/\s+/g, "");
+/**
+ * A key is bytes, not text. Compare SPKI DER so the same key still matches
+ * when a rail publishes it in another envelope, and so an unreadable key is
+ * distinguishable from one that simply differs.
+ */
+function toSpkiDer(key: string): Buffer | null {
+  const trimmed = key.trim();
+  const attempts = trimmed.includes("-----BEGIN")
+    ? [{ key: trimmed, format: "pem" as const }]
+    : [
+        {
+          key: Buffer.from(trimmed.replace(/\s+/g, ""), "base64"),
+          format: "der" as const,
+          type: "spki" as const,
+        },
+      ];
+  for (const attempt of attempts) {
+    try {
+      return createPublicKey(attempt as Parameters<typeof createPublicKey>[0]).export({
+        type: "spki",
+        format: "der",
+      });
+    } catch {
+      // fall through to the next shape
+    }
+  }
+  return null;
 }
 
 function settlementKey(s: RailSettlement): string {
@@ -409,6 +437,22 @@ export function audit(input: {
 
     const signatureVerifies = verifyRailExtract(input.extract);
 
+    // An extract that declares one window and carries rows from outside it has
+    // not reported on the period it claims to cover. This holds whether or not
+    // a key was pinned, so it is checked before the trust branch.
+    for (const row of input.extract.body.settlements) {
+      if (
+        row.timestampMs < input.extract.body.windowStartMs ||
+        row.timestampMs >= input.extract.body.windowEndMs
+      ) {
+        findings.push({
+          code: "extract-scope-mismatch",
+          id: row.ref,
+          detail: `settlement ${row.ref} at ${row.timestampMs} is outside the declared window ${input.extract.body.windowStartMs}..${input.extract.body.windowEndMs}`,
+        });
+      }
+    }
+
     if (!input.trust) {
       warnings.push({
         code: "unauthenticated-extract",
@@ -425,18 +469,30 @@ export function audit(input: {
       // already verified would fail open on the worse input.
       const t = input.trust;
       const body = input.extract.body;
-      if (!signatureVerifies) {
+      const pinnedDer = toSpkiDer(t.publicKeyPem);
+      if (pinnedDer === null) {
+        // The verifier's own configuration is broken. Saying "mismatch" here
+        // would blame the extract for a key we could not read.
+        findings.push({
+          code: "trust-key-unreadable",
+          id: "extract",
+          detail: "the pinned rail key could not be read as a public key; supply PEM or base64 SPKI",
+        });
+      } else if (!signatureVerifies) {
         findings.push({
           code: "extract-key-mismatch",
           id: "extract",
           detail: "a rail key was pinned but the extract signature does not verify against the key it carries",
         });
-      } else if (normalizePem(input.extract.publicKeyPem) !== normalizePem(t.publicKeyPem)) {
-        findings.push({
-          code: "extract-key-mismatch",
-          id: "extract",
-          detail: "rail extract is signed by a key other than the pinned rail key",
-        });
+      } else {
+        const carriedDer = toSpkiDer(input.extract.publicKeyPem);
+        if (carriedDer === null || !carriedDer.equals(pinnedDer)) {
+          findings.push({
+            code: "extract-key-mismatch",
+            id: "extract",
+            detail: "rail extract is signed by a key other than the pinned rail key",
+          });
+        }
       }
       if (t.accountId !== undefined && body.accountId !== t.accountId) {
         findings.push({

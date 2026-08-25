@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { createPublicKey } from "node:crypto";
 import { describe, it } from "node:test";
 
 import { audit, formatAudit } from "@cedulon/audit";
@@ -8,6 +9,7 @@ import {
   RailLedger,
   gatedSettleWithLedger,
   generateExtractKeys,
+  signRailExtract,
   type AdapterKeys,
 } from "@cedulon/x402-adapter";
 
@@ -239,6 +241,123 @@ describe("rail extract binding", () => {
     );
     assert.match(green, /guarantee=unconditional/);
     assert.equal(/warn\t/.test(green), false);
+  });
+
+  it("26 RED then GREEN: the same rail key in another encoding still matches the pin", () => {
+    const rail = generateExtractKeys();
+    const ledger = new RailLedger();
+    const extract = ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem);
+
+    // A rail that publishes its key as bare base64 SPKI rather than PEM. Same
+    // key, same bytes; only the envelope differs. Comparing PEM text called
+    // this a mismatch, which fails closed against an honest rail.
+    const bareBase64 = createPublicKey(rail.publicKeyPem)
+      .export({ type: "spki", format: "der" })
+      .toString("base64");
+
+    const green = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      trust: { publicKeyPem: bareBase64 },
+    });
+    assert.equal(green.ok, true, "the same key in another encoding is the same key");
+    assert.equal(green.guarantee, "unconditional");
+
+    const other = generateExtractKeys();
+    const red = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      trust: { publicKeyPem: other.publicKeyPem },
+    });
+    assert.equal(red.findings.some((f) => f.code === "extract-key-mismatch"), true);
+  });
+
+  it("27 RED then GREEN: a pin the audit cannot read is named, not silently a mismatch", () => {
+    const rail = generateExtractKeys();
+    const ledger = new RailLedger();
+    const extract = ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem);
+
+    // RED before the fix: an unreadable pin compared unequal and was reported
+    // as extract-key-mismatch, so an operator could not tell a forged extract
+    // from their own malformed configuration.
+    const red = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      trust: { publicKeyPem: "-----BEGIN PUBLIC KEY-----\nnot-a-key\n-----END PUBLIC KEY-----" },
+    });
+    assert.equal(red.ok, false, "an unreadable pin fails closed");
+    assert.equal(red.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(
+      red.findings.some((f) => f.code === "extract-key-mismatch"),
+      false,
+      "and is not confused with a key that simply does not match",
+    );
+
+    const green = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      trust: { publicKeyPem: rail.publicKeyPem },
+    });
+    assert.equal(green.ok, true);
+  });
+
+  it("28 RED then GREEN: a settlement outside the extract's declared window is named", () => {
+    const rail = generateExtractKeys();
+    // The rail declares one window but carries a row from outside it. Nothing
+    // checked that the rows and the declared window agree, so the extract
+    // could cover a period it did not actually report on.
+    const strayed = signRailExtract(
+      {
+        accountId: "acct-1",
+        railId: "rail-1",
+        windowStartMs: NOW,
+        windowEndMs: NOW + 1_000,
+        settlements: [
+          { ref: "inside", amount: "1", currency: "USD", timestampMs: NOW + 10 },
+          { ref: "strayed", amount: "9", currency: "USD", timestampMs: NOW + 5_000 },
+        ],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+
+    const red = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: strayed,
+      trust: { publicKeyPem: rail.publicKeyPem },
+    });
+    const stray = red.findings.find((f) => f.code === "extract-scope-mismatch" && f.id === "strayed");
+    assert.ok(stray, "the row outside the declared window is named by its ref");
+    assert.match(stray.detail, /outside the declared window/);
+    assert.equal(
+      red.findings.some((f) => f.code === "extract-scope-mismatch" && f.id === "inside"),
+      false,
+      "the row inside the window is not flagged",
+    );
+
+    const clean = signRailExtract(
+      {
+        accountId: "acct-1",
+        railId: "rail-1",
+        windowStartMs: NOW,
+        windowEndMs: NOW + 1_000,
+        settlements: [{ ref: "inside", amount: "1", currency: "USD", timestampMs: NOW + 10 }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const green = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: clean,
+      trust: { publicKeyPem: rail.publicKeyPem },
+    });
+    assert.equal(green.findings.some((f) => f.code === "extract-scope-mismatch"), false);
   });
 
   it("25 RED then GREEN: an amount the audit cannot read is a finding, not a crash", () => {

@@ -106,16 +106,30 @@ than failing. The defect was that nothing surfaced it; that is now fixed. Making
 an unpinned audit fail outright would be a normative change and is not one this
 implementation should make on its own.
 
-Two further observations, not yet addressed. Both reporters agreed these are
-the right next controls, so they are queued for -01 alongside the normative
-items below:
+Two further observations were named here as open. Both reporters agreed they
+were the right next controls, and both are now implemented; cases 26–28 cover
+them.
 
-- The pin is compared as normalized PEM text rather than as SPKI DER bytes, so
-  a rail that publishes the same key in another encoding would be reported as a
-  mismatch.
-- Nothing checks that the rows inside an extract fall within the window the
-  extract declares. Every settlement row outside that window should be a named
-  finding.
+### 8. The pin was compared as PEM text — fixed
+
+Text comparison tolerated whitespace differences but not envelope differences:
+the same key published as bare base64 SPKI rather than PEM compared unequal, so
+an honest rail could be reported as a mismatch. Keys are now compared as SPKI
+DER bytes, and PEM or bare base64 are both accepted for the pin.
+
+The same change separated two failures that used to look identical. A pin the
+audit cannot read at all is now `trust-key-unreadable` rather than
+`extract-key-mismatch`, so a broken local configuration is distinguishable from
+an extract signed by the wrong key.
+
+### 9. Rows outside the declared window were never checked — fixed
+
+An extract declares a window and carries settlement rows. Nothing compared the
+two, so an extract could claim to cover a period while carrying rows from
+outside it. Each row outside the declared window is now
+`extract-scope-mismatch`, named by its `ref`. This runs whether or not a key is
+pinned, because it is a question about the extract's internal consistency
+rather than about trust.
 
 ## Round 1 verification, by the reporters
 
@@ -157,8 +171,13 @@ is already there, two are new requirements:
 - New. A `ref` that repeats is reconciled by aggregate amount per currency, so
   the unaccounted amount is named. -00 keys the match on each unique `ref`,
   which is what allowed a repeated ref to drop out of the comparison.
+- New. The pinned key is compared as SPKI DER rather than as encoded text, so
+  the same key in a different envelope is the same key.
+- New. Every settlement row outside the extract's declared window is a named
+  finding, so a declared window and the rows it carries cannot disagree
+  silently.
 
-The implementation also now emits three finding codes that -00 does not define:
-`extract-key-mismatch`, `extract-scope-mismatch`, and
-`extract-settlement-mismatch`, along with `malformed-amount`. The finding code
-table moves to -01 with them.
+The implementation also now emits finding codes that -00 does not define:
+`extract-key-mismatch`, `extract-scope-mismatch`, `extract-settlement-mismatch`,
+`trust-key-unreadable`, and `malformed-amount`. The finding code table moves to
+-01 with them.
