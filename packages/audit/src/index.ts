@@ -374,7 +374,7 @@ function normalizePem(pem: string): string {
 }
 
 function settlementKey(s: RailSettlement): string {
-  return [s.ref, s.amount, s.currency, s.timestampMs].join(" ");
+  return [s.ref, s.amount, s.currency, s.timestampMs].join("\u0000");
 }
 
 function sameSettlements(a: RailSettlement[], b: RailSettlement[]): boolean {
