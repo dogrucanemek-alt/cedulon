@@ -25,17 +25,29 @@ npm run demo
 
 `npm run demo:unguarded` shows the unprotected hole: 100/100 allows.
 
+`npm run audit` must exit 0 (`audit: balanced`).
+
+`npm run demo:bypass` must exit non-zero:
+`audit: 1 settlement without receipt → FAIL`.
+
+A third party can reproduce this without trusting us:
+`docs/RUN_AS_VERIFIER.md`.
+
 ## Layout
 
 ```
 packages/core           policy engine (no npm dependencies)
+packages/cose           deterministic CBOR + COSE_Sign1 (Ed25519)
 packages/manifest       signed trade manifest
-packages/receipts       signed spend receipt + dispute bundle + SCITT stub
+packages/receipts       spend receipt (COSE default, JSON legacy)
+packages/checkpoint     epoch checkpoints + in-process transparency log
+packages/audit          rail-extract completeness checker
 packages/mcp-guard      MCP tools/call wrapper (mock)
-packages/x402-adapter   HTTP 402 adapter (mock rail)
-examples/demo           runaway (3/97) and dispute-evidence demos
+packages/x402-adapter   HTTP 402 adapter + mock rail extract
+examples/demo           runaway, dispute, bypass, audit CLI
 spec/draft-dogru-cedulon-00.md
 THREAT_MODEL.md
+docs/RUN_AS_VERIFIER.md
 ```
 
 Brand names come from `packages/core/src/brand.ts` only.
