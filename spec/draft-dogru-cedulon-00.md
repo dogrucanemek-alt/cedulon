@@ -362,7 +362,7 @@ The service returns a COSE receipt {{RFC9942}}. Embedding that receipt
 yields a Transparent Statement. Cedulon does not define a new transparency
 algorithm.
 
-# Privacy Considerations
+# Privacy Considerations {#privacy}
 
 A public transparency encoding MUST support omitting or hashing payer and
 payee identifiers and MUST support amount redaction or bucket encoding
