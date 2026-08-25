@@ -99,6 +99,20 @@ informative:
         name: Christopher Hopley
     date: 2026-05
     target: https://datatracker.ietf.org/doc/draft-hopley-x402-compliance-receipt/
+  REATTEST:
+    title: "Cedulon Re-Attestation: Carrying Spend Evidence Across Algorithm Retirement"
+    author:
+      - ins: E. C. Dogru
+        name: Emek Can Dogru
+    date: 2026-08
+    target: https://github.com/dogrucanemek-alt/cedulon
+  STREAMING:
+    title: "Cedulon Streaming Reconciliation: Continuous Completeness for Agent Spend"
+    author:
+      - ins: E. C. Dogru
+        name: Emek Can Dogru
+    date: 2026-08
+    target: https://github.com/dogrucanemek-alt/cedulon
 ---
 
 --- abstract
@@ -773,6 +787,40 @@ runnable verification suite is published at
 <https://github.com/dogrucanemek-alt/cedulon>. The code is a
 profile of this document, not a second specification. This -00 is
 not an IETF working-group item.
+
+# Evolution and Future Work (Informative) {#evolution}
+
+This section is a direction, not a commitment. The structures below
+are reserved in name only. Normative wire formats, tests, and
+threat-model MUST lines for them belong in later revisions (-01 or
+-02), written with the same discipline as this -00.
+
+## Re-attestation profile
+
+Algorithms retire. A Spend Receipt or checkpoint signed under
+Ed25519 today may need a later verifier that no longer accepts
+`-19`. A companion seed {{REATTEST}} sketches re-attestation:
+register the original COSE bytes as a SCITT Signed Statement and
+have a current algorithm countersign or receipt them. The
+principle is that structures outlive ciphers. The first concrete
+example is the profile's own move from generic EdDSA (`-8`) to
+Ed25519 (`-19`) in {{RFC9864}}.
+
+## Streaming reconciliation
+
+Epoch checkpoints in this document are batch windows. A later
+revision (-02) may define a continuous, second-scale profile
+{{STREAMING}} in which the same completeness relation is evaluated
+as settlements arrive, without waiting for an epoch close. That
+work does not change the -00 matching rules.
+
+## Generalization
+
+Payment is the special case that this -00 implements. The same
+completeness calculus — an authenticated extract of consumed units
+reconciled to signed receipts — can apply to other consumable
+resources such as compute, data, or energy. This document does
+not specify those profiles.
 
 # Informative Notes on Adjacent Protocols
 
