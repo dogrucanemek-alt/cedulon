@@ -57,25 +57,29 @@ packages; they do not reimplement policy, receipts, or audit.
 | `cedulon_export_ledger` | none | Receipts + checkpoint + extract in the `demo:export` JSON shape |
 | `cedulon_status` | none | `{ version, policy, receiptCount, chainHead }` |
 
-```bash
-npm run mcp
-```
-
-Claude Desktop / Claude Code / Cursor:
+Claude Desktop / Claude Code / Cursor. Nothing to clone and nothing to build:
 
 ```json
 {
   "mcpServers": {
     "cedulon": {
-      "command": "node",
-      "args": [
-        "--experimental-strip-types",
-        "packages/mcp-server/src/index.ts"
-      ],
-      "cwd": "/absolute/path/to/cedulon"
+      "command": "npx",
+      "args": ["-y", "@cedulon/mcp-server"]
     }
   }
 }
+```
+
+Policy limits come from the environment: `CEDULON_MAX_AMOUNT`,
+`CEDULON_MAX_CUMULATIVE`, `CEDULON_MAX_PAYMENTS`, `CEDULON_WINDOW_MS`,
+`CEDULON_ALLOWED_PAYEES`, `CEDULON_ALLOWED_CURRENCIES`,
+`CEDULON_ALLOWED_TOOLS`, `CEDULON_PAYER`. Set `CEDULON_STATE_PATH` to keep the
+receipt chain across restarts; without it the ledger lives in memory.
+
+Working inside this repository instead, against the sources:
+
+```bash
+npm run mcp
 ```
 
 Registry files (`server.json`, `smithery.yaml`) are prepared in this

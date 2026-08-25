@@ -1,39 +1,16 @@
 # Cedulon in 5 minutes
 
-You will clone the repo, run the tests, attach the MCP server to Claude
-or Cursor, and try one spend plus one audit. No wallet. No network rail.
+You will attach the MCP server to Claude or Cursor and try one spend plus one
+audit. No wallet. No network rail. No clone, unless you want to read the code.
 
-## 1. Clone and install
-
-```bash
-git clone https://github.com/dogrucanemek-alt/cedulon.git
-cd cedulon
-npm install
-```
-
-## 2. Prove the suite
-
-```bash
-npx tsc --noEmit
-npm run test:all
-```
-
-Typecheck prints nothing. Tests should all pass.
-
-## 3. Point your host at the server
-
-Use this `mcpServers` block. Set `cwd` to the clone path.
+## 1. Point your host at the server
 
 ```json
 {
   "mcpServers": {
     "cedulon": {
-      "command": "node",
-      "args": [
-        "--experimental-strip-types",
-        "packages/mcp-server/src/index.ts"
-      ],
-      "cwd": "/absolute/path/to/cedulon"
+      "command": "npx",
+      "args": ["-y", "@cedulon/mcp-server"]
     }
   }
 }
@@ -43,7 +20,25 @@ Use this `mcpServers` block. Set `cwd` to the clone path.
 - Claude Code: add the same block to `.mcp.json` or your user MCP config.
 - Cursor: Settings → MCP → add the same command.
 
-## 4. Ask the host to spend
+That is the whole install. The published package is compiled JavaScript, so
+there is nothing to build and no experimental Node flag to pass.
+
+## 2. Optional: clone and prove the suite
+
+Only if you want to check the claims rather than take them:
+
+```bash
+git clone https://github.com/dogrucanemek-alt/cedulon.git
+cd cedulon
+npm install
+npx tsc --noEmit
+npm run test:all
+```
+
+Typecheck prints nothing. Tests should all pass. Running the server from the
+sources instead of npm is `npm run mcp`.
+
+## 3. Ask the host to spend
 
 Demo policy allows `payee-1` / `USD` up to amount `10`.
 
@@ -61,7 +56,7 @@ You should see `audit: balanced`.
 
 A second spend with amount `11` is denied (`reason: limit-amount`).
 
-## 5. Optional: persist the ledger
+## 4. Optional: persist the ledger
 
 ```bash
 set CEDULON_STATE_PATH=./cedulon-state.json
