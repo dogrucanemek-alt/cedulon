@@ -31,11 +31,11 @@
       <div class="steps">
         <h2>Sections</h2>
         <ol>
-          <li><strong>Introduction</strong> — rails move value; the audit layer is missing.</li>
+          <li><strong>Introduction</strong> — rails move value; the audit layer is missing. Single-entry → double-entry → proven completeness.</li>
           <li><strong>Terminology</strong> — RFC 2119; Trade Manifest, PDP, Spend Receipt, Decision Token (COSE_Sign1), Rail Extract.</li>
           <li><strong>Architecture</strong> — PDP before the rail; Receipt Issuer after; optional SCITT.</li>
           <li><strong>Trade Manifest</strong> — COSE_Sign1 offer before payment; <span class="mono">manifestHash</span> is SHA-256 of the COSE bytes.</li>
-          <li><strong>Spend Receipt</strong> — signed record after a gated payment; <span class="mono">noManifest</span> and <span class="mono">outcome</span> are explicit.</li>
+          <li><strong>Spend Receipt</strong> — signed record after a gated payment; <span class="mono">noManifest</span> and <span class="mono">outcome</span> are explicit; optional payee countersignature is a detached COSE_Sign1.</li>
           <li><strong>COSE Profile</strong> — deterministic CBOR; alg −19 (Ed25519); private-use labels below −65536; mandatory <span class="mono">kid</span>.</li>
           <li><strong>Rail Extract Profile</strong> — authenticated settlement records; unsigned extract makes the guarantee conditional.</li>
           <li><strong>Reconciliation and Epoch Checkpoints</strong> — 1:1 ref+amount+currency; half-open windows; equivocation.</li>
@@ -46,14 +46,14 @@
           <li><strong>Security Considerations</strong> — T1–T11, including rail-bypass completeness (T10) and checkpoint suppression (T11).</li>
           <li><strong>IANA Considerations</strong> — no actions; private-use labels do not need a registry block.</li>
           <li><strong>Implementation Status</strong> — RFC 7942 note pointing at the companion repository.</li>
-          <li><strong>Informative Notes</strong> — x402, AP2, HTTP Message Signatures profiles, draft-bates-atp as neighbors.</li>
+          <li><strong>Evolution and Future Work</strong> — re-attestation, streaming reconciliation, generalization (direction, not -00 code).</li>
+          <li><strong>Informative Notes</strong> — x402, AP2, Bates, Vauban, Schrock, Marques/Acta, Hopley; none define rail-extract completeness.</li>
         </ol>
       </div>
 
       <p>
-        Neighbor drafts: Bates ATP is causal lineage. Profiles built on HTTP
-        Message Signatures authenticate bots. Neither defines rail-extract
-        completeness.
+        Neighbor drafts (Vauban, Schrock, Marques/Acta, Hopley, Bates) sign
+        other facts. None of them define rail-extract completeness.
       </p>
 
       <footer class="colophon">

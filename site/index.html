@@ -23,7 +23,9 @@
         Agents can already pay on open rails such as x402 and AP2. Cedulon sits
         above those rails as an audit layer: a signed spend receipt, a chained
         epoch checkpoint, and a reconciliation of the rail extract. If a spend
-        left no receipt, the gap is the finding.
+        left no receipt, the gap is the finding. Bookkeeping moved from
+        single-entry records to Pacioli's double-entry; Cedulon is the
+        later step where an external rail extract is machine-checkable.
       </p>
 
       <h2>How it works</h2>
@@ -90,7 +92,7 @@ const result = gatedSettle(engine, {
 
       <h2>Measured in this repository</h2>
       <ul class="claims">
-        <li><span class="mono">79</span> passing tests (<span class="mono">npm run test:all</span>, 2026-08-26)</li>
+        <li><span class="mono">81</span> passing tests (<span class="mono">npm run test:all</span>, 2026-08-26)</li>
         <li>zero runtime dependencies on <span class="mono">packages/*</span> (workspace packages only)</li>
         <li>fail-closed by default (missing or throwing policy engine denies)</li>
         <li>signed receipts, chained checkpoints, reconciliation audit</li>

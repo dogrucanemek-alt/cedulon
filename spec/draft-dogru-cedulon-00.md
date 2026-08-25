@@ -163,8 +163,8 @@ not check themselves. Double-entry bookkeeping, set out by Pacioli in
 1494 {{PACIOLI}}, posts each event to two books so that the books can
 check each other. Cedulon is a later step: **proven completeness**, where an
 external witness (the authenticated rail extract) is machine-checkable
-against signed spend receipts. Grigg's triple-entry idea — signed
-receipts as the third entry — is {{GRIGG}}. Cedulon's addition is the
+against signed spend receipts. Grigg's triple-entry idea (signed
+receipts as the third entry) is {{GRIGG}}. Cedulon's addition is the
 completeness and reconciliation proof plus an open standard profile,
 not a claim to be first.
 
@@ -817,8 +817,8 @@ work does not change the -00 matching rules.
 ## Generalization
 
 Payment is the special case that this -00 implements. The same
-completeness calculus — an authenticated extract of consumed units
-reconciled to signed receipts — can apply to other consumable
+completeness calculus (an authenticated extract of consumed units
+reconciled to signed receipts) can apply to other consumable
 resources such as compute, data, or energy. This document does
 not specify those profiles.
 
