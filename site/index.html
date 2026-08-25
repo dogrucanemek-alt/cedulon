@@ -90,6 +90,27 @@ const result = gatedSettle(engine, {
   payer: "p", paymentHeader: "mock",
 }, { receiptPrivatePem: keys.privateKeyPem, receiptPublicPem: keys.publicKeyPem }, nowMs);</code></pre>
 
+      <h2>Use it as an MCP server</h2>
+      <p>
+        The same gated spend and extract audit are also five MCP tools on
+        stdio. Clone the repository, run <span class="mono">npm install</span>,
+        then point Claude Desktop, Claude Code, or Cursor at the process.
+        Step-by-step:
+        <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Cedulon in 5 minutes</a>.
+      </p>
+      <pre><code>{
+  "mcpServers": {
+    "cedulon": {
+      "command": "node",
+      "args": [
+        "--experimental-strip-types",
+        "packages/mcp-server/src/index.ts"
+      ],
+      "cwd": "/absolute/path/to/cedulon"
+    }
+  }
+}</code></pre>
+
       <h2>Measured in this repository</h2>
       <ul class="claims">
         <li><span class="mono">89</span> passing tests (<span class="mono">npm run test:all</span>)</li>
@@ -99,7 +120,7 @@ const result = gatedSettle(engine, {
       </ul>
 
       <footer class="colophon">
-        <p><a href="https://github.com/dogrucanemek-alt/cedulon">Source</a> · <a href="spec.html">Draft</a> · <a href="verify.html">Run as a verifier</a></p>
+        <p><a href="https://github.com/dogrucanemek-alt/cedulon">Source</a> · <a href="spec.html">Draft</a> · <a href="verify.html">Run as a verifier</a> · <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Quickstart</a></p>
         <p>Apache-2.0 · A <a href="https://verax-ai.com">VERAX</a> product · © 2026 Emek Can Dogru</p>
       </footer>
     </div>
