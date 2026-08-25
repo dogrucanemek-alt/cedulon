@@ -1,11 +1,12 @@
-# Cedulon — Cedulon Protocol
+# Cedulon
 
 Audit layer for agent-to-agent spend: signed trade manifest, fail-closed
 policy, signed spend receipt (SCITT-anchorable).
 
 Cedulon is **not** a payment rail. It sits above x402 and AP2.
 
-Local repository only. No remote, no npm publish, no real wallets.
+No npm publish, no real wallets, no network rails: everything runs locally
+against mock fixtures.
 
 ## Requirements
 
