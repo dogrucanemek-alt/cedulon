@@ -18,8 +18,8 @@ startCommand:
         description: JSON file path for CEDULON_STATE_PATH
   commandFunction: |-
     (config) => ({
-      command: 'node',
-      args: ['--experimental-strip-types', 'packages/mcp-server/src/index.ts'],
+      command: 'npx',
+      args: ['-y', '@cedulon/mcp-server'],
       env: {
         CEDULON_MAX_AMOUNT: config.maxAmount || '10',
         ...(config.statePath ? { CEDULON_STATE_PATH: config.statePath } : {})
