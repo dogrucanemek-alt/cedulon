@@ -1,22 +1,61 @@
 {
   "name": "@cedulon/mcp-server",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "Local stdio MCP server for policy-gated Cedulon spend and audit.",
   "license": "Apache-2.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogrucanemek-alt/cedulon.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/dogrucanemek-alt/cedulon/tree/master/packages/mcp-server",
+  "bugs": {
+    "url": "https://github.com/dogrucanemek-alt/cedulon/issues"
+  },
+  "keywords": [
+    "cedulon",
+    "mcp"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json"
   },
-  "main": "./src/index.ts",
+  "bin": {
+    "cedulon-mcp": "dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   },
   "dependencies": {
-    "@cedulon/audit": "*",
-    "@cedulon/checkpoint": "*",
-    "@cedulon/core": "*",
-    "@cedulon/cose": "*",
-    "@cedulon/receipts": "*",
-    "@cedulon/x402-adapter": "*",
+    "@cedulon/audit": "^0.1.0",
+    "@cedulon/checkpoint": "^0.1.0",
+    "@cedulon/core": "^0.1.0",
+    "@cedulon/cose": "^0.1.0",
+    "@cedulon/receipts": "^0.1.0",
+    "@cedulon/x402-adapter": "^0.1.0",
     "@modelcontextprotocol/sdk": "^1.30.0"
   }
 }

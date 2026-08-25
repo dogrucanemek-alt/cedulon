@@ -1,18 +1,54 @@
 {
   "name": "@cedulon/x402-adapter",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "HTTP 402 adapter and mock rail extract for Cedulon.",
   "license": "Apache-2.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogrucanemek-alt/cedulon.git",
+    "directory": "packages/x402-adapter"
+  },
+  "homepage": "https://github.com/dogrucanemek-alt/cedulon/tree/master/packages/x402-adapter",
+  "bugs": {
+    "url": "https://github.com/dogrucanemek-alt/cedulon/issues"
+  },
+  "keywords": [
+    "cedulon",
+    "x402"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json"
   },
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   },
   "dependencies": {
-    "@cedulon/core": "*",
-    "@cedulon/manifest": "*",
-    "@cedulon/receipts": "*"
+    "@cedulon/core": "^0.1.0",
+    "@cedulon/manifest": "^0.1.0",
+    "@cedulon/receipts": "^0.1.0"
   }
 }

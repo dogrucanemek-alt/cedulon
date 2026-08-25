@@ -9,6 +9,7 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "customConditions": ["development"],
     "types": ["node"]
   },
   "include": ["packages/**/*.ts", "examples/**/*.ts", "tests/**/*.ts"]

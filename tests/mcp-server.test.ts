@@ -34,7 +34,7 @@ class StdioRpc {
   private readonly child: ChildProcessWithoutNullStreams;
 
   constructor(env: NodeJS.ProcessEnv = {}) {
-    this.child = spawn(process.execPath, ["--experimental-strip-types", serverEntry], {
+    this.child = spawn(process.execPath, ["--experimental-strip-types", "--conditions=development", serverEntry], {
       cwd: root,
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "pipe"],
@@ -256,7 +256,7 @@ describe("mcp-server stdio JSON-RPC", () => {
         receiptCount?: number;
         chainHead?: string | null;
       };
-      assert.equal(beforeBody.version, "0.0.1");
+      assert.equal(beforeBody.version, "0.1.0");
       assert.equal(beforeBody.policy?.maxAmount, "10");
       assert.equal(beforeBody.receiptCount, 0);
       assert.equal(beforeBody.chainHead, null);

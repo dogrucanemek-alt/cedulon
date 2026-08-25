@@ -13,16 +13,16 @@
   "scripts": {
     "build": "tsc --noEmit",
     "build:packages": "npm run build -w @cedulon/cose && npm run build -w @cedulon/core && npm run build -w @cedulon/receipts && npm run build -w @cedulon/manifest && npm run build -w @cedulon/checkpoint && npm run build -w @cedulon/x402-adapter && npm run build -w @cedulon/audit && npm run build -w @cedulon/mcp-server",
-    "test:all": "node --experimental-strip-types --test tests/fail-closed.test.ts tests/policy.test.ts tests/replay-manifest.test.ts tests/receipts-demo.test.ts tests/cose.test.ts tests/checkpoint.test.ts tests/audit.test.ts tests/extract-binding.test.ts tests/mcp-server.test.ts tests/base-extract.test.ts",
-    "extract": "node --experimental-strip-types packages/base-extract/src/cli.ts",
-    "mcp": "node --experimental-strip-types packages/mcp-server/src/index.ts",
-    "tamper": "node --experimental-strip-types examples/demo/src/tamper.ts",
-    "demo": "node --experimental-strip-types examples/demo/src/cli.ts",
-    "demo:unguarded": "node --experimental-strip-types examples/demo/src/unguarded.ts",
-    "demo:bypass": "node --experimental-strip-types examples/demo/src/bypass.ts",
-    "demo:bypasses": "node --experimental-strip-types examples/demo/src/bypass.ts all",
-    "audit": "node --experimental-strip-types examples/demo/src/audit-cli.ts",
-    "demo:export": "node --experimental-strip-types examples/demo/src/export.ts"
+    "test:all": "node --experimental-strip-types --conditions=development --test tests/fail-closed.test.ts tests/policy.test.ts tests/replay-manifest.test.ts tests/receipts-demo.test.ts tests/cose.test.ts tests/checkpoint.test.ts tests/audit.test.ts tests/extract-binding.test.ts tests/mcp-server.test.ts tests/base-extract.test.ts",
+    "extract": "node --experimental-strip-types --conditions=development packages/base-extract/src/cli.ts",
+    "mcp": "node --experimental-strip-types --conditions=development packages/mcp-server/src/index.ts",
+    "tamper": "node --experimental-strip-types --conditions=development examples/demo/src/tamper.ts",
+    "demo": "node --experimental-strip-types --conditions=development examples/demo/src/cli.ts",
+    "demo:unguarded": "node --experimental-strip-types --conditions=development examples/demo/src/unguarded.ts",
+    "demo:bypass": "node --experimental-strip-types --conditions=development examples/demo/src/bypass.ts",
+    "demo:bypasses": "node --experimental-strip-types --conditions=development examples/demo/src/bypass.ts all",
+    "audit": "node --experimental-strip-types --conditions=development examples/demo/src/audit-cli.ts",
+    "demo:export": "node --experimental-strip-types --conditions=development examples/demo/src/export.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

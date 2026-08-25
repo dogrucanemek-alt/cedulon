@@ -1,17 +1,53 @@
 {
   "name": "@cedulon/manifest",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "Signed trade manifests issued before a Cedulon spend.",
   "license": "Apache-2.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogrucanemek-alt/cedulon.git",
+    "directory": "packages/manifest"
+  },
+  "homepage": "https://github.com/dogrucanemek-alt/cedulon/tree/master/packages/manifest",
+  "bugs": {
+    "url": "https://github.com/dogrucanemek-alt/cedulon/issues"
+  },
+  "keywords": [
+    "cedulon",
+    "manifest"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json"
   },
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   },
   "dependencies": {
-    "@cedulon/core": "*",
-    "@cedulon/cose": "*"
+    "@cedulon/core": "^0.1.0",
+    "@cedulon/cose": "^0.1.0"
   }
 }

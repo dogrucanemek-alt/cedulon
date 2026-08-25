@@ -1,18 +1,54 @@
 {
   "name": "@cedulon/audit",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "Reconcile a rail extract against the Cedulon receipt chain.",
   "license": "Apache-2.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogrucanemek-alt/cedulon.git",
+    "directory": "packages/audit"
+  },
+  "homepage": "https://github.com/dogrucanemek-alt/cedulon/tree/master/packages/audit",
+  "bugs": {
+    "url": "https://github.com/dogrucanemek-alt/cedulon/issues"
+  },
+  "keywords": [
+    "cedulon",
+    "audit"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json"
   },
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   },
   "dependencies": {
-    "@cedulon/checkpoint": "*",
-    "@cedulon/receipts": "*",
-    "@cedulon/x402-adapter": "*"
+    "@cedulon/checkpoint": "^0.1.0",
+    "@cedulon/receipts": "^0.1.0",
+    "@cedulon/x402-adapter": "^0.1.0"
   }
 }

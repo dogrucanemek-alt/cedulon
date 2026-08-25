@@ -19,32 +19,38 @@ only on those workspace packages plus `@modelcontextprotocol/sdk`.
 
 ## Run
 
-From the repository root after `npm install`:
+The binary is `cedulon-mcp` (compiled JavaScript, no
+`--experimental-strip-types`). From this repository, after `npm run build:packages`:
+
+```bash
+node packages/mcp-server/dist/index.js
+```
+
+From a packed or published install:
+
+```bash
+npx cedulon-mcp
+```
+
+`npx @cedulon/mcp-server` is the same once the package is on the npm registry.
+
+From the repository source tree (development):
 
 ```bash
 npm run mcp
 ```
 
-Equivalent:
-
-```bash
-node --experimental-strip-types packages/mcp-server/src/index.ts
-```
-
 ## Host config
 
-Claude Desktop / Claude Code / Cursor (`mcpServers`):
+Claude Desktop / Claude Code / Cursor (`mcpServers`), after the package is
+installed:
 
 ```json
 {
   "mcpServers": {
     "cedulon": {
-      "command": "node",
-      "args": [
-        "--experimental-strip-types",
-        "packages/mcp-server/src/index.ts"
-      ],
-      "cwd": "/absolute/path/to/cedulon"
+      "command": "npx",
+      "args": ["-y", "@cedulon/mcp-server"]
     }
   }
 }
