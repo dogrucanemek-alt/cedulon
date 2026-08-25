@@ -186,6 +186,43 @@ when the operator chooses privacy mode.
 | SHOULD-T9-3 | Default public anchors SHOULD publish `policyHash`, `manifestHash`, `receiptHash`, and timestamp rather than full claim sets. |
 | MAY-T9-4 | A private auditor MAY receive an unredacted receipt out of band. |
 
+### T10 — Secret spend via rail bypass
+
+T5 requires the model not to see an ungated rail. An operator, leaked
+credential, or a second binary can still settle on the rail and omit the
+Receipt Issuer. Validity checks on the receipts that *do* exist stay green.
+
+**Mitigation.** Completeness, not validity: reconcile the rail extract to
+Spend Receipt payment refs. A settlement without a receipt is a finding
+identified by the settlement ref. The audit fails closed.
+
+| ID | Requirement |
+|---|---|
+| MUST-T10-1 | A verifier MUST compare each rail-extract settlement `ref` to Spend Receipt `x402PaymentRef` values. |
+| MUST-T10-2 | A settlement with no matching receipt MUST be reported as a completeness failure identified by that settlement `ref`. |
+| MUST-T10-3 | A Spend Receipt whose `x402PaymentRef` is not on the extract MUST be reported as a completeness failure. |
+| MUST-T10-4 | An audit that has any completeness finding MUST fail (non-zero status in the companion tool). |
+| SHOULD-T10-5 | Hosts SHOULD still apply T5 (no ungated rail in the model process). Completeness does not replace prevention. |
+
+### T11 — Checkpoint suppression or rollback
+
+An issuer publishes a later checkpoint that omits receipts, or issues two
+different checkpoints for one epoch (equivocation), or breaks the
+checkpoint hash chain so a window disappears.
+
+**Mitigation.** Checkpoints are COSE-signed and chained. Totals must match
+receipts in the window. Two valid hashes for one epoch are equivocation.
+Optional registration in a transparency log makes suppression visible.
+
+| ID | Requirement |
+|---|---|
+| MUST-T11-1 | An epoch checkpoint MUST be COSE-signed and MUST bind epoch number, time window, receipt count, chain-head hash, per-currency totals, and the previous checkpoint hash. |
+| MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails or whose totals do not match receipts in the declared window. |
+| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. |
+| MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
+| SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
+| MAY-T11-6 | A test deployment MAY use an in-process append-only log as the witness. |
+
 ## 3. Traceability table
 
 | Threat | Mitigation (short) | MUST IDs |
@@ -199,6 +236,8 @@ when the operator chooses privacy mode.
 | T7 Key leak | No secrets in artifacts; mock keys only | MUST-T7-1, MUST-T7-2 |
 | T8 Bad counterparty | Manifest bind + evidence bundle, no escrow | MUST-T8-1, MUST-T8-2, MUST-T8-3, MUST-T8-4, MAY-T8-6 (MUST NOT custody) |
 | T9 Log PII | Redaction / hash-only public form | MUST-T9-1, MUST-T9-2 |
+| T10 Rail bypass / secret spend | Extract vs receipt refs; fail on gap | MUST-T10-1, MUST-T10-2, MUST-T10-3, MUST-T10-4 |
+| T11 Checkpoint suppress / rollback | Signed chained checkpoints; equivocation | MUST-T11-1, MUST-T11-2, MUST-T11-3, MUST-T11-4 |
 
 Untraced MUST check: every MUST in Section 2 appears in this table.
 

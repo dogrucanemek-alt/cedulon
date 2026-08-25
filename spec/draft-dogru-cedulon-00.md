@@ -37,6 +37,20 @@ normative:
 informative:
   RFC9110:
   RFC9421:
+  SHARIF-ATTP:
+    title: "ATTP: Agent Trust Transport Protocol"
+    author:
+      - ins: R. Sharif
+        name: Raza Sharif
+    date: 2026-06
+    target: https://datatracker.ietf.org/doc/draft-sharif-attp/01/
+  BATES-ATTP:
+    title: "Agent Transaction Protocol (ATP)"
+    author:
+      - ins: D. Bates
+        name: David Asher Bates
+    date: 2026-05
+    target: https://datatracker.ietf.org/doc/draft-bates-atp/00/
 ---
 
 .# Abstract
@@ -47,9 +61,10 @@ mandate protocols (AP2) already move value. They do not, by themselves,
 produce a portable, fail-closed policy decision and a signed spend receipt
 that can be anchored in a transparency log. Cedulon specifies a Trade Manifest
 (signed offer before payment), a Policy Decision Point with default deny,
-a Spend Receipt (COSE/CWT claim set after a gated payment), a Dispute
-Evidence Bundle (evidence, not an award), and optional SCITT anchoring.
-Cedulon is not a competitor to x402 or AP2; it sits above them.
+a Spend Receipt (COSE/CWT claim set after a gated payment), epoch
+checkpoints, rail-extract reconciliation that proves completeness, a
+Dispute Evidence Bundle (evidence, not an award), and optional SCITT
+anchoring. Cedulon is not a competitor to x402 or AP2; it sits above them.
 
 {::boilerplate bcp14-tagged}
 
@@ -71,6 +86,14 @@ payment facilitator. An optional escrow actor is defined only as a
 third-party role interface ({{escrow-role}}). This document and the
 companion implementation MUST NOT operate escrow or custody
 ({{MUST-T8-4}}, {{MUST-T8-custody}}).
+
+Neighbor drafts are complementary, not substitutes. draft-sharif-attp
+{{SHARIF-ATTP}} (and its payment-scoped predecessor
+draft-sharif-agent-payment-trust-00) covers agent identity and
+trust-score spend tiers via a central query API. draft-bates-atp
+{{BATES-ATTP}} covers tamper-evident causal lineage as a signed DAG.
+Cedulon is the completeness layer: a spend that never produced a receipt
+is visible when the rail extract is reconciled ({{MUST-T10-1}}).
 
 # Terminology
 
@@ -179,9 +202,10 @@ spend ({{MAY-T1-4}}).
 
 # Spend Receipt
 
-The Spend Receipt claim set is intended for COSE_Sign1 {{RFC9052}} wrapping
-a CWT-compatible map {{RFC8392}}. The skeleton encodes the same claims as
-canonical JSON and signs with Ed25519; on-the-wire COSE is a later profile.
+The Spend Receipt claim set is carried in COSE_Sign1 {{RFC9052}} wrapping
+a CWT-compatible map {{RFC8392}}. A legacy canonical-JSON signature exists
+only for comparison tests. New receipts MUST use the COSE profile
+({{cose-profile}}).
 
 Claims ({{MUST-T4-3}}, {{MUST-T4-4}}):
 
@@ -201,6 +225,96 @@ Claims ({{MUST-T4-3}}, {{MUST-T4-4}}):
 
 Verifiers MUST reject a receipt if the signature fails or if the canonical
 bytes do not match the signed payload ({{MUST-T4-2}}).
+
+# COSE Profile {#cose-profile}
+
+This profile uses deterministic CBOR {{RFC8949}} Section 4.2.1 (definite
+lengths, shortest integer form, map keys sorted by encoded-key length then
+byte order). Implementations MUST encode only the types used by Cedulon
+claim maps: null, bool, unsigned and negative integers, UTF-8 text,
+byte strings, arrays, and maps ({{MUST-T4-1}}).
+
+## Claim labels
+
+Registered CWT claims {{RFC8392}} are not required in -00. Cedulon uses
+private integer labels:
+
+| Label | Claim | CBOR type |
+|---|---|---|
+| 100 | payer | tstr |
+| 101 | payee | tstr |
+| 102 | amount | tstr (decimal minor units) |
+| 103 | currency | tstr |
+| 104 | policyHash | tstr (hex SHA-256) |
+| 105 | manifestHash | tstr / null |
+| 106 | noManifest | bool |
+| 107 | x402PaymentRef | tstr / null |
+| 108 | timestampMs | uint |
+| 109 | nonce | tstr |
+| 110 | prevReceiptHash | tstr / null |
+
+## COSE_Sign1 headers
+
+The protected header MUST be the map `{ 1: -8 }` (alg = EdDSA)
+({{MUST-T4-1}}). The unprotected header MUST be empty. The payload MUST be
+the CBOR encoding of the claim map. The signature is Ed25519 over the
+COSE `Sig_structure` `["Signature1", protected, h'', payload]`.
+
+# Reconciliation and Epoch Checkpoints {#reconciliation}
+
+Completeness is the property that every rail settlement in a window has a
+matching Spend Receipt, every receipt has a matching settlement, receipt
+and checkpoint hash chains verify, and checkpoint totals equal the sum of
+receipts in the checkpoint window. If a spend occurred without a receipt,
+the missing receipt is itself the evidence ({{MUST-T10-2}}).
+
+## Checkpoint claims
+
+An epoch checkpoint MUST be COSE_Sign1-signed with the same header profile
+and MUST bind all of the following ({{MUST-T11-1}}):
+
+| Label | Claim | CBOR type |
+|---|---|---|
+| 200 | epoch | uint |
+| 201 | startMs | uint |
+| 202 | endMs | uint |
+| 203 | receiptCount | uint |
+| 204 | chainHeadHash | tstr / null |
+| 205 | totals | map tstr -> tstr (currency to decimal sum) |
+| 206 | prevCheckpointHash | tstr / null |
+
+## Verification algorithm
+
+A verifier MUST perform these steps in order ({{MUST-T10-1}},
+{{MUST-T11-2}}):
+
+1. Decode each Spend Receipt COSE_Sign1. Reject if Ed25519 verify fails or
+   if the decoded claim map does not match the presented claims
+   ({{MUST-T4-2}}).
+2. Walk receipts in issuer order. The first `prevReceiptHash` MUST be
+   null. Each later `prevReceiptHash` MUST equal the SHA-256 of the
+   previous receipt's COSE bytes.
+3. For each settlement in the rail extract, require a receipt whose
+   `x402PaymentRef` equals the settlement `ref`. A settlement with no
+   match MUST be reported as `settlement-without-receipt` identified by
+   that `ref` ({{MUST-T10-2}}).
+4. For each receipt with a non-null `x402PaymentRef`, require a
+   settlement with that `ref`. A miss MUST be reported as
+   `receipt-without-settlement` ({{MUST-T10-3}}).
+5. Decode each checkpoint. Reject a failed signature or a totals map that
+   does not equal the sum of receipt amounts in `[startMs, endMs]`
+   ({{MUST-T11-2}}).
+6. Walk checkpoints in epoch order. `prevCheckpointHash` MUST equal the
+   SHA-256 of the previous checkpoint COSE bytes, or null for the first
+   ({{MUST-T11-4}}).
+7. If two successfully verified checkpoints share an epoch number and
+   have different hashes, the verifier MUST report equivocation
+   ({{MUST-T11-3}}).
+8. If any finding exists, the audit MUST fail ({{MUST-T10-4}}).
+
+Checkpoints SHOULD be registered with a Transparency Service
+({{SHOULD-T11-5}}). A test deployment MAY use an in-process append-only
+log as the witness ({{MAY-T11-6}}). Cedulon still MUST NOT take custody.
 
 # Lifecycle
 
@@ -305,6 +419,16 @@ Counterparty (T8):
 Privacy (T9):
 : See {{privacy}}.
 
+Rail bypass completeness (T10):
+: Verifiers MUST reconcile the rail extract to receipts
+  ({{MUST-T10-1}}, {{MUST-T10-2}}, {{MUST-T10-3}}) and MUST fail the
+  audit when any finding exists ({{MUST-T10-4}}). See {{reconciliation}}.
+
+Checkpoint suppression (T11):
+: Checkpoints MUST be signed and chained ({{MUST-T11-1}},
+  {{MUST-T11-4}}). Totals MUST match the window ({{MUST-T11-2}}).
+  Equivocation MUST be reported ({{MUST-T11-3}}).
+
 ## Optional escrow role {#escrow-role}
 
 Parties MAY name an escrow actor in a Trade Manifest as a third-party role
@@ -323,7 +447,9 @@ This section is a placeholder.
 x402 uses HTTP 402 {{RFC9110}} to negotiate stablecoin payment. AP2 uses
 signed mandates as verifiable credentials. Cedulon does not replace either
 protocol. Web Bot Auth {{RFC9421}} authenticates bots; it is not a spend
-receipt.
+receipt. draft-sharif-attp {{SHARIF-ATTP}} is an identity and score
+neighbor. draft-bates-atp {{BATES-ATTP}} is a lineage neighbor. Neither
+defines rail-extract completeness.
 
 ---
 
