@@ -14,6 +14,7 @@ import {
   type SignedManifest,
 } from "@cedulon/manifest";
 import {
+  padNonce,
   signReceipt,
   type SignedReceipt,
 } from "@cedulon/receipts";
@@ -194,7 +195,7 @@ function issue(
       noManifest: !input.manifest,
       x402PaymentRef: x402Ref,
       timestampMs: nowMs,
-      nonce: input.req.nonce,
+      nonce: padNonce(input.req.nonce),
       prevReceiptHash,
       outcome: "settled",
     },

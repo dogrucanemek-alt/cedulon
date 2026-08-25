@@ -71,16 +71,15 @@ function encodeParts(value: CborVal): Buffer[] {
   return parts;
 }
 
-function compareEncodedKeys(a: Buffer, b: Buffer): number {
-  if (a.length !== b.length) {
-    return a.length - b.length;
-  }
-  for (let i = 0; i < a.length; i += 1) {
+/** RFC 8949 §4.2.1: bytewise lexicographic order of encoded keys. */
+export function compareEncodedKeys(a: Buffer, b: Buffer): number {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i += 1) {
     if (a[i] !== b[i]) {
       return a[i] - b[i];
     }
   }
-  return 0;
+  return a.length - b.length;
 }
 
 function encodeInt(n: number): Buffer {
@@ -222,6 +221,9 @@ export function bytesToHex(bytes: Uint8Array): string {
 export function hexToBytes(hex: string): Uint8Array {
   if (hex.length % 2 !== 0) {
     throw new Error("hex-odd");
+  }
+  if (hex !== hex.toLowerCase()) {
+    throw new Error("hex-not-lowercase");
   }
   return Uint8Array.from(Buffer.from(hex, "hex"));
 }

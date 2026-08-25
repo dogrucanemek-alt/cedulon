@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { canonical } from "@cedulon/core";
 import {
+  CTY_CHECKPOINT,
   asMap,
   cborMap,
   decodeCbor,
@@ -15,13 +16,13 @@ import {
 import { receiptHash, type SignedReceipt } from "@cedulon/receipts";
 
 export const CHECKPOINT_CLAIM = {
-  epoch: 200,
-  startMs: 201,
-  endMs: 202,
-  receiptCount: 203,
-  chainHeadHash: 204,
-  totals: 205,
-  prevCheckpointHash: 206,
+  epoch: -70101,
+  startMs: -70102,
+  endMs: -70103,
+  receiptCount: -70104,
+  chainHeadHash: -70105,
+  totals: -70106,
+  prevCheckpointHash: -70107,
 } as const;
 
 export type CheckpointClaims = {
@@ -140,7 +141,7 @@ export function signCheckpoint(
   privateKeyPem: string,
   publicKeyPem: string,
 ): SignedCheckpoint {
-  const cose = signCoseSign1(checkpointToCbor(claims), privateKeyPem);
+  const cose = signCoseSign1(checkpointToCbor(claims), privateKeyPem, CTY_CHECKPOINT);
   return {
     claims,
     publicKeyPem,
@@ -151,7 +152,7 @@ export function signCheckpoint(
 
 export function verifyCheckpoint(signed: SignedCheckpoint): boolean {
   const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, signed.publicKeyPem)) {
+  if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_CHECKPOINT)) {
     return false;
   }
   try {

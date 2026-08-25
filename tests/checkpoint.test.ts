@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { fixtureEd25519Pems } from "@cedulon/cose";
-import { generateReceiptKeys, signReceipt, type SpendReceiptClaims } from "@cedulon/receipts";
+import { generateReceiptKeys, padNonce, signReceipt, type SpendReceiptClaims } from "@cedulon/receipts";
 import {
   MemoryTransparencyService,
   anchorCheckpoint,
@@ -25,7 +25,7 @@ function sampleClaims(nonce: string, amount = "1"): SpendReceiptClaims {
     noManifest: true,
     x402PaymentRef: nonce,
     timestampMs: 1_700_000_000_000,
-    nonce,
+    nonce: padNonce(nonce),
     prevReceiptHash: null,
     outcome: "settled",
   };

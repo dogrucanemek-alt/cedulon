@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  CTY_INCLUSION,
   asMap,
   cborMap,
   decodeCbor,
@@ -46,7 +47,7 @@ export class MemoryTransparencyService {
         [3, this.treeHead],
       ]),
     );
-    const cose = signCoseSign1(payload, this.privateKeyPem);
+    const cose = signCoseSign1(payload, this.privateKeyPem, CTY_INCLUSION);
     return {
       statementHash,
       index,
@@ -60,7 +61,7 @@ export class MemoryTransparencyService {
     if (this.leaves[receipt.index] !== receipt.statementHash) {
       return false;
     }
-    return verifyCoseSign1(Buffer.from(receipt.coseHex, "hex"), receipt.issuerPublicKeyPem);
+    return verifyCoseSign1(Buffer.from(receipt.coseHex, "hex"), receipt.issuerPublicKeyPem, CTY_INCLUSION);
   }
 
   size(): number {

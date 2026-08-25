@@ -30,7 +30,7 @@ function chainReceipts(keys: { privateKeyPem: string; publicKeyPem: string }, am
         noManifest: true,
         x402PaymentRef: `x402-n${i}`,
         timestampMs: 1_700_000_000_000 + i,
-        nonce: `n${i}`,
+        nonce: `n${i}`.padEnd(16, "0"),
         prevReceiptHash: prev,
         outcome: "settled",
       },
@@ -196,7 +196,7 @@ describe("hakem bypasses — RED then GREEN", () => {
         noManifest: true,
         x402PaymentRef: null,
         timestampMs: 1_700_000_000_000,
-        nonce: "ghost",
+        nonce: "ghost".padEnd(16, "0"),
         prevReceiptHash: null,
         outcome: "settled",
       },
@@ -206,7 +206,7 @@ describe("hakem bypasses — RED then GREEN", () => {
     assert.throws(() => signReceipt(bad.claims, k.privateKeyPem, k.publicKeyPem), /settled receipt requires rail ref/);
     const red = audit({ receipts: [bad], checkpoints: [oneCheckpoint(k, [bad])], settlements: [] });
     assert.equal(red.ok, false);
-    assert.equal(red.findings.some((f) => f.code === "settled-without-ref" && f.id === "ghost"), true);
+    assert.equal(red.findings.some((f) => f.code === "settled-without-ref" && f.id === "ghost".padEnd(16, "0")), true);
     const receipts = chainReceipts(k, ["1"]);
     const green = audit({
       receipts,
@@ -291,7 +291,7 @@ describe("new detections — RED then GREEN", () => {
       k.publicKeyPem,
     );
     const redGap = audit({ receipts, checkpoints: [gap], settlements: settlementsOf(receipts) });
-    assert.equal(redGap.findings.some((f) => f.code === "window-coverage" && f.id === "n1"), true);
+    assert.equal(redGap.findings.some((f) => f.code === "window-coverage" && f.id === "n1".padEnd(16, "0")), true);
     const a = signCheckpoint(
       buildCheckpointClaims(1, receipts, 1_700_000_000_000, 1_700_000_000_010, null),
       k.privateKeyPem,
@@ -326,7 +326,7 @@ describe("new detections — RED then GREEN", () => {
         noManifest: true,
         x402PaymentRef: null,
         timestampMs: 1_700_000_000_001,
-        nonce: "abort-1",
+        nonce: "abort-1".padEnd(16, "0"),
         prevReceiptHash: receiptHash(settled[0]),
         outcome: "aborted",
       },

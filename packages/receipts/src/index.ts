@@ -1,6 +1,7 @@
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
 import { canonical } from "@cedulon/core";
 import {
+  CTY_RECEIPT,
   asMap,
   cborMap,
   decodeCbor,
@@ -13,21 +14,24 @@ import {
 
 export type ReceiptOutcome = "settled" | "aborted";
 
-/** CWT-style integer labels for Spend Receipt claims (private use). */
+/** CWT private-use labels (less than -65536) for Spend Receipt claims. */
 export const RECEIPT_CLAIM = {
-  payer: 100,
-  payee: 101,
-  amount: 102,
-  currency: 103,
-  policyHash: 104,
-  manifestHash: 105,
-  noManifest: 106,
-  x402PaymentRef: 107,
-  timestampMs: 108,
-  nonce: 109,
-  prevReceiptHash: 110,
-  outcome: 111,
+  payer: -70001,
+  payee: -70002,
+  amount: -70003,
+  currency: -70004,
+  policyHash: -70005,
+  manifestHash: -70006,
+  noManifest: -70007,
+  x402PaymentRef: -70008,
+  timestampMs: -70009,
+  nonce: -70010,
+  prevReceiptHash: -70011,
+  outcome: -70012,
 } as const;
+
+export const AMOUNT_RE = /^(0|[1-9][0-9]*)$/;
+export const NONCE_MIN_BYTES = 16;
 
 export type ReceiptEncoding = "cose" | "json";
 
@@ -58,6 +62,21 @@ export type PrivacyMode = "full" | "public-hash";
 
 export function sha256Hex(data: string | Buffer): string {
   return createHash("sha256").update(data).digest("hex");
+}
+
+export function isValidAmount(amount: string): boolean {
+  return AMOUNT_RE.test(amount);
+}
+
+export function isValidNonce(nonce: string): boolean {
+  return Buffer.byteLength(nonce, "utf8") >= NONCE_MIN_BYTES;
+}
+
+export function padNonce(nonce: string): string {
+  if (isValidNonce(nonce)) {
+    return nonce;
+  }
+  return nonce.padEnd(NONCE_MIN_BYTES, "0");
 }
 
 export function generateReceiptKeys(): { publicKeyPem: string; privateKeyPem: string } {
@@ -135,6 +154,12 @@ function assertClaimConsistency(claims: SpendReceiptClaims): void {
   if (claims.outcome === "settled" && claims.x402PaymentRef === null) {
     throw new Error("settled receipt requires rail ref");
   }
+  if (!isValidAmount(claims.amount)) {
+    throw new Error("amount grammar");
+  }
+  if (!isValidNonce(claims.nonce)) {
+    throw new Error("nonce-too-short");
+  }
 }
 
 export function signReceiptJson(
@@ -167,7 +192,7 @@ export function signReceiptCose(
 ): SignedReceipt {
   assertClaimConsistency(claims);
   const payload = claimsToCbor(claims);
-  const cose = signCoseSign1(payload, privateKeyPem);
+  const cose = signCoseSign1(payload, privateKeyPem, CTY_RECEIPT);
   const msg = decodeCoseSign1(cose);
   return {
     claims,
@@ -186,7 +211,7 @@ export function verifyReceiptCose(signed: SignedReceipt): boolean {
     return false;
   }
   const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, signed.publicKeyPem)) {
+  if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_RECEIPT)) {
     return false;
   }
   try {
@@ -216,7 +241,7 @@ export function signReceiptUnchecked(
   publicKeyPem: string,
 ): SignedReceipt {
   const payload = claimsToCbor(claims);
-  const cose = signCoseSign1(payload, privateKeyPem);
+  const cose = signCoseSign1(payload, privateKeyPem, CTY_RECEIPT);
   const msg = decodeCoseSign1(cose);
   return {
     claims,

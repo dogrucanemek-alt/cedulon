@@ -1,10 +1,21 @@
-import { createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
-import { asArray, cborMap, decodeCbor, encodeCbor } from "./cbor.ts";
+import { createHash, createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
+import { asArray, asMap, cborMap, decodeCbor, encodeCbor, mapGet } from "./cbor.ts";
 
-/** COSE alg EdDSA (RFC 9052). */
+/** RFC 9052 EdDSA. Deprecated for this profile; use Ed25519 (-19). */
 export const COSE_ALG_EDDSA = -8;
+/** Ed25519, RFC 9864. */
+export const COSE_ALG_ED25519 = -19;
 /** COSE header label alg. */
 export const COSE_HDR_ALG = 1;
+/** COSE header label content type. */
+export const COSE_HDR_CONTENT_TYPE = 3;
+/** COSE header label kid. */
+export const COSE_HDR_KID = 4;
+
+export const CTY_RECEIPT = "application/cedulon-receipt+cbor";
+export const CTY_CHECKPOINT = "application/cedulon-checkpoint+cbor";
+export const CTY_MANIFEST = "application/cedulon-manifest+cbor";
+export const CTY_INCLUSION = "application/cedulon-inclusion+cbor";
 
 export type CoseSign1 = {
   protectedHeader: Uint8Array;
@@ -13,16 +24,55 @@ export type CoseSign1 = {
   signature: Uint8Array;
 };
 
-export function encodeProtectedHeader(alg: number = COSE_ALG_EDDSA): Uint8Array {
-  return encodeCbor(cborMap([[COSE_HDR_ALG, alg]]));
+export type ProtectedHeader = {
+  alg: number;
+  kid: Uint8Array;
+  contentType: string;
+};
+
+export function kidFromPublicKeyPem(publicKeyPem: string): Uint8Array {
+  const der = createPublicKey(publicKeyPem).export({ type: "spki", format: "der" });
+  return new Uint8Array(createHash("sha256").update(der).digest().subarray(0, 8));
+}
+
+export function publicKeyPemFromPrivate(privateKeyPem: string): string {
+  return createPublicKey(createPrivateKey(privateKeyPem))
+    .export({ type: "spki", format: "pem" })
+    .toString();
+}
+
+export function encodeProtectedHeader(header: ProtectedHeader): Uint8Array {
+  return encodeCbor(
+    cborMap([
+      [COSE_HDR_ALG, header.alg],
+      [COSE_HDR_CONTENT_TYPE, header.contentType],
+      [COSE_HDR_KID, header.kid],
+    ]),
+  );
+}
+
+export function decodeProtectedHeader(bytes: Uint8Array): ProtectedHeader {
+  const map = asMap(decodeCbor(bytes));
+  const alg = mapGet(map, COSE_HDR_ALG);
+  const contentType = mapGet(map, COSE_HDR_CONTENT_TYPE);
+  const kid = mapGet(map, COSE_HDR_KID);
+  if (typeof alg !== "number" || typeof contentType !== "string" || !(kid instanceof Uint8Array)) {
+    throw new Error("cose-protected-header");
+  }
+  return { alg, contentType, kid };
 }
 
 export function sigStructure(protectedHeader: Uint8Array, payload: Uint8Array): Uint8Array {
   return encodeCbor(["Signature1", protectedHeader, new Uint8Array(0), payload]);
 }
 
-export function signCoseSign1(payload: Uint8Array, privateKeyPem: string): Uint8Array {
-  const protectedHeader = encodeProtectedHeader();
+export function signCoseSign1(payload: Uint8Array, privateKeyPem: string, contentType: string): Uint8Array {
+  const publicKeyPem = publicKeyPemFromPrivate(privateKeyPem);
+  const protectedHeader = encodeProtectedHeader({
+    alg: COSE_ALG_ED25519,
+    kid: kidFromPublicKeyPem(publicKeyPem),
+    contentType,
+  });
   const toBeSigned = sigStructure(protectedHeader, payload);
   const signature = sign(null, Buffer.from(toBeSigned), privateKeyPem);
   return encodeCoseSign1({
@@ -58,9 +108,34 @@ export function decodeCoseSign1(bytes: Uint8Array): CoseSign1 {
   };
 }
 
-export function verifyCoseSign1(bytes: Uint8Array, publicKeyPem: string): boolean {
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let d = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    d |= a[i] ^ b[i];
+  }
+  return d === 0;
+}
+
+export function verifyCoseSign1(
+  bytes: Uint8Array,
+  publicKeyPem: string,
+  expectedContentType?: string,
+): boolean {
   try {
     const msg = decodeCoseSign1(bytes);
+    const header = decodeProtectedHeader(msg.protectedHeader);
+    if (header.alg !== COSE_ALG_ED25519) {
+      return false;
+    }
+    if (!bytesEqual(header.kid, kidFromPublicKeyPem(publicKeyPem))) {
+      return false;
+    }
+    if (expectedContentType && header.contentType !== expectedContentType) {
+      return false;
+    }
     const toBeSigned = sigStructure(msg.protectedHeader, msg.payload);
     return verify(null, Buffer.from(toBeSigned), publicKeyPem, Buffer.from(msg.signature));
   } catch {
@@ -84,4 +159,3 @@ export function fixtureEd25519Pems(): { publicKeyPem: string; privateKeyPem: str
     publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
   };
 }
-
