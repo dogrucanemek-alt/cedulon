@@ -1,0 +1,28 @@
+export {
+  asArray,
+  asMap,
+  bytesToHex,
+  cborMap,
+  decodeCbor,
+  encodeCbor,
+  hexToBytes,
+  isCborMap,
+  mapGet,
+  type CborMap,
+  type CborVal,
+} from "./cbor.ts";
+export {
+  COSE_ALG_EDDSA,
+  COSE_HDR_ALG,
+  coseFromHex,
+  coseToHex,
+  decodeCoseSign1,
+  encodeCoseSign1,
+  encodeProtectedHeader,
+  fixtureEd25519Pems,
+  FIXTURE_ED25519_SEED_HEX,
+  sigStructure,
+  signCoseSign1,
+  verifyCoseSign1,
+  type CoseSign1,
+} from "./cose.ts";
