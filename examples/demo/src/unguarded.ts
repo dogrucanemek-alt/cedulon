@@ -1,5 +1,5 @@
-import { generateReceiptKeys } from "@agent-trade-protocol/receipts";
-import { unguardedSettle } from "@agent-trade-protocol/x402-adapter";
+import { generateReceiptKeys } from "@cedulon/receipts";
+import { unguardedSettle } from "@cedulon/x402-adapter";
 
 const nowMs = 1_700_000_000_000;
 const k = generateReceiptKeys();

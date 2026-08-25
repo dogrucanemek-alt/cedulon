@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { PolicyEngine } from "@agent-trade-protocol/core";
-import { generateManifestKeys, signManifest, verifyManifest } from "@agent-trade-protocol/manifest";
-import { generateReceiptKeys, verifyReceipt } from "@agent-trade-protocol/receipts";
-import { gatedSettle } from "@agent-trade-protocol/x402-adapter";
+import { PolicyEngine } from "@cedulon/core";
+import { generateManifestKeys, signManifest, verifyManifest } from "@cedulon/manifest";
+import { generateReceiptKeys, verifyReceipt } from "@cedulon/receipts";
+import { gatedSettle } from "@cedulon/x402-adapter";
 
 describe("replay and manifest expiry", () => {
   it("rejects reused nonce", () => {

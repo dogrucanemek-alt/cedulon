@@ -1,14 +1,14 @@
 ---
-title: "ATP: Agent Trade Protocol"
-abbrev: ATP
-docname: draft-dogru-atp-00
+title: "Cedulon: An Audit Layer for Agent-to-Agent Commerce"
+abbrev: Cedulon
+docname: draft-dogru-cedulon-00
 date: 2026-08-25
 category: info
 ipr: trust200902
 area: sec
 workgroup:
 keyword:
-  - ATP
+  - Cedulon
   - agent
   - receipt
   - policy
@@ -41,15 +41,15 @@ informative:
 
 .# Abstract
 
-This document defines the Agent Trade Protocol (ATP), an audit layer for
+This document defines the Cedulon Protocol, an audit layer for
 agent-to-agent commerce. Payment rails such as HTTP 402 flows (x402) and
 mandate protocols (AP2) already move value. They do not, by themselves,
 produce a portable, fail-closed policy decision and a signed spend receipt
-that can be anchored in a transparency log. ATP specifies a Trade Manifest
+that can be anchored in a transparency log. Cedulon specifies a Trade Manifest
 (signed offer before payment), a Policy Decision Point with default deny,
 a Spend Receipt (COSE/CWT claim set after a gated payment), a Dispute
 Evidence Bundle (evidence, not an award), and optional SCITT anchoring.
-ATP is not a competitor to x402 or AP2; it sits above them.
+Cedulon is not a competitor to x402 or AP2; it sits above them.
 
 {::boilerplate bcp14-tagged}
 
@@ -66,7 +66,7 @@ agent can drain a rail that has already accepted a valid signature. A
 counterparty can ship the wrong artifact. A transparency log, if used at
 all, is proprietary.
 
-ATP fills that gap. It does not clear funds, hold custody, or operate a
+Cedulon fills that gap. It does not clear funds, hold custody, or operate a
 payment facilitator. An optional escrow actor is defined only as a
 third-party role interface ({{escrow-role}}). This document and the
 companion implementation MUST NOT operate escrow or custody
@@ -107,7 +107,7 @@ Decision Token:
 
 # Architecture
 
-ATP has three control-plane objects and one optional log:
+Cedulon has three control-plane objects and one optional log:
 
 ~~~~
   Principal --policy--> PDP --allow/deny--> x402/AP2 rail
@@ -154,7 +154,7 @@ Service.
 A Trade Manifest is the commerce analogue of a promise: it is issued
 **before** value moves. It is conceptually symmetric to a later Spend
 Receipt (promise then proof), and it MAY carry an AP2 mandate hash so that
-user intent and the ATP offer stay linked ({{SHOULD-T8-5}}).
+user intent and the Cedulon offer stay linked ({{SHOULD-T8-5}}).
 
 A Trade Manifest MUST bind all of the following ({{MUST-T8-1}}):
 
@@ -245,7 +245,7 @@ A Receipt Issuer or relying party MAY construct a SCITT Signed Statement
 whose payload is either the Spend Receipt COSE object or a privacy profile
 ({{privacy}}) and register it with a Transparency Service {{RFC9943}}.
 The service returns a COSE receipt {{RFC9942}}. Embedding that receipt
-yields a Transparent Statement. ATP does not define a new transparency
+yields a Transparent Statement. Cedulon does not define a new transparency
 algorithm.
 
 # Privacy Considerations
@@ -315,13 +315,13 @@ escrow {{MUST-T8-custody}}.
 # IANA Considerations
 
 This document has no IANA actions in -00. A later revision MAY request a
-COSE header parameter and a CWT claim registry block for ATP claim labels.
+COSE header parameter and a CWT claim registry block for Cedulon claim labels.
 This section is a placeholder.
 
 # Informative Notes on Adjacent Protocols
 
 x402 uses HTTP 402 {{RFC9110}} to negotiate stablecoin payment. AP2 uses
-signed mandates as verifiable credentials. ATP does not replace either
+signed mandates as verifiable credentials. Cedulon does not replace either
 protocol. Web Bot Auth {{RFC9421}} authenticates bots; it is not a spend
 receipt.
 

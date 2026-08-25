@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
-import { canonical } from "@agent-trade-protocol/core";
+import { canonical } from "@cedulon/core";
 
 export type SpendReceiptClaims = {
   payer: string;

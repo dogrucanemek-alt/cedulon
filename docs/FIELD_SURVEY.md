@@ -5,7 +5,7 @@ Internal Turkish notes live outside this repository (`../ARASTIRMA_RAPORU.md`).
 
 ## Layering
 
-ATP is an **audit layer**, not a payment rail.
+Cedulon is an **audit layer**, not a payment rail.
 
 - **x402** (Coinbase, Apache-2.0): HTTP 402 + facilitator settlement.
   https://www.coinbase.com/developer-platform/discover/launches/x402
@@ -39,8 +39,9 @@ Risk: **RED**.
 - Class 9/42 trademark search on USPTO/EUIPO/TURKPATENT: UNVERIFIED (interactive search not completed).
 - `agenttradeprotocol.org`: RDAP 404 (likely unregistered). `atp.dev`: treat as taken.
 
-Acronym backups are **invalid**: AGTP is taken (`nomoticai/agtp`, `draft-hood-independent-agtp-09`). ATRP stays in the A*P graveyard. Word-name candidates (no rename in this tree): **Cedulon** (preferred), **Vouchel**, **Pactile**, **Assensus**. Detail and sources: `../ARASTIRMA_RAPORU.md` §8.6.
-npm scope candidate: `@agent-trade-protocol/*`. No publish in this tree.
+Acronym backups are **invalid**: AGTP is taken (`nomoticai/agtp`, `draft-hood-independent-agtp-09`). ATRP stays in the A*P graveyard. Word-name candidates were **Cedulon** (preferred), **Vouchel**, **Pactile**, **Assensus**. Detail and sources: `../ARASTIRMA_RAPORU.md` §8.6.
+
+**Resolution (2026-08-25): the protocol is named Cedulon.** npm scope: `@cedulon/*`. No publish in this tree.
 
 ## Closest Internet-Drafts (FIX, 2026-08-25)
 
@@ -72,4 +73,4 @@ Informational DAG of signed agent-action nodes. Another expansion of the letters
 - Text search: no `x402`, `AP2`, `fail-closed`, `payment`, `spend`, `manifest`.
 - SCITT: optional composition for anti-suppression (§14.6, Appendix C.6). Not a spend-audit profile.
 
-ATP (this repo) stays an audit layer above rails. Sharif/ATTP = identity + score. Bates = causal lineage. Complementary; no outbound mail.
+Cedulon (this repo) stays an audit layer above rails. Sharif/ATTP = identity + score. Bates = causal lineage. Complementary; no outbound mail.

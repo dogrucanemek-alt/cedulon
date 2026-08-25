@@ -1,6 +1,6 @@
-import type { PolicyEngine, SpendRequest } from "@agent-trade-protocol/core";
-import { gatedSettle, type AdapterKeys, type PayResult } from "@agent-trade-protocol/x402-adapter";
-import type { SignedManifest } from "@agent-trade-protocol/manifest";
+import type { PolicyEngine, SpendRequest } from "@cedulon/core";
+import { gatedSettle, type AdapterKeys, type PayResult } from "@cedulon/x402-adapter";
+import type { SignedManifest } from "@cedulon/manifest";
 
 export type ToolCall = {
   name: string;

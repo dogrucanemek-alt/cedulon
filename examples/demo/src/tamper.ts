@@ -1,5 +1,5 @@
-import { generateManifestKeys, signManifest, verifyManifest } from "@agent-trade-protocol/manifest";
-import { generateReceiptKeys, signReceipt, verifyReceipt } from "@agent-trade-protocol/receipts";
+import { generateManifestKeys, signManifest, verifyManifest } from "@cedulon/manifest";
+import { generateReceiptKeys, signReceipt, verifyReceipt } from "@cedulon/receipts";
 
 const nowMs = 1_700_000_000_000;
 const mk = generateManifestKeys();

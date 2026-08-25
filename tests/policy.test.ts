@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { PolicyEngine, requestHashOf } from "@agent-trade-protocol/core";
+import { PolicyEngine, requestHashOf } from "@cedulon/core";
 
 function engine(extra: Partial<ConstructorParameters<typeof PolicyEngine>[0]> = {}) {
   return new PolicyEngine({

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canonical, PACKAGE_SCOPE, PROTOCOL_SHORT, PolicyEngine } from "@agent-trade-protocol/core";
+import { canonical, PACKAGE_SCOPE, PROTOCOL_SHORT, PolicyEngine } from "@cedulon/core";
 import {
   assertNoPiiFields,
   generateReceiptKeys,
@@ -11,8 +11,8 @@ import {
   signReceipt,
   verifyDisputeBundle,
   verifyReceipt,
-} from "@agent-trade-protocol/receipts";
-import { wrapToolsCall } from "@agent-trade-protocol/mcp-guard";
+} from "@cedulon/receipts";
+import { wrapToolsCall } from "@cedulon/mcp-guard";
 import { runDispute } from "../examples/demo/src/dispute.ts";
 import { assertRunaway, runRunaway } from "../examples/demo/src/runaway.ts";
 
@@ -239,8 +239,8 @@ describe("mcp-guard", () => {
 
 describe("brand", () => {
   it("uses the single brand constant", () => {
-    assert.equal(PROTOCOL_SHORT, "ATP");
-    assert.equal(PACKAGE_SCOPE, "@agent-trade-protocol");
+    assert.equal(PROTOCOL_SHORT, "Cedulon");
+    assert.equal(PACKAGE_SCOPE, "@cedulon");
   });
 
   it("canonical sorts object keys", () => {

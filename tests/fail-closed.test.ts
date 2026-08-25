@@ -5,7 +5,7 @@ import {
   naivePayAlwaysAllow,
   PolicyEngine,
   type SpendRequest,
-} from "@agent-trade-protocol/core";
+} from "@cedulon/core";
 
 const req: SpendRequest = {
   amount: 1n,

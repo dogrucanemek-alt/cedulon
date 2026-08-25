@@ -4,19 +4,19 @@ import {
   policyDocument,
   type PolicyEngine,
   type SpendRequest,
-} from "@agent-trade-protocol/core";
-import { canonical } from "@agent-trade-protocol/core";
+} from "@cedulon/core";
+import { canonical } from "@cedulon/core";
 import {
   isManifestExpired,
   manifestHash,
   sha256Hex,
   verifyManifest,
   type SignedManifest,
-} from "@agent-trade-protocol/manifest";
+} from "@cedulon/manifest";
 import {
   signReceipt,
   type SignedReceipt,
-} from "@agent-trade-protocol/receipts";
+} from "@cedulon/receipts";
 
 export type AdapterKeys = {
   receiptPrivatePem: string;

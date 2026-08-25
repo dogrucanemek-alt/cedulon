@@ -1,10 +1,10 @@
-# ATP Threat Model
+# Cedulon Threat Model
 
-This document is the Block B threat model for the Agent Trade Protocol (ATP).
+This document is the Block B threat model for the Cedulon Protocol.
 Requirements use RFC 2119 key words ([RFC2119], [RFC8174]). Every MUST
 traces to a numbered threat in Section 2.
 
-ATP is an audit layer above payment rails (x402, AP2, and similar). It does
+Cedulon is an audit layer above payment rails (x402, AP2, and similar). It does
 not take custody and does not operate escrow. An optional third-party escrow
 role may appear in the protocol as an interface only.
 
@@ -35,13 +35,13 @@ role may appear in the protocol as an interface only.
 
 ### 1.3 Assumptions
 
-- Rails (x402 facilitators, card networks) may succeed even if ATP is skipped.
-  Therefore ATP MUST be on the only path the agent is allowed to use (T5).
+- Rails (x402 facilitators, card networks) may succeed even if Cedulon is skipped.
+  Therefore Cedulon MUST be on the only path the agent is allowed to use (T5).
 - Cryptographic primitives come from the host (`node:crypto` in the skeleton).
 - This repository uses mock keys and a mock rail. Production key storage is
   out of scope but constrained by T7.
 - Delivery verification is a hash compare against the manifest acceptance
-  criteria. ATP does not judge quality beyond that hash.
+  criteria. Cedulon does not judge quality beyond that hash.
 
 ## 2. Threats, mitigations, and requirements
 
@@ -80,7 +80,7 @@ Fail-closed: if the engine is missing or throws, the result is deny.
 
 ### T3 — Replay of payment authority
 
-An observer replays a signed payment payload, mandate, or ATP decision token.
+An observer replays a signed payment payload, mandate, or Cedulon decision token.
 
 **Mitigation.** Every gated spend carries a unique nonce. The nonce store
 rejects a second use. Manifests expire. Decision tokens are single-use and
@@ -160,7 +160,7 @@ The payee ships a different artifact, or the price exceeds the signed offer.
 
 **Mitigation.** Trade Manifest binds price and an acceptance-criteria hash
 before payment. After delivery, a Dispute Evidence Bundle packages
-manifest, receipt, and delivery hash. ATP does not adjudicate.
+manifest, receipt, and delivery hash. Cedulon does not adjudicate.
 
 | ID | Requirement |
 |---|---|
@@ -203,7 +203,7 @@ when the operator chooses privacy mode.
 Untraced MUST check: every MUST in Section 2 appears in this table.
 
 MAY-T8-6 contains a MUST NOT (no custody). It traces to T8 and to the
-closed product decision that ATP does not operate escrow.
+closed product decision that Cedulon does not operate escrow.
 
 ## 4. Out of scope
 

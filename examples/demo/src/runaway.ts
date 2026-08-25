@@ -1,11 +1,11 @@
-import { PolicyEngine, type Policy } from "@agent-trade-protocol/core";
+import { PolicyEngine, type Policy } from "@cedulon/core";
 import {
   generateReceiptKeys,
   receiptHash,
   verifyReceipt,
   type SignedReceipt,
-} from "@agent-trade-protocol/receipts";
-import { gatedSettle, type AdapterKeys } from "@agent-trade-protocol/x402-adapter";
+} from "@cedulon/receipts";
+import { gatedSettle, type AdapterKeys } from "@cedulon/x402-adapter";
 
 export const RUNAWAY_POLICY: Policy = {
   maxAmount: 10n,

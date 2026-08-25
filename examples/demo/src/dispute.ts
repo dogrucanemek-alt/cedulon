@@ -1,17 +1,17 @@
-import { canonical, PolicyEngine } from "@agent-trade-protocol/core";
+import { canonical, PolicyEngine } from "@cedulon/core";
 import {
   generateManifestKeys,
   sha256Hex,
   signManifest,
   type TradeManifestBody,
-} from "@agent-trade-protocol/manifest";
+} from "@cedulon/manifest";
 import {
   generateReceiptKeys,
   makeDisputeBundle,
   verifyDisputeBundle,
   verifyReceipt,
-} from "@agent-trade-protocol/receipts";
-import { gatedSettle } from "@agent-trade-protocol/x402-adapter";
+} from "@cedulon/receipts";
+import { gatedSettle } from "@cedulon/x402-adapter";
 
 export function runDispute(nowMs = 1_700_000_000_000): {
   matchesAcceptance: boolean;

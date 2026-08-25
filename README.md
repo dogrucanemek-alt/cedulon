@@ -1,9 +1,9 @@
-# ATP — Agent Trade Protocol
+# Cedulon — Cedulon Protocol
 
 Audit layer for agent-to-agent spend: signed trade manifest, fail-closed
 policy, signed spend receipt (SCITT-anchorable).
 
-ATP is **not** a payment rail. It sits above x402 and AP2.
+Cedulon is **not** a payment rail. It sits above x402 and AP2.
 
 Local repository only. No remote, no npm publish, no real wallets.
 
@@ -34,7 +34,7 @@ packages/receipts       signed spend receipt + dispute bundle + SCITT stub
 packages/mcp-guard      MCP tools/call wrapper (mock)
 packages/x402-adapter   HTTP 402 adapter (mock rail)
 examples/demo           runaway (3/97) and dispute-evidence demos
-spec/draft-dogru-atp-00.md
+spec/draft-dogru-cedulon-00.md
 THREAT_MODEL.md
 ```
 
