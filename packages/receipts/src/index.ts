@@ -1,6 +1,7 @@
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
 import { canonical } from "@cedulon/core";
 import {
+  CTY_COUNTERSIGN,
   CTY_RECEIPT,
   asMap,
   cborMap,
@@ -30,6 +31,11 @@ export const RECEIPT_CLAIM = {
   outcome: -70012,
 } as const;
 
+/** CWT private-use label for a detached payee countersignature payload. */
+export const COUNTERSIGN_CLAIM = {
+  receiptCose: -70401,
+} as const;
+
 export const AMOUNT_RE = /^(0|[1-9][0-9]*)$/;
 export const NONCE_MIN_BYTES = 16;
 
@@ -56,6 +62,8 @@ export type SignedReceipt = {
   publicKeyPem: string;
   encoding: ReceiptEncoding;
   coseHex?: string;
+  counterCoseHex?: string;
+  payeePublicKeyPem?: string;
 };
 
 export type PrivacyMode = "full" | "public-hash";
@@ -254,6 +262,63 @@ export function signReceiptUnchecked(
 
 export function verifyReceipt(signed: SignedReceipt): boolean {
   return signed.encoding === "json" ? verifyReceiptJson(signed) : verifyReceiptCose(signed);
+}
+
+function issuerCoseBytes(signed: SignedReceipt): Uint8Array {
+  if (!signed.coseHex) {
+    throw new Error("countersign-requires-cose");
+  }
+  return new Uint8Array(Buffer.from(signed.coseHex, "hex"));
+}
+
+export function counterSign(
+  signed: SignedReceipt,
+  payeePrivateKeyPem: string,
+  payeePublicKeyPem: string,
+): SignedReceipt {
+  if (!verifyReceipt(signed)) {
+    throw new Error("countersign-unsigned-receipt");
+  }
+  const payload = encodeCbor(cborMap([[COUNTERSIGN_CLAIM.receiptCose, issuerCoseBytes(signed)]]));
+  const cose = signCoseSign1(payload, payeePrivateKeyPem, CTY_COUNTERSIGN);
+  return {
+    ...signed,
+    counterCoseHex: Buffer.from(cose).toString("hex"),
+    payeePublicKeyPem,
+  };
+}
+
+export function verifyCounterSignature(signed: SignedReceipt, payeePublicKeyPem?: string): boolean {
+  if (!signed.counterCoseHex) {
+    return false;
+  }
+  const key = payeePublicKeyPem ?? signed.payeePublicKeyPem;
+  if (!key || !signed.coseHex) {
+    return false;
+  }
+  try {
+    const bytes = Buffer.from(signed.counterCoseHex, "hex");
+    if (!verifyCoseSign1(bytes, key, CTY_COUNTERSIGN)) {
+      return false;
+    }
+    const msg = decodeCoseSign1(bytes);
+    const map = asMap(decodeCbor(msg.payload));
+    const bound = mapGet(map, COUNTERSIGN_CLAIM.receiptCose);
+    if (!(bound instanceof Uint8Array)) {
+      return false;
+    }
+    const issuer = issuerCoseBytes(signed);
+    if (bound.length !== issuer.length) {
+      return false;
+    }
+    let d = 0;
+    for (let i = 0; i < bound.length; i += 1) {
+      d |= bound[i] ^ issuer[i];
+    }
+    return d === 0;
+  } catch {
+    return false;
+  }
 }
 
 export function receiptHash(signed: SignedReceipt): string {

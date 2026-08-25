@@ -317,6 +317,36 @@ encoded as lowercase hex.
 Verifiers MUST reject a receipt if the signature fails or if the
 decoded claim map does not match the presented claims (`MUST-T4-2`).
 
+## Optional payee countersignature {#countersign}
+
+A payee MAY attach a countersignature over the issuer's signed
+Spend Receipt (`MAY-T8-9`). The profile uses a **detached**
+COSE_Sign1 {{RFC9052}} whose payload is a CBOR map with a single
+private-use label:
+
+| Label | Claim | CBOR type |
+|---|---|---|
+| -70401 | receiptCose | bstr (exact issuer COSE_Sign1 bytes) |
+
+The countersignature uses the header profile in {{cose-profile}}
+and content type `application/cedulon-countersign+cbor`.
+
+This is a second Sign1 object, not RFC 9052 Countersignature0
+(unprotected-header label 11). Countersignature0 would write into
+the issuer object and change `receiptHash` after issue, breaking
+the receipt chain. A detached Sign1 keeps the issuer bytes
+stable, reuses `kid` and content-type, and is absent by simply
+omitting the sibling object.
+
+Absence of a countersignature MUST NOT invalidate the issuer
+receipt (`MAY-T8-9`). If a countersignature is present, a
+verifier MUST reject it when the signature fails, when `kid` or
+content type does not match the configured payee key, or when
+label -70401 is not the issuer COSE bytes (`MUST-T8-8`). A
+Dispute Evidence Bundle that includes a verified countersignature
+has stronger evidence that the payee accepted those bytes; the
+bundle is still not an award (`MUST-T8-4`).
+
 # COSE Profile {#cose-profile}
 
 This profile uses deterministic CBOR {{RFC8949}} Section 4.2.1
@@ -393,8 +423,9 @@ The protected header MUST be a deterministic CBOR map containing
 - `3` (content type) = a tstr that distinguishes the payload:
   `application/cedulon-receipt+cbor`,
   `application/cedulon-checkpoint+cbor`,
-  `application/cedulon-manifest+cbor`, or
-  `application/cedulon-decision+cbor`
+  `application/cedulon-manifest+cbor`,
+  `application/cedulon-decision+cbor`, or
+  `application/cedulon-countersign+cbor`
 - `4` (kid) = bstr, mandatory. The profile computes `kid` as the
   first eight bytes of SHA-256 over the issuer's SubjectPublicKeyInfo
   DER. A verifier MUST obtain the public key from an authenticated
@@ -557,6 +588,7 @@ A verifier MUST perform these steps in order (`MUST-T10-1`,
 | equivocation | fail | Two distinct hashes for one epoch |
 | window-coverage | fail | Gap, overlap, or non-adjacent / non-consecutive windows |
 | unauthenticated-extract | warn | Extract has no verifiable signature; guarantee is conditional |
+| countersign-bad | fail | Present payee countersignature failed verify |
 
 Checkpoints SHOULD be registered with a Transparency Service
 (`SHOULD-T11-5`). A test deployment MAY use an in-process
@@ -672,7 +704,8 @@ Counterparty (T8):
 : Manifest bind (`MUST-T8-1`, `MUST-T8-2`). Evidence bundle
   (`MUST-T8-3`) is not an award (`MUST-T8-4`).
   `manifestHash` is the SHA-256 of the signed COSE bytes
-  (`MUST-T8-7`).
+  (`MUST-T8-7`). A present payee countersignature MUST verify
+  (`MUST-T8-8`); absence is allowed (`MAY-T8-9`).
 
 Privacy (T9):
 : See {{privacy}}.

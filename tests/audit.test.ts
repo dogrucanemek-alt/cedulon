@@ -6,7 +6,14 @@ import {
   signCheckpoint,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
-import { generateReceiptKeys, receiptHash, signReceipt, signReceiptUnchecked, type SignedReceipt } from "@cedulon/receipts";
+import {
+  counterSign,
+  generateReceiptKeys,
+  receiptHash,
+  signReceipt,
+  signReceiptUnchecked,
+  type SignedReceipt,
+} from "@cedulon/receipts";
 import {
   RailLedger,
   generateExtractKeys,
@@ -408,5 +415,27 @@ describe("new detections — RED then GREEN", () => {
     for (const s of settlements) ledger.record(s);
     const fromLedger = ledger.signedExtract(ek.privateKeyPem, ek.publicKeyPem);
     assert.equal(fromLedger.body.settlements.length, 1);
+  });
+
+  it("14 RED then GREEN: bad payee countersignature is countersign-bad", () => {
+    const k = generateReceiptKeys();
+    const payee = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const good = counterSign(receipts[0], payee.privateKeyPem, payee.publicKeyPem);
+    const raw = Buffer.from(good.counterCoseHex ?? "", "hex");
+    raw[raw.length - 1] ^= 0x01;
+    const bad = { ...good, counterCoseHex: raw.toString("hex") };
+    const red = audit({
+      receipts: [bad],
+      checkpoints: [oneCheckpoint(k, [bad])],
+      settlements: settlementsOf([bad]),
+    });
+    assert.equal(red.findings.some((f) => f.code === "countersign-bad"), true);
+    const green = audit({
+      receipts: [good],
+      checkpoints: [oneCheckpoint(k, [good])],
+      settlements: settlementsOf([good]),
+    });
+    assert.equal(green.ok, true);
   });
 });

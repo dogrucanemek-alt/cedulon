@@ -6,8 +6,10 @@ import {
   type TradeManifestBody,
 } from "@cedulon/manifest";
 import {
+  counterSign,
   generateReceiptKeys,
   makeDisputeBundle,
+  verifyCounterSignature,
   verifyDisputeBundle,
   verifyReceipt,
 } from "@cedulon/receipts";
@@ -16,6 +18,7 @@ import { gatedSettle } from "@cedulon/x402-adapter";
 export function runDispute(nowMs = 1_700_000_000_000): {
   matchesAcceptance: boolean;
   bundleOk: boolean;
+  countersignOk: boolean;
 } {
   const expected = Buffer.from("good-bytes");
   const delivered = Buffer.from("bad-bytes");
@@ -63,14 +66,20 @@ export function runDispute(nowMs = 1_700_000_000_000): {
   if (!verifyReceipt(paid.receipt)) {
     throw new Error("receipt");
   }
+  const payeeKeys = generateReceiptKeys();
+  const countersigned = counterSign(paid.receipt, payeeKeys.privateKeyPem, payeeKeys.publicKeyPem);
+  if (!verifyCounterSignature(countersigned)) {
+    throw new Error("countersign");
+  }
   const bundle = makeDisputeBundle({
     manifestCanonical: canonical(manifest),
-    receiptCanonical: canonical(paid.receipt),
+    receiptCanonical: canonical(countersigned),
     deliveryBytes: delivered,
     acceptanceCriteriaHash: body.acceptanceCriteriaHash,
   });
   return {
     matchesAcceptance: bundle.matchesAcceptance,
     bundleOk: verifyDisputeBundle(bundle) && bundle.matchesAcceptance === false,
+    countersignOk: verifyCounterSignature(countersigned) && verifyReceipt(countersigned),
   };
 }

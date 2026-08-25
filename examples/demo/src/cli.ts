@@ -10,3 +10,4 @@ console.log(`receipts_verified=${runaway.receipts.length}`);
 const dispute = runDispute();
 console.log(`matchesAcceptance=${dispute.matchesAcceptance}`);
 console.log(`bundle_ok=${dispute.bundleOk}`);
+console.log(`countersign_ok=${dispute.countersignOk}`);

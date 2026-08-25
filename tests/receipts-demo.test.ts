@@ -9,8 +9,10 @@ import {
   receiptHash,
   scittAnchorStub,
   signReceipt,
+  verifyCounterSignature,
   verifyDisputeBundle,
   verifyReceipt,
+  counterSign,
 } from "@cedulon/receipts";
 import { wrapToolsCall } from "@cedulon/mcp-guard";
 import { runDispute } from "../examples/demo/src/dispute.ts";
@@ -167,6 +169,42 @@ describe("receipts and hash chain", () => {
     assert.equal(stub.statementHash, receiptHash(signed));
   });
 
+  it("RED then GREEN: payee countersignature tamper and wrong key fail", () => {
+    const issuer = generateReceiptKeys();
+    const payee = generateReceiptKeys();
+    const other = generateReceiptKeys();
+    const signed = signReceipt(
+      {
+        payer: "a",
+        payee: "b",
+        amount: "1",
+        currency: "USD",
+        policyHash: "p",
+        manifestHash: null,
+        noManifest: true,
+        x402PaymentRef: "ref-1",
+        outcome: "settled",
+        timestampMs: 1,
+        nonce: "n".padEnd(16, "0"),
+        prevReceiptHash: null,
+      },
+      issuer.privateKeyPem,
+      issuer.publicKeyPem,
+    );
+    assert.equal(verifyReceipt(signed), true);
+    assert.equal(verifyCounterSignature(signed), false);
+    const countersigned = counterSign(signed, payee.privateKeyPem, payee.publicKeyPem);
+    assert.equal(verifyReceipt(countersigned), true);
+    assert.equal(verifyCounterSignature(countersigned), true);
+    assert.equal(receiptHash(countersigned), receiptHash(signed));
+    const raw = Buffer.from(countersigned.counterCoseHex ?? "", "hex");
+    raw[raw.length - 1] ^= 0x01;
+    const tampered = { ...countersigned, counterCoseHex: raw.toString("hex") };
+    assert.equal(verifyCounterSignature(tampered), false);
+    assert.equal(verifyCounterSignature(countersigned, other.publicKeyPem), false);
+    assert.equal(verifyCounterSignature(countersigned), true);
+  });
+
   it("dispute bundle verifies when hashes disagree", () => {
     const bundle = makeDisputeBundle({
       manifestCanonical: "{}",
@@ -191,6 +229,7 @@ describe("demo fixtures", () => {
     const d = runDispute();
     assert.equal(d.matchesAcceptance, false);
     assert.equal(d.bundleOk, true);
+    assert.equal(d.countersignOk, true);
   });
 });
 

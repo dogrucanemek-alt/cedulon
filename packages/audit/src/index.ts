@@ -5,7 +5,7 @@ import {
   verifyCheckpoint,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
-import { receiptHash, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
+import { receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import {
   verifyRailExtract,
   type RailSettlement,
@@ -24,6 +24,7 @@ export type FindingCode =
   | "window-coverage"
   | "settled-without-ref"
   | "unauthenticated-extract"
+  | "countersign-bad"
   | "ok";
 
 export type Finding = {
@@ -326,6 +327,18 @@ export function audit(input: {
   }
 
   findings.push(...findSettlementMatches(input.receipts, input.settlements));
+  for (const r of input.receipts) {
+    if (!r.counterCoseHex) {
+      continue;
+    }
+    if (!verifyCounterSignature(r)) {
+      findings.push({
+        code: "countersign-bad",
+        id: r.claims.nonce,
+        detail: `payee countersignature on nonce=${r.claims.nonce} failed verify`,
+      });
+    }
+  }
   const chain = findReceiptChainBreak(input.receipts);
   if (chain) findings.push(chain);
   findings.push(...findCheckpointTotalMismatches(input.receipts, input.checkpoints));

@@ -168,7 +168,9 @@ The payee ships a different artifact, or the price exceeds the signed offer.
 
 **Mitigation.** Trade Manifest binds price and an acceptance-criteria hash
 before payment. After delivery, a Dispute Evidence Bundle packages
-manifest, receipt, and delivery hash. Cedulon does not adjudicate.
+manifest, receipt, and delivery hash. The payee MAY countersign the
+issuer receipt bytes so they cannot later deny those bytes. Cedulon
+does not adjudicate.
 
 | ID | Requirement |
 |---|---|
@@ -180,6 +182,8 @@ manifest, receipt, and delivery hash. Cedulon does not adjudicate.
 | SHOULD-T8-5 | Manifests SHOULD reference an AP2 mandate hash when one exists. |
 | MAY-T8-6 | Parties MAY add an optional escrow actor as a third-party role interface; this project MUST NOT implement custody. |
 | MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
+| MUST-T8-8 | If a payee countersignature is present, a verifier MUST reject it when the signature fails, when `kid` or content type does not match the configured payee key, or when the payload is not the issuer COSE_Sign1 bytes. |
+| MAY-T8-9 | A payee MAY attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. |
 
 ### T9 — PII leakage into the transparency log
 
@@ -249,7 +253,7 @@ Optional registration in a transparency log makes suppression visible.
 | T5 Rail bypass | Single gated interface; no secrets in tools | MUST-T5-1, MUST-T5-2 |
 | T6 TOCTOU | Decision Token COSE binds six request fields | MUST-T6-1, MUST-T6-2, MUST-T6-4, MUST-T6-5 |
 | T7 Key leak | No secrets in artifacts; mock keys only | MUST-T7-1, MUST-T7-2 |
-| T8 Bad counterparty | Manifest bind + COSE hash + evidence bundle, no escrow | MUST-T8-1, MUST-T8-2, MUST-T8-3, MUST-T8-4, MUST-T8-7, MAY-T8-6 (MUST NOT custody) |
+| T8 Bad counterparty | Manifest bind + COSE hash + evidence bundle + optional countersign, no escrow | MUST-T8-1, MUST-T8-2, MUST-T8-3, MUST-T8-4, MUST-T8-7, MUST-T8-8, MAY-T8-6 (MUST NOT custody), MAY-T8-9 |
 | T9 Log PII | Redaction / hash-only public form | MUST-T9-1, MUST-T9-2 |
 | T10 Rail bypass / secret spend | Authenticated extract; 1:1 ref+amount+currency | MUST-T10-1, MUST-T10-2, MUST-T10-3, MUST-T10-4, MUST-T10-6, MUST-T10-7 |
 | T11 Checkpoint suppress / rollback | Signed chained checkpoints; window; witness-conditional prefix | MUST-T11-1, MUST-T11-2, MUST-T11-3, MUST-T11-4, MUST-T11-7, MUST-T11-8, MUST-T11-9 |
