@@ -208,3 +208,98 @@ footer.colophon p {
   padding-left: 0.75rem;
   margin: 0.5rem 0 1rem;
 }
+
+.wrap.wide {
+  max-width: 64rem;
+}
+
+.banner {
+  font-family: var(--mono);
+  font-size: clamp(1.4rem, 4vw, 2.4rem);
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  padding: 1rem 0 1.25rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1.25rem;
+}
+
+.banner.ok {
+  color: var(--balanced);
+}
+
+.banner.bad {
+  color: var(--fail);
+}
+
+.switch {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.switch button {
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  padding: 0.35rem 0.7rem;
+}
+
+.switch button[aria-pressed="true"] {
+  border-color: var(--ink);
+}
+
+.board {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 860px) {
+  .board {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.card {
+  border: 1px solid var(--rule);
+  padding: 0.7rem 0.8rem;
+  margin: 0 0 0.6rem;
+}
+
+.card .meta {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+.chain {
+  position: relative;
+  padding-left: 0.85rem;
+  border-left: 1px solid var(--rule);
+}
+
+.gap {
+  border-style: dashed;
+  color: var(--fail);
+  min-height: 4.5rem;
+}
+
+.findings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.findings th,
+.findings td {
+  text-align: left;
+  border-top: 1px solid var(--rule);
+  padding: 0.4rem 0.35rem;
+  vertical-align: top;
+}
+
+.findings th {
+  font-weight: 600;
+}

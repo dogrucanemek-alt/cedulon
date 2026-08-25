@@ -17,7 +17,8 @@
     "demo": "node --experimental-strip-types examples/demo/src/cli.ts",
     "demo:unguarded": "node --experimental-strip-types examples/demo/src/unguarded.ts",
     "demo:bypass": "node --experimental-strip-types examples/demo/src/bypass.ts",
-    "audit": "node --experimental-strip-types examples/demo/src/audit-cli.ts"
+    "audit": "node --experimental-strip-types examples/demo/src/audit-cli.ts",
+    "demo:export": "node --experimental-strip-types examples/demo/src/export.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

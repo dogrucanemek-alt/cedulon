@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cedulon — Completeness panel</title>
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <div class="wrap wide">
+      <header class="mast">
+        <nav>
+          <a href="../index.html">Cedulon</a>
+          <a href="../verify.html">Verify</a>
+          <a href="../spec.html">Spec</a>
+          <a href="index.html">Panel</a>
+        </nav>
+      </header>
+
+      <div class="switch">
+        <button type="button" id="btn-balanced" aria-pressed="true">Balanced</button>
+        <button type="button" id="btn-bypass" aria-pressed="false">Bypass</button>
+      </div>
+
+      <div id="banner" class="banner ok" role="status">BALANCED</div>
+
+      <div class="board">
+        <section>
+          <h2>Receipt chain</h2>
+          <div id="chain" class="chain"></div>
+        </section>
+        <section>
+          <h2>Checkpoints</h2>
+          <div id="checkpoints"></div>
+          <h2>Findings</h2>
+          <table class="findings">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Ref</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody id="findings"></tbody>
+          </table>
+        </section>
+      </div>
+
+      <footer class="colophon">
+        <p>Fixtures from <span class="mono">npm run demo:export</span>. No network.</p>
+        <p>Apache-2.0 · © 2026 Emek Can Dogru</p>
+      </footer>
+    </div>
+    <script src="fixtures.js"></script>
+    <script src="panel.js"></script>
+  </body>
+</html>
