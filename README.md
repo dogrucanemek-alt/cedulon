@@ -94,6 +94,7 @@ packages/audit          rail-extract completeness checker
 packages/mcp-guard      MCP tools/call wrapper (mock)
 packages/mcp-server     stdio MCP server (official SDK)
 packages/x402-adapter   HTTP 402 adapter + mock rail extract
+packages/base-extract   read-only Base Sepolia USDC → RailExtract
 examples/demo           runaway, dispute, bypass, audit CLI
 spec/draft-dogru-cedulon-00.md
 THREAT_MODEL.md

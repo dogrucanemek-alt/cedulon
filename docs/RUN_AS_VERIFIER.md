@@ -24,7 +24,7 @@ npx tsc --noEmit
 npm run test:all
 ```
 
-Expect: `tsc` silent, **85** tests passing. The suite includes red-then-green
+Expect: `tsc` silent, **89** tests passing. The suite includes red-then-green
 cases for COSE tamper, checkpoint equivocation, field-level settlement
 matching, window coverage, signed extracts, and each audit finding.
 

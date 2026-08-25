@@ -12,7 +12,8 @@
   ],
   "scripts": {
     "build": "tsc --noEmit",
-    "test:all": "node --experimental-strip-types --test tests/fail-closed.test.ts tests/policy.test.ts tests/replay-manifest.test.ts tests/receipts-demo.test.ts tests/cose.test.ts tests/checkpoint.test.ts tests/audit.test.ts tests/mcp-server.test.ts",
+    "test:all": "node --experimental-strip-types --test tests/fail-closed.test.ts tests/policy.test.ts tests/replay-manifest.test.ts tests/receipts-demo.test.ts tests/cose.test.ts tests/checkpoint.test.ts tests/audit.test.ts tests/mcp-server.test.ts tests/base-extract.test.ts",
+    "extract": "node --experimental-strip-types packages/base-extract/src/cli.ts",
     "mcp": "node --experimental-strip-types packages/mcp-server/src/index.ts",
     "tamper": "node --experimental-strip-types examples/demo/src/tamper.ts",
     "demo": "node --experimental-strip-types examples/demo/src/cli.ts",
