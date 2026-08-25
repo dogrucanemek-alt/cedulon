@@ -1,0 +1,279 @@
+import assert from "node:assert/strict";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const serverEntry = join(root, "packages", "mcp-server", "src", "index.ts");
+
+const TOOL_NAMES = [
+  "cedulon_spend",
+  "cedulon_audit",
+  "cedulon_verify_receipt",
+  "cedulon_export_ledger",
+  "cedulon_status",
+] as const;
+
+type JsonRpc = {
+  jsonrpc?: string;
+  id?: number | string;
+  method?: string;
+  result?: unknown;
+  error?: { code: number; message: string };
+  params?: unknown;
+};
+
+class StdioRpc {
+  private buf = Buffer.alloc(0);
+  private nextId = 1;
+  private readonly pending = new Map<
+    number,
+    { resolve: (v: JsonRpc) => void; reject: (e: Error) => void }
+  >();
+  private readonly child: ChildProcessWithoutNullStreams;
+
+  constructor(env: NodeJS.ProcessEnv = {}) {
+    this.child = spawn(process.execPath, ["--experimental-strip-types", serverEntry], {
+      cwd: root,
+      env: { ...process.env, ...env },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    this.child.stdout.on("data", (chunk: Buffer) => this.onData(chunk));
+    this.child.stderr.on("data", () => {
+      /* protocol must stay on stdout; ignore logs */
+    });
+    this.child.on("error", (err) => {
+      for (const p of this.pending.values()) p.reject(err);
+      this.pending.clear();
+    });
+    this.child.on("exit", (code) => {
+      for (const p of this.pending.values()) {
+        p.reject(new Error(`mcp-server exited ${code}`));
+      }
+      this.pending.clear();
+    });
+  }
+
+  async handshake(): Promise<JsonRpc> {
+    const init = await this.request("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "cedulon-mcp-test", version: "0.0.1" },
+    });
+    this.notify("notifications/initialized", {});
+    return init;
+  }
+
+  request(method: string, params: unknown): Promise<JsonRpc> {
+    const id = this.nextId;
+    this.nextId += 1;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`timeout waiting for ${method}`));
+      }, 8_000);
+      this.pending.set(id, {
+        resolve: (v) => {
+          clearTimeout(timer);
+          resolve(v);
+        },
+        reject: (e) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      });
+      this.write({ jsonrpc: "2.0", id, method, params });
+    });
+  }
+
+  notify(method: string, params: unknown): void {
+    this.write({ jsonrpc: "2.0", method, params });
+  }
+
+  async callTool(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const res = await this.request("tools/call", { name, arguments: args });
+    assert.equal(res.error, undefined, JSON.stringify(res.error));
+    const result = res.result as {
+      content?: Array<{ type: string; text?: string }>;
+      isError?: boolean;
+    };
+    const text = result.content?.find((c) => c.type === "text")?.text;
+    assert.equal(typeof text, "string");
+    return { isError: Boolean(result.isError), body: JSON.parse(text as string) };
+  }
+
+  close(): void {
+    this.child.kill();
+  }
+
+  private write(msg: unknown): void {
+    this.child.stdin.write(`${JSON.stringify(msg)}\n`);
+  }
+
+  private onData(chunk: Buffer): void {
+    this.buf = Buffer.concat([this.buf, chunk]);
+    while (true) {
+      const idx = this.buf.indexOf("\n");
+      if (idx < 0) {
+        return;
+      }
+      const line = this.buf.slice(0, idx).toString("utf8").replace(/\r$/, "");
+      this.buf = this.buf.slice(idx + 1);
+      if (!line) {
+        continue;
+      }
+      const parsed = JSON.parse(line) as JsonRpc;
+      if (parsed.id === undefined) {
+        continue;
+      }
+      const pending = this.pending.get(Number(parsed.id));
+      if (pending) {
+        this.pending.delete(Number(parsed.id));
+        pending.resolve(parsed);
+      }
+    }
+  }
+}
+
+describe("mcp-server stdio JSON-RPC", () => {
+  it("initialize then tools/list exposes five named schemas", async () => {
+    const rpc = new StdioRpc();
+    try {
+      const init = await rpc.handshake();
+      assert.equal(init.error, undefined);
+      const listed = await rpc.request("tools/list", {});
+      assert.equal(listed.error, undefined);
+      const tools = (listed.result as { tools: Array<{ name: string; inputSchema?: unknown }> }).tools;
+      assert.equal(tools.length, 5);
+      assert.deepEqual(
+        tools.map((t) => t.name).sort(),
+        [...TOOL_NAMES].sort(),
+      );
+      for (const tool of tools) {
+        assert.equal((tool.inputSchema as { type?: string } | undefined)?.type, "object");
+      }
+    } finally {
+      rpc.close();
+    }
+  });
+
+  it("spend allow returns a signed receipt; over-limit is deny", async () => {
+    const rpc = new StdioRpc();
+    try {
+      await rpc.handshake();
+      const allowed = await rpc.callTool("cedulon_spend", {
+        amount: "1",
+        currency: "USD",
+        payee: "payee-1",
+        nonce: "allow-nonce-0001",
+        tool: "spend",
+      });
+      assert.equal(allowed.isError, false);
+      const okBody = allowed.body as {
+        ok?: boolean;
+        receipt?: { claims?: { amount?: string; payee?: string }; coseHex?: string };
+      };
+      assert.equal(okBody.ok, true);
+      assert.equal(okBody.receipt?.claims?.amount, "1");
+      assert.equal(okBody.receipt?.claims?.payee, "payee-1");
+      assert.equal(typeof okBody.receipt?.coseHex, "string");
+
+      const denied = await rpc.callTool("cedulon_spend", {
+        amount: "11",
+        currency: "USD",
+        payee: "payee-1",
+        nonce: "deny-nonce-00002",
+        tool: "spend",
+      });
+      assert.equal(denied.isError, true);
+      const denyBody = denied.body as { ok?: boolean; reason?: string };
+      assert.equal(denyBody.ok, false);
+      assert.equal(denyBody.reason, "limit-amount");
+
+      const verified = await rpc.callTool("cedulon_verify_receipt", {
+        receipt: okBody.receipt,
+      });
+      assert.equal(verified.isError, false);
+      const verifyBody = verified.body as { ok?: boolean; receipt?: boolean; countersignature?: null };
+      assert.equal(verifyBody.ok, true);
+      assert.equal(verifyBody.receipt, true);
+      assert.equal(verifyBody.countersignature, null);
+    } finally {
+      rpc.close();
+    }
+  });
+
+  it("audit is balanced after allow, and flags an injected bypass extract", async () => {
+    const rpc = new StdioRpc();
+    try {
+      await rpc.handshake();
+      const paid = await rpc.callTool("cedulon_spend", {
+        amount: "1",
+        currency: "USD",
+        payee: "payee-1",
+        nonce: "audit-nonce-0001",
+        tool: "spend",
+      });
+      assert.equal(paid.isError, false);
+
+      const balanced = await rpc.callTool("cedulon_audit", {});
+      assert.equal(balanced.isError, false);
+      const balancedBody = balanced.body as { ok?: boolean; summary?: string; findings?: unknown[] };
+      assert.equal(balancedBody.ok, true);
+      assert.equal(balancedBody.summary, "audit: balanced");
+      assert.equal(balancedBody.findings?.length, 0);
+
+      const bypass = await rpc.callTool("cedulon_audit", {
+        extraSettlements: [
+          { ref: "bypass-hidden", amount: "7", currency: "USD", timestampMs: 1_700_000_000_099 },
+        ],
+      });
+      assert.equal(bypass.isError, false);
+      const bypassBody = bypass.body as {
+        ok?: boolean;
+        summary?: string;
+        findings?: Array<{ code: string; id: string }>;
+      };
+      assert.equal(bypassBody.ok, false);
+      assert.equal(
+        bypassBody.findings?.some((f) => f.code === "settlement-without-receipt" && f.id === "bypass-hidden"),
+        true,
+      );
+    } finally {
+      rpc.close();
+    }
+  });
+
+  it("status reports version, policy, receipt count, and chain head", async () => {
+    const rpc = new StdioRpc();
+    try {
+      await rpc.handshake();
+      const before = await rpc.callTool("cedulon_status", {});
+      const beforeBody = before.body as {
+        version?: string;
+        policy?: { maxAmount?: string };
+        receiptCount?: number;
+        chainHead?: string | null;
+      };
+      assert.equal(beforeBody.version, "0.0.1");
+      assert.equal(beforeBody.policy?.maxAmount, "10");
+      assert.equal(beforeBody.receiptCount, 0);
+      assert.equal(beforeBody.chainHead, null);
+
+      await rpc.callTool("cedulon_spend", {
+        amount: "2",
+        currency: "USD",
+        payee: "payee-1",
+        nonce: "status-nonce-0001",
+        tool: "spend",
+      });
+      const after = await rpc.callTool("cedulon_status", {});
+      const afterBody = after.body as { receiptCount?: number; chainHead?: string | null };
+      assert.equal(afterBody.receiptCount, 1);
+      assert.equal(typeof afterBody.chainHead, "string");
+    } finally {
+      rpc.close();
+    }
+  });
+});

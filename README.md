@@ -8,6 +8,9 @@ Cedulon is **not** a payment rail. It sits above x402 and AP2.
 No npm publish, no real wallets, no network rails: everything runs locally
 against mock fixtures.
 
+Core packages carry zero runtime dependencies; the MCP server package
+depends only on the official MCP SDK.
+
 ## Requirements
 
 - Node.js 22 or newer (20+ for the libraries; scripts use Node type stripping)
@@ -48,6 +51,7 @@ packages/receipts       spend receipt (COSE default, JSON legacy)
 packages/checkpoint     epoch checkpoints + in-process transparency log
 packages/audit          rail-extract completeness checker
 packages/mcp-guard      MCP tools/call wrapper (mock)
+packages/mcp-server     stdio MCP server (official SDK)
 packages/x402-adapter   HTTP 402 adapter + mock rail extract
 examples/demo           runaway, dispute, bypass, audit CLI
 spec/draft-dogru-cedulon-00.md

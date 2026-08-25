@@ -1,0 +1,19 @@
+{
+  "name": "@cedulon/mcp-server",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@cedulon/audit": "*",
+    "@cedulon/checkpoint": "*",
+    "@cedulon/core": "*",
+    "@cedulon/cose": "*",
+    "@cedulon/receipts": "*",
+    "@cedulon/x402-adapter": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}
