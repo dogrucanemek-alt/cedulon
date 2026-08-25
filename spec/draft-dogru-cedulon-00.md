@@ -52,6 +52,13 @@ informative:
         name: David Asher Bates
     date: 2026-05
     target: https://datatracker.ietf.org/doc/draft-bates-atp/00/
+  GRIGG:
+    title: "Triple Entry Accounting"
+    author:
+      - ins: I. Grigg
+        name: Ian Grigg
+    date: 2005
+    target: https://iang.org/papers/triple_entry.html
 ---
 
 --- abstract
@@ -95,6 +102,17 @@ operate a payment facilitator. An optional escrow actor is defined only
 as a third-party role interface ({{escrow-role}}). Implementations of
 this specification MUST NOT take custody of funds or operate escrow
 (`MUST-T8-custody`).
+
+The completeness claim sits in a long bookkeeping line. Single-entry
+records (clay tablets, journals) listed events in one place and could
+not check themselves. Double-entry bookkeeping, set out by Pacioli in
+1494, posts each event to two books so that the books can check each
+other. Cedulon is a later step: **proven completeness**, where an
+external witness (the authenticated rail extract) is machine-checkable
+against signed spend receipts. Grigg's triple-entry idea — signed
+receipts as the third entry — is {{GRIGG}}. Cedulon's addition is the
+completeness and reconciliation proof plus an open standard profile,
+not a claim to be first.
 
 Neighbor drafts are complementary, not substitutes.
 draft-bates-atp {{BATES-ATTP}} covers tamper-evident causal lineage as
