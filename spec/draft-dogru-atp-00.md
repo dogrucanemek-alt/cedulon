@@ -23,8 +23,8 @@ pi:
   - comments
 author:
   -
-    ins: E. Dogru
-    name: Emekcan Dogru
+    ins: E. C. Dogru
+    name: Emek Can Dogru
     org: Independent
 normative:
   RFC2119:
