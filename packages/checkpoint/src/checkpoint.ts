@@ -48,6 +48,9 @@ export function sha256Hex(data: string | Buffer): string {
 export function totalsFromReceipts(receipts: SignedReceipt[]): Record<string, string> {
   const acc = new Map<string, bigint>();
   for (const r of receipts) {
+    if (r.claims.outcome === "aborted") {
+      continue;
+    }
     const prev = acc.get(r.claims.currency) ?? 0n;
     acc.set(r.claims.currency, prev + BigInt(r.claims.amount));
   }

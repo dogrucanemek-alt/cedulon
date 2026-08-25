@@ -19,7 +19,15 @@ import {
 } from "@cedulon/receipts";
 import { RailLedger, type RailSettlement } from "./rail.ts";
 
-export { RailLedger, type RailSettlement } from "./rail.ts";
+export {
+  RailLedger,
+  generateExtractKeys,
+  signRailExtract,
+  verifyRailExtract,
+  type RailExtractBody,
+  type RailSettlement,
+  type SignedRailExtract,
+} from "./rail.ts";
 
 export type AdapterKeys = {
   receiptPrivatePem: string;
@@ -188,6 +196,7 @@ function issue(
       timestampMs: nowMs,
       nonce: input.req.nonce,
       prevReceiptHash,
+      outcome: "settled",
     },
     keys.receiptPrivatePem,
     keys.receiptPublicPem,

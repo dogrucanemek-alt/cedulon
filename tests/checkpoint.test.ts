@@ -27,6 +27,7 @@ function sampleClaims(nonce: string, amount = "1"): SpendReceiptClaims {
     timestampMs: 1_700_000_000_000,
     nonce,
     prevReceiptHash: null,
+    outcome: "settled",
   };
 }
 

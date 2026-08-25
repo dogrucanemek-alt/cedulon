@@ -11,6 +11,8 @@ import {
   verifyCoseSign1,
 } from "@cedulon/cose";
 
+export type ReceiptOutcome = "settled" | "aborted";
+
 /** CWT-style integer labels for Spend Receipt claims (private use). */
 export const RECEIPT_CLAIM = {
   payer: 100,
@@ -24,6 +26,7 @@ export const RECEIPT_CLAIM = {
   timestampMs: 108,
   nonce: 109,
   prevReceiptHash: 110,
+  outcome: 111,
 } as const;
 
 export type ReceiptEncoding = "cose" | "json";
@@ -40,6 +43,7 @@ export type SpendReceiptClaims = {
   timestampMs: number;
   nonce: string;
   prevReceiptHash: string | null;
+  outcome: ReceiptOutcome;
 };
 
 export type SignedReceipt = {
@@ -78,6 +82,7 @@ export function claimsToCbor(claims: SpendReceiptClaims): Uint8Array {
       [RECEIPT_CLAIM.timestampMs, claims.timestampMs],
       [RECEIPT_CLAIM.nonce, claims.nonce],
       [RECEIPT_CLAIM.prevReceiptHash, claims.prevReceiptHash],
+      [RECEIPT_CLAIM.outcome, claims.outcome],
     ]),
   );
 }
@@ -97,8 +102,12 @@ export function claimsFromCbor(bytes: Uint8Array): SpendReceiptClaims {
   };
   const ts = mapGet(map, RECEIPT_CLAIM.timestampMs);
   const noMan = mapGet(map, RECEIPT_CLAIM.noManifest);
+  const outcome = mapGet(map, RECEIPT_CLAIM.outcome);
   if (typeof ts !== "number" || typeof noMan !== "boolean") {
     throw new Error("claim-types");
+  }
+  if (outcome !== "settled" && outcome !== "aborted") {
+    throw new Error("claim-outcome");
   }
   return {
     payer: text(RECEIPT_CLAIM.payer),
@@ -112,12 +121,19 @@ export function claimsFromCbor(bytes: Uint8Array): SpendReceiptClaims {
     timestampMs: ts,
     nonce: text(RECEIPT_CLAIM.nonce),
     prevReceiptHash: textOrNull(RECEIPT_CLAIM.prevReceiptHash),
+    outcome,
   };
 }
 
 function assertClaimConsistency(claims: SpendReceiptClaims): void {
   if (claims.noManifest !== (claims.manifestHash === null)) {
     throw new Error("no-manifest flag must match missing manifestHash");
+  }
+  if (claims.outcome !== "settled" && claims.outcome !== "aborted") {
+    throw new Error("outcome must be settled or aborted");
+  }
+  if (claims.outcome === "settled" && claims.x402PaymentRef === null) {
+    throw new Error("settled receipt requires rail ref");
   }
 }
 
@@ -191,6 +207,24 @@ export function signReceipt(
   return encoding === "json"
     ? signReceiptJson(claims, privateKeyPem, publicKeyPem)
     : signReceiptCose(claims, privateKeyPem, publicKeyPem);
+}
+
+/** Adversary/test helper: signs claims that an issuer MUST reject. */
+export function signReceiptUnchecked(
+  claims: SpendReceiptClaims,
+  privateKeyPem: string,
+  publicKeyPem: string,
+): SignedReceipt {
+  const payload = claimsToCbor(claims);
+  const cose = signCoseSign1(payload, privateKeyPem);
+  const msg = decodeCoseSign1(cose);
+  return {
+    claims,
+    signature: Buffer.from(msg.signature).toString("base64"),
+    publicKeyPem,
+    encoding: "cose",
+    coseHex: Buffer.from(cose).toString("hex"),
+  };
 }
 
 export function verifyReceipt(signed: SignedReceipt): boolean {

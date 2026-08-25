@@ -49,11 +49,12 @@ const FIXTURE_CLAIMS: SpendReceiptClaims = {
   timestampMs: 1_700_000_000_000,
   nonce: "n1",
   prevReceiptHash: null,
+  outcome: "aborted",
 };
 
 /** Encoded by this profile; locked so encoder drift fails the suite. */
 const FIXTURE_CLAIMS_CBOR_HEX =
-  "ab18646770617965722d3118656770617965652d311866613118676355534418686261611869f6186af5186bf6186c1b0000018bcfe56800186d626e31186ef6";
+  "ac18646770617965722d3118656770617965652d311866613118676355534418686261611869f6186af5186bf6186c1b0000018bcfe56800186d626e31186ef6186f6761626f72746564";
 
 describe("deterministic CBOR", () => {
   for (const v of RFC_VECTORS) {
@@ -90,6 +91,7 @@ describe("independent cbor-x decoder", () => {
     assert.equal(Number(foreign[108]), 1_700_000_000_000);
     assert.equal(foreign[109], "n1");
     assert.equal(foreign[110], null);
+    assert.equal(foreign[111], "aborted");
     const roundTrip = claimsFromCbor(encoded);
     assert.deepEqual(roundTrip, FIXTURE_CLAIMS);
   });
@@ -132,7 +134,7 @@ describe("COSE_Sign1 receipts", () => {
     assert.ok(signed.coseHex);
     assert.equal(
       signed.coseHex,
-      "8443a10127a05840ab18646770617965722d3118656770617965652d311866613118676355534418686261611869f6186af5186bf6186c1b0000018bcfe56800186d626e31186ef65840512234abda34c3730601b3b08a144d86c84f2654b73bd323d08ebb17368f2cd086803b7b214226d3658360492206a21e0a5625525a8e18c4f387b3fc6f13f50e",
+      "8443a10127a0584aac18646770617965722d3118656770617965652d311866613118676355534418686261611869f6186af5186bf6186c1b0000018bcfe56800186d626e31186ef6186f6761626f72746564584067b0202b3716ef99dc1e845a07dc847662bb962c7f19a1657dce4f6036ba51f4667f58e20c1833c7078d101096b95ec974f531d28d54e013ba48ae89b209f30b",
     );
     assert.equal(verifyReceipt(signed), true);
     const msg = decodeCoseSign1(hexToBytes(signed.coseHex));

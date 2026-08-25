@@ -34,6 +34,7 @@ const receipt = signReceipt(
     timestampMs: nowMs,
     nonce: "n1",
     prevReceiptHash: null,
+    outcome: "settled",
   },
   rk.privateKeyPem,
   rk.publicKeyPem,
