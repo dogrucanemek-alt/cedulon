@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { decode as decodeCborX } from "cbor-x";
 import { describe, it } from "node:test";
@@ -220,6 +223,15 @@ describe("COSE_Sign1 receipts", () => {
     assert.equal(verifyReceipt(signed), true);
     const tampered = { ...signed, claims: { ...signed.claims, amount: "9" } };
     assert.equal(verifyReceipt(tampered), false);
+  });
+
+  it("spec appendix vectors are byte-identical to locked tests", () => {
+    const spec = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "spec", "draft-dogru-cedulon-00.md"),
+      "utf8",
+    );
+    assert.equal(spec.includes(VECTOR_RECEIPT_COSE_HEX), true);
+    assert.equal(spec.includes(VECTOR_MANIFEST_COSE_HEX), true);
   });
 
   it("amount grammar and nonce width", () => {

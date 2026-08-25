@@ -1,6 +1,10 @@
 # Cedulon Threat Model
 
-This document is the Block B threat model for the Cedulon Protocol.
+This document is an **informative** companion to
+`spec/draft-dogru-cedulon-00.md`. The Internet-Draft Security
+Considerations section is authoritative for protocol requirements.
+This file MUST NOT be read as overriding the draft.
+
 Requirements use RFC 2119 key words ([RFC2119], [RFC8174]). Every MUST
 traces to a numbered threat in Section 2.
 
@@ -105,10 +109,12 @@ A hash chain links receipts. Tamper of one byte fails verify.
 |---|---|
 | MUST-T4-1 | A Spend Receipt MUST be signed by the Receipt Issuer over a canonical encoding of its claims. |
 | MUST-T4-2 | Verifiers MUST reject a receipt whose signature does not validate or whose canonical bytes do not match the signed payload. |
-| MUST-T4-3 | A Spend Receipt MUST include `payer`, `payee`, `amount`, `currency`, `policyHash`, `timestamp`, and `nonce`. |
-| MUST-T4-4 | A Spend Receipt MUST include `manifestHash` or an explicit `no-manifest` flag, never an ambiguous empty hash. |
+| MUST-T4-3 | A Spend Receipt MUST include `payer`, `payee`, `amount`, `currency`, `policyHash`, `timestampMs`, and `nonce`. |
+| MUST-T4-4 | A Spend Receipt MUST include `manifestHash` or an explicit `noManifest` flag, never an ambiguous empty hash. Empty optional values are CBOR null; labels are never absent. |
 | SHOULD-T4-5 | Receipts SHOULD form a hash chain (`prevReceiptHash`) so omission is detectable within one issuer stream. |
 | MAY-T4-6 | Parties MAY register the signed receipt as a SCITT statement to obtain a COSE receipt. |
+| MUST-T4-7 | A Spend Receipt MUST include `outcome` (`settled` or `aborted`). A settled receipt MUST have a non-null rail ref. Aborted receipts MUST NOT enter checkpoint totals. |
+| MUST-T4-8 | COSE_Sign1 protected headers MUST use alg -19 (Ed25519), a mandatory `kid`, and a payload-specific content type. Verifiers MUST reject a `kid` that does not match the configured issuer key. |
 
 ### T5 — Policy bypass via direct rail access
 
@@ -136,7 +142,7 @@ single-use decision. Settlement amount and payee MUST match the decision.
 
 | ID | Requirement |
 |---|---|
-| MUST-T6-1 | Payment settlement MUST use the same amount, currency, and payee that the PDP hashed into its allow decision. |
+| MUST-T6-1 | Payment settlement MUST use the same six `requestHash` fields the PDP evaluated: amount, currency, payee, tool, nonce, and `manifestHash`. |
 | MUST-T6-2 | An allow decision MUST be consumed on the first settlement attempt, success or fail-closed abort, and MUST NOT authorize a later different request. |
 | SHOULD-T6-3 | Implementations SHOULD treat a decision older than a short TTL as expired. |
 
@@ -168,6 +174,7 @@ manifest, receipt, and delivery hash. Cedulon does not adjudicate.
 | MUST-T8-2 | A spend bound to a manifest MUST be denied if the requested amount or currency differs from the manifest. |
 | MUST-T8-3 | If delivery bytes do not hash to the acceptance-criteria hash, the implementation MUST be able to produce a Dispute Evidence Bundle containing the manifest, the spend receipt, and the delivery hash. |
 | MUST-T8-4 | The Dispute Evidence Bundle MUST NOT be described as an arbitral award or escrow release. |
+| MUST-T8-7 | `manifestHash` MUST be the SHA-256 of the signed Trade Manifest COSE bytes and MUST NOT include the issuer public key encoding. |
 | SHOULD-T8-5 | Manifests SHOULD reference an AP2 mandate hash when one exists. |
 | MAY-T8-6 | Parties MAY add an optional escrow actor as a third-party role interface; this project MUST NOT implement custody. |
 | MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
@@ -199,11 +206,13 @@ identified by the settlement ref. The audit fails closed.
 
 | ID | Requirement |
 |---|---|
-| MUST-T10-1 | A verifier MUST compare each rail-extract settlement `ref` to Spend Receipt `x402PaymentRef` values. |
+| MUST-T10-1 | A verifier MUST match each extract settlement to a settled receipt on `ref` AND `amount` AND `currency`. |
 | MUST-T10-2 | A settlement with no matching receipt MUST be reported as a completeness failure identified by that settlement `ref`. |
-| MUST-T10-3 | A Spend Receipt whose `x402PaymentRef` is not on the extract MUST be reported as a completeness failure. |
-| MUST-T10-4 | An audit that has any completeness finding MUST fail (non-zero status in the companion tool). |
+| MUST-T10-3 | A settled Spend Receipt whose `x402PaymentRef` is not on the extract MUST be reported as a completeness failure. |
+| MUST-T10-4 | An audit that has any fail-severity completeness finding MUST fail (non-zero status in the companion tool). |
 | SHOULD-T10-5 | Hosts SHOULD still apply T5 (no ungated rail in the model process). Completeness does not replace prevention. |
+| MUST-T10-6 | A `ref` that appears more than once among settled receipts or among extract rows MUST be reported as `duplicate-ref`. |
+| MUST-T10-7 | A verifier MUST obtain the extract from the rail or from a rail signature. An unverifiable extract MUST be reported as `unauthenticated-extract` and makes the completeness guarantee conditional. |
 
 ### T11 — Checkpoint suppression or rollback
 
@@ -218,11 +227,14 @@ Optional registration in a transparency log makes suppression visible.
 | ID | Requirement |
 |---|---|
 | MUST-T11-1 | An epoch checkpoint MUST be COSE-signed and MUST bind epoch number, time window, receipt count, chain-head hash, per-currency totals, and the previous checkpoint hash. |
-| MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails or whose totals do not match receipts in the declared window. |
+| MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the last in-window receipt hash. |
 | MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. |
 | MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
 | SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
 | MAY-T11-6 | A test deployment MAY use an in-process append-only log as the witness. |
+| MUST-T11-7 | Checkpoint windows MUST be half-open `[startMs, endMs)`. Every chained receipt MUST fall in exactly one window. |
+| MUST-T11-8 | Presented checkpoint epochs MUST be consecutive and adjacent windows MUST meet at `endMs = next.startMs`. |
+| MUST-T11-9 | Prefix-deletion and suppression claims that go beyond the presented chain are conditional on an external transparency witness. |
 
 ## 3. Traceability table
 
@@ -231,14 +243,14 @@ Optional registration in a transparency log makes suppression visible.
 | T1 Prompt injection | Structured PDP; `no-manifest` still gated | MUST-T1-1, MUST-T1-2 |
 | T2 Runaway spend | Limits, velocity, fail-closed | MUST-T2-1, MUST-T2-2, MUST-T2-3, MUST-T2-4 |
 | T3 Replay | Nonce, expiry, single-use decision | MUST-T3-1, MUST-T3-2, MUST-T3-3, MUST-T3-4 |
-| T4 Forgery / denial | Signed canonical receipt, verify fail on tamper | MUST-T4-1, MUST-T4-2, MUST-T4-3, MUST-T4-4 |
+| T4 Forgery / denial | Signed canonical receipt, kid, outcome | MUST-T4-1, MUST-T4-2, MUST-T4-3, MUST-T4-4, MUST-T4-7, MUST-T4-8 |
 | T5 Rail bypass | Single gated interface; no secrets in tools | MUST-T5-1, MUST-T5-2 |
-| T6 TOCTOU | Decision hash binds settlement fields | MUST-T6-1, MUST-T6-2 |
+| T6 TOCTOU | Decision hash binds six request fields | MUST-T6-1, MUST-T6-2 |
 | T7 Key leak | No secrets in artifacts; mock keys only | MUST-T7-1, MUST-T7-2 |
-| T8 Bad counterparty | Manifest bind + evidence bundle, no escrow | MUST-T8-1, MUST-T8-2, MUST-T8-3, MUST-T8-4, MAY-T8-6 (MUST NOT custody) |
+| T8 Bad counterparty | Manifest bind + COSE hash + evidence bundle, no escrow | MUST-T8-1, MUST-T8-2, MUST-T8-3, MUST-T8-4, MUST-T8-7, MAY-T8-6 (MUST NOT custody) |
 | T9 Log PII | Redaction / hash-only public form | MUST-T9-1, MUST-T9-2 |
-| T10 Rail bypass / secret spend | Extract vs receipt refs; fail on gap | MUST-T10-1, MUST-T10-2, MUST-T10-3, MUST-T10-4 |
-| T11 Checkpoint suppress / rollback | Signed chained checkpoints; equivocation | MUST-T11-1, MUST-T11-2, MUST-T11-3, MUST-T11-4 |
+| T10 Rail bypass / secret spend | Authenticated extract; 1:1 ref+amount+currency | MUST-T10-1, MUST-T10-2, MUST-T10-3, MUST-T10-4, MUST-T10-6, MUST-T10-7 |
+| T11 Checkpoint suppress / rollback | Signed chained checkpoints; window; witness-conditional prefix | MUST-T11-1, MUST-T11-2, MUST-T11-3, MUST-T11-4, MUST-T11-7, MUST-T11-8, MUST-T11-9 |
 
 Untraced MUST check: every MUST in Section 2 appears in this table.
 
