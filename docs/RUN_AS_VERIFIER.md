@@ -24,7 +24,7 @@ npx tsc --noEmit
 npm run test:all
 ```
 
-Expect: `tsc` silent, **93** tests passing. The suite includes red-then-green
+Expect: `tsc` silent, **97** tests passing. The suite includes red-then-green
 cases for COSE tamper, checkpoint equivocation, field-level settlement
 matching, window coverage, signed extracts, extract binding and trust pinning,
 and each audit finding.
@@ -43,7 +43,14 @@ Expected stdout:
 audit: balanced
 receipts=2
 findings=0
+guarantee=conditional
+warn	unauthenticated-extract	rail extract is unsigned; completeness guarantee is conditional
 ```
+
+Read the last two lines before you trust the first one. This demo passes no
+rail extract and no pin, so the books balance against what the issuer itself
+recorded. That is a conditional result, and the audit says so. Section 6 shows
+what an unconditional one requires.
 
 ## 4. Four bypass kinds (must all fail)
 

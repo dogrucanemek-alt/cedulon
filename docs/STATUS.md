@@ -1,6 +1,6 @@
 # Status
 
-`npm run test:all` is 93 pass; `npx tsc --noEmit` is silent; `npm run audit`
+`npm run test:all` is 97 pass; `npx tsc --noEmit` is silent; `npm run audit`
 exits 0 and the four bypass demos fail as designed.
 
 The three -00 drafts are posted on the IETF datatracker and the repository is

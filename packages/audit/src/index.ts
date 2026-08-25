@@ -27,6 +27,7 @@ export type FindingCode =
   | "extract-key-mismatch"
   | "extract-scope-mismatch"
   | "extract-settlement-mismatch"
+  | "malformed-amount"
   | "countersign-bad"
   | "ok";
 
@@ -151,17 +152,37 @@ export function findSettlementMatches(
   // aggregate settled amount against the aggregate receipted amount instead.
   // Otherwise a repeated ref hides the amount that is unaccounted for.
   for (const ref of skip) {
+    let malformed = false;
+    const add = (into: Map<string, bigint>, currency: string, amount: string): void => {
+      let parsed: bigint;
+      try {
+        parsed = BigInt(amount);
+      } catch {
+        // An amount the audit cannot read is itself a finding. Throwing here
+        // would take down the whole report over one bad row.
+        malformed = true;
+        findings.push({
+          code: "malformed-amount",
+          id: ref,
+          detail: `ref ${ref} carries the amount ${JSON.stringify(amount)}, which is not an integer`,
+        });
+        return;
+      }
+      into.set(currency, (into.get(currency) ?? 0n) + parsed);
+    };
+
     const settledByCurrency = new Map<string, bigint>();
     for (const item of settlementItems) {
       if (item.ref !== ref) continue;
-      const cur = item.settlement.currency;
-      settledByCurrency.set(cur, (settledByCurrency.get(cur) ?? 0n) + BigInt(item.settlement.amount));
+      add(settledByCurrency, item.settlement.currency, item.settlement.amount);
     }
     const receiptedByCurrency = new Map<string, bigint>();
     for (const item of receiptItems) {
       if (item.ref !== ref) continue;
-      const cur = item.receipt.claims.currency;
-      receiptedByCurrency.set(cur, (receiptedByCurrency.get(cur) ?? 0n) + BigInt(item.receipt.claims.amount));
+      add(receiptedByCurrency, item.receipt.claims.currency, item.receipt.claims.amount);
+    }
+    if (malformed) {
+      continue;
     }
     for (const [currency, settled] of settledByCurrency) {
       const receipted = receiptedByCurrency.get(currency) ?? 0n;
@@ -386,25 +407,31 @@ export function audit(input: {
       });
     }
 
-    if (!verifyRailExtract(input.extract)) {
+    const signatureVerifies = verifyRailExtract(input.extract);
+
+    if (!input.trust) {
       warnings.push({
         code: "unauthenticated-extract",
         id: "extract",
-        detail: "rail extract signature failed; completeness guarantee is conditional",
-        severity: "warn",
-      });
-    } else if (!input.trust) {
-      warnings.push({
-        code: "unauthenticated-extract",
-        id: "extract",
-        detail:
-          "no verifier-supplied rail key; the signature proves internal consistency, not that the named rail produced the extract, so the completeness guarantee is conditional",
+        detail: signatureVerifies
+          ? "no verifier-supplied rail key; the signature proves internal consistency, not that the named rail produced the extract, so the completeness guarantee is conditional"
+          : "rail extract signature failed and no rail key was pinned; completeness guarantee is conditional",
         severity: "warn",
       });
     } else {
+      // A pin is the verifier stating what it expects. Once stated, every way of
+      // failing to meet it is a finding, including a signature that does not
+      // verify at all: checking the pin only on the path where the signature
+      // already verified would fail open on the worse input.
       const t = input.trust;
       const body = input.extract.body;
-      if (normalizePem(input.extract.publicKeyPem) !== normalizePem(t.publicKeyPem)) {
+      if (!signatureVerifies) {
+        findings.push({
+          code: "extract-key-mismatch",
+          id: "extract",
+          detail: "a rail key was pinned but the extract signature does not verify against the key it carries",
+        });
+      } else if (normalizePem(input.extract.publicKeyPem) !== normalizePem(t.publicKeyPem)) {
         findings.push({
           code: "extract-key-mismatch",
           id: "extract",
@@ -444,7 +471,9 @@ export function audit(input: {
     warnings.push({
       code: "unauthenticated-extract",
       id: "extract",
-      detail: "rail extract is unsigned; completeness guarantee is conditional",
+      detail: input.trust
+        ? "a rail key was pinned but no extract was supplied, so there is nothing to check it against; completeness guarantee is conditional"
+        : "rail extract is unsigned; completeness guarantee is conditional",
       severity: "warn",
     });
   }
@@ -477,22 +506,33 @@ export function audit(input: {
       : missing.length > 0
         ? `audit: ${missing.length} settlement without receipt → FAIL`
         : `audit: ${hard.length} finding(s) → FAIL`;
+  // A finding that says the extract itself cannot be trusted also removes the
+  // unconditional claim; otherwise a report could name a key mismatch and still
+  // describe its own guarantee as unconditional.
+  const doubtedExtract = hard.some(
+    (f) =>
+      f.code === "extract-key-mismatch" ||
+      f.code === "extract-scope-mismatch" ||
+      f.code === "extract-settlement-mismatch",
+  );
   return {
     ok: hard.length === 0,
     findings: hard,
     warnings,
-    guarantee: warnings.length === 0 ? "unconditional" : "conditional",
+    guarantee: warnings.length === 0 && !doubtedExtract ? "unconditional" : "conditional",
     summary,
   };
 }
 
 export function formatAudit(report: AuditReport, receiptCount = 0): string {
-  if (report.ok) {
-    return [`audit: balanced`, `receipts=${receiptCount}`, "findings=0"].join("\n");
-  }
-  const lines = [report.summary];
-  for (const f of report.findings) {
-    lines.push(`${f.code}\t${f.id}\t${f.detail}`);
+  const lines = report.ok
+    ? [`audit: balanced`, `receipts=${receiptCount}`, "findings=0"]
+    : [report.summary, ...report.findings.map((f) => `${f.code}\t${f.id}\t${f.detail}`)];
+  // Warnings decide whether the balance means anything, so an operator has to
+  // see them on the passing path too, not only in the returned object.
+  lines.push(`guarantee=${report.guarantee}`);
+  for (const w of report.warnings) {
+    lines.push(`warn\t${w.code}\t${w.detail}`);
   }
   return lines.join("\n");
 }
