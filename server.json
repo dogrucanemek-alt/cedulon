@@ -1,0 +1,72 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.dogrucanemek-alt/cedulon",
+  "title": "Cedulon",
+  "description": "Policy-gated agent spend with signed receipts and rail-extract audit",
+  "version": "0.0.1",
+  "websiteUrl": "https://github.com/dogrucanemek-alt/cedulon",
+  "repository": {
+    "url": "https://github.com/dogrucanemek-alt/cedulon",
+    "source": "github",
+    "subfolder": "packages/mcp-server"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@cedulon/mcp-server",
+      "version": "0.0.1",
+      "runtimeHint": "node",
+      "runtimeArguments": [
+        {
+          "type": "positional",
+          "value": "--experimental-strip-types"
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "packages/mcp-server/src/index.ts"
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CEDULON_STATE_PATH",
+          "description": "Optional JSON file that persists the in-process ledger",
+          "format": "filepath",
+          "isRequired": false
+        },
+        {
+          "name": "CEDULON_MAX_AMOUNT",
+          "description": "Per-payment amount cap (demo default 10)",
+          "format": "string",
+          "isRequired": false,
+          "default": "10"
+        },
+        {
+          "name": "CEDULON_MAX_CUMULATIVE",
+          "description": "Window cumulative cap (demo default 30)",
+          "format": "string",
+          "isRequired": false,
+          "default": "30"
+        },
+        {
+          "name": "CEDULON_MAX_PAYMENTS",
+          "description": "Window payment-count cap (demo default 3)",
+          "format": "number",
+          "isRequired": false,
+          "default": "3"
+        },
+        {
+          "name": "CEDULON_RPC_URL",
+          "description": "JSON-RPC URL for the optional Base extract package; unused by the MCP server",
+          "format": "string",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

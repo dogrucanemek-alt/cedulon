@@ -1,0 +1,29 @@
+# Smithery stdio startCommand (ecosystem format still shipped by
+# https://github.com/microsoft/mcp/blob/main/smithery.yaml).
+# Current Smithery publish docs prefer HTTP or an MCPB bundle:
+# https://smithery.ai/docs/build/publish.md
+# Historical project-config URL cited by that file:
+# https://smithery.ai/docs/build/project-config
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    description: Optional overrides for the local Cedulon MCP server
+    properties:
+      maxAmount:
+        type: string
+        description: Per-payment amount cap (maps to CEDULON_MAX_AMOUNT)
+      statePath:
+        type: string
+        description: JSON file path for CEDULON_STATE_PATH
+  commandFunction: |-
+    (config) => ({
+      command: 'node',
+      args: ['--experimental-strip-types', 'packages/mcp-server/src/index.ts'],
+      env: {
+        CEDULON_MAX_AMOUNT: config.maxAmount || '10',
+        ...(config.statePath ? { CEDULON_STATE_PATH: config.statePath } : {})
+      }
+    })
+  exampleConfig:
+    maxAmount: "10"

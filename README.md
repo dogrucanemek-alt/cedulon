@@ -41,6 +41,47 @@ is caught; a missed bypass makes it exit non-zero.
 A third party can reproduce this without trusting us:
 `docs/RUN_AS_VERIFIER.md`.
 
+Five-minute path, including the MCP host config: `docs/QUICKSTART.md`.
+
+## MCP server
+
+Cedulon can run as a local stdio MCP server. The host talks JSON-RPC on
+stdin/stdout. The five tools are thin wrappers over the existing
+packages; they do not reimplement policy, receipts, or audit.
+
+| Tool | Arguments | Result |
+| --- | --- | --- |
+| `cedulon_spend` | `amount` (string), `currency`, `payee`, `nonce`, optional `tool` | Allow → signed receipt JSON. Deny → `{ ok: false, reason }` (for example `limit-amount`). |
+| `cedulon_audit` | optional `extraSettlements[]` (`ref`, `amount`, `currency`, `timestampMs`) | `{ ok, summary, findings }`. Balanced books print `audit: balanced`. |
+| `cedulon_verify_receipt` | `receipt` object, or `coseHex` + `publicKeyPem`, optional countersignature fields | `{ ok, receipt, countersignature }` |
+| `cedulon_export_ledger` | none | Receipts + checkpoint + extract in the `demo:export` JSON shape |
+| `cedulon_status` | none | `{ version, policy, receiptCount, chainHead }` |
+
+```bash
+npm run mcp
+```
+
+Claude Desktop / Claude Code / Cursor:
+
+```json
+{
+  "mcpServers": {
+    "cedulon": {
+      "command": "node",
+      "args": [
+        "--experimental-strip-types",
+        "packages/mcp-server/src/index.ts"
+      ],
+      "cwd": "/absolute/path/to/cedulon"
+    }
+  }
+}
+```
+
+Registry files (`server.json`, `smithery.yaml`) are prepared in this
+repository. Directory submissions stay with the publisher.
+
+
 ## Layout
 
 ```
