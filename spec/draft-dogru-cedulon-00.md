@@ -28,7 +28,7 @@ author:
     name: Emek Can Dogru
     org: VERAX TEKNOLOJI LIMITED SIRKETI
     country: Turkey
-    email: e.dogru@conarium.dev
+    email: e.dogru@cedulon.com
 normative:
   RFC2119:
   RFC6234:
