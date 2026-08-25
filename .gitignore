@@ -9,3 +9,6 @@ coverage/
 spec/author-tools-*-response.bin
 spec/idnits-*.bin
 spec/idnits-out.txt
+
+# kramdown-rfc reference cache
+spec/.refcache/
