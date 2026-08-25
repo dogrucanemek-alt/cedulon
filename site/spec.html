@@ -32,25 +32,28 @@
         <h2>Sections</h2>
         <ol>
           <li><strong>Introduction</strong> — rails move value; the audit layer is missing.</li>
-          <li><strong>Terminology</strong> — RFC 2119; Trade Manifest, PDP, Spend Receipt, Anchor, Dispute Evidence Bundle.</li>
+          <li><strong>Terminology</strong> — RFC 2119; Trade Manifest, PDP, Spend Receipt, Decision Token (internal), Rail Extract.</li>
           <li><strong>Architecture</strong> — PDP before the rail; Receipt Issuer after; optional SCITT.</li>
-          <li><strong>Trade Manifest</strong> — signed offer before payment; price, acceptance hash, expiry.</li>
-          <li><strong>Spend Receipt</strong> — signed record after a gated payment; <span class="mono">no-manifest</span> is explicit.</li>
-          <li><strong>COSE Profile</strong> — deterministic CBOR; COSE_Sign1 with alg EdDSA; claim labels 100–110.</li>
-          <li><strong>Reconciliation and Epoch Checkpoints</strong> — completeness: extract versus receipts; checkpoint chain; equivocation.</li>
+          <li><strong>Trade Manifest</strong> — COSE_Sign1 offer before payment; <span class="mono">manifestHash</span> is SHA-256 of the COSE bytes.</li>
+          <li><strong>Spend Receipt</strong> — signed record after a gated payment; <span class="mono">noManifest</span> and <span class="mono">outcome</span> are explicit.</li>
+          <li><strong>COSE Profile</strong> — deterministic CBOR; alg −19 (Ed25519); private-use labels below −65536; mandatory <span class="mono">kid</span>.</li>
+          <li><strong>Rail Extract Profile</strong> — authenticated settlement records; unsigned extract makes the guarantee conditional.</li>
+          <li><strong>Reconciliation and Epoch Checkpoints</strong> — 1:1 ref+amount+currency; half-open windows; equivocation.</li>
           <li><strong>Lifecycle</strong> — Manifest → Policy → Payment → Receipt → Dispute Evidence Bundle.</li>
           <li><strong>Policy Semantics</strong> — limit, velocity, scope; fail-closed default deny.</li>
           <li><strong>SCITT Anchoring</strong> — optional registration; this draft does not operate a service.</li>
           <li><strong>Privacy Considerations</strong> — public encodings omit or hash identifiers and amounts.</li>
           <li><strong>Security Considerations</strong> — T1–T11, including rail-bypass completeness (T10) and checkpoint suppression (T11).</li>
-          <li><strong>IANA Considerations</strong> — placeholder; no actions in -00.</li>
-          <li><strong>Informative Notes</strong> — x402, AP2, draft-sharif-attp, draft-bates-atp as neighbors.</li>
+          <li><strong>IANA Considerations</strong> — no actions; private-use labels do not need a registry block.</li>
+          <li><strong>Implementation Status</strong> — RFC 7942 note pointing at the companion repository.</li>
+          <li><strong>Informative Notes</strong> — x402, AP2, HTTP Message Signatures profiles, draft-bates-atp as neighbors.</li>
         </ol>
       </div>
 
       <p>
-        Neighbor drafts: Sharif ATTP is identity and score. Bates ATP is causal
-        lineage. Neither defines rail-extract completeness.
+        Neighbor drafts: Bates ATP is causal lineage. Profiles built on HTTP
+        Message Signatures authenticate bots. Neither defines rail-extract
+        completeness.
       </p>
 
       <footer class="colophon">

@@ -164,6 +164,15 @@ describe("cedulon-audit detections", () => {
     const ran = runBypass();
     assert.equal(ran.exitCode, 1);
     assert.equal(ran.summary, "audit: 1 settlement without receipt → FAIL");
+    const amount = runBypass(undefined, "amount");
+    assert.equal(amount.exitCode, 1);
+    assert.match(amount.text, /settlement-mismatch/);
+    const nullRef = runBypass(undefined, "null-ref");
+    assert.equal(nullRef.exitCode, 1);
+    assert.match(nullRef.text, /settled-without-ref/);
+    const head = runBypass(undefined, "head");
+    assert.equal(head.exitCode, 1);
+    assert.match(head.text, /checkpoint-head-mismatch/);
   });
 });
 

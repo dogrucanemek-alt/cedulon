@@ -41,8 +41,9 @@ npm run test:all</code></pre>
       <p>
         Expect: <span class="mono">tsc</span> silent, every test passing. The
         suite includes red-then-green cases for COSE tamper, checkpoint
-        equivocation, and each audit finding. This tree reports
-        <span class="mono">64</span> passing tests.
+        equivocation, field-level matching, and each audit finding. This tree
+        reports
+        <span class="mono">77</span> passing tests.
       </p>
 
       <h2>3. Completeness demo</h2>
@@ -54,12 +55,17 @@ npm run test:all</code></pre>
         <p class="mono">findings=0</p>
       </div>
       <p>
-        Bypass: the agent settles on the mock rail without a Spend Receipt.
-        Guardrails do not see it. Audit must exit non-zero:
+        Three bypass kinds. Missing receipt, same-ref wrong amount, and
+        garbage <span class="mono">chainHeadHash</span> (plus a settled
+        null-ref) must all fail:
       </p>
-      <pre><code>npm run demo:bypass</code></pre>
+      <pre><code>npm run demo:bypass
+npm run demo:bypasses</code></pre>
       <div class="out">
         <p><span class="seal bad">audit: 1 settlement without receipt → FAIL</span></p>
+        <p class="mono">amount → settlement-mismatch</p>
+        <p class="mono">null-ref → settled-without-ref</p>
+        <p class="mono">head → checkpoint-head-mismatch</p>
       </div>
 
       <h2>4. Older demos (still required)</h2>
@@ -81,6 +87,7 @@ npm run tamper</code></pre>
         <li>A receipt whose COSE bytes were flipped does not verify.</li>
         <li>Two different checkpoints for one epoch are equivocation.</li>
         <li>A rail settlement with no receipt fails the audit and names the gap.</li>
+        <li>Wrong amount, null-ref, and garbage chain head are named findings.</li>
         <li>A clean pair of receipts, settlements, and a checkpoint exits 0.</li>
       </ul>
       <p>That is completeness: missing evidence is itself evidence.</p>

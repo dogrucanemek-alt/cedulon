@@ -230,8 +230,9 @@ describe("COSE_Sign1 receipts", () => {
       join(dirname(fileURLToPath(import.meta.url)), "..", "spec", "draft-dogru-cedulon-00.md"),
       "utf8",
     );
-    assert.equal(spec.includes(VECTOR_RECEIPT_COSE_HEX), true);
-    assert.equal(spec.includes(VECTOR_MANIFEST_COSE_HEX), true);
+    const compact = spec.replace(/[\s`~]/g, "");
+    assert.equal(compact.includes(VECTOR_RECEIPT_COSE_HEX), true);
+    assert.equal(compact.includes(VECTOR_MANIFEST_COSE_HEX), true);
   });
 
   it("amount grammar and nonce width", () => {

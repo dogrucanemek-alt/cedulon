@@ -5,3 +5,6 @@ coverage/
 .env
 .DS_Store
 .turbo
+spec/author-tools-*-response.bin
+spec/idnits-*.bin
+spec/idnits-out.txt

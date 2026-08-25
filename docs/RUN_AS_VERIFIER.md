@@ -24,8 +24,9 @@ npx tsc --noEmit
 npm run test:all
 ```
 
-Expect: `tsc` silent, every test passing. The suite includes red-then-green
-cases for COSE tamper, checkpoint equivocation, and each audit finding.
+Expect: `tsc` silent, **77** tests passing. The suite includes red-then-green
+cases for COSE tamper, checkpoint equivocation, field-level settlement
+matching, window coverage, signed extracts, and each audit finding.
 
 ## 3. Completeness demo (the moat)
 
@@ -43,8 +44,13 @@ receipts=2
 findings=0
 ```
 
-Bypass: the agent settles on the mock rail without a Spend Receipt.
-Guardrails do not see it. Audit must (exit non-zero):
+## 4. Three bypass kinds (must all fail)
+
+The old hole was a rail settlement with no receipt. Two more holes used
+to pass: a same-ref wrong amount, a settled receipt with a null rail
+ref, and a garbage `chainHeadHash`. All three now fail.
+
+Missing receipt (exit non-zero):
 
 ```bash
 npm run demo:bypass
@@ -56,7 +62,25 @@ Expected stdout (exactly):
 audit: 1 settlement without receipt → FAIL
 ```
 
-## 4. Older demos (still required)
+Wrong amount, null-ref exemption, and garbage chain head:
+
+```bash
+npm run demo:bypasses
+```
+
+Expected stdout (four lines, all FAIL):
+
+```
+missing	audit: 1 settlement without receipt → FAIL
+amount	audit: 1 finding(s) → FAIL
+null-ref	audit: 1 finding(s) → FAIL
+head	audit: 1 finding(s) → FAIL
+```
+
+`amount` names `settlement-mismatch`. `null-ref` names
+`settled-without-ref`. `head` names `checkpoint-head-mismatch`.
+
+## 5. Older demos (still required)
 
 ```bash
 npm run demo
@@ -67,13 +91,19 @@ npm run tamper
 `tamper` must exit non-zero and print `tamper detected`.
 
 `npm run demo:unguarded` is the old hole: 100 allows and no completeness
-check. Prefer `demo:bypass` to see that hole closed at audit time.
+check. Prefer `demo:bypass` / `demo:bypasses` to see that hole closed at
+audit time.
 
-## 5. What you just proved
+## 6. What you just proved
 
 - A receipt whose COSE bytes were flipped does not verify.
 - Two different checkpoints for one epoch are equivocation.
 - A rail settlement with no receipt fails the audit and names the gap.
+- A same-ref wrong amount is `settlement-mismatch`.
+- A settled receipt with a null rail ref is `settled-without-ref`.
+- A garbage `chainHeadHash` is `checkpoint-head-mismatch`.
 - A clean pair of receipts, settlements, and a checkpoint exits 0.
 
-That is completeness: missing evidence is itself evidence.
+That is completeness: missing or mismatched evidence is itself evidence.
+The guarantee is unconditional only when the rail extract is
+authenticated.

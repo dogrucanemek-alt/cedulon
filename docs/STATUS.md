@@ -1,7 +1,7 @@
 # Status
 
-Blocks A-E of the 2026-08-25 local skeleton are complete. The 2026-08-25
-COSE/completeness pass adds COSE_Sign1 receipts, epoch checkpoints, and
-`cedulon-audit`. No remote, no publish.
+Hardening pass 2026-08-26 (local): field-level extract matching, Ed25519
+alg −19, private-use labels, authenticated extract, spec -00 rewrite.
+`npm run test:all` is 77 pass. No remote, no publish.
 See `docs/RUN_AS_VERIFIER.md`.
 See the internal closing note outside this repository.

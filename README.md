@@ -31,6 +31,9 @@ npm run demo
 `npm run demo:bypass` must exit non-zero:
 `audit: 1 settlement without receipt → FAIL`.
 
+`npm run demo:bypasses` must exit non-zero and print four FAIL lines
+(missing receipt, wrong amount, null-ref, garbage chain head).
+
 A third party can reproduce this without trusting us:
 `docs/RUN_AS_VERIFIER.md`.
 
