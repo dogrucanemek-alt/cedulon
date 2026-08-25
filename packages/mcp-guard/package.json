@@ -1,0 +1,14 @@
+{
+  "name": "@agent-trade-protocol/mcp-guard",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agent-trade-protocol/core": "*",
+    "@agent-trade-protocol/x402-adapter": "*"
+  }
+}

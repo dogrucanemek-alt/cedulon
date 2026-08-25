@@ -1,0 +1,14 @@
+{
+  "name": "@agent-trade-protocol/demo",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@agent-trade-protocol/core": "*",
+    "@agent-trade-protocol/manifest": "*",
+    "@agent-trade-protocol/mcp-guard": "*",
+    "@agent-trade-protocol/receipts": "*",
+    "@agent-trade-protocol/x402-adapter": "*"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@agent-trade-protocol/workspace",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test:all": "node --experimental-strip-types --test tests/fail-closed.test.ts tests/policy.test.ts tests/replay-manifest.test.ts tests/receipts-demo.test.ts",
+    "tamper": "node --experimental-strip-types examples/demo/src/tamper.ts",
+    "demo": "node --experimental-strip-types examples/demo/src/cli.ts",
+    "demo:unguarded": "node --experimental-strip-types examples/demo/src/unguarded.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  }
+}
