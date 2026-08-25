@@ -392,11 +392,21 @@ describe("new detections — RED then GREEN", () => {
       ek.privateKeyPem,
       ek.publicKeyPem,
     );
+    const unpinned = audit({
+      receipts,
+      checkpoints: [oneCheckpoint(k, receipts)],
+      settlements,
+      extract,
+    });
+    assert.equal(unpinned.ok, true);
+    assert.equal(unpinned.guarantee, "conditional");
+    assert.equal(unpinned.warnings.some((f) => f.code === "unauthenticated-extract"), true);
     const green = audit({
       receipts,
       checkpoints: [oneCheckpoint(k, receipts)],
       settlements,
       extract,
+      trust: { publicKeyPem: ek.publicKeyPem, accountId: "acct-1", railId: "mock-rail" },
     });
     assert.equal(green.ok, true);
     assert.equal(green.guarantee, "unconditional");

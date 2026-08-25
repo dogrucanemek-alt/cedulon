@@ -24,8 +24,23 @@ export type FindingCode =
   | "window-coverage"
   | "settled-without-ref"
   | "unauthenticated-extract"
+  | "extract-key-mismatch"
+  | "extract-scope-mismatch"
+  | "extract-settlement-mismatch"
   | "countersign-bad"
   | "ok";
+
+/**
+ * Trust root the verifier supplies out of band. Without it a rail extract only
+ * proves internal consistency: any key can sign any body, including its own.
+ */
+export type RailTrustPin = {
+  publicKeyPem: string;
+  accountId?: string;
+  railId?: string;
+  windowStartMs?: number;
+  windowEndMs?: number;
+};
 
 export type Finding = {
   code: Exclude<FindingCode, "ok">;
@@ -131,6 +146,40 @@ export function findSettlementMatches(
   const dupeReceipt = pushDuplicateRefs(receiptItems, findings);
   const dupeSettlement = pushDuplicateRefs(settlementItems, findings);
   const skip = new Set<string>([...dupeReceipt, ...dupeSettlement]);
+
+  // A ref that repeats is skipped by the ref-keyed match below, so compare the
+  // aggregate settled amount against the aggregate receipted amount instead.
+  // Otherwise a repeated ref hides the amount that is unaccounted for.
+  for (const ref of skip) {
+    const settledByCurrency = new Map<string, bigint>();
+    for (const item of settlementItems) {
+      if (item.ref !== ref) continue;
+      const cur = item.settlement.currency;
+      settledByCurrency.set(cur, (settledByCurrency.get(cur) ?? 0n) + BigInt(item.settlement.amount));
+    }
+    const receiptedByCurrency = new Map<string, bigint>();
+    for (const item of receiptItems) {
+      if (item.ref !== ref) continue;
+      const cur = item.receipt.claims.currency;
+      receiptedByCurrency.set(cur, (receiptedByCurrency.get(cur) ?? 0n) + BigInt(item.receipt.claims.amount));
+    }
+    for (const [currency, settled] of settledByCurrency) {
+      const receipted = receiptedByCurrency.get(currency) ?? 0n;
+      if (settled > receipted) {
+        findings.push({
+          code: "settlement-without-receipt",
+          id: ref,
+          detail: `ref ${ref} settled ${settled} ${currency} against ${receipted} ${currency} receipted; ${settled - receipted} ${currency} unaccounted`,
+        });
+      } else if (settled < receipted) {
+        findings.push({
+          code: "settlement-mismatch",
+          id: ref,
+          detail: `ref ${ref} settled ${settled} ${currency} against ${receipted} ${currency} receipted`,
+        });
+      }
+    }
+  }
 
   const receiptsByRef = new Map<string, SignedReceipt>();
   for (const item of receiptItems) {
@@ -299,16 +348,44 @@ export function findEquivocationFinding(checkpoints: SignedCheckpoint[]): Findin
   };
 }
 
+function normalizePem(pem: string): string {
+  return pem.replace(/\s+/g, "");
+}
+
+function settlementKey(s: RailSettlement): string {
+  return [s.ref, s.amount, s.currency, s.timestampMs].join(" ");
+}
+
+function sameSettlements(a: RailSettlement[], b: RailSettlement[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = a.map(settlementKey).sort();
+  const right = b.map(settlementKey).sort();
+  return left.every((k, i) => k === right[i]);
+}
+
 export function audit(input: {
   receipts: SignedReceipt[];
   checkpoints: SignedCheckpoint[];
-  settlements: RailSettlement[];
+  settlements?: RailSettlement[];
   extract?: SignedRailExtract;
+  trust?: RailTrustPin;
 }): AuditReport {
   const findings: Finding[] = [];
   const warnings: Finding[] = [];
 
+  // When an extract is supplied it is the subject of the audit: reconcile the
+  // rows it actually carries, never a separate array the caller hands over.
+  const reconciled = input.extract ? input.extract.body.settlements : (input.settlements ?? []);
+
   if (input.extract) {
+    if (input.settlements && !sameSettlements(input.settlements, input.extract.body.settlements)) {
+      findings.push({
+        code: "extract-settlement-mismatch",
+        id: "extract",
+        detail: `caller supplied ${input.settlements.length} settlement(s) that differ from the ${input.extract.body.settlements.length} in the signed extract; the extract is authoritative`,
+      });
+    }
+
     if (!verifyRailExtract(input.extract)) {
       warnings.push({
         code: "unauthenticated-extract",
@@ -316,6 +393,52 @@ export function audit(input: {
         detail: "rail extract signature failed; completeness guarantee is conditional",
         severity: "warn",
       });
+    } else if (!input.trust) {
+      warnings.push({
+        code: "unauthenticated-extract",
+        id: "extract",
+        detail:
+          "no verifier-supplied rail key; the signature proves internal consistency, not that the named rail produced the extract, so the completeness guarantee is conditional",
+        severity: "warn",
+      });
+    } else {
+      const t = input.trust;
+      const body = input.extract.body;
+      if (normalizePem(input.extract.publicKeyPem) !== normalizePem(t.publicKeyPem)) {
+        findings.push({
+          code: "extract-key-mismatch",
+          id: "extract",
+          detail: "rail extract is signed by a key other than the pinned rail key",
+        });
+      }
+      if (t.accountId !== undefined && body.accountId !== t.accountId) {
+        findings.push({
+          code: "extract-scope-mismatch",
+          id: "extract",
+          detail: `rail extract covers account ${body.accountId}, not the expected ${t.accountId}`,
+        });
+      }
+      if (t.railId !== undefined && body.railId !== t.railId) {
+        findings.push({
+          code: "extract-scope-mismatch",
+          id: "extract",
+          detail: `rail extract covers rail ${body.railId}, not the expected ${t.railId}`,
+        });
+      }
+      if (t.windowStartMs !== undefined && body.windowStartMs > t.windowStartMs) {
+        findings.push({
+          code: "extract-scope-mismatch",
+          id: "extract",
+          detail: `rail extract starts at ${body.windowStartMs}, after the expected window start ${t.windowStartMs}`,
+        });
+      }
+      if (t.windowEndMs !== undefined && body.windowEndMs < t.windowEndMs) {
+        findings.push({
+          code: "extract-scope-mismatch",
+          id: "extract",
+          detail: `rail extract ends at ${body.windowEndMs}, before the expected window end ${t.windowEndMs}`,
+        });
+      }
     }
   } else {
     warnings.push({
@@ -326,7 +449,7 @@ export function audit(input: {
     });
   }
 
-  findings.push(...findSettlementMatches(input.receipts, input.settlements));
+  findings.push(...findSettlementMatches(input.receipts, reconciled));
   for (const r of input.receipts) {
     if (!r.counterCoseHex) {
       continue;
