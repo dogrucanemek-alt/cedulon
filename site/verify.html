@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cedulon — Run as a verifier</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="mast">
+        <nav>
+          <a href="index.html">Cedulon</a>
+          <a href="verify.html">Verify</a>
+          <a href="spec.html">Spec</a>
+        </nav>
+      </header>
+
+      <h1>Run as a verifier</h1>
+      <p>
+        You do not have to trust the authors. On a clean machine, clone this
+        repository and run the commands below. Wall time is under ten minutes
+        when Node.js 22+ and npm 10+ are already installed.
+      </p>
+      <p>Cedulon never talks to a network rail. All keys are fixtures.</p>
+
+      <h2>1. Clone and install</h2>
+      <pre><code>git clone &lt;path-to-this-repo&gt; cedulon
+cd cedulon
+npm install</code></pre>
+      <p>
+        <span class="mono">cbor-x</span> is a test-only decoder. If the installer
+        mentions <span class="mono">cbor-extract</span>, leave its install script
+        blocked. The suite uses the JavaScript path.
+      </p>
+
+      <h2>2. Typecheck and tests</h2>
+      <pre><code>npx tsc --noEmit
+npm run test:all</code></pre>
+      <p>
+        Expect: <span class="mono">tsc</span> silent, every test passing. The
+        suite includes red-then-green cases for COSE tamper, checkpoint
+        equivocation, and each audit finding. This tree reports
+        <span class="mono">64</span> passing tests.
+      </p>
+
+      <h2>3. Completeness demo</h2>
+      <p>Balanced books (must exit 0):</p>
+      <pre><code>npm run audit</code></pre>
+      <div class="out">
+        <p><span class="seal ok">audit: balanced</span></p>
+        <p class="mono">receipts=2</p>
+        <p class="mono">findings=0</p>
+      </div>
+      <p>
+        Bypass: the agent settles on the mock rail without a Spend Receipt.
+        Guardrails do not see it. Audit must exit non-zero:
+      </p>
+      <pre><code>npm run demo:bypass</code></pre>
+      <div class="out">
+        <p><span class="seal bad">audit: 1 settlement without receipt → FAIL</span></p>
+      </div>
+
+      <h2>4. Older demos (still required)</h2>
+      <pre><code>npm run demo
+npm run tamper</code></pre>
+      <p>
+        <span class="mono">demo</span> prints a 3-allow / 97-block runaway with
+        verified receipts. <span class="mono">tamper</span> must exit non-zero
+        and print <span class="mono">tamper detected</span>.
+      </p>
+      <p>
+        <span class="mono">npm run demo:unguarded</span> is the old hole: 100
+        allows and no completeness check. Prefer
+        <span class="mono">demo:bypass</span> to see that hole closed at audit time.
+      </p>
+
+      <h2>5. What you just proved</h2>
+      <ul>
+        <li>A receipt whose COSE bytes were flipped does not verify.</li>
+        <li>Two different checkpoints for one epoch are equivocation.</li>
+        <li>A rail settlement with no receipt fails the audit and names the gap.</li>
+        <li>A clean pair of receipts, settlements, and a checkpoint exits 0.</li>
+      </ul>
+      <p>That is completeness: missing evidence is itself evidence.</p>
+      <p>Source text: <span class="mono">docs/RUN_AS_VERIFIER.md</span>.</p>
+
+      <footer class="colophon">
+        <p><a href="{{REPO_URL}}">Source</a> · <a href="index.html">Home</a> · <a href="spec.html">Draft</a></p>
+        <p>Apache-2.0 · © 2026 Emek Can Dogru</p>
+      </footer>
+    </div>
+  </body>
+</html>

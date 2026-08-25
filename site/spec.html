@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cedulon — Draft outline</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="mast">
+        <nav>
+          <a href="index.html">Cedulon</a>
+          <a href="verify.html">Verify</a>
+          <a href="spec.html">Spec</a>
+        </nav>
+      </header>
+
+      <h1>draft-dogru-cedulon-00</h1>
+      <p>
+        Internet-Draft seed. Category: informational. Author: Emek Can Dogru.
+        Full text lives in the repository at
+        <span class="mono">spec/draft-dogru-cedulon-00.md</span>.
+      </p>
+      <p>
+        Cedulon is an audit layer above payment rails. It is not a rail, not a
+        custodian, and not an arbitral award.
+      </p>
+
+      <div class="steps">
+        <h2>Sections</h2>
+        <ol>
+          <li><strong>Introduction</strong> — rails move value; the audit layer is missing.</li>
+          <li><strong>Terminology</strong> — RFC 2119; Trade Manifest, PDP, Spend Receipt, Anchor, Dispute Evidence Bundle.</li>
+          <li><strong>Architecture</strong> — PDP before the rail; Receipt Issuer after; optional SCITT.</li>
+          <li><strong>Trade Manifest</strong> — signed offer before payment; price, acceptance hash, expiry.</li>
+          <li><strong>Spend Receipt</strong> — signed record after a gated payment; <span class="mono">no-manifest</span> is explicit.</li>
+          <li><strong>COSE Profile</strong> — deterministic CBOR; COSE_Sign1 with alg EdDSA; claim labels 100–110.</li>
+          <li><strong>Reconciliation and Epoch Checkpoints</strong> — completeness: extract versus receipts; checkpoint chain; equivocation.</li>
+          <li><strong>Lifecycle</strong> — Manifest → Policy → Payment → Receipt → Dispute Evidence Bundle.</li>
+          <li><strong>Policy Semantics</strong> — limit, velocity, scope; fail-closed default deny.</li>
+          <li><strong>SCITT Anchoring</strong> — optional registration; this draft does not operate a service.</li>
+          <li><strong>Privacy Considerations</strong> — public encodings omit or hash identifiers and amounts.</li>
+          <li><strong>Security Considerations</strong> — T1–T11, including rail-bypass completeness (T10) and checkpoint suppression (T11).</li>
+          <li><strong>IANA Considerations</strong> — placeholder; no actions in -00.</li>
+          <li><strong>Informative Notes</strong> — x402, AP2, draft-sharif-attp, draft-bates-atp as neighbors.</li>
+        </ol>
+      </div>
+
+      <p>
+        Neighbor drafts: Sharif ATTP is identity and score. Bates ATP is causal
+        lineage. Neither defines rail-extract completeness.
+      </p>
+
+      <footer class="colophon">
+        <p><a href="{{REPO_URL}}">Source</a> · <a href="index.html">Home</a> · <a href="verify.html">Verify</a></p>
+        <p>Apache-2.0 · © 2026 Emek Can Dogru</p>
+      </footer>
+    </div>
+  </body>
+</html>

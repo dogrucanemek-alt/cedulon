@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cedulon — Missing evidence is itself evidence</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="mast">
+        <nav>
+          <a href="index.html">Cedulon</a>
+          <a href="verify.html">Verify</a>
+          <a href="spec.html">Spec</a>
+        </nav>
+      </header>
+
+      <h1>Cedulon</h1>
+      <p class="tagline">Missing evidence is itself evidence.</p>
+      <p class="lede">
+        Agents can already pay on open rails such as x402 and AP2. Cedulon sits
+        above those rails as an audit layer: a signed spend receipt, a chained
+        epoch checkpoint, and a reconciliation of the rail extract. If a spend
+        left no receipt, the gap is the finding.
+      </p>
+
+      <h2>How it works</h2>
+      <svg class="flow" viewBox="0 0 360 420" role="img" aria-labelledby="flow-title">
+        <title id="flow-title">Cedulon flow from manifest to reconciliation audit</title>
+        <rect class="box" x="40" y="8" width="280" height="48" />
+        <text x="180" y="30" text-anchor="middle" font-size="13">Trade Manifest</text>
+        <text x="180" y="46" text-anchor="middle" font-size="11">signed offer before payment</text>
+        <path class="arrow" d="M180 56 v16" />
+        <rect class="box" x="40" y="72" width="280" height="48" />
+        <text x="180" y="94" text-anchor="middle" font-size="13">Policy Decision Point</text>
+        <text x="180" y="110" text-anchor="middle" font-size="11">default deny, fail-closed</text>
+        <path class="arrow" d="M180 120 v16" />
+        <rect class="box" x="40" y="136" width="280" height="48" />
+        <text x="180" y="158" text-anchor="middle" font-size="13">Payment rail</text>
+        <text x="180" y="174" text-anchor="middle" font-size="11">x402 or other settlement</text>
+        <path class="arrow" d="M180 184 v16" />
+        <rect class="box" x="40" y="200" width="280" height="48" />
+        <text x="180" y="222" text-anchor="middle" font-size="13">Signed Spend Receipt</text>
+        <text x="180" y="238" text-anchor="middle" font-size="11">COSE_Sign1, Ed25519</text>
+        <path class="arrow" d="M180 248 v16" />
+        <rect class="box" x="40" y="264" width="280" height="48" />
+        <text x="180" y="286" text-anchor="middle" font-size="13">Epoch Checkpoint</text>
+        <text x="180" y="302" text-anchor="middle" font-size="11">totals and previous hash</text>
+        <path class="arrow" d="M180 312 v16" />
+        <rect class="box" x="40" y="328" width="280" height="48" />
+        <text x="180" y="350" text-anchor="middle" font-size="13">Reconciliation Audit</text>
+        <text x="180" y="366" text-anchor="middle" font-size="11">rail extract versus receipts</text>
+      </svg>
+
+      <h2>The gap we close</h2>
+      <div class="columns three">
+        <div class="col">
+          <h3>Anyone can verify a receipt</h3>
+          <p>A signed spend record checks as valid or tampered. That is the easy half.</p>
+        </div>
+        <div class="col">
+          <h3>Nobody sees a missing receipt</h3>
+          <p>A spend that never issued a receipt leaves no object to verify. The books still look clean.</p>
+        </div>
+        <div class="col">
+          <h3>Cedulon turns the gap into evidence</h3>
+          <p>
+            The companion audit compares the rail extract to the receipt chain.
+            A bypass in this repository prints
+            <span class="seal bad">audit: 1 settlement without receipt → FAIL</span>
+          </p>
+        </div>
+      </div>
+
+      <h2>Gated spend (repository API)</h2>
+      <pre><code>import { PolicyEngine } from "@cedulon/core";
+import { generateReceiptKeys } from "@cedulon/receipts";
+import { gatedSettle } from "@cedulon/x402-adapter";
+
+const engine = new PolicyEngine({
+  maxAmount: 10n, maxCumulative: 30n, maxPayments: 3, windowMs: 3600000,
+});
+const keys = generateReceiptKeys();
+const result = gatedSettle(engine, {
+  req: { amount: 1n, currency: "USD", payee: "q", nonce: "n1", nowMs, tool: "spend" },
+  payer: "p", paymentHeader: "mock",
+}, { receiptPrivatePem: keys.privateKeyPem, receiptPublicPem: keys.publicKeyPem }, nowMs);</code></pre>
+
+      <h2>Measured in this repository</h2>
+      <ul class="claims">
+        <li><span class="mono">64</span> passing tests (<span class="mono">npm run test:all</span>, 2026-08-25)</li>
+        <li>zero runtime dependencies on <span class="mono">packages/*</span> (workspace packages only)</li>
+        <li>fail-closed by default (missing or throwing policy engine denies)</li>
+        <li>signed receipts, chained checkpoints, reconciliation audit</li>
+      </ul>
+
+      <footer class="colophon">
+        <p><a href="{{REPO_URL}}">Source</a> · <a href="spec.html">Draft</a> · <a href="verify.html">Run as a verifier</a></p>
+        <p>Apache-2.0 · © 2026 Emek Can Dogru</p>
+      </footer>
+    </div>
+  </body>
+</html>
