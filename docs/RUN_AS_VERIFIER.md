@@ -44,11 +44,11 @@ receipts=2
 findings=0
 ```
 
-## 4. Three bypass kinds (must all fail)
+## 4. Four bypass kinds (must all fail)
 
-The old hole was a rail settlement with no receipt. Two more holes used
-to pass: a same-ref wrong amount, a settled receipt with a null rail
-ref, and a garbage `chainHeadHash`. All three now fail.
+The old hole was a rail settlement with no receipt. Three more holes
+used to pass: a same-ref wrong amount, a settled receipt with a null
+rail ref, and a garbage `chainHeadHash`. All four now fail.
 
 Missing receipt (exit non-zero):
 

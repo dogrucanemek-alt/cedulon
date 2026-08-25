@@ -1207,7 +1207,9 @@ Internet-Draft                   Cedulon                     August 2026
 
    [REATTEST] Dogru, E. C., "Cedulon Re-Attestation: Carrying Spend
               Evidence Across Algorithm Retirement", August 2026,
-              <https://github.com/dogrucanemek-alt/cedulon>.
+              <https://github.com/dogrucanemek-
+              alt/cedulon/blob/master/spec/draft-dogru-cedulon-
+              reattestation-00.md>.
 
    [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of Running
               Code: The Implementation Status Section", BCP 205,
@@ -1227,8 +1229,6 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-
-
 Dogru                   Expires 27 February 2027               [Page 22]
 
 Internet-Draft                   Cedulon                     August 2026
@@ -1242,7 +1242,9 @@ Internet-Draft                   Cedulon                     August 2026
    [STREAMING]
               Dogru, E. C., "Cedulon Streaming Reconciliation:
               Continuous Completeness for Agent Spend", August 2026,
-              <https://github.com/dogrucanemek-alt/cedulon>.
+              <https://github.com/dogrucanemek-
+              alt/cedulon/blob/master/spec/draft-dogru-cedulon-
+              streaming-00.md>.
 
    [VAUBAN]   Vauban Research, "x402 STARK Receipt Format Extension",
               May 2026, <https://datatracker.ietf.org/doc/draft-vauban-
@@ -1279,8 +1281,6 @@ Appendix A.  Test Vectors
    38a65812cb5315ee7f1cf403
 
    Manifest COSE_Sign1:
-
-
 
 
 

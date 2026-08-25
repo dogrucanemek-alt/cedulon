@@ -105,14 +105,14 @@ informative:
       - ins: E. C. Dogru
         name: Emek Can Dogru
     date: 2026-08
-    target: https://github.com/dogrucanemek-alt/cedulon
+    target: https://github.com/dogrucanemek-alt/cedulon/blob/master/spec/draft-dogru-cedulon-reattestation-00.md
   STREAMING:
     title: "Cedulon Streaming Reconciliation: Continuous Completeness for Agent Spend"
     author:
       - ins: E. C. Dogru
         name: Emek Can Dogru
     date: 2026-08
-    target: https://github.com/dogrucanemek-alt/cedulon
+    target: https://github.com/dogrucanemek-alt/cedulon/blob/master/spec/draft-dogru-cedulon-streaming-00.md
 ---
 
 --- abstract

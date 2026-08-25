@@ -1,0 +1,336 @@
+
+
+
+
+Network Working Group                                        E. C. Dogru
+Internet-Draft                           VERAX TEKNOLOJI LIMITED SIRKETI
+Intended status: Informational                            26 August 2026
+Expires: 27 February 2027
+
+
+    Cedulon Re-Attestation: Carrying Spend Evidence Across Algorithm
+                               Retirement
+                  draft-dogru-cedulon-reattestation-00
+
+Abstract
+
+   Audit evidence is only useful for as long as it can be verified.
+   Cedulon produces COSE spend receipts and epoch checkpoints whose
+   signature algorithms will eventually be deprecated or broken; the
+   recent transition from polymorphic EdDSA to fully-specified Ed25519
+   algorithm identifiers shows that even identifiers change within a
+   decade.  This document proposes a re-attestation profile for Cedulon
+   evidence: a signed statement, produced while the original algorithm
+   is still trustworthy, that binds the original evidence bytes to a
+   successor algorithm and is registered in a SCITT transparency
+   service.  Chains of such statements allow a verifier decades later to
+   trust evidence whose original cipher has been retired.  Structures
+   are meant to outlive ciphers.  This is an extension proposal to the
+   Cedulon core document; its normative language is provisional and the
+   companion implementation does not implement it yet.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 27 February 2027.
+
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+
+
+Dogru                   Expires 27 February 2027                [Page 1]
+
+Internet-Draft           Cedulon Re-Attestation              August 2026
+
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2
+   2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   3
+   3.  Re-Attestation Statement  . . . . . . . . . . . . . . . . . .   3
+   4.  Processing Rules (provisional)  . . . . . . . . . . . . . . .   4
+   5.  Security Considerations . . . . . . . . . . . . . . . . . . .   5
+   6.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .   5
+   7.  References  . . . . . . . . . . . . . . . . . . . . . . . . .   5
+     7.1.  Normative References  . . . . . . . . . . . . . . . . . .   5
+     7.2.  Informative References  . . . . . . . . . . . . . . . . .   6
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .   6
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .   6
+
+1.  Introduction
+
+   A Cedulon Spend Receipt is a COSE_Sign1 object [RFC9052] verified
+   against a signature algorithm.  When that algorithm is deprecated,
+   verification of old evidence degrades from a cryptographic check into
+   an act of faith.  Archives that must answer questions many years
+   later (regulators, insurers, courts, and historians of automated
+   commerce) need a defined ceremony for carrying evidence forward, not
+   an ad-hoc migration.
+
+   The proposal is deliberately narrow: re-attestation does not re-
+   issue, amend, or reinterpret evidence.  It states, under a successor
+   algorithm, that specific original bytes existed and verified at a
+   specific time, and it anchors that statement in an append-only
+   transparency log.
+
+   This document is an extension seed for the Cedulon core specification
+   [CEDULON].  It is not an IETF working-group item, its keyword usage
+   is provisional, and the reference implementation does not yet
+   implement it.  It is published to define the shape of the mechanism
+   early and to invite review.
+
+
+
+
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027                [Page 2]
+
+Internet-Draft           Cedulon Re-Attestation              August 2026
+
+
+2.  Terminology
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+   Original Evidence:  A COSE_Sign1 object produced under the Cedulon
+      core profile (a Spend Receipt, an epoch checkpoint, a Trade
+      Manifest, or a Decision Token).
+
+   Re-Attestation Statement:  A COSE_Sign1 object, signed with a
+      successor algorithm, whose claims bind the hash of the Original
+      Evidence, the original algorithm, the verification result observed
+      at re-attestation time, and a reference to a transparency-log
+      entry.
+
+   Successor Algorithm:  A fully-specified COSE algorithm [RFC9864]
+      selected to outlive the algorithm of the Original Evidence.
+
+   Attestation Chain:  The sequence formed when a Re-Attestation
+      Statement itself becomes Original Evidence for a later re-
+      attestation.
+
+3.  Re-Attestation Statement
+
+   A Re-Attestation Statement is a COSE_Sign1 object over a
+   deterministic CBOR claim map.  The provisional claim set is:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027                [Page 3]
+
+Internet-Draft           Cedulon Re-Attestation              August 2026
+
+
+    +=====================+==========================================+
+    | Claim               | Meaning                                  |
+    +=====================+==========================================+
+    | originalHash        | SHA-256 [RFC6234] of the Original        |
+    |                     | Evidence COSE bytes, lowercase hex       |
+    +---------------------+------------------------------------------+
+    | originalAlg         | COSE algorithm identifier of the         |
+    |                     | Original Evidence                        |
+    +---------------------+------------------------------------------+
+    | originalKid         | Key identifier the Original Evidence     |
+    |                     | verified against                         |
+    +---------------------+------------------------------------------+
+    | verifiedAtMs        | POSIX milliseconds at which the re-      |
+    |                     | attester verified the original signature |
+    +---------------------+------------------------------------------+
+    | successorAlg        | COSE algorithm identifier of this        |
+    |                     | statement's signature                    |
+    +---------------------+------------------------------------------+
+    | anchorRef           | Reference to the SCITT registration of   |
+    |                     | the Original Evidence or of a prior      |
+    |                     | chain link, or null                      |
+    +---------------------+------------------------------------------+
+    | prevAttestationHash | SHA-256 of the previous Re-Attestation   |
+    |                     | Statement in the chain, or null          |
+    +---------------------+------------------------------------------+
+
+                                 Table 1
+
+   Label values are to be assigned from the CWT private-use range in a
+   later revision, alongside the Cedulon core label blocks.
+
+4.  Processing Rules (provisional)
+
+   1.  A re-attester MUST verify the Original Evidence signature under
+       its original algorithm before issuing a Re-Attestation Statement,
+       and MUST record the verification time in verifiedAtMs.
+
+   2.  A Re-Attestation Statement SHOULD be produced while the original
+       algorithm is still considered trustworthy by current guidance.
+       Re-attesting an already-broken algorithm proves nothing unless
+       the Original Evidence was registered in a transparency log before
+       the break; in that case the log inclusion proof, not the
+       signature, is the basis of trust and the statement MUST reference
+       it in anchorRef.
+
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027                [Page 4]
+
+Internet-Draft           Cedulon Re-Attestation              August 2026
+
+
+   3.  Each Re-Attestation Statement SHOULD be registered in a SCITT
+       Transparency Service [RFC9943], obtaining a COSE receipt
+       [RFC9942]; the resulting Transparent Statement is the archival
+       unit.
+
+   4.  A verifier evaluating old evidence walks the Attestation Chain
+       from the newest statement backwards.  The chain is acceptable
+       when every link's signature verifies under an algorithm trusted
+       at evaluation time and every originalHash/prevAttestationHash
+       matches the presented bytes.
+
+5.  Security Considerations
+
+   Re-attestation moves trust from an aging cipher to the combination of
+   a newer cipher and an append-only log.  The critical window is the
+   period before the original algorithm's break: evidence that reaches a
+   transparency log inside that window survives; evidence that does not
+   cannot be resurrected afterwards, and no statement defined here
+   claims otherwise.  A malicious re-attester can refuse to re-attest
+   (denial of archival service) but cannot forge history that a log
+   inclusion proof contradicts.  Timestamp claims are assertions by the
+   re-attester; deployments needing stronger time should anchor promptly
+   so the log's observed registration time bounds verifiedAtMs.
+
+6.  IANA Considerations
+
+   This document has no IANA actions.
+
+7.  References
+
+7.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+   [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
+              (SHA and SHA-based HMAC and HKDF)", RFC 6234,
+              DOI 10.17487/RFC6234, May 2011,
+              <https://www.rfc-editor.org/rfc/rfc6234>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027                [Page 5]
+
+Internet-Draft           Cedulon Re-Attestation              August 2026
+
+
+   [RFC9052]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
+              Structures and Process", STD 96, RFC 9052,
+              DOI 10.17487/RFC9052, August 2022,
+              <https://www.rfc-editor.org/rfc/rfc9052>.
+
+   [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
+              JSON Object Signing and Encryption (JOSE) and CBOR Object
+              Signing and Encryption (COSE)", RFC 9864,
+              DOI 10.17487/RFC9864, October 2025,
+              <https://www.rfc-editor.org/rfc/rfc9864>.
+
+   [RFC9942]  Steele, O., Birkholz, H., Delignat-Lavaud, A., and C.
+              Fournet, "CBOR Object Signing and Encryption (COSE)
+              Receipts", RFC 9942, DOI 10.17487/RFC9942, June 2026,
+              <https://www.rfc-editor.org/rfc/rfc9942>.
+
+   [RFC9943]  Birkholz, H., Delignat-Lavaud, A., Fournet, C., Deshpande,
+              Y., and S. Lasker, "An Architecture for Trustworthy and
+              Transparent Digital Supply Chains", RFC 9943,
+              DOI 10.17487/RFC9943, June 2026,
+              <https://www.rfc-editor.org/rfc/rfc9943>.
+
+7.2.  Informative References
+
+   [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
+              Commerce (work in progress)", August 2026,
+              <https://github.com/dogrucanemek-alt/cedulon>.
+
+Acknowledgments
+
+   This seed accompanies the Cedulon core document and its companion
+   implementation at https://github.com/dogrucanemek-alt/cedulon
+   (https://github.com/dogrucanemek-alt/cedulon).
+
+Author's Address
+
+   Emek Can Dogru
+   VERAX TEKNOLOJI LIMITED SIRKETI
+   Email: e.dogru@conarium.dev
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027                [Page 6]

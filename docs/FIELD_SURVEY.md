@@ -39,7 +39,7 @@ Risk: **RED**.
 - Class 9/42 trademark search on USPTO/EUIPO/TURKPATENT: UNVERIFIED (interactive search not completed).
 - `agenttradeprotocol.org`: RDAP 404 (likely unregistered). `atp.dev`: treat as taken.
 
-Acronym backups are **invalid**: AGTP is taken (`nomoticai/agtp`, `draft-hood-independent-agtp-09`). ATRP stays in the A*P graveyard. Word-name candidates were **Cedulon** (preferred), **Vouchel**, **Pactile**, **Assensus**. Detail and sources: `../ARASTIRMA_RAPORU.md` §8.6.
+Acronym backups are **invalid**: AGTP is taken (`nomoticai/agtp`, `draft-hood-independent-agtp-09`). ATRP stays in the A*P graveyard. Word-name candidates were **Cedulon** (preferred), **Vouchel**, **Pactile**, **Assensus**.
 
 **Resolution (2026-08-25): the protocol is named Cedulon.** npm scope: `@cedulon/*`. No publish in this tree.
 

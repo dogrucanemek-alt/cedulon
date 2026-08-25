@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use or cite this work, please cite it as below."
+title: "Cedulon: An Audit Layer for Agent-to-Agent Commerce"
+authors:
+  - family-names: Dogru
+    given-names: Emek Can
+    affiliation: "VERAX TEKNOLOJI LIMITED SIRKETI"
+repository-code: "https://github.com/dogrucanemek-alt/cedulon"
+url: "https://cedulon.com"
+license: Apache-2.0
+keywords:
+  - agent commerce
+  - audit
+  - completeness
+  - coverage reconciliation
+  - COSE
+  - CWT
+  - receipts
+  - SCITT
+  - transparency
+  - x402

@@ -183,7 +183,7 @@ describe("cedulon-audit detections", () => {
   });
 });
 
-describe("hakem bypasses — RED then GREEN", () => {
+describe("adversarial bypasses — RED then GREEN", () => {
   it("6 RED then GREEN: same-ref wrong amount is settlement-mismatch", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);

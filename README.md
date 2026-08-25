@@ -57,6 +57,11 @@ docs/RUN_AS_VERIFIER.md
 
 Brand names come from `packages/core/src/brand.ts` only.
 
+## How to cite
+
+Citation metadata is in `CITATION.cff`. A DOI for archived releases
+will be added here once minted.
+
 ## License
 
 Apache-2.0

@@ -1,0 +1,224 @@
+
+
+
+
+Network Working Group                                        E. C. Dogru
+Internet-Draft                           VERAX TEKNOLOJI LIMITED SIRKETI
+Intended status: Informational                            26 August 2026
+Expires: 27 February 2027
+
+
+  Cedulon Streaming Reconciliation: Continuous Completeness for Agent
+                                 Spend
+                    draft-dogru-cedulon-streaming-00
+
+Abstract
+
+   Cedulon defines a batch reconciliation audit: given a window of spend
+   receipts, epoch checkpoints, and an authenticated rail extract, a
+   verifier proves completeness after the fact.  Agent fleets that spend
+   continuously need the same property as a live signal: a conscience
+   that runs beside the payments rather than behind them.  This document
+   proposes a streaming profile: short half-open micro-epochs, an
+   incremental checkpoint cadence, a watermark that separates
+   provisional from final findings, and rules for late-arriving
+   settlements.  The goal is that "the books are balanced" becomes a
+   continuously maintained, externally checkable state instead of a
+   periodic report.  This is an extension proposal to the Cedulon core
+   document; its normative language is provisional and the companion
+   implementation does not implement it yet.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 27 February 2027.
+
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+
+
+
+Dogru                   Expires 27 February 2027                [Page 1]
+
+Internet-Draft              Cedulon Streaming                August 2026
+
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2
+   2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   2
+   3.  Streaming Model (provisional) . . . . . . . . . . . . . . . .   3
+   4.  Security Considerations . . . . . . . . . . . . . . . . . . .   4
+   5.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .   4
+   6.  References  . . . . . . . . . . . . . . . . . . . . . . . . .   4
+     6.1.  Normative References  . . . . . . . . . . . . . . . . . .   4
+     6.2.  Informative References  . . . . . . . . . . . . . . . . .   4
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .   4
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .   4
+
+1.  Introduction
+
+   Batch audits answer "was last week clean?".  Operators of
+   continuously spending agents ask a different question: "is this fleet
+   clean right now, and if not, which settlement broke it?"  The gap
+   between the two is not a new primitive; it is cadence.  The core
+   Cedulon objects (receipts, checkpoints, extracts) already chain and
+   total; this profile shortens their windows, defines when a window may
+   be judged, and names the states a finding passes through as evidence
+   arrives.
+
+   This document is an extension seed for the Cedulon core specification
+   [CEDULON].  It is not an IETF working-group item, its keyword usage
+   is provisional, and the reference implementation does not yet
+   implement it.  It is published to define the shape of the mechanism
+   early and to invite review.
+
+2.  Terminology
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+   Micro-Epoch:  A half-open window [startMs, endMs) of fixed short
+      duration (seconds to minutes) carrying an incremental checkpoint,
+      contiguous with its neighbors and covering the receipt chain with
+      no gaps.
+
+
+
+Dogru                   Expires 27 February 2027                [Page 2]
+
+Internet-Draft              Cedulon Streaming                August 2026
+
+
+   Watermark:  A timestamp finalizedUpToMs before which the verifier has
+      received the authenticated rail extract covering every closed
+      micro-epoch.  Windows entirely below the watermark are final;
+      windows above it are provisional.
+
+   Provisional Finding:  A reconciliation finding raised in a window not
+      yet below the watermark; it MAY be resolved by evidence that
+      arrives before finalization.
+
+   Final Finding:  A finding in a finalized window.  It does not change;
+      late evidence cannot erase it, only annotate it.
+
+3.  Streaming Model (provisional)
+
+   1.  Receipts and checkpoints follow the core profile unchanged; only
+       the epoch duration shrinks.  Consecutive micro-epochs MUST be
+       contiguous and half-open, and every chained receipt MUST fall in
+       exactly one micro-epoch.
+
+   2.  The rail extract is consumed as an authenticated append-only feed
+       segmented by the same windows.  A window is eligible for
+       finalization only when its extract segment is complete and
+       authenticated.
+
+   3.  The streaming verifier maintains, per window: matched pairs,
+       unmatched settlements, unmatched receipts, and checkpoint totals.
+       Findings in windows above the watermark are Provisional; when the
+       watermark passes a window, its findings become Final and the
+       window's verdict is immutable.
+
+   4.  A settlement arriving for an already-final window is itself a
+       finding (late-settlement), because a complete authenticated
+       extract for that window had already been presented.  One of the
+       two extract presentations is wrong, and the conflict is the
+       evidence.
+
+   5.  The current watermark, the head checkpoint hash, and the count of
+       open provisional findings form the fleet's live conscience tuple;
+       publishing it (for example to a transparency log at a fixed
+       cadence) lets outside parties observe that the books were
+       continuously balanced without seeing individual trades.
+
+
+
+
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027                [Page 3]
+
+Internet-Draft              Cedulon Streaming                August 2026
+
+
+4.  Security Considerations
+
+   Streaming changes when judgments are made, not what is judged; the
+   core trust analysis applies.  The new surface is the watermark: an
+   operator who can stall the extract feed keeps windows provisional and
+   delays Final findings.  Deployments SHOULD bound the distance between
+   wall clock and watermark and SHOULD treat a stalled watermark as an
+   availability finding in itself; silence, here too, is evidence.  A
+   late-settlement conflict reveals that two inconsistent extracts were
+   presented; resolving which party misbehaved requires the extract
+   signatures, which is why unauthenticated feeds cannot finalize
+   anything.
+
+5.  IANA Considerations
+
+   This document has no IANA actions.
+
+6.  References
+
+6.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+6.2.  Informative References
+
+   [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
+              Commerce (work in progress)", August 2026,
+              <https://github.com/dogrucanemek-alt/cedulon>.
+
+Acknowledgments
+
+   This seed accompanies the Cedulon core document and its companion
+   implementation at https://github.com/dogrucanemek-alt/cedulon
+   (https://github.com/dogrucanemek-alt/cedulon).
+
+Author's Address
+
+   Emek Can Dogru
+   VERAX TEKNOLOJI LIMITED SIRKETI
+   Email: e.dogru@conarium.dev
+
+
+
+
+Dogru                   Expires 27 February 2027                [Page 4]

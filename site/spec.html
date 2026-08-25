@@ -31,7 +31,7 @@
       <div class="steps">
         <h2>Sections</h2>
         <ol>
-          <li><strong>Introduction</strong> — rails move value; the audit layer is missing. Single-entry → double-entry → proven completeness.</li>
+          <li><strong>Introduction</strong> — rails move value; the audit layer is missing. Single-entry → double-entry → completeness proven against an authenticated rail extract.</li>
           <li><strong>Terminology</strong> — RFC 2119; Trade Manifest, PDP, Spend Receipt, Decision Token (COSE_Sign1), Rail Extract.</li>
           <li><strong>Architecture</strong> — PDP before the rail; Receipt Issuer after; optional SCITT.</li>
           <li><strong>Trade Manifest</strong> — COSE_Sign1 offer before payment; <span class="mono">manifestHash</span> is SHA-256 of the COSE bytes.</li>
@@ -48,6 +48,8 @@
           <li><strong>Implementation Status</strong> — RFC 7942 note pointing at the companion repository.</li>
           <li><strong>Evolution and Future Work</strong> — re-attestation, streaming reconciliation, generalization (direction, not -00 code).</li>
           <li><strong>Informative Notes</strong> — x402, AP2, Bates, Vauban, Schrock, Marques/Acta, Hopley; none define rail-extract completeness.</li>
+          <li><strong>Acknowledgments</strong> — field survey and threat-model notes in the companion repository.</li>
+          <li><strong>Appendix A. Test Vectors</strong> — locked byte-level receipt and manifest vectors, reproduced by the test suite.</li>
         </ol>
       </div>
 
