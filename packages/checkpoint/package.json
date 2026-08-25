@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "license": "Apache-2.0",
   "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
