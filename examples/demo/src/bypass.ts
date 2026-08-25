@@ -63,6 +63,7 @@ export function runBypass(
   kind: BypassKind = "missing",
 ): {
   summary: string;
+  guarantee: "unconditional" | "conditional";
   exitCode: number;
   text: string;
   kind: BypassKind;
@@ -126,7 +127,13 @@ export function runBypass(
   const checkpoint = signCheckpoint(checkpointClaims, keys.privateKeyPem, keys.publicKeyPem);
   const report = audit({ receipts: auditReceipts, checkpoints: [checkpoint], settlements });
   const text = formatAudit(report, auditReceipts.length);
-  return { summary: report.summary, exitCode: report.ok ? 0 : 1, text, kind };
+  return {
+    summary: report.summary,
+    guarantee: report.guarantee,
+    exitCode: report.ok ? 0 : 1,
+    text,
+    kind,
+  };
 }
 
 const KINDS: BypassKind[] = ["missing", "amount", "null-ref", "head"];
@@ -138,7 +145,9 @@ if (isMain) {
     let fail = 0;
     for (const kind of KINDS) {
       const ran = runBypass(undefined, kind);
-      console.log(`${kind}\t${ran.summary}`);
+      // The guarantee travels with the verdict: this demo pins no rail key, so
+      // every line here is a conditional result and says so.
+      console.log(`${kind}\t${ran.summary}\tguarantee=${ran.guarantee}`);
       if (ran.exitCode !== 1) fail = 1;
     }
     process.exit(fail);

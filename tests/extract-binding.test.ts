@@ -3,6 +3,7 @@ import { createPublicKey } from "node:crypto";
 import { describe, it } from "node:test";
 
 import { audit, formatAudit } from "@cedulon/audit";
+import { receiptHash } from "@cedulon/receipts";
 import { PolicyEngine } from "@cedulon/core";
 import { fixtureEd25519Pems } from "@cedulon/cose";
 import {
@@ -14,6 +15,43 @@ import {
 } from "@cedulon/x402-adapter";
 
 const NOW = 1_700_000_000_000;
+const WINDOW_END = NOW + 3_600_000;
+
+type RailKeys = ReturnType<typeof generateExtractKeys>;
+
+/**
+ * An extract that covers a real period. `RailLedger.signedExtract` derives the
+ * window from the rows it holds, so an empty ledger declares `[0, 0)`: an
+ * extract that reports on nothing balances trivially. Tests that mean to show
+ * a clean audit have to state a period, the same way a verifier does.
+ */
+function railExtract(
+  rail: RailKeys,
+  settlements: Array<{ ref: string; amount: string; currency: string; timestampMs: number }> = [],
+  overrides: Partial<{ accountId: string; railId: string; windowStartMs: number; windowEndMs: number }> = {},
+) {
+  return signRailExtract(
+    {
+      accountId: overrides.accountId ?? "mock-account",
+      railId: overrides.railId ?? "mock-rail",
+      windowStartMs: overrides.windowStartMs ?? NOW,
+      windowEndMs: overrides.windowEndMs ?? WINDOW_END,
+      settlements,
+    },
+    rail.privateKeyPem,
+    rail.publicKeyPem,
+  );
+}
+
+/** A pin that states the period under audit, not only who signed. */
+function pin(rail: RailKeys, overrides: Record<string, unknown> = {}) {
+  return {
+    publicKeyPem: rail.publicKeyPem,
+    windowStartMs: NOW,
+    windowEndMs: WINDOW_END,
+    ...overrides,
+  };
+}
 
 function adapterKeys(): AdapterKeys {
   const signer = fixtureEd25519Pems();
@@ -34,9 +72,9 @@ function engine(): PolicyEngine {
 describe("rail extract binding", () => {
   it("18 RED then GREEN: an off-book row inside a signed extract is reconciled, not skipped", () => {
     const rail = generateExtractKeys();
-    const ledger = new RailLedger();
-    ledger.record({ ref: "off-book-1", amount: "7", currency: "USD", timestampMs: NOW });
-    const extract = ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem);
+    const extract = railExtract(rail, [
+      { ref: "off-book-1", amount: "7", currency: "USD", timestampMs: NOW },
+    ]);
 
     // RED before the fix: the caller could hand over an empty array and the
     // off-book row inside the extract was never examined.
@@ -45,7 +83,7 @@ describe("rail extract binding", () => {
       checkpoints: [],
       settlements: [],
       extract,
-      trust: { publicKeyPem: rail.publicKeyPem },
+      trust: pin(rail),
     });
     assert.equal(red.ok, false);
     assert.equal(
@@ -58,12 +96,11 @@ describe("rail extract binding", () => {
       "the empty caller array is itself reported",
     );
 
-    const clean = new RailLedger();
     const green = audit({
       receipts: [],
       checkpoints: [],
-      extract: clean.signedExtract(rail.privateKeyPem, rail.publicKeyPem),
-      trust: { publicKeyPem: rail.publicKeyPem },
+      extract: railExtract(rail),
+      trust: pin(rail),
     });
     assert.equal(green.ok, true);
     assert.equal(green.guarantee, "unconditional");
@@ -72,8 +109,7 @@ describe("rail extract binding", () => {
   it("19 RED then GREEN: an unpinned or attacker-signed extract cannot reach an unconditional guarantee", () => {
     const attacker = generateExtractKeys();
     const rail = generateExtractKeys();
-    const ledger = new RailLedger();
-    const forged = ledger.signedExtract(attacker.privateKeyPem, attacker.publicKeyPem);
+    const forged = railExtract(attacker);
 
     const unpinned = audit({ receipts: [], checkpoints: [], extract: forged });
     assert.equal(unpinned.guarantee, "conditional", "a self-signed extract proves nothing on its own");
@@ -83,7 +119,7 @@ describe("rail extract binding", () => {
       receipts: [],
       checkpoints: [],
       extract: forged,
-      trust: { publicKeyPem: rail.publicKeyPem },
+      trust: pin(rail),
     });
     assert.equal(pinned.ok, false);
     assert.equal(pinned.findings.some((f) => f.code === "extract-key-mismatch"), true);
@@ -91,8 +127,8 @@ describe("rail extract binding", () => {
     const green = audit({
       receipts: [],
       checkpoints: [],
-      extract: ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem),
-      trust: { publicKeyPem: rail.publicKeyPem },
+      extract: railExtract(rail),
+      trust: pin(rail),
     });
     assert.equal(green.ok, true);
     assert.equal(green.guarantee, "unconditional");
@@ -168,8 +204,7 @@ describe("rail extract binding", () => {
 
   it("22 RED then GREEN: once a key is pinned, a signature that does not verify fails closed", () => {
     const rail = generateExtractKeys();
-    const ledger = new RailLedger();
-    const good = ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem);
+    const good = railExtract(rail);
     const tampered = { ...good, signature: "aa" };
 
     // RED before the fix: the pin was only compared on the branch where the
@@ -179,7 +214,7 @@ describe("rail extract binding", () => {
       receipts: [],
       checkpoints: [],
       extract: tampered,
-      trust: { publicKeyPem: rail.publicKeyPem },
+      trust: pin(rail),
     });
     assert.equal(red.ok, false, "a pinned verifier does not accept an unverifiable extract");
     assert.equal(red.findings.some((f) => f.code === "extract-key-mismatch"), true);
@@ -188,7 +223,7 @@ describe("rail extract binding", () => {
       receipts: [],
       checkpoints: [],
       extract: good,
-      trust: { publicKeyPem: rail.publicKeyPem },
+      trust: pin(rail),
     });
     assert.equal(green.ok, true);
   });
@@ -196,8 +231,7 @@ describe("rail extract binding", () => {
   it("23 RED then GREEN: a doubted extract is never described as an unconditional guarantee", () => {
     const attacker = generateExtractKeys();
     const rail = generateExtractKeys();
-    const ledger = new RailLedger();
-    const forged = ledger.signedExtract(attacker.privateKeyPem, attacker.publicKeyPem);
+    const forged = railExtract(attacker);
 
     // RED before the fix: guarantee was derived from warnings alone, so a report
     // could name extract-key-mismatch and still call itself unconditional.
@@ -205,7 +239,7 @@ describe("rail extract binding", () => {
       receipts: [],
       checkpoints: [],
       extract: forged,
-      trust: { publicKeyPem: rail.publicKeyPem },
+      trust: pin(rail),
     });
     assert.equal(red.findings.some((f) => f.code === "extract-key-mismatch"), true);
     assert.equal(red.guarantee, "conditional");
@@ -213,8 +247,8 @@ describe("rail extract binding", () => {
     const green = audit({
       receipts: [],
       checkpoints: [],
-      extract: ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem),
-      trust: { publicKeyPem: rail.publicKeyPem },
+      extract: railExtract(rail),
+      trust: pin(rail),
     });
     assert.equal(green.guarantee, "unconditional");
   });
@@ -229,13 +263,12 @@ describe("rail extract binding", () => {
     assert.match(red, /warn\tunauthenticated-extract/);
 
     const rail = generateExtractKeys();
-    const ledger = new RailLedger();
     const green = formatAudit(
       audit({
         receipts: [],
         checkpoints: [],
-        extract: ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem),
-        trust: { publicKeyPem: rail.publicKeyPem },
+        extract: railExtract(rail),
+        trust: pin(rail),
       }),
       0,
     );
@@ -245,8 +278,7 @@ describe("rail extract binding", () => {
 
   it("26 RED then GREEN: the same rail key in another encoding still matches the pin", () => {
     const rail = generateExtractKeys();
-    const ledger = new RailLedger();
-    const extract = ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem);
+    const extract = railExtract(rail);
 
     // A rail that publishes its key as bare base64 SPKI rather than PEM. Same
     // key, same bytes; only the envelope differs. Comparing PEM text called
@@ -259,7 +291,7 @@ describe("rail extract binding", () => {
       receipts: [],
       checkpoints: [],
       extract,
-      trust: { publicKeyPem: bareBase64 },
+      trust: pin(rail, { publicKeyPem: bareBase64 }),
     });
     assert.equal(green.ok, true, "the same key in another encoding is the same key");
     assert.equal(green.guarantee, "unconditional");
@@ -269,15 +301,14 @@ describe("rail extract binding", () => {
       receipts: [],
       checkpoints: [],
       extract,
-      trust: { publicKeyPem: other.publicKeyPem },
+      trust: pin(rail, { publicKeyPem: other.publicKeyPem }),
     });
     assert.equal(red.findings.some((f) => f.code === "extract-key-mismatch"), true);
   });
 
   it("27 RED then GREEN: a pin the audit cannot read is named, not silently a mismatch", () => {
     const rail = generateExtractKeys();
-    const ledger = new RailLedger();
-    const extract = ledger.signedExtract(rail.privateKeyPem, rail.publicKeyPem);
+    const extract = railExtract(rail);
 
     // RED before the fix: an unreadable pin compared unequal and was reported
     // as extract-key-mismatch, so an operator could not tell a forged extract
@@ -295,12 +326,16 @@ describe("rail extract binding", () => {
       false,
       "and is not confused with a key that simply does not match",
     );
+    // On this path nothing was authenticated: the signature is never compared
+    // because there was no readable key to compare it against. Reporting an
+    // unconditional guarantee here would invert the whole point.
+    assert.equal(red.guarantee, "conditional");
 
     const green = audit({
       receipts: [],
       checkpoints: [],
       extract,
-      trust: { publicKeyPem: rail.publicKeyPem },
+      trust: pin(rail),
     });
     assert.equal(green.ok, true);
   });
@@ -358,6 +393,196 @@ describe("rail extract binding", () => {
       trust: { publicKeyPem: rail.publicKeyPem },
     });
     assert.equal(green.findings.some((f) => f.code === "extract-scope-mismatch"), false);
+  });
+
+  it("29 RED then GREEN: without a stated window the extract picks its own scope", () => {
+    const rail = generateExtractKeys();
+    // The rail declares a one-millisecond window and carries nothing. Key,
+    // account and rail all match the pin, so every check that exists passes
+    // and the report balances over a period that reports on nothing.
+    const sliver = signRailExtract(
+      {
+        accountId: "acct-1",
+        railId: "rail-1",
+        windowStartMs: NOW,
+        windowEndMs: NOW + 1,
+        settlements: [],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+
+    const unstated = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: sliver,
+      trust: { publicKeyPem: rail.publicKeyPem, accountId: "acct-1", railId: "rail-1" },
+    });
+    assert.equal(unstated.ok, true, "nothing is wrong with the rows it carries");
+    assert.equal(
+      unstated.guarantee,
+      "conditional",
+      "but a verifier that did not state a period cannot call the result unconditional",
+    );
+    assert.equal(unstated.warnings.some((f) => f.code === "unstated-audit-window"), true);
+
+    // Stating the period turns the same sliver into a scope finding.
+    const red = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: sliver,
+      trust: {
+        publicKeyPem: rail.publicKeyPem,
+        accountId: "acct-1",
+        railId: "rail-1",
+        windowStartMs: NOW,
+        windowEndMs: NOW + 3_600_000,
+      },
+    });
+    assert.equal(red.ok, false);
+    assert.equal(red.findings.some((f) => f.code === "extract-scope-mismatch"), true);
+
+    const covering = signRailExtract(
+      {
+        accountId: "acct-1",
+        railId: "rail-1",
+        windowStartMs: NOW,
+        windowEndMs: NOW + 3_600_000,
+        settlements: [],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const green = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: covering,
+      trust: {
+        publicKeyPem: rail.publicKeyPem,
+        accountId: "acct-1",
+        railId: "rail-1",
+        windowStartMs: NOW,
+        windowEndMs: NOW + 3_600_000,
+      },
+    });
+    assert.equal(green.ok, true);
+    assert.equal(green.guarantee, "unconditional", "stated period, covering extract, pinned key");
+  });
+
+  it("30 RED then GREEN: a duplicated ref reports a currency that exists only on the receipt side", () => {
+    const signer = fixtureEd25519Pems();
+    const ledger = new RailLedger();
+    const result = gatedSettleWithLedger(
+      engine(),
+      {
+        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "dup", nowMs: NOW, tool: "spend" },
+        payer: "payer-1",
+        paymentHeader: "mock",
+      },
+      { receiptPrivatePem: signer.privateKeyPem, receiptPublicPem: signer.publicKeyPem },
+      NOW,
+      ledger,
+      null,
+    );
+    const receipt = (result as any).receipt;
+    const ref = receipt.claims.x402PaymentRef;
+
+    // The rail reports this ref twice, both rows in EUR, so the ref takes the
+    // dedup path and USD exists on the receipt side alone.
+    const settlements = [
+      { ref, amount: "4", currency: "EUR", timestampMs: NOW },
+      { ref, amount: "4", currency: "EUR", timestampMs: NOW + 1 },
+    ];
+
+    const report = audit({ receipts: [receipt], checkpoints: [], settlements });
+    assert.equal(report.ok, false);
+    // RED before the fix: only the settled side was walked, so USD produced no
+    // finding at all and the report was silently incomplete about a receipt
+    // with nothing settled behind it.
+    assert.equal(
+      report.findings.some((f) => f.code === "settlement-mismatch" && f.id === ref && /USD/.test(f.detail)),
+      true,
+      "the receipt-only currency is reported",
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "settlement-without-receipt" && /EUR/.test(f.detail)),
+      true,
+      "and the settlement-only currency still is too",
+    );
+  });
+
+  it("31 RED then GREEN: a receipt from outside the extract's window is out of scope, not a failure", () => {
+    const rail = generateExtractKeys();
+    const keys = adapterKeys();
+    const ledger = new RailLedger();
+
+    // Two honest spends a day apart. The extract covers the first hour only.
+    const first = gatedSettleWithLedger(
+      engine(),
+      {
+        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "in", nowMs: NOW, tool: "spend" },
+        payer: "payer-1",
+        paymentHeader: "mock",
+      },
+      keys,
+      NOW,
+      ledger,
+      null,
+    );
+    const later = NOW + 86_400_000;
+    const second = gatedSettleWithLedger(
+      engine(),
+      {
+        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "out", nowMs: later, tool: "spend" },
+        payer: "payer-1",
+        paymentHeader: "mock",
+      },
+      keys,
+      later,
+      ledger,
+      receiptHash((first as any).receipt),
+    );
+
+    const firstReceipt = (first as any).receipt;
+    const secondReceipt = (second as any).receipt;
+    const extract = railExtract(rail, [
+      {
+        ref: firstReceipt.claims.x402PaymentRef,
+        amount: "1",
+        currency: "USD",
+        timestampMs: NOW,
+      },
+    ]);
+
+    // RED before the fix: the second receipt was matched against an extract
+    // that never claimed to cover its day, and the honest spend was reported
+    // as receipt-without-settlement.
+    const report = audit({
+      receipts: [firstReceipt, secondReceipt],
+      checkpoints: [],
+      extract,
+      trust: pin(rail),
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "receipt-without-settlement"),
+      false,
+      "a receipt outside the declared window is not this extract's business",
+    );
+
+    // Inside the window the rule still bites: drop the row and the first
+    // receipt has nothing behind it.
+    const red = audit({
+      receipts: [firstReceipt, secondReceipt],
+      checkpoints: [],
+      extract: railExtract(rail),
+      trust: pin(rail),
+    });
+    assert.equal(
+      red.findings.some(
+        (f) => f.code === "receipt-without-settlement" && f.id === firstReceipt.claims.nonce,
+      ),
+      true,
+    );
   });
 
   it("25 RED then GREEN: an amount the audit cannot read is a finding, not a crash", () => {

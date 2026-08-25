@@ -21,10 +21,14 @@ Abstract
    Cedulon specifies a Trade Manifest (signed offer before payment), a
    Policy Decision Point with default deny, a Spend Receipt (COSE/CWT
    claim set after a gated payment), epoch checkpoints, and rail-extract
-   reconciliation that proves completeness against an authenticated rail
-   extract.  It also defines a Dispute Evidence Bundle (evidence, not an
-   award) and optional SCITT anchoring.  Cedulon is not a competitor to
-   x402 or AP2; it sits above them.
+   reconciliation.  The reconciliation shows that no settlement on the
+   extract lacks a receipt and no settled receipt is absent from the
+   extract.  That result is unconditional only when the verifier pins
+   the rail key out of band and states the period under audit; otherwise
+   the document requires it to be reported as conditional.  It also
+   defines a Dispute Evidence Bundle (evidence, not an award) and
+   optional SCITT anchoring.  Cedulon is not a competitor to x402 or
+   AP2; it sits above them.
 
 Status of This Memo
 
@@ -43,10 +47,6 @@ Status of This Memo
 
    This Internet-Draft will expire on 27 February 2027.
 
-Copyright Notice
-
-   Copyright (c) 2026 IETF Trust and the persons identified as the
-   document authors.  All rights reserved.
 
 
 
@@ -58,6 +58,11 @@ Dogru                   Expires 27 February 2027                [Page 1]
 Internet-Draft                   Cedulon                     August 2026
 
 
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
    This document is subject to BCP 78 and the IETF Trust's Legal
    Provisions Relating to IETF Documents (https://trustee.ietf.org/
    license-info) in effect on the date of publication of this document.
@@ -68,11 +73,11 @@ Table of Contents
 
    1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
    2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   4
-   3.  Architecture  . . . . . . . . . . . . . . . . . . . . . . . .   4
+   3.  Architecture  . . . . . . . . . . . . . . . . . . . . . . . .   5
      3.1.  Policy Decision Point . . . . . . . . . . . . . . . . . .   5
      3.2.  Receipt Issuer  . . . . . . . . . . . . . . . . . . . . .   5
      3.3.  Anchor / SCITT  . . . . . . . . . . . . . . . . . . . . .   5
-   4.  Trade Manifest  . . . . . . . . . . . . . . . . . . . . . . .   5
+   4.  Trade Manifest  . . . . . . . . . . . . . . . . . . . . . . .   6
    5.  Spend Receipt . . . . . . . . . . . . . . . . . . . . . . . .   6
      5.1.  Optional payee countersignature . . . . . . . . . . . . .   8
    6.  COSE Profile  . . . . . . . . . . . . . . . . . . . . . . . .   8
@@ -82,30 +87,25 @@ Table of Contents
    8.  Rail Extract Profile  . . . . . . . . . . . . . . . . . . . .  12
      8.1.  Record schema . . . . . . . . . . . . . . . . . . . . . .  12
      8.2.  Scope . . . . . . . . . . . . . . . . . . . . . . . . . .  12
-     8.3.  Authentication  . . . . . . . . . . . . . . . . . . . . .  12
+     8.3.  Authentication  . . . . . . . . . . . . . . . . . . . . .  13
      8.4.  Scope agreement . . . . . . . . . . . . . . . . . . . . .  13
-   9.  Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  13
+   9.  Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  14
      9.1.  Checkpoint claims . . . . . . . . . . . . . . . . . . . .  14
      9.2.  Genesis and continuity  . . . . . . . . . . . . . . . . .  14
-     9.3.  Verification algorithm  . . . . . . . . . . . . . . . . .  14
-     9.4.  Finding codes . . . . . . . . . . . . . . . . . . . . . .  16
-   10. Lifecycle . . . . . . . . . . . . . . . . . . . . . . . . . .  18
-   11. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  18
-   12. SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  19
-   13. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  19
-   14. Security Considerations . . . . . . . . . . . . . . . . . . .  19
-     14.1.  Optional escrow role . . . . . . . . . . . . . . . . . .  21
-   15. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  21
-   16. Implementation Status . . . . . . . . . . . . . . . . . . . .  21
-     16.1.  Changes from -00 . . . . . . . . . . . . . . . . . . . .  21
-   17. Evolution and Future Work (Informative) . . . . . . . . . . .  22
-     17.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  22
-     17.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  22
-     17.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  23
-   18. Informative Notes on Adjacent Protocols . . . . . . . . . . .  23
-   19. References  . . . . . . . . . . . . . . . . . . . . . . . . .  23
-     19.1.  Normative References . . . . . . . . . . . . . . . . . .  23
-     19.2.  Informative References . . . . . . . . . . . . . . . . .  24
+     9.3.  Verification algorithm  . . . . . . . . . . . . . . . . .  15
+     9.4.  Finding codes . . . . . . . . . . . . . . . . . . . . . .  17
+   10. Lifecycle . . . . . . . . . . . . . . . . . . . . . . . . . .  19
+   11. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  19
+   12. SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  20
+   13. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  20
+   14. Security Considerations . . . . . . . . . . . . . . . . . . .  20
+     14.1.  Optional escrow role . . . . . . . . . . . . . . . . . .  22
+   15. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  22
+   16. Implementation Status . . . . . . . . . . . . . . . . . . . .  23
+     16.1.  Changes from -00 . . . . . . . . . . . . . . . . . . . .  24
+   17. Evolution and Future Work (Informative) . . . . . . . . . . .  25
+     17.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  25
+     17.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  25
 
 
 
@@ -114,9 +114,14 @@ Dogru                   Expires 27 February 2027                [Page 2]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  26
-   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  26
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  27
+     17.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  25
+   18. Informative Notes on Adjacent Protocols . . . . . . . . . . .  25
+   19. References  . . . . . . . . . . . . . . . . . . . . . . . . .  26
+     19.1.  Normative References . . . . . . . . . . . . . . . . . .  26
+     19.2.  Informative References . . . . . . . . . . . . . . . . .  27
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  28
+   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  29
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  29
 
 1.  Introduction
 
@@ -143,22 +148,17 @@ Internet-Draft                   Cedulon                     August 2026
    of this specification MUST NOT take custody of funds or operate
    escrow (MUST-T8-custody).
 
-   The completeness claim sits in a long bookkeeping line.  Single-entry
-   records (clay tablets, journals) listed events in one place and could
-   not check themselves.  Double-entry bookkeeping, set out by Pacioli
-   in 1494 [PACIOLI], posts each event to two books so that the books
-   can check each other.  Cedulon is a later step: *proven
-   completeness*, where an external witness (the authenticated rail
-   extract) is machine-checkable against signed spend receipts.  Grigg's
-   triple-entry idea (signed receipts as the third entry) is [GRIGG].
-   Cedulon's addition is the completeness and reconciliation proof plus
-   an open standard profile, not a claim to be first.
+   The control is an old one.  Reconciling an internal ledger against an
+   external statement is what double-entry bookkeeping [PACIOLI] made
+   routine, and signing the artifacts on both sides is Grigg's triple-
+   entry idea [GRIGG].  Neither is claimed here.  What this document
+   contributes is an open wire profile for that control in a setting
+   where the parties are software: a COSE receipt shape, an extract
+   shape, a checkpoint chain, and a verification algorithm precise
+   enough that two implementations reach the same finding on the same
+   evidence.  The novelty is interoperability, not the idea.
 
-   Neighbor drafts are complementary, not substitutes. draft-bates-atp
-   [BATES-ATTP] covers tamper-evident causal lineage as a signed DAG.
-   Cedulon is the completeness layer: a spend that never produced a
-   receipt is visible when an authenticated rail extract is reconciled
-   (MUST-T10-1).
+
 
 
 
@@ -169,6 +169,12 @@ Dogru                   Expires 27 February 2027                [Page 3]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   Neighbor drafts are complementary, not substitutes. draft-bates-atp
+   [BATES-ATTP] covers tamper-evident causal lineage as a signed DAG.
+   Cedulon is the completeness layer: a spend that never produced a
+   receipt is visible when an authenticated rail extract is reconciled
+   (MUST-T10-1).
 
 2.  Terminology
 
@@ -211,12 +217,6 @@ Internet-Draft                   Cedulon                     August 2026
    Rail Extract:  An authenticated list of settlement records for one
       account, one rail, and one time window.  See Section 8.
 
-3.  Architecture
-
-   Cedulon has three control-plane objects and one optional log:
-
-
-
 
 
 
@@ -225,6 +225,10 @@ Dogru                   Expires 27 February 2027                [Page 4]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+3.  Architecture
+
+   Cedulon has three control-plane objects and one optional log:
 
      Principal --policy--> PDP --allow/deny--> x402/AP2 rail
                                  |
@@ -267,12 +271,8 @@ Internet-Draft                   Cedulon                     August 2026
    receipt (MAY-T4-6).  This document does not operate a Transparency
    Service.
 
-4.  Trade Manifest
 
-   A Trade Manifest is the commerce analogue of a promise: it is issued
-   *before* value moves.  It is conceptually symmetric to a later Spend
-   Receipt (promise then proof), and it MAY carry an AP2 mandate hash so
-   that user intent and the Cedulon offer stay linked (SHOULD-T8-5).
+
 
 
 
@@ -281,6 +281,13 @@ Dogru                   Expires 27 February 2027                [Page 5]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+4.  Trade Manifest
+
+   A Trade Manifest is the commerce analogue of a promise: it is issued
+   *before* value moves.  It is conceptually symmetric to a later Spend
+   Receipt (promise then proof), and it MAY carry an AP2 mandate hash so
+   that user intent and the Cedulon offer stay linked (SHOULD-T8-5).
 
    A Trade Manifest MUST bind all of the following (MUST-T8-1):
 
@@ -319,13 +326,6 @@ Internet-Draft                   Cedulon                     August 2026
    COSE profile (Section 6).
 
    Claims (MUST-T4-3, MUST-T4-4, MUST-T4-7):
-
-
-
-
-
-
-
 
 
 
@@ -659,12 +659,12 @@ Internet-Draft                   Cedulon                     August 2026
    An extract is scoped to one account identifier, one rail identifier,
    and one half-open time window [windowStartMs, windowEndMs).
 
-8.3.  Authentication
 
-   The mock rail in the companion implementation signs the extract with
-   Ed25519 over a canonical encoding of the scoped body.  A production
-   verifier MUST obtain the extract from the rail or from a signature
-   the rail published (MUST-T10-7).
+
+
+
+
+
 
 
 
@@ -673,6 +673,15 @@ Dogru                   Expires 27 February 2027               [Page 12]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+8.3.  Authentication
+
+   The mock rail in the companion implementation signs the extract with
+   Ed25519 over a canonical encoding of the scoped body.  A verifier
+   MUST obtain the extract from the rail or from a signature the rail
+   published (MUST-T10-7).  A deployment that cannot do so is running
+   the reconciliation against evidence it did not obtain independently,
+   and MUST report the guarantee as conditional.
 
    A signature on an extract proves internal consistency, not origin: a
    key generated by whoever produced the object verifies against itself.
@@ -689,10 +698,17 @@ Internet-Draft                   Cedulon                     August 2026
    own configuration, not evidence about the extract, and MUST be
    reported as trust-key-unreadable rather than as a key mismatch.
 
-   If the extract is missing a verifiable signature, the verifier MUST
-   emit finding unauthenticated-extract.  Completeness findings may
-   still be computed, but the completeness guarantee is *conditional* on
-   the extract being authentic.  See Section 14.
+   What a verifier emits for an extract it cannot authenticate depends
+   on whether it stated an expectation.  With no pinned key the verifier
+   has asserted nothing, so an extract that does not carry a verifiable
+   signature is unauthenticated-extract, a warning: completeness
+   findings may still be computed, but the guarantee is *conditional* on
+   the extract being authentic.  With a pinned key the verifier has
+   asserted what it requires, and an extract that fails to meet it is a
+   failure rather than a caveat; see the verification algorithm for
+   which finding applies. -00 defined only the first case, and readers
+   of -00 should note that this revision makes the pinned case fail
+   closed.  See Section 14.
 
 8.4.  Scope agreement
 
@@ -706,9 +722,25 @@ Internet-Draft                   Cedulon                     August 2026
    A verifier that knows which account, rail, and window it is auditing
    MUST also check the extract against that expectation and MUST fail
    closed when the extract does not cover it (MUST-T10-11).  An extract
+
+
+
+Dogru                   Expires 27 February 2027               [Page 13]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    for another account or rail, or one whose window does not span the
    period under audit, cannot support a completeness claim about that
    period.
+
+   A verifier that states no period leaves the extract free to define
+   one, and an extract that reports on a millisecond balances as easily
+   as one that reports on a month.  Pinning a key establishes who
+   signed; only a stated period establishes what the signature had to
+   cover.  A verifier that has not stated the period under audit
+   therefore MUST emit unstated-audit-window and MUST treat the
+   guarantee as conditional (MUST-T10-15), whatever else verifies.
 
 9.  Reconciliation and Epoch Checkpoints
 
@@ -719,16 +751,6 @@ Internet-Draft                   Cedulon                     August 2026
    *settled* receipts in the checkpoint window.  If a spend occurred
    without a receipt, the missing receipt is itself the evidence (MUST-
    T10-2).
-
-
-
-
-
-
-Dogru                   Expires 27 February 2027               [Page 13]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
 9.1.  Checkpoint claims
 
@@ -757,10 +779,20 @@ Internet-Draft                   Cedulon                     August 2026
    log) has recorded the missing prefix (MUST-T11-9).  Without that
    witness, T11 guarantees about suppression are *conditional*.
 
+
+
+Dogru                   Expires 27 February 2027               [Page 14]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
 9.3.  Verification algorithm
 
-   A verifier MUST perform these steps in order (MUST-T10-1, MUST-
-   T11-2):
+   A verifier MUST perform all of these steps and MUST report every
+   finding they produce (MUST-T10-1, MUST-T11-2).  They are numbered for
+   reference, not to require an evaluation order: no step short-circuits
+   another, and an implementation may evaluate them in any order that
+   produces the same set of findings.
 
    1.   Establish the subject of the audit.  When an extract is
         supplied, the settlement records it carries are the ones
@@ -778,61 +810,29 @@ Internet-Draft                   Cedulon                     August 2026
         extract-key-mismatch.  A finding that puts the extract itself in
         doubt MUST prevent an unconditional guarantee.
 
-
-
-
-Dogru                   Expires 27 February 2027               [Page 14]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    3.   Check scope.  Report each settlement record outside the declared
         window as extract-scope-mismatch (MUST-T10-10), and, when the
         verifier states an expected account, rail, or window, report an
         extract that does not cover it as extract-scope-mismatch (MUST-
-        T10-11).
+        T10-11).  If the verifier stated no period, emit unstated-audit-
+        window and treat the guarantee as conditional (MUST-T10-15).
 
    4.   Decode each Spend Receipt COSE_Sign1.  Reject if Ed25519 verify
         fails, if kid does not match the configured issuer key, if the
         content type is not the receipt type, or if the decoded claim
         map does not match the presented claims (MUST-T4-2, MUST-T4-8).
 
-   5.   Walk receipts in issuer order.  The first prevReceiptHash MUST
+   5.   Scope the receipts.  When an extract is supplied, only receipts
+        whose timestampMs falls in the extract's declared window are
+        reconciled against it (MUST-T10-16).  A receipt outside that
+        window is not a completeness failure against this extract;
+        auditing a longer period requires extracts that cover it.
+        Receipts remain subject to every other check regardless of
+        window.
+
+   6.   Walk receipts in issuer order.  The first prevReceiptHash MUST
         be null.  Each later prevReceiptHash MUST equal receiptHash of
         the previous receipt.  A miss is receipt-chain-break.
-
-   6.   Index settled receipts and extract records by ref.  A ref that
-        appears more than once on either side is duplicate-ref (MUST-
-        T10-6).
-
-   7.   For each ref that appears exactly once on each side, require a
-        one-to-one match on ref AND amount AND currency (MUST-T10-1).
-        Amount or currency mismatch is settlement-mismatch.  A
-        settlement with no receipt is settlement-without-receipt (MUST-
-        T10-2).  A settled receipt with no extract row is receipt-
-        without-settlement (MUST-T10-3).  A settled receipt with a null
-        rail ref is settled-without-ref.
-
-   8.   A ref reported as duplicate-ref MUST still be reconciled by
-        amount rather than dropped from the comparison (MUST-T10-13).
-        For each currency under that ref, compare the total settled
-        against the total receipted.  A settled total that exceeds the
-        receipted total is settlement-without-receipt, and the finding
-        MUST state the unaccounted amount.  An amount that cannot be
-        parsed as an integer is malformed-amount; a verifier MUST NOT
-        abort the audit over one unreadable record.
-
-   9.   Aborted receipts are not matched to extract rows and are not
-        added to totals.
-
-   10.  Decode each checkpoint.  Reject a failed signature.  Require
-        receiptCount, chainHeadHash, and totals to match the receipts in
-        [startMs, endMs) as defined above (MUST-T11-2).
-
-   11.  Every chained receipt MUST fall in exactly one checkpoint
-        window.  A gap or double count is window-coverage (MUST-T11-7,
-        MUST-T11-8).
-
 
 
 
@@ -842,15 +842,61 @@ Dogru                   Expires 27 February 2027               [Page 15]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   12.  Walk checkpoints in epoch order. prevCheckpointHash MUST equal
+   7.   Index settled receipts and extract records by ref.  A ref that
+        appears more than once on either side is duplicate-ref (MUST-
+        T10-6).
+
+   8.   For each ref that appears exactly once on each side, require a
+        one-to-one match on ref AND amount AND currency (MUST-T10-1).
+        Amount or currency mismatch is settlement-mismatch.  A
+        settlement with no receipt is settlement-without-receipt (MUST-
+        T10-2).  A settled receipt with no extract row is receipt-
+        without-settlement (MUST-T10-3).  A settled receipt with a null
+        rail ref is settled-without-ref.
+
+   9.   A ref reported as duplicate-ref MUST still be reconciled by
+        amount rather than dropped from the comparison (MUST-T10-13).
+        For each currency under that ref, compare the total settled
+        against the total receipted.  A settled total that exceeds the
+        receipted total is settlement-without-receipt, and the finding
+        MUST state the unaccounted amount.  An amount that cannot be
+        parsed as an integer is malformed-amount; a verifier MUST still
+        report findings for the remaining records rather than abandon
+        the audit.
+
+   10.  Aborted receipts are not matched to extract rows and are not
+        added to totals.
+
+   11.  Decode each checkpoint.  Reject a failed signature.  Require
+        receiptCount, chainHeadHash, and totals to match the receipts in
+        [startMs, endMs) as defined above (MUST-T11-2).
+
+   12.  Every chained receipt MUST fall in exactly one checkpoint
+        window.  A gap or double count is window-coverage (MUST-T11-7,
+        MUST-T11-8).
+
+   13.  Walk checkpoints in epoch order. prevCheckpointHash MUST equal
         the SHA-256 of the previous checkpoint COSE bytes, or null for
         genesis (MUST-T11-4).
 
-   13.  If two successfully verified checkpoints share an epoch number
+   14.  If two successfully verified checkpoints share an epoch number
         and have different hashes, emit equivocation (MUST-T11-3).
 
-   14.  If any fail-severity finding exists, the audit MUST fail (MUST-
+   15.  If any fail-severity finding exists, the audit MUST fail (MUST-
         T10-4).
+
+
+
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 16]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
 9.4.  Finding codes
 
@@ -890,14 +936,6 @@ Internet-Draft                   Cedulon                     August 2026
    +-----------------------------+----------+--------------------------+
    | window-coverage             | fail     | Gap, overlap, or non-    |
    |                             |          | adjacent / non-          |
-
-
-
-Dogru                   Expires 27 February 2027               [Page 16]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    |                             |          | consecutive windows      |
    +-----------------------------+----------+--------------------------+
    | unauthenticated-extract     | warn     | No pinned rail key, or   |
@@ -908,6 +946,14 @@ Internet-Draft                   Cedulon                     August 2026
    +-----------------------------+----------+--------------------------+
    | extract-key-mismatch        | fail     | Extract is signed by a   |
    |                             |          | key other than the       |
+
+
+
+Dogru                   Expires 27 February 2027               [Page 17]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    |                             |          | pinned rail key, or      |
    |                             |          | does not verify          |
    |                             |          | against it               |
@@ -934,6 +980,12 @@ Internet-Draft                   Cedulon                     August 2026
    | malformed-amount            | fail     | An amount could not be   |
    |                             |          | parsed as an integer     |
    +-----------------------------+----------+--------------------------+
+   | unstated-audit-window       | warn     | The verifier stated no   |
+   |                             |          | period, so the extract   |
+   |                             |          | defined its own;         |
+   |                             |          | guarantee is             |
+   |                             |          | conditional              |
+   +-----------------------------+----------+--------------------------+
    | countersign-bad             | fail     | Present payee            |
    |                             |          | countersignature         |
    |                             |          | failed verify            |
@@ -946,19 +998,24 @@ Internet-Draft                   Cedulon                     August 2026
    settlement-mismatch) MUST also prevent an unconditional guarantee,
    not merely fail the audit.
 
+   An unconditional guarantee therefore requires all of: an extract, a
+   pinned rail key the extract's signature verifies against, a stated
+   period the extract covers, and no finding that puts the extract in
+   doubt.  Anything less is conditional, and the report MUST say so.
 
 
 
-Dogru                   Expires 27 February 2027               [Page 17]
+Dogru                   Expires 27 February 2027               [Page 18]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
    An implementation MUST make the guarantee and any warnings visible in
-   whatever output an operator reads, not only in a returned structure
-   (MUST-T10-14).  A report that says the books balance while
-   withholding that the balance is conditional invites the reader to
-   take a conditional result for an unconditional one.
+   whatever human-readable audit report it produces under this document,
+   not only in a returned structure (MUST-T10-14).  A report that says
+   the books balance while withholding that the balance is conditional
+   invites the reader to take a conditional result for an unconditional
+   one.
 
    Checkpoints SHOULD be registered with a Transparency Service (SHOULD-
    T11-5).  A test deployment MAY use an in-process append-only log as
@@ -1004,8 +1061,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-
-Dogru                   Expires 27 February 2027               [Page 18]
+Dogru                   Expires 27 February 2027               [Page 19]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1061,7 +1117,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                   Expires 27 February 2027               [Page 19]
+Dogru                   Expires 27 February 2027               [Page 20]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1117,7 +1173,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                   Expires 27 February 2027               [Page 20]
+Dogru                   Expires 27 February 2027               [Page 21]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1143,21 +1199,96 @@ Internet-Draft                   Cedulon                     August 2026
 
 15.  IANA Considerations
 
-   This document has no IANA actions.  Private-use CWT labels below
-   -65536 are used so that a registry assignment is not required for
-   -01.
+   CWT claim labels need no assignment: this profile uses private-use
+   integer labels below -65536.
+
+   Media types do.  This document defines five and makes their values a
+   normative check inside a protected COSE header (MUST-T4-8, MUST-
+   T6-5), so they cannot stay unregistered while that check stands.  If
+   this work is taken up, the following should be registered in the
+   Standards Tree per [RFC6838]:
+
+   +======================================+============================+
+   | Media type                           | Carries                    |
+   +======================================+============================+
+   | application/cedulon-receipt+cbor     | Spend Receipt claim set    |
+   +--------------------------------------+----------------------------+
+   | application/cedulon-checkpoint+cbor  | Epoch checkpoint claim set |
+   +--------------------------------------+----------------------------+
+   | application/cedulon-manifest+cbor    | Trade Manifest claim set   |
+   +--------------------------------------+----------------------------+
+   | application/cedulon-decision+cbor    | Decision Token claim set   |
+   +--------------------------------------+----------------------------+
+   | application/cedulon-                 | Payee countersignature     |
+   | countersign+cbor                     |                            |
+   +--------------------------------------+----------------------------+
+
+                                  Table 9
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 22]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
+   For each: encoding is binary CBOR [RFC8949]; security considerations
+   are those in Section 14; the change controller would be the IETF; the
+   contact is the author of this document.  Until registration, an
+   implementation outside a closed deployment should expect these names
+   to change, and readers should treat them as placeholders rather than
+   as stable identifiers.
 
 16.  Implementation Status
 
-   RFC 7942 [RFC7942] note: a companion implementation with a runnable
-   verification suite is published at https://github.com/dogrucanemek-
-   alt/cedulon (https://github.com/dogrucanemek-alt/cedulon), and on npm
-   as @cedulon/mcp-server and its libraries.  The code is a profile of
-   this document, not a second specification.  This -01 is not an IETF
-   working-group item.
+   This section is to be removed before publishing as an RFC.
 
-   Every requirement added in this revision is implemented and covered
-   by a red-then-green case in that suite before appearing here.
+   RFC 7942 [RFC7942] note.
+
+   Implementation:  A companion implementation with a runnable
+      verification suite at https://github.com/dogrucanemek-alt/cedulon
+      (https://github.com/dogrucanemek-alt/cedulon).  The code is a
+      profile of this document, not a second specification.  This -01 is
+      not an IETF working-group item.
+
+   Maturity:  Research code by a single implementer.  Interoperability
+      with an independent implementation has not been demonstrated; no
+      second implementation is known to the author.
+
+   Coverage:  The receipt, checkpoint, extract, reconciliation, and
+      verification algorithm are implemented.  Every requirement added
+      in this revision is implemented and covered by a red-then-green
+      case before appearing in this text.  The escrow role, reversal,
+      refund, and partial settlement are not implemented.
+
+   Licensing:  Apache-2.0.
+
+   Contact:  The author of this document.
+
+   Experience:  Two independent readers ran an earlier revision and
+      reported defects, one of which was a bypass of the completeness
+      claim.  Both are fixed and the fixes are recorded in the
+      repository.  That review is the reason for most of this revision.
+
+   Note on distribution: the packages published on npm may lag the
+   repository.  A reader checking the requirements in this document
+   should use the repository at the commit referenced in the release
+   notes rather than an installed package, unless the package version
+   states otherwise.
+
+
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 23]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
 16.1.  Changes from -00
 
@@ -1170,13 +1301,6 @@ Internet-Draft                   Cedulon                     August 2026
    -00, which already required reconciling against the extract; this
    revision states the requirement in the verification algorithm so it
    cannot be read as optional (MUST-T10-12).
-
-
-
-Dogru                   Expires 27 February 2027               [Page 21]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    The second was a gap in this document rather than in the code. -00
    required an authenticated extract but never said which key the
@@ -1193,7 +1317,34 @@ Internet-Draft                   Cedulon                     August 2026
    report that states a balance in operator-facing output while
    withholding that the balance is conditional (MUST-T10-14).
 
-   The reporters are named in the companion repository's review notes.
+   Three changes are not repairs and are recorded here so a reader of
+   -00 is not surprised:
+
+   *  A failed extract signature was a warning in -00 and stays one when
+      no key is pinned.  Once a key is pinned it now fails the audit.
+      -00 did not contemplate a pinned key, so this is new behaviour
+      rather than a clarification.
+
+   *  Requiring that a disagreeing caller-supplied list be _reported_ as
+      extract-settlement-mismatch is new normative content. -00 required
+      reconciling the extract; it did not require saying anything about
+      a list that contradicted it.
+
+   *  -00 said reversal, refund, and partial settlement were "expected
+      in -01", and said reserved extensions belonged in "-01 or -02".
+      Neither arrived in this revision.  They are now stated as out of
+      scope for this revision and expected later, with no date.
+
+   The reporters are named in the Acknowledgments.
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 24]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
 17.  Evolution and Future Work (Informative)
 
@@ -1221,19 +1372,6 @@ Internet-Draft                   Cedulon                     August 2026
    settlements arrive, without waiting for an epoch close.  That work
    does not change the matching rules in this document.
 
-
-
-
-
-
-
-
-
-Dogru                   Expires 27 February 2027               [Page 22]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
 17.3.  Generalization
 
    Payment is the special case that this -01 implements.  The same
@@ -1256,6 +1394,14 @@ Internet-Draft                   Cedulon                     August 2026
    as a rail proof; it does not define rail-extract completeness. draft-
    schrock-ep-outcome-binding [SCHROCK] compares authorized action bytes
    to independently observed effects; it does not define rail-extract
+
+
+
+Dogru                   Expires 27 February 2027               [Page 25]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    completeness. draft-marques-asqav-compliance-receipts [MARQUES]
    profiles access-control action receipts (the broader Acta family
    includes [ACTA]); it does not define rail-extract completeness.
@@ -1277,18 +1423,15 @@ Internet-Draft                   Cedulon                     August 2026
               DOI 10.17487/RFC6234, May 2011,
               <https://www.rfc-editor.org/rfc/rfc6234>.
 
+   [RFC6838]  Freed, N., Klensin, J., and T. Hansen, "Media Type
+              Specifications and Registration Procedures", BCP 13,
+              RFC 6838, DOI 10.17487/RFC6838, January 2013,
+              <https://www.rfc-editor.org/rfc/rfc6838>.
+
    [RFC8032]  Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
               Signature Algorithm (EdDSA)", RFC 8032,
               DOI 10.17487/RFC8032, January 2017,
               <https://www.rfc-editor.org/rfc/rfc8032>.
-
-
-
-
-Dogru                   Expires 27 February 2027               [Page 23]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
@@ -1307,6 +1450,13 @@ Internet-Draft                   Cedulon                     August 2026
               Structures and Process", STD 96, RFC 9052,
               DOI 10.17487/RFC9052, August 2022,
               <https://www.rfc-editor.org/rfc/rfc9052>.
+
+
+
+Dogru                   Expires 27 February 2027               [Page 26]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    [RFC9053]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
               Initial Algorithms", RFC 9053, DOI 10.17487/RFC9053,
@@ -1336,16 +1486,6 @@ Internet-Draft                   Cedulon                     August 2026
               <https://datatracker.ietf.org/doc/draft-farley-acta-
               signed-receipts/>.
 
-
-
-
-
-
-Dogru                   Expires 27 February 2027               [Page 24]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    [BATES-ATTP]
               Bates, D., "Agent Transaction Protocol (ATP)", May 2026,
               <https://datatracker.ietf.org/doc/draft-bates-atp/00/>.
@@ -1365,6 +1505,14 @@ Internet-Draft                   Cedulon                     August 2026
 
    [PACIOLI]  Pacioli, L., "Summa de arithmetica, geometria, proportioni
               et proportionalita", 1494.
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 27]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    [REATTEST] Dogru, E. C., "Cedulon Re-Attestation: Carrying Spend
               Evidence Across Algorithm Retirement", August 2026,
@@ -1394,14 +1542,6 @@ Internet-Draft                   Cedulon                     August 2026
    [STREAMING]
               Dogru, E. C., "Cedulon Streaming Reconciliation:
               Continuous Completeness for Agent Spend", August 2026,
-
-
-
-Dogru                   Expires 27 February 2027               [Page 25]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
               <https://github.com/dogrucanemek-
               alt/cedulon/blob/master/spec/draft-dogru-cedulon-
               streaming-00.md>.
@@ -1411,6 +1551,24 @@ Internet-Draft                   Cedulon                     August 2026
               x402-stark-receipts/>.
 
 Acknowledgments
+
+   Iman Schrock and Pablo Play ran the -00 implementation against the
+   pinned commit and reported the defects that produced this revision.
+   Iman Schrock found the two extract-binding defects, proposed the
+   repair this document adopts, and is also the author of [SCHROCK],
+   cited here as adjacent work.  Pablo Play found that a repeated
+   reference hid the unaccounted amount, and filed a written
+   reproduction.  Neither reviewed this text, and any error in it is the
+   author's.
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 28]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    Field survey notes and the informative threat-model table in the
    companion repository helped shape the MUST identifiers used here.
@@ -1448,16 +1606,6 @@ Appendix A.  Test Vectors
 
    COSE_Sign1 hex (whitespace ignored; identical to the locked test):
 
-
-
-
-
-
-Dogru                   Expires 27 February 2027               [Page 26]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    845831a301320378216170706c69636174696f6e2f636564756c6f6e2d
    6d616e69666573742b63626f72044806e3fd8fda29bb60a0584aa73a00
    0112386d666978747572652d676f6f64733a0001123961313a0001123a
@@ -1470,6 +1618,14 @@ Author's Address
 
    Emek Can Dogru
    VERAX TEKNOLOJI LIMITED SIRKETI
+
+
+
+Dogru                   Expires 27 February 2027               [Page 29]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    Email: e.dogru@cedulon.com
 
 
@@ -1509,4 +1665,16 @@ Author's Address
 
 
 
-Dogru                   Expires 27 February 2027               [Page 27]
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 30]

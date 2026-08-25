@@ -406,7 +406,13 @@ describe("new detections — RED then GREEN", () => {
       checkpoints: [oneCheckpoint(k, receipts)],
       settlements,
       extract,
-      trust: { publicKeyPem: ek.publicKeyPem, accountId: "acct-1", railId: "mock-rail" },
+      trust: {
+        publicKeyPem: ek.publicKeyPem,
+        accountId: "acct-1",
+        railId: "mock-rail",
+        windowStartMs: 1_700_000_000_000,
+        windowEndMs: 1_700_000_000_010,
+      },
     });
     assert.equal(green.ok, true);
     assert.equal(green.guarantee, "unconditional");

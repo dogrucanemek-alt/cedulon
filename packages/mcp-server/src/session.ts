@@ -73,6 +73,10 @@ export type LedgerExport = {
   settlements: RailSettlement[];
   checkpoints: PanelCheckpoint[];
   findings: Finding[];
+  // A balance means nothing without the conditions it was reached under, so
+  // the export carries them rather than leaving the reader to assume.
+  guarantee: "unconditional" | "conditional";
+  warnings: Finding[];
 };
 
 export type VerifyArgs = {
@@ -224,6 +228,8 @@ export class CedulonSession {
         hash: checkpointHash(cp),
       })),
       findings: report.findings,
+      guarantee: report.guarantee,
+      warnings: report.warnings,
     };
   }
 

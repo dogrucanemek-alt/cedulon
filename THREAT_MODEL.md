@@ -1,7 +1,7 @@
 # Cedulon Threat Model
 
 This document is an **informative** companion to
-`spec/draft-dogru-cedulon-00.md`. The Internet-Draft Security
+`spec/draft-dogru-cedulon-01.md`. The Internet-Draft Security
 Considerations section is authoritative for protocol requirements.
 This file MUST NOT be read as overriding the draft.
 
@@ -218,14 +218,16 @@ identified by the settlement ref. The audit fails closed.
 | MUST-T10-4 | An audit that has any fail-severity completeness finding MUST fail (non-zero status in the companion tool). |
 | SHOULD-T10-5 | Hosts SHOULD still apply T5 (no ungated rail in the model process). Completeness does not replace prevention. |
 | MUST-T10-6 | A `ref` that appears more than once among settled receipts or among extract rows MUST be reported as `duplicate-ref`. |
-| MUST-T10-7 | A verifier MUST obtain the extract from the rail or from a rail signature. An unverifiable extract MUST be reported as `unauthenticated-extract` and makes the completeness guarantee conditional. |
+| MUST-T10-7 | A verifier MUST obtain the extract from the rail or from a rail signature. With no pinned rail key, an unverifiable extract MUST be reported as `unauthenticated-extract` and makes the completeness guarantee conditional. With a pinned key, see MUST-T10-8: the extract MUST fail closed rather than warn. |
 | MUST-T10-8 | A verifier MUST obtain the rail public key out of band and MUST verify the extract signature against that key, not against a key the extract carries. Without such a key the guarantee is conditional. |
 | MUST-T10-9 | Keys MUST be compared by SubjectPublicKeyInfo DER encoding rather than by any text encoding. A pinned key that cannot be decoded MUST be reported as `trust-key-unreadable`, not as a key mismatch. |
 | MUST-T10-10 | Every settlement record whose `timestampMs` falls outside the extract's declared window MUST be reported as `extract-scope-mismatch`, identified by that record's `ref`. This check MUST run whether or not a key is pinned. |
 | MUST-T10-11 | When the verifier states an expected account, rail, or window, an extract that does not cover it MUST fail closed as `extract-scope-mismatch`. |
 | MUST-T10-12 | When an extract is supplied, the records it carries are the subject of reconciliation. A settlement list from another source MUST NOT be substituted; a disagreeing list MUST be reported as `extract-settlement-mismatch`. |
 | MUST-T10-13 | A `ref` reported as `duplicate-ref` MUST still be reconciled by aggregate amount per currency, and a shortfall MUST state the unaccounted amount. An unparseable amount MUST be reported as `malformed-amount` without aborting the audit. |
-| MUST-T10-14 | An implementation MUST surface the guarantee and any warnings in the operator-facing output, not only in a returned structure. |
+| MUST-T10-14 | An implementation MUST surface the guarantee and any warnings in any human-readable audit report it produces, not only in a returned structure. |
+| MUST-T10-15 | A verifier that has not stated the period under audit MUST emit `unstated-audit-window` and MUST treat the guarantee as conditional, because an unstated period leaves the extract free to define its own. |
+| MUST-T10-16 | When an extract is supplied, only receipts whose `timestampMs` falls in its declared window are reconciled against it. A receipt outside that window MUST NOT be reported as a completeness failure against that extract. |
 
 ### T11 — Checkpoint suppression or rollback
 
@@ -262,7 +264,7 @@ Optional registration in a transparency log makes suppression visible.
 | T7 Key leak | No secrets in artifacts; mock keys only | MUST-T7-1, MUST-T7-2 |
 | T8 Bad counterparty | Manifest bind + COSE hash + evidence bundle + optional countersign, no escrow | MUST-T8-1, MUST-T8-2, MUST-T8-3, MUST-T8-4, MUST-T8-7, MUST-T8-8, MAY-T8-6 (MUST NOT custody), MAY-T8-9 |
 | T9 Log PII | Redaction / hash-only public form | MUST-T9-1, MUST-T9-2 |
-| T10 Rail bypass / secret spend | Pinned-key extract as the subject; 1:1 ref+amount+currency; scope agreement | MUST-T10-1, MUST-T10-2, MUST-T10-3, MUST-T10-4, MUST-T10-6, MUST-T10-7, MUST-T10-8, MUST-T10-9, MUST-T10-10, MUST-T10-11, MUST-T10-12, MUST-T10-13, MUST-T10-14 |
+| T10 Rail bypass / secret spend | Pinned-key extract as the subject; 1:1 ref+amount+currency; scope agreement | MUST-T10-1, MUST-T10-2, MUST-T10-3, MUST-T10-4, MUST-T10-6, MUST-T10-7, MUST-T10-8, MUST-T10-9, MUST-T10-10, MUST-T10-11, MUST-T10-12, MUST-T10-13, MUST-T10-14, MUST-T10-15, MUST-T10-16 |
 | T11 Checkpoint suppress / rollback | Signed chained checkpoints; window; witness-conditional prefix | MUST-T11-1, MUST-T11-2, MUST-T11-3, MUST-T11-4, MUST-T11-7, MUST-T11-8, MUST-T11-9 |
 
 Untraced MUST check: every MUST in Section 2 appears in this table.

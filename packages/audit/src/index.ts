@@ -30,6 +30,7 @@ export type FindingCode =
   | "extract-scope-mismatch"
   | "extract-settlement-mismatch"
   | "trust-key-unreadable"
+  | "unstated-audit-window"
   | "malformed-amount"
   | "countersign-bad"
   | "ok";
@@ -187,7 +188,12 @@ export function findSettlementMatches(
     if (malformed) {
       continue;
     }
-    for (const [currency, settled] of settledByCurrency) {
+    // Walk both sides: a currency that appears only among the receipts is a
+    // receipt with nothing settled behind it, and iterating the settled side
+    // alone would report nothing at all for it.
+    const currencies = new Set([...settledByCurrency.keys(), ...receiptedByCurrency.keys()]);
+    for (const currency of currencies) {
+      const settled = settledByCurrency.get(currency) ?? 0n;
       const receipted = receiptedByCurrency.get(currency) ?? 0n;
       if (settled > receipted) {
         findings.push({
@@ -522,6 +528,19 @@ export function audit(input: {
           detail: `rail extract ends at ${body.windowEndMs}, before the expected window end ${t.windowEndMs}`,
         });
       }
+      if (t.windowStartMs === undefined || t.windowEndMs === undefined) {
+        // Without a stated period the extract picks its own scope, and an
+        // extract that reports on a millisecond balances as easily as one that
+        // reports on a month. Pinning the key says who signed; only a stated
+        // window says what the signature had to cover.
+        warnings.push({
+          code: "unstated-audit-window",
+          id: "extract",
+          detail:
+            "no audit window was stated, so the extract defines the period it reports on; completeness guarantee is conditional",
+          severity: "warn",
+        });
+      }
     }
   } else {
     warnings.push({
@@ -534,7 +553,19 @@ export function audit(input: {
     });
   }
 
-  findings.push(...findSettlementMatches(input.receipts, reconciled));
+  // An extract reports on the period it declares. Matching receipts from
+  // outside that period against it would call an honest later spend a
+  // completeness failure, so they are out of scope for this extract; auditing
+  // a longer period means obtaining extracts that cover it.
+  const inScope = input.extract
+    ? input.receipts.filter(
+        (r) =>
+          r.claims.timestampMs >= input.extract!.body.windowStartMs &&
+          r.claims.timestampMs < input.extract!.body.windowEndMs,
+      )
+    : input.receipts;
+
+  findings.push(...findSettlementMatches(inScope, reconciled));
   for (const r of input.receipts) {
     if (!r.counterCoseHex) {
       continue;
@@ -568,6 +599,7 @@ export function audit(input: {
   const doubtedExtract = hard.some(
     (f) =>
       f.code === "extract-key-mismatch" ||
+      f.code === "trust-key-unreadable" ||
       f.code === "extract-scope-mismatch" ||
       f.code === "extract-settlement-mismatch",
   );
