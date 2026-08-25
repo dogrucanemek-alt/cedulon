@@ -74,3 +74,25 @@ Informational DAG of signed agent-action nodes. Another expansion of the letters
 - SCITT: optional composition for anti-suppression (§14.6, Appendix C.6). Not a spend-audit profile.
 
 Cedulon (this repo) stays an audit layer above rails. Sharif/ATTP = identity + score. Bates = causal lineage. Complementary; no outbound mail.
+
+## Adjacent receipt drafts (accessed 2026-08-26)
+
+Checked against the posted Datatracker text, not summaries. None of
+these five drafts defines rail-extract completeness (one-to-one match
+of authenticated settlement rows to signed spend receipts).
+
+| Draft | What it signs | Rail-extract completeness | Source |
+|---|---|---|---|
+| `draft-vauban-x402-stark-receipts` | x402 payment-condition receipt variants (STARK / hybrid / ES256K) | **No** | https://datatracker.ietf.org/doc/draft-vauban-x402-stark-receipts/ — accessed 2026-08-26 |
+| `draft-schrock-ep-outcome-binding` | authorized action vs independently observed effect | **No** | https://datatracker.ietf.org/doc/draft-schrock-ep-outcome-binding/ — accessed 2026-08-26 |
+| `draft-marques-asqav-compliance-receipts` | access-control action receipts bound to regulatory fields | **No** | https://datatracker.ietf.org/doc/draft-marques-asqav-compliance-receipts/ — accessed 2026-08-26 |
+| `draft-farley-acta-signed-receipts` (Acta family) | portable access-control decision receipts | **No** | https://datatracker.ietf.org/doc/draft-farley-acta-signed-receipts/ — accessed 2026-08-26 |
+| `draft-hopley-x402-compliance-receipt` | admission-time ALLOW/REFER/DENY screening decision | **No** | https://datatracker.ietf.org/doc/draft-hopley-x402-compliance-receipt/ — accessed 2026-08-26 |
+| Cedulon (this repo) | gated spend receipt + checkpoint + extract reconciliation | **Yes** (against an authenticated extract) | `spec/draft-dogru-cedulon-00.md` |
+
+Historical papers used in the -00 Introduction (not I-Ds):
+
+| Work | Role | Source |
+|---|---|---|
+| Pacioli, *Summa de arithmetica…*, 1494 | double-entry: two books check each other | cited as {{PACIOLI}} in the draft; no public URL required |
+| Grigg, "Triple Entry Accounting", 2005 | signed receipts as the third entry | https://iang.org/papers/triple_entry.html — accessed 2026-08-26 |

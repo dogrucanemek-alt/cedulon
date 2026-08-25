@@ -59,6 +59,46 @@ informative:
         name: Ian Grigg
     date: 2005
     target: https://iang.org/papers/triple_entry.html
+  PACIOLI:
+    title: "Summa de arithmetica, geometria, proportioni et proportionalita"
+    author:
+      - ins: L. Pacioli
+        name: Luca Pacioli
+    date: 1494
+  VAUBAN:
+    title: "x402 STARK Receipt Format Extension"
+    author:
+      - org: Vauban Research
+    date: 2026-05
+    target: https://datatracker.ietf.org/doc/draft-vauban-x402-stark-receipts/
+  SCHROCK:
+    title: "Outcome Binding for Authorized Actions and Independently Observed Effects"
+    author:
+      - ins: I. Schrock
+        name: Iman Schrock
+    date: 2026-07
+    target: https://datatracker.ietf.org/doc/draft-schrock-ep-outcome-binding/
+  MARQUES:
+    title: "Compliance Profile of Signed Action Receipts for AI Agents"
+    author:
+      - ins: J. A. Gomes Marques
+        name: Joao Andre Gomes Marques
+    date: 2026-07
+    target: https://datatracker.ietf.org/doc/draft-marques-asqav-compliance-receipts/
+  ACTA:
+    title: "Signed Decision Receipts for Machine-to-Machine Access Control"
+    author:
+      - ins: T. Farley
+        name: Tom Farley
+    date: 2026-06
+    target: https://datatracker.ietf.org/doc/draft-farley-acta-signed-receipts/
+  HOPLEY:
+    title: "Categorical Compliance Screening Receipt Format for Agentic-Payment Flows"
+    author:
+      - ins: C. Hopley
+        name: Christopher Hopley
+    date: 2026-05
+    target: https://datatracker.ietf.org/doc/draft-hopley-x402-compliance-receipt/
 ---
 
 --- abstract
@@ -106,8 +146,8 @@ this specification MUST NOT take custody of funds or operate escrow
 The completeness claim sits in a long bookkeeping line. Single-entry
 records (clay tablets, journals) listed events in one place and could
 not check themselves. Double-entry bookkeeping, set out by Pacioli in
-1494, posts each event to two books so that the books can check each
-other. Cedulon is a later step: **proven completeness**, where an
+1494 {{PACIOLI}}, posts each event to two books so that the books can
+check each other. Cedulon is a later step: **proven completeness**, where an
 external witness (the authenticated rail extract) is machine-checkable
 against signed spend receipts. Grigg's triple-entry idea — signed
 receipts as the third entry — is {{GRIGG}}. Cedulon's addition is the
@@ -709,6 +749,19 @@ replace either protocol. Profiles built on HTTP Message Signatures
 {{RFC9421}} authenticate bots; they are not a spend receipt.
 draft-bates-atp {{BATES-ATTP}} is a lineage neighbor. It does not
 define rail-extract completeness.
+
+draft-vauban-x402-stark-receipts {{VAUBAN}} specifies complementary
+x402 receipt-format variants that a Cedulon Spend Receipt MAY carry
+as a rail proof; it does not define rail-extract completeness.
+draft-schrock-ep-outcome-binding {{SCHROCK}} compares authorized
+action bytes to independently observed effects; it does not define
+rail-extract completeness.
+draft-marques-asqav-compliance-receipts {{MARQUES}} profiles
+access-control action receipts (the broader Acta family includes
+{{ACTA}}); it does not define rail-extract completeness.
+draft-hopley-x402-compliance-receipt {{HOPLEY}} records an
+admission-time compliance decision; it does not define rail-extract
+completeness.
 
 --- back
 
