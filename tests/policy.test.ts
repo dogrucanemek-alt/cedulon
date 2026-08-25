@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import { describe, it } from "node:test";
-import { PolicyEngine, requestHashOf } from "@cedulon/core";
+import {
+  PolicyEngine,
+  issueDecisionToken,
+  requestHashOf,
+  verifyDecisionToken,
+} from "@cedulon/core";
+
+function fixtureKeys() {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  return {
+    publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
+    privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+  };
+}
 
 function engine(extra: Partial<ConstructorParameters<typeof PolicyEngine>[0]> = {}) {
   return new PolicyEngine({
@@ -209,5 +223,64 @@ describe("policy limits velocity scope", () => {
     }
     assert.equal(e.consumeDecision(d.decisionId, d.requestHash, req).allow, true);
     assert.equal(e.consumeDecision(d.decisionId, d.requestHash, req).reason, "decision-replay");
+  });
+
+  it("RED then GREEN: Decision Token COSE tamper fails verify", () => {
+    const k = fixtureKeys();
+    const e = engine();
+    const req = {
+      amount: 1n,
+      currency: "USD",
+      payee: "ok",
+      nonce: "n",
+      nowMs: 1,
+      tool: "spend",
+    };
+    const d = e.evaluate(req);
+    if (!d.allow) {
+      throw new Error("expected allow");
+    }
+    const token = issueDecisionToken(req, e.policy, d.decisionId, 10_000, k.privateKeyPem, k.publicKeyPem);
+    assert.equal(verifyDecisionToken(token, 1), true);
+    const raw = Buffer.from(token.coseHex, "hex");
+    raw[raw.length - 1] ^= 0x01;
+    const tampered = { ...token, coseHex: raw.toString("hex") };
+    assert.equal(verifyDecisionToken(tampered, 1), false);
+    assert.equal(verifyDecisionToken(token, 1), true);
+  });
+
+  it("engine-issued Decision Token is consumed once and rejects tamper", () => {
+    const k = fixtureKeys();
+    const e = new PolicyEngine(
+      {
+        maxAmount: 10n,
+        maxCumulative: 20n,
+        maxPayments: 3,
+        windowMs: 1000,
+        allowedPayees: ["ok"],
+        allowedCurrencies: ["USD"],
+        allowedTools: ["spend"],
+      },
+      undefined,
+      { ...k, ttlMs: 10_000 },
+    );
+    const req = {
+      amount: 1n,
+      currency: "USD",
+      payee: "ok",
+      nonce: "n",
+      nowMs: 1,
+      tool: "spend",
+    };
+    const d = e.evaluate(req);
+    if (!d.allow || !d.token) {
+      throw new Error("expected signed token");
+    }
+    const raw = Buffer.from(d.token.coseHex, "hex");
+    raw[raw.length - 1] ^= 0x01;
+    const tampered = { ...d.token, coseHex: raw.toString("hex") };
+    assert.equal(e.consumeDecisionToken(tampered, req, 1).reason, "decision-bad-sig");
+    assert.equal(e.consumeDecisionToken(d.token, req, 1).allow, true);
+    assert.equal(e.consumeDecisionToken(d.token, req, 1).reason, "decision-replay");
   });
 });

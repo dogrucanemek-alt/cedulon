@@ -1,3 +1,5 @@
+import type { SignedDecisionToken } from "./decision-token.ts";
+
 export type Policy = {
   maxAmount: bigint;
   maxCumulative: bigint;
@@ -23,6 +25,7 @@ export type AllowDecision = {
   decisionId: string;
   requestHash: string;
   reason: "allow";
+  token?: SignedDecisionToken;
 };
 
 export type DenyDecision = {
@@ -41,7 +44,9 @@ export type DenyDecision = {
     | "expired-manifest"
     | "manifest-mismatch"
     | "decision-mismatch"
-    | "decision-replay";
+    | "decision-replay"
+    | "decision-expired"
+    | "decision-bad-sig";
 };
 
 export type Decision = AllowDecision | DenyDecision;

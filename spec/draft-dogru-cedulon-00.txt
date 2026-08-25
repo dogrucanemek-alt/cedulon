@@ -21,7 +21,7 @@ Abstract
    Cedulon specifies a Trade Manifest (signed offer before payment), a
    Policy Decision Point with default deny, a Spend Receipt (COSE/CWT
    claim set after a gated payment), epoch checkpoints, and rail-extract
-   reconciliation that checks completeness against an authenticated rail
+   reconciliation that proves completeness against an authenticated rail
    extract.  It also defines a Dispute Evidence Bundle (evidence, not an
    award) and optional SCITT anchoring.  Cedulon is not a competitor to
    x402 or AP2; it sits above them.
@@ -69,39 +69,39 @@ Table of Contents
    1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
    2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   3
    3.  Architecture  . . . . . . . . . . . . . . . . . . . . . . . .   4
-     3.1.  Policy Decision Point . . . . . . . . . . . . . . . . . .   5
+     3.1.  Policy Decision Point . . . . . . . . . . . . . . . . . .   4
      3.2.  Receipt Issuer  . . . . . . . . . . . . . . . . . . . . .   5
      3.3.  Anchor / SCITT  . . . . . . . . . . . . . . . . . . . . .   5
    4.  Trade Manifest  . . . . . . . . . . . . . . . . . . . . . . .   5
    5.  Spend Receipt . . . . . . . . . . . . . . . . . . . . . . . .   6
    6.  COSE Profile  . . . . . . . . . . . . . . . . . . . . . . . .   8
      6.1.  Claim labels  . . . . . . . . . . . . . . . . . . . . . .   8
-     6.2.  COSE_Sign1 headers  . . . . . . . . . . . . . . . . . . .   9
-   7.  Rail Extract Profile  . . . . . . . . . . . . . . . . . . . .  10
-     7.1.  Record schema . . . . . . . . . . . . . . . . . . . . . .  10
-     7.2.  Scope . . . . . . . . . . . . . . . . . . . . . . . . . .  10
-     7.3.  Authentication  . . . . . . . . . . . . . . . . . . . . .  11
-   8.  Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  11
-     8.1.  Checkpoint claims . . . . . . . . . . . . . . . . . . . .  11
-     8.2.  Genesis and continuity  . . . . . . . . . . . . . . . . .  11
-     8.3.  Verification algorithm  . . . . . . . . . . . . . . . . .  12
-     8.4.  Finding codes . . . . . . . . . . . . . . . . . . . . . .  13
-   9.  Lifecycle . . . . . . . . . . . . . . . . . . . . . . . . . .  14
-   10. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  14
-   11. SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  15
-   12. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  15
-   13. Security Considerations . . . . . . . . . . . . . . . . . . .  15
-     13.1.  Optional escrow role . . . . . . . . . . . . . . . . . .  17
-   14. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  17
-   15. Implementation Status . . . . . . . . . . . . . . . . . . . .  17
-   16. Informative Notes on Adjacent Protocols . . . . . . . . . . .  17
-   17. References  . . . . . . . . . . . . . . . . . . . . . . . . .  17
-     17.1.  Normative References . . . . . . . . . . . . . . . . . .  17
-     17.2.  Informative References . . . . . . . . . . . . . . . . .  18
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  19
-   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  19
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  20
-
+     6.2.  COSE_Sign1 headers  . . . . . . . . . . . . . . . . . . .  10
+   7.  Decision Token  . . . . . . . . . . . . . . . . . . . . . . .  10
+   8.  Rail Extract Profile  . . . . . . . . . . . . . . . . . . . .  11
+     8.1.  Record schema . . . . . . . . . . . . . . . . . . . . . .  11
+     8.2.  Scope . . . . . . . . . . . . . . . . . . . . . . . . . .  11
+     8.3.  Authentication  . . . . . . . . . . . . . . . . . . . . .  11
+   9.  Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  12
+     9.1.  Checkpoint claims . . . . . . . . . . . . . . . . . . . .  12
+     9.2.  Genesis and continuity  . . . . . . . . . . . . . . . . .  12
+     9.3.  Verification algorithm  . . . . . . . . . . . . . . . . .  12
+     9.4.  Finding codes . . . . . . . . . . . . . . . . . . . . . .  14
+   10. Lifecycle . . . . . . . . . . . . . . . . . . . . . . . . . .  15
+   11. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  15
+   12. SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  16
+   13. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  16
+   14. Security Considerations . . . . . . . . . . . . . . . . . . .  16
+     14.1.  Optional escrow role . . . . . . . . . . . . . . . . . .  18
+   15. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  18
+   16. Implementation Status . . . . . . . . . . . . . . . . . . . .  18
+   17. Informative Notes on Adjacent Protocols . . . . . . . . . . .  18
+   18. References  . . . . . . . . . . . . . . . . . . . . . . . . .  18
+     18.1.  Normative References . . . . . . . . . . . . . . . . . .  18
+     18.2.  Informative References . . . . . . . . . . . . . . . . .  19
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  20
+   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  20
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  21
 
 
 
@@ -135,7 +135,7 @@ Internet-Draft                   Cedulon                     August 2026
 
    Cedulon fills that gap.  It does not clear funds, hold custody, or
    operate a payment facilitator.  An optional escrow actor is defined
-   only as a third-party role interface (Section 13.1).  Implementations
+   only as a third-party role interface (Section 14.1).  Implementations
    of this specification MUST NOT take custody of funds or operate
    escrow (MUST-T8-custody).
 
@@ -188,13 +188,12 @@ Internet-Draft                   Cedulon                     August 2026
       legal process.  It is not an arbitral award and not an escrow
       release.
 
-   Decision Token:  A single-use PDP allow bound to a hash of the
-      evaluated request fields.  It is implementation-internal and is
-      never exchanged between parties.  This document does not define a
-      wire format for it.
+   Decision Token:  A portable, single-use PDP allow encoded as
+      COSE_Sign1.  The claim set binds requestHash, policyHash,
+      expiryMs, nonce, and singleUseId.  See Section 7.
 
    Rail Extract:  An authenticated list of settlement records for one
-      account, one rail, and one time window.  See Section 7.
+      account, one rail, and one time window.  See Section 8.
 
 3.  Architecture
 
@@ -211,21 +210,6 @@ Internet-Draft                   Cedulon                     August 2026
    The payer agent never talks to the rail except through an adapter
    that calls the PDP first (MUST-T5-1).
 
-
-
-
-
-
-
-
-
-
-
-Dogru                   Expires 27 February 2027                [Page 4]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
 3.1.  Policy Decision Point
 
    The PDP evaluates structured fields only (MUST-T1-1): amount,
@@ -235,10 +219,18 @@ Internet-Draft                   Cedulon                     August 2026
    throws, the result is deny (MUST-T2-3).  Denied attempts do not
    increment success counters (MUST-T2-4).
 
+
+
+Dogru                   Expires 27 February 2027                [Page 4]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    An allow produces a Decision Token whose requestHash covers six
    fields: amount, currency, payee, tool, nonce, and manifestHash (MUST-
-   T3-4, MUST-T6-1).  The token is single-use (MUST-T6-2) and
-   implementation-internal.
+   T3-4, MUST-T6-1).  The token is a COSE_Sign1 object (MUST-T6-4), is
+   single-use (MUST-T6-2), and MAY be carried to the adapter that
+   performs settlement.
 
 3.2.  Receipt Issuer
 
@@ -274,6 +266,14 @@ Internet-Draft                   Cedulon                     August 2026
    *  acceptance-criteria hash (SHA-256 [RFC6234] of the exact delivery
       bytes or of a declared schema instance)
 
+   *  cancel condition (opaque string agreed by the parties)
+
+   *  expiry (POSIX milliseconds, expiresAtMs)
+
+   It MAY include ap2MandateHash.  The corresponding CBOR label is
+   always present; a missing mandate is encoded as CBOR null.
+
+
 
 
 
@@ -281,13 +281,6 @@ Dogru                   Expires 27 February 2027                [Page 5]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   *  cancel condition (opaque string agreed by the parties)
-
-   *  expiry (POSIX milliseconds, expiresAtMs)
-
-   It MAY include ap2MandateHash.  The corresponding CBOR label is
-   always present; a missing mandate is encoded as CBOR null.
 
    The manifest is COSE_Sign1 [RFC9052] over a deterministic CBOR claim
    map (Section 6). manifestHash is the SHA-256 of the signed COSE bytes
@@ -307,6 +300,13 @@ Internet-Draft                   Cedulon                     August 2026
    COSE profile (Section 6).
 
    Claims (MUST-T4-3, MUST-T4-4, MUST-T4-7):
+
+
+
+
+
+
+
 
 
 
@@ -492,10 +492,10 @@ Internet-Draft                   Cedulon                     August 2026
 
                                   Table 4
 
-6.2.  COSE_Sign1 headers
+   Decision Token labels (MUST-T6-4):
 
-   The protected header MUST be a deterministic CBOR map containing
-   (MUST-T4-1, MUST-T4-8):
+
+
 
 
 
@@ -506,12 +506,34 @@ Dogru                   Expires 27 February 2027                [Page 9]
 Internet-Draft                   Cedulon                     August 2026
 
 
+          +========+=============+==============================+
+          | Label  | Claim       | CBOR type                    |
+          +========+=============+==============================+
+          | -70301 | requestHash | tstr                         |
+          +--------+-------------+------------------------------+
+          | -70302 | policyHash  | tstr (lowercase hex SHA-256) |
+          +--------+-------------+------------------------------+
+          | -70303 | expiryMs    | uint                         |
+          +--------+-------------+------------------------------+
+          | -70304 | nonce       | tstr                         |
+          +--------+-------------+------------------------------+
+          | -70305 | singleUseId | tstr                         |
+          +--------+-------------+------------------------------+
+
+                                  Table 5
+
+6.2.  COSE_Sign1 headers
+
+   The protected header MUST be a deterministic CBOR map containing
+   (MUST-T4-1, MUST-T4-8):
+
    *  1 (alg) = -19 (Ed25519, [RFC9864]; the generic EdDSA value -8 from
       [RFC9053] is deprecated for this profile)
 
    *  3 (content type) = a tstr that distinguishes the payload:
       application/cedulon-receipt+cbor, application/cedulon-
-      checkpoint+cbor, or application/cedulon-manifest+cbor
+      checkpoint+cbor, application/cedulon-manifest+cbor, or
+      application/cedulon-decision+cbor
 
    *  4 (kid) = bstr, mandatory.  The profile computes kid as the first
       eight bytes of SHA-256 over the issuer's SubjectPublicKeyInfo DER.
@@ -524,12 +546,41 @@ Internet-Draft                   Cedulon                     August 2026
    encoding of the claim map.  The signature is Ed25519 [RFC8032] over
    the COSE Sig_structure ["Signature1", protected, h'', payload].
 
-7.  Rail Extract Profile
+7.  Decision Token
+
+   A Decision Token is the portable encoding of a PDP allow.  It is
+   COSE_Sign1 with the header profile in Section 6 and the labels in
+   Section 6.1.  All five labels are always present (MUST-T6-4).
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 10]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
+   requestHash MUST be the six-field hash defined for the PDP (MUST-
+   T6-1). policyHash MUST be the SHA-256 of the canonical policy
+   document the PDP evaluated. expiryMs is a Unix time in milliseconds
+   after which the token MUST be treated as expired (SHOULD-T6-3). nonce
+   is the request nonce. singleUseId is the identifier consumed on the
+   first settlement attempt (MUST-T6-2).
+
+   A party that accepts a Decision Token MUST reject it if the signature
+   fails, if kid does not match a configured PDP key, if the content
+   type is not application/cedulon-decision+cbor, if the decoded claim
+   map does not match the presented claims, or if expiryMs is in the
+   past (MUST-T6-5).
+
+8.  Rail Extract Profile
 
    A verifier checks completeness against a *rail extract*, not against
    the issuer's own receipts alone (MUST-T10-7).
 
-7.1.  Record schema
+8.1.  Record schema
 
    Each settlement record MUST contain:
 
@@ -545,36 +596,34 @@ Internet-Draft                   Cedulon                     August 2026
               | timestampMs | uint                          |
               +-------------+-------------------------------+
 
-                                  Table 5
+                                  Table 6
 
-7.2.  Scope
+8.2.  Scope
 
    An extract is scoped to one account identifier, one rail identifier,
    and one half-open time window [windowStartMs, windowEndMs).
 
-
-
-
-
-
-Dogru                   Expires 27 February 2027               [Page 10]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
-7.3.  Authentication
+8.3.  Authentication
 
    The mock rail in the companion implementation signs the extract with
    Ed25519 over a canonical encoding of the scoped body.  A production
    verifier MUST obtain the extract from the rail or from a signature
    the rail published (MUST-T10-7).
 
+
+
+
+Dogru                   Expires 27 February 2027               [Page 11]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    If the extract is missing a verifiable signature, the verifier MUST
    emit finding unauthenticated-extract.  Completeness findings may
    still be computed, but the completeness guarantee is *conditional* on
-   the extract being authentic.  See Section 13.
+   the extract being authentic.  See Section 14.
 
-8.  Reconciliation and Epoch Checkpoints
+9.  Reconciliation and Epoch Checkpoints
 
    Completeness is the property that, given an authenticated rail
    extract, every settlement in the extract has a matching settled Spend
@@ -584,7 +633,7 @@ Internet-Draft                   Cedulon                     August 2026
    without a receipt, the missing receipt is itself the evidence (MUST-
    T10-2).
 
-8.1.  Checkpoint claims
+9.1.  Checkpoint claims
 
    An epoch checkpoint MUST be COSE_Sign1-signed with the header profile
    in Section 6 and MUST bind all of the following (MUST-T11-1):
@@ -599,7 +648,7 @@ Internet-Draft                   Cedulon                     August 2026
    is empty (MUST-T11-2). totals MUST sum only receipts with outcome =
    settled.
 
-8.2.  Genesis and continuity
+9.2.  Genesis and continuity
 
    The first checkpoint in a presented chain is the genesis checkpoint
    of that chain.  Its prevCheckpointHash MUST be null.  Epoch numbers
@@ -611,17 +660,19 @@ Internet-Draft                   Cedulon                     August 2026
    log) has recorded the missing prefix (MUST-T11-9).  Without that
    witness, T11 guarantees about suppression are *conditional*.
 
-
-
-Dogru                   Expires 27 February 2027               [Page 11]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
-8.3.  Verification algorithm
+9.3.  Verification algorithm
 
    A verifier MUST perform these steps in order (MUST-T10-1, MUST-
    T11-2):
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 12]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    1.   If the rail extract signature does not verify, emit
         unauthenticated-extract and treat the guarantee as conditional
@@ -665,19 +716,21 @@ Internet-Draft                   Cedulon                     August 2026
    10.  If two successfully verified checkpoints share an epoch number
         and have different hashes, emit equivocation (MUST-T11-3).
 
+   11.  If any fail-severity finding exists, the audit MUST fail (MUST-
+        T10-4).
 
 
 
 
-Dogru                   Expires 27 February 2027               [Page 12]
+
+
+
+Dogru                   Expires 27 February 2027               [Page 13]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
-   11.  If any fail-severity finding exists, the audit MUST fail (MUST-
-        T10-4).
-
-8.4.  Finding codes
+9.4.  Finding codes
 
    +============================+==========+==========================+
    | Code                       | Severity | Meaning                  |
@@ -719,34 +772,33 @@ Internet-Draft                   Cedulon                     August 2026
    |                            |          | guarantee is conditional |
    +----------------------------+----------+--------------------------+
 
-                                 Table 6
-
-
-
-
-
-Dogru                   Expires 27 February 2027               [Page 13]
-
-Internet-Draft                   Cedulon                     August 2026
-
+                                 Table 7
 
    Checkpoints SHOULD be registered with a Transparency Service (SHOULD-
    T11-5).  A test deployment MAY use an in-process append-only log as
    the witness (MAY-T11-6).  Cedulon still MUST NOT take custody.
 
-9.  Lifecycle
+
+
+
+Dogru                   Expires 27 February 2027               [Page 14]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
+10.  Lifecycle
 
    1.  *Manifest.* Parties sign a Trade Manifest (optional for metered
        API spend; required for goods with acceptance criteria).
 
    2.  *Policy check.* The adapter submits a structured request to the
-       PDP.  Default is deny.  The Decision Token stays inside the
-       implementation.
+       PDP.  Default is deny.  An allow is a Decision Token (MUST-T6-4).
 
    3.  *Payment.* On allow, the adapter performs the x402 (or other
        rail) exchange using exactly the decision fields (MUST-T6-1).
        The Decision Token is consumed (MUST-T6-2).  A reused nonce is
-       denied (MUST-T3-1, MUST-T3-2).
+       denied (MUST-T3-1, MUST-T3-2).  A tampered or expired token is
+       denied (MUST-T6-5).
 
    4.  *Receipt.* The Receipt Issuer signs a Spend Receipt.  Rail
        credentials MUST NOT appear in the receipt, logs, or tool results
@@ -758,7 +810,7 @@ Internet-Draft                   Cedulon                     August 2026
        bundle MUST NOT be described as an arbitral award or escrow
        release (MUST-T8-4).
 
-10.  Policy Semantics
+11.  Policy Semantics
 
    Policy is default deny.  The engine understands three families of
    rule:
@@ -781,21 +833,25 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                   Expires 27 February 2027               [Page 14]
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 15]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
-11.  SCITT Anchoring
+12.  SCITT Anchoring
 
    A Receipt Issuer or relying party MAY construct a SCITT Signed
    Statement whose payload is either the Spend Receipt COSE object or a
-   privacy profile (Section 12) and register it with a Transparency
+   privacy profile (Section 13) and register it with a Transparency
    Service [RFC9943].  The service returns a COSE receipt [RFC9942].
    Embedding that receipt yields a Transparent Statement.  Cedulon does
    not define a new transparency algorithm.
 
-12.  Privacy Considerations
+13.  Privacy Considerations
 
    A public transparency encoding MUST support omitting or hashing payer
    and payee identifiers and MUST support amount redaction or bucket
@@ -806,7 +862,7 @@ Internet-Draft                   Cedulon                     August 2026
    full claims (SHOULD-T9-3).  A private auditor MAY receive an
    unredacted receipt out of band (MAY-T9-4).
 
-13.  Security Considerations
+14.  Security Considerations
 
    This section is authoritative for the protocol requirements in this
    document.  The companion repository file THREAT_MODEL.md is
@@ -837,13 +893,14 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                   Expires 27 February 2027               [Page 15]
+Dogru                   Expires 27 February 2027               [Page 16]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
-      hash (MUST-T6-1).  The decision is consumed on first use (MUST-
-      T6-2).
+      hash (MUST-T6-1).  The allow is a COSE_Sign1 Decision Token (MUST-
+      T6-4) consumed on first use (MUST-T6-2).  A failed signature or
+      expired token MUST be rejected (MUST-T6-5).
 
    Key leakage (T7):  Secret key material MUST NOT appear in artifacts
       (MUST-T7-1).  Examples MUST use mock keys (MUST-T7-2).  Production
@@ -853,13 +910,13 @@ Internet-Draft                   Cedulon                     August 2026
       bundle (MUST-T8-3) is not an award (MUST-T8-4). manifestHash is
       the SHA-256 of the signed COSE bytes (MUST-T8-7).
 
-   Privacy (T9):  See Section 12.
+   Privacy (T9):  See Section 13.
 
    Rail bypass completeness (T10):  Verifiers MUST reconcile an
       authenticated extract to receipts with one-to-one
       ref+amount+currency matching (MUST-T10-1, MUST-T10-6, MUST-T10-7)
       and MUST fail the audit when any fail-severity finding exists
-      (MUST-T10-4).  See Section 8.
+      (MUST-T10-4).  See Section 9.
 
    Checkpoint suppression (T11):  Checkpoints MUST be signed and chained
       (MUST-T11-1, MUST-T11-4).  Totals, count, and chainHeadHash MUST
@@ -888,30 +945,32 @@ Internet-Draft                   Cedulon                     August 2026
       settlement.  Cedulon does not detect extract-external agreement.
 
    Reversal, refund, and partial settlement:  State machines for
-      reversal, refund, and partial settlement are out of scope for -00
-      and are expected in -01.
 
 
 
-Dogru                   Expires 27 February 2027               [Page 16]
+
+Dogru                   Expires 27 February 2027               [Page 17]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
-13.1.  Optional escrow role
+      reversal, refund, and partial settlement are out of scope for -00
+      and are expected in -01.
+
+14.1.  Optional escrow role
 
    Parties MAY name an escrow actor in a Trade Manifest as a third-party
    role that holds funds under rules outside this protocol (MAY-T8-6).
    Implementations of this specification MUST NOT take custody or
    operate escrow (MUST-T8-custody).
 
-14.  IANA Considerations
+15.  IANA Considerations
 
    This document has no IANA actions.  Private-use CWT labels below
    -65536 are used so that a registry assignment is not required for
    -00.
 
-15.  Implementation Status
+16.  Implementation Status
 
    RFC 7942 [RFC7942] note: a companion implementation with a runnable
    verification suite is published at https://github.com/dogrucanemek-
@@ -919,7 +978,7 @@ Internet-Draft                   Cedulon                     August 2026
    is a profile of this document, not a second specification.  This -00
    is not an IETF working-group item.
 
-16.  Informative Notes on Adjacent Protocols
+17.  Informative Notes on Adjacent Protocols
 
    x402 uses HTTP 402 [RFC9110] to negotiate stablecoin payment.  AP2
    uses signed mandates as verifiable credentials.  Cedulon does not
@@ -928,9 +987,9 @@ Internet-Draft                   Cedulon                     August 2026
    bates-atp [BATES-ATTP] is a lineage neighbor.  It does not define
    rail-extract completeness.
 
-17.  References
+18.  References
 
-17.1.  Normative References
+18.1.  Normative References
 
    [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
               Requirement Levels", BCP 14, RFC 2119,
@@ -942,17 +1001,19 @@ Internet-Draft                   Cedulon                     August 2026
               DOI 10.17487/RFC6234, May 2011,
               <https://www.rfc-editor.org/rfc/rfc6234>.
 
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 18]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    [RFC8032]  Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
               Signature Algorithm (EdDSA)", RFC 8032,
               DOI 10.17487/RFC8032, January 2017,
               <https://www.rfc-editor.org/rfc/rfc8032>.
-
-
-
-Dogru                   Expires 27 February 2027               [Page 17]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
@@ -993,22 +1054,21 @@ Internet-Draft                   Cedulon                     August 2026
               DOI 10.17487/RFC9943, June 2026,
               <https://www.rfc-editor.org/rfc/rfc9943>.
 
-17.2.  Informative References
+18.2.  Informative References
+
+
+
+
+
+
+Dogru                   Expires 27 February 2027               [Page 19]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    [BATES-ATTP]
               Bates, D., "Agent Transaction Protocol (ATP)", May 2026,
               <https://datatracker.ietf.org/doc/draft-bates-atp/00/>.
-
-
-
-
-
-
-
-Dogru                   Expires 27 February 2027               [Page 18]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of Running
               Code: The Implementation Status Section", BCP 205,
@@ -1054,17 +1114,15 @@ Appendix A.  Test Vectors
    0422533e28ac620ad439f5e7bd8ed1fa5ded90d4421a2de34f94d1d78d
    38a65812cb5315ee7f1cf403
 
-   Manifest COSE_Sign1:
 
 
 
-
-
-
-Dogru                   Expires 27 February 2027               [Page 19]
+Dogru                   Expires 27 February 2027               [Page 20]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   Manifest COSE_Sign1:
 
    Body: description=fixture-goods, amount=1, currency=USD,
    acceptanceCriteriaHash=00, cancelCondition=none,
@@ -1115,6 +1173,4 @@ Author's Address
 
 
 
-
-
-Dogru                   Expires 27 February 2027               [Page 20]
+Dogru                   Expires 27 February 2027               [Page 21]

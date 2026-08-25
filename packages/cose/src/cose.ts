@@ -16,6 +16,7 @@ export const CTY_RECEIPT = "application/cedulon-receipt+cbor";
 export const CTY_CHECKPOINT = "application/cedulon-checkpoint+cbor";
 export const CTY_MANIFEST = "application/cedulon-manifest+cbor";
 export const CTY_INCLUSION = "application/cedulon-inclusion+cbor";
+export const CTY_DECISION = "application/cedulon-decision+cbor";
 
 export type CoseSign1 = {
   protectedHeader: Uint8Array;

@@ -145,6 +145,8 @@ single-use decision. Settlement amount and payee MUST match the decision.
 | MUST-T6-1 | Payment settlement MUST use the same six `requestHash` fields the PDP evaluated: amount, currency, payee, tool, nonce, and `manifestHash`. |
 | MUST-T6-2 | An allow decision MUST be consumed on the first settlement attempt, success or fail-closed abort, and MUST NOT authorize a later different request. |
 | SHOULD-T6-3 | Implementations SHOULD treat a decision older than a short TTL as expired. |
+| MUST-T6-4 | An allow Decision Token MUST be COSE_Sign1 with CWT private-use labels -70301..-70305 (`requestHash`, `policyHash`, `expiryMs`, `nonce`, `singleUseId`) and content type `application/cedulon-decision+cbor`. |
+| MUST-T6-5 | A party that accepts a Decision Token MUST reject a failed signature, a `kid` or content-type mismatch, a claim-map mismatch, or an expired `expiryMs`. |
 
 ### T7 — Signing-key leakage
 
@@ -245,7 +247,7 @@ Optional registration in a transparency log makes suppression visible.
 | T3 Replay | Nonce, expiry, single-use decision | MUST-T3-1, MUST-T3-2, MUST-T3-3, MUST-T3-4 |
 | T4 Forgery / denial | Signed canonical receipt, kid, outcome | MUST-T4-1, MUST-T4-2, MUST-T4-3, MUST-T4-4, MUST-T4-7, MUST-T4-8 |
 | T5 Rail bypass | Single gated interface; no secrets in tools | MUST-T5-1, MUST-T5-2 |
-| T6 TOCTOU | Decision hash binds six request fields | MUST-T6-1, MUST-T6-2 |
+| T6 TOCTOU | Decision Token COSE binds six request fields | MUST-T6-1, MUST-T6-2, MUST-T6-4, MUST-T6-5 |
 | T7 Key leak | No secrets in artifacts; mock keys only | MUST-T7-1, MUST-T7-2 |
 | T8 Bad counterparty | Manifest bind + COSE hash + evidence bundle, no escrow | MUST-T8-1, MUST-T8-2, MUST-T8-3, MUST-T8-4, MUST-T8-7, MAY-T8-6 (MUST NOT custody) |
 | T9 Log PII | Redaction / hash-only public form | MUST-T9-1, MUST-T9-2 |

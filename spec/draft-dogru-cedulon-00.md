@@ -63,7 +63,7 @@ produce a fail-closed policy check and a signed spend receipt that a
 verifier can reconcile against a rail extract. Cedulon specifies a Trade
 Manifest (signed offer before payment), a Policy Decision Point with
 default deny, a Spend Receipt (COSE/CWT claim set after a gated payment),
-epoch checkpoints, and rail-extract reconciliation that checks
+epoch checkpoints, and rail-extract reconciliation that proves
 completeness against an authenticated rail extract. It also defines a
 Dispute Evidence Bundle (evidence, not an award) and optional SCITT
 anchoring. Cedulon is not a competitor to x402 or AP2; it sits above
@@ -136,9 +136,9 @@ Dispute Evidence Bundle:
   arbitral award and not an escrow release.
 
 Decision Token:
-: A single-use PDP allow bound to a hash of the evaluated request
-  fields. It is implementation-internal and is never exchanged between
-  parties. This document does not define a wire format for it.
+: A portable, single-use PDP allow encoded as COSE_Sign1. The claim
+  set binds `requestHash`, `policyHash`, `expiryMs`, `nonce`, and
+  `singleUseId`. See {{decision-token}}.
 
 Rail Extract:
 : An authenticated list of settlement records for one account, one
@@ -172,8 +172,9 @@ increment success counters (`MUST-T2-4`).
 
 An allow produces a Decision Token whose `requestHash` covers six
 fields: amount, currency, payee, tool, nonce, and `manifestHash`
-(`MUST-T3-4`, `MUST-T6-1`). The token is single-use (`MUST-T6-2`) and
-implementation-internal.
+(`MUST-T3-4`, `MUST-T6-1`). The token is a COSE_Sign1 object
+(`MUST-T6-4`), is single-use (`MUST-T6-2`), and MAY be carried to
+the adapter that performs settlement.
 
 ## Receipt Issuer
 
@@ -314,6 +315,16 @@ Manifest labels (`MUST-T8-1`):
 | -70206 | expiresAtMs | uint |
 | -70207 | ap2MandateHash | tstr / null |
 
+Decision Token labels (`MUST-T6-4`):
+
+| Label | Claim | CBOR type |
+|---|---|---|
+| -70301 | requestHash | tstr |
+| -70302 | policyHash | tstr (lowercase hex SHA-256) |
+| -70303 | expiryMs | uint |
+| -70304 | nonce | tstr |
+| -70305 | singleUseId | tstr |
+
 ## COSE_Sign1 headers
 
 The protected header MUST be a deterministic CBOR map containing
@@ -323,8 +334,9 @@ The protected header MUST be a deterministic CBOR map containing
   `-8` from {{RFC9053}} is deprecated for this profile)
 - `3` (content type) = a tstr that distinguishes the payload:
   `application/cedulon-receipt+cbor`,
-  `application/cedulon-checkpoint+cbor`, or
-  `application/cedulon-manifest+cbor`
+  `application/cedulon-checkpoint+cbor`,
+  `application/cedulon-manifest+cbor`, or
+  `application/cedulon-decision+cbor`
 - `4` (kid) = bstr, mandatory. The profile computes `kid` as the
   first eight bytes of SHA-256 over the issuer's SubjectPublicKeyInfo
   DER. A verifier MUST obtain the public key from an authenticated
@@ -336,6 +348,27 @@ The unprotected header MUST be empty. The payload MUST be the CBOR
 encoding of the claim map. The signature is Ed25519 {{RFC8032}} over
 the COSE `Sig_structure`
 `["Signature1", protected, h'', payload]`.
+
+# Decision Token {#decision-token}
+
+A Decision Token is the portable encoding of a PDP allow. It is
+COSE_Sign1 with the header profile in {{cose-profile}} and the
+labels in {{receipt-labels}}. All five labels are always present
+(`MUST-T6-4`).
+
+`requestHash` MUST be the six-field hash defined for the PDP
+(`MUST-T6-1`). `policyHash` MUST be the SHA-256 of the canonical
+policy document the PDP evaluated. `expiryMs` is a Unix time in
+milliseconds after which the token MUST be treated as expired
+(`SHOULD-T6-3`). `nonce` is the request nonce. `singleUseId` is
+the identifier consumed on the first settlement attempt
+(`MUST-T6-2`).
+
+A party that accepts a Decision Token MUST reject it if the
+signature fails, if `kid` does not match a configured PDP key, if
+the content type is not `application/cedulon-decision+cbor`, if
+the decoded claim map does not match the presented claims, or if
+`expiryMs` is in the past (`MUST-T6-5`).
 
 # Rail Extract Profile {#rail-extract}
 
@@ -477,12 +510,13 @@ NOT take custody.
 1. **Manifest.** Parties sign a Trade Manifest (optional for metered
    API spend; required for goods with acceptance criteria).
 2. **Policy check.** The adapter submits a structured request to the
-   PDP. Default is deny. The Decision Token stays inside the
-   implementation.
+   PDP. Default is deny. An allow is a Decision Token
+   (`MUST-T6-4`).
 3. **Payment.** On allow, the adapter performs the x402 (or other
    rail) exchange using exactly the decision fields (`MUST-T6-1`).
    The Decision Token is consumed (`MUST-T6-2`). A reused nonce is
-   denied (`MUST-T3-1`, `MUST-T3-2`).
+   denied (`MUST-T3-1`, `MUST-T3-2`). A tampered or expired token
+   is denied (`MUST-T6-5`).
 4. **Receipt.** The Receipt Issuer signs a Spend Receipt. Rail
    credentials MUST NOT appear in the receipt, logs, or tool
    results (`MUST-T5-2`, `MUST-T7-1`).
@@ -567,8 +601,9 @@ Bypass (T5):
 
 TOCTOU (T6):
 : Settlement fields MUST match the six-field decision hash
-  (`MUST-T6-1`). The decision is consumed on first use
-  (`MUST-T6-2`).
+  (`MUST-T6-1`). The allow is a COSE_Sign1 Decision Token
+  (`MUST-T6-4`) consumed on first use (`MUST-T6-2`). A failed
+  signature or expired token MUST be rejected (`MUST-T6-5`).
 
 Key leakage (T7):
 : Secret key material MUST NOT appear in artifacts (`MUST-T7-1`).

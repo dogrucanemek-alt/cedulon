@@ -135,7 +135,9 @@ export function gatedSettle(
     return deny402(input.req, decision.reason);
   }
   if (engine) {
-    const consumed = engine.consumeDecision(decision.decisionId, decision.requestHash, input.req);
+    const consumed = decision.token
+      ? engine.consumeDecisionToken(decision.token, input.req, nowMs)
+      : engine.consumeDecision(decision.decisionId, decision.requestHash, input.req);
     if (!consumed.allow) {
       return deny402(input.req, consumed.reason);
     }

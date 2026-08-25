@@ -32,7 +32,7 @@
         <h2>Sections</h2>
         <ol>
           <li><strong>Introduction</strong> — rails move value; the audit layer is missing.</li>
-          <li><strong>Terminology</strong> — RFC 2119; Trade Manifest, PDP, Spend Receipt, Decision Token (internal), Rail Extract.</li>
+          <li><strong>Terminology</strong> — RFC 2119; Trade Manifest, PDP, Spend Receipt, Decision Token (COSE_Sign1), Rail Extract.</li>
           <li><strong>Architecture</strong> — PDP before the rail; Receipt Issuer after; optional SCITT.</li>
           <li><strong>Trade Manifest</strong> — COSE_Sign1 offer before payment; <span class="mono">manifestHash</span> is SHA-256 of the COSE bytes.</li>
           <li><strong>Spend Receipt</strong> — signed record after a gated payment; <span class="mono">noManifest</span> and <span class="mono">outcome</span> are explicit.</li>

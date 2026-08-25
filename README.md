@@ -40,7 +40,7 @@ A third party can reproduce this without trusting us:
 ## Layout
 
 ```
-packages/core           policy engine (no npm dependencies)
+packages/core           policy engine + Decision Token (workspace dep on @cedulon/cose)
 packages/cose           deterministic CBOR + COSE_Sign1 (Ed25519)
 packages/manifest       signed trade manifest
 packages/receipts       spend receipt (COSE default, JSON legacy)

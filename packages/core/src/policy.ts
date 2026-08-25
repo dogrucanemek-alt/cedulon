@@ -1,6 +1,13 @@
 import { canonical } from "./canonical.ts";
+import { issueDecisionToken, verifyDecisionToken, type SignedDecisionToken } from "./decision-token.ts";
 import type { Decision, Policy, SpendRequest } from "./types.ts";
 import { MemoryStore } from "./store.ts";
+
+export type DecisionIssuerKeys = {
+  privateKeyPem: string;
+  publicKeyPem: string;
+  ttlMs?: number;
+};
 
 export function requestHashOf(req: SpendRequest): string {
   return canonical({
@@ -31,10 +38,16 @@ export class PolicyEngine {
   private nextDecision = 1;
   readonly policy: Policy;
   readonly store: MemoryStore;
+  readonly issuerKeys: DecisionIssuerKeys | null;
 
-  constructor(policy: Policy, store: MemoryStore = new MemoryStore()) {
+  constructor(
+    policy: Policy,
+    store: MemoryStore = new MemoryStore(),
+    issuerKeys: DecisionIssuerKeys | null = null,
+  ) {
     this.policy = policy;
     this.store = store;
+    this.issuerKeys = issuerKeys;
   }
 
   evaluate(req: SpendRequest): Decision {
@@ -70,12 +83,34 @@ export class PolicyEngine {
     this.store.counters.allowedSum += req.amount;
     const decisionId = `dec-${this.nextDecision}`;
     this.nextDecision += 1;
+    const requestHash = requestHashOf(req);
+    const token = this.issuerKeys
+      ? issueDecisionToken(
+          req,
+          this.policy,
+          decisionId,
+          req.nowMs + (this.issuerKeys.ttlMs ?? 60_000),
+          this.issuerKeys.privateKeyPem,
+          this.issuerKeys.publicKeyPem,
+        )
+      : undefined;
     return {
       allow: true,
       decisionId,
-      requestHash: requestHashOf(req),
+      requestHash,
       reason: "allow",
+      token,
     };
+  }
+
+  consumeDecisionToken(token: SignedDecisionToken, req: SpendRequest, nowMs: number): Decision {
+    if (!verifyDecisionToken(token, nowMs)) {
+      if (token.claims.expiryMs < nowMs) {
+        return { allow: false, reason: "decision-expired" };
+      }
+      return { allow: false, reason: "decision-bad-sig" };
+    }
+    return this.consumeDecision(token.claims.singleUseId, token.claims.requestHash, req);
   }
 
   consumeDecision(decisionId: string, requestHash: string, req: SpendRequest): Decision {
