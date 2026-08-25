@@ -1,0 +1,25 @@
+export {
+  CHECKPOINT_CLAIM,
+  buildCheckpointClaims,
+  checkpointFromCbor,
+  checkpointHash,
+  checkpointToCbor,
+  findCheckpointChainBreak,
+  findEquivocation,
+  signCheckpoint,
+  totalsFromReceipts,
+  verifyCheckpoint,
+  type ChainBreak,
+  type CheckpointClaims,
+  type Equivocation,
+  type SignedCheckpoint,
+} from "./checkpoint.ts";
+export {
+  MemoryTransparencyService,
+  anchorCheckpoint,
+  anchorReceipt,
+  decodeInclusionPayload,
+  statementHashOfCheckpoint,
+  statementHashOfReceipt,
+  type InclusionReceipt,
+} from "./transparency.ts";
