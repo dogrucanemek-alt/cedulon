@@ -24,6 +24,11 @@ audit. No wallet. No network rail. No clone, unless you want to read the code.
 That is the whole install. The published package is compiled JavaScript, so
 there is nothing to build and no experimental Node flag to pass.
 
+If you would rather not have the host reach npm at all, `npm run mcpb` in a
+clone builds `build/cedulon-<version>.mcpb`: a single file holding the server
+and its dependencies, which a desktop host installs in one click and which
+offers the policy caps as settings during install.
+
 ## 2. Optional: clone and prove the suite
 
 Only if you want to check the claims rather than take them:

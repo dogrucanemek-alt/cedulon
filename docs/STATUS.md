@@ -28,6 +28,12 @@ this sentence staying true. Neither is packaged for release: their entry
 points name TypeScript sources, which works inside the repo and would not
 work outside it. `demo:live` uses `base-extract` from the workspace.
 
+`npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
+desktop install. The 0.2.3 bundle was built and unpacked, and the server inside
+it answered `initialize`, listed exactly the tools its manifest declares, and
+returned a signed receipt. It is not submitted to any directory: Glama requires
+an account and a bot check, and Smithery takes an HTTPS endpoint or a bundle.
+
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
 where `0.2.2` is the current version. `server.json` is the entry it was published
 from. Two versions are listed: `0.2.1` announced itself as `0.2.0` over

@@ -96,7 +96,17 @@ npm run mcp
 
 The server is listed in the MCP Registry as
 `io.github.dogrucanemek-alt/cedulon`; `server.json` is the entry it is published
-from. `smithery.yaml` is prepared but not submitted.
+from.
+
+`npm run mcpb` builds an `.mcpb` bundle — a zip holding the server and its
+dependencies, which a desktop host installs in one click, with the policy caps
+exposed as settings. It installs the released npm package rather than packing
+the working tree, so the bundle holds what npm would have given you, and the
+version must already be released. The result lands in `build/` and is a release
+artifact, not source.
+
+`smithery.yaml` is the older ecosystem format and is not submitted; Smithery's
+current instructions take an HTTPS endpoint or an `.mcpb` bundle.
 
 
 ## Layout

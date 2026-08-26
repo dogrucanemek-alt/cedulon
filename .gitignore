@@ -1,6 +1,9 @@
 node_modules/
 dist/
 *.tgz
+
+# npm run mcpb staging and the .mcpb it produces (a release artifact, not source)
+build/
 coverage/
 *.log
 .env

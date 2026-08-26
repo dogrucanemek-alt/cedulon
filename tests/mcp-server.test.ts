@@ -157,6 +157,24 @@ describe("mcp-server stdio JSON-RPC", () => {
     }
   });
 
+  it("the mcpb manifest lists the tools the server actually exposes", async () => {
+    // The bundle ships a tool list of its own, which a desktop host shows
+    // before anything runs. A tool renamed here and not there would advertise
+    // something the server does not answer to.
+    const { mcpbManifest } = await import("../scripts/mcpb-manifest.mjs");
+    const manifest = mcpbManifest();
+    const rpc = new StdioRpc();
+    try {
+      await rpc.handshake();
+      const listed = await rpc.request("tools/list", {});
+      const actual = (listed.result as { tools: Array<{ name: string }> }).tools.map((t) => t.name).sort();
+      assert.deepEqual(manifest.tools.map((t: { name: string }) => t.name).sort(), actual);
+      assert.equal(manifest.version, packageVersion);
+    } finally {
+      rpc.close();
+    }
+  });
+
   it("initialize then tools/list exposes five named schemas", async () => {
     const rpc = new StdioRpc();
     try {

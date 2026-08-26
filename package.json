@@ -23,7 +23,8 @@
     "demo:bypasses": "node --experimental-strip-types examples/demo/src/bypass.ts all",
     "audit": "node --experimental-strip-types examples/demo/src/audit-cli.ts",
     "demo:export": "node --experimental-strip-types examples/demo/src/export.ts",
-    "demo:live": "node --experimental-strip-types examples/demo/src/live-audit.ts"
+    "demo:live": "node --experimental-strip-types examples/demo/src/live-audit.ts",
+    "mcpb": "node scripts/build-mcpb.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
