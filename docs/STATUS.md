@@ -1,7 +1,9 @@
 # Status
 
-`npm run test:all` is 103 pass; `npx tsc --noEmit` is silent; `npm run audit`
-exits 0 and the four bypass demos fail as designed.
+`npm run test:all` is green; `npx tsc --noEmit` is silent; `npm run audit`
+exits 0 and the four bypass demos fail as designed. `docs/RUN_AS_VERIFIER.md`
+carries the count to expect and the exact output of each demo, and part of the
+suite checks that file against what the commands actually print.
 
 The three -00 drafts are posted on the IETF datatracker and the repository is
 archived at `10.5281/zenodo.22099792`. The core packages carry no runtime
