@@ -1091,10 +1091,11 @@ Experience:
   and the fixes are recorded in the repository. That review is the
   reason for most of this revision.
 
-Note on distribution: the packages published on npm may lag the
-repository. A reader checking the requirements in this document should
-use the repository at the commit referenced in the release notes rather
-than an installed package, unless the package version states otherwise.
+Note on distribution: the requirements in this document are implemented
+in the `@cedulon` packages at version 0.2.0 on npm, and in the
+repository at the commit named in the release notes. Package versions
+before 0.2.0 predate these requirements, so a reader checking a claim
+against an installed package should confirm the version first.
 
 ## Changes from -00 {#changes}
 
