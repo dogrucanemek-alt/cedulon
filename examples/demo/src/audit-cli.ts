@@ -1,5 +1,5 @@
 import { PolicyEngine } from "@cedulon/core";
-import { audit, formatAudit } from "@cedulon/audit";
+import { audit, formatAudit, toFindingObject } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint } from "@cedulon/checkpoint";
 import { generateReceiptKeys, receiptHash } from "@cedulon/receipts";
 import { RailLedger, gatedSettleWithLedger, type AdapterKeys } from "@cedulon/x402-adapter";
@@ -49,5 +49,9 @@ const checkpoint = signCheckpoint(
   k.publicKeyPem,
 );
 const report = audit({ receipts, checkpoints: [checkpoint], settlements: ledger.extract() });
-console.log(formatAudit(report, receipts.length));
+if (process.argv.includes("--json")) {
+  process.stdout.write(`${JSON.stringify(toFindingObject(report, receipts.length), null, 2)}\n`);
+} else {
+  console.log(formatAudit(report, receipts.length));
+}
 process.exit(report.ok ? 0 : 1);

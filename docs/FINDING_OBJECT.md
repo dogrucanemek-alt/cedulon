@@ -1,0 +1,111 @@
+# Finding object (design note)
+
+This is not a specification. `-01` says finding codes are diagnostic
+identifiers, not an interop surface
+(`spec/draft-dogru-cedulon-01.md`, the paragraph that begins "The
+identifiers below are for diagnostic output"). That decision was
+correct for `-01`: inventing a wire format in the same turn as the
+codes would have frozen a guess.
+
+The cost is that two implementations cannot compare findings
+machine-to-machine. This note is the portable object we would emit
+today, and the schema next to it is what `audit --json` already
+satisfies. Whether that object becomes normative in `-02` is a later
+call; the recommendation at the end is the one this tree would make.
+
+## Envelope
+
+```
+{
+  findingObjectVersion: 1,
+  ok: boolean,
+  guarantee: "unconditional" | "conditional",
+  summary: string,          // same text formatAudit prints first
+  receipts: number,
+  findings: Finding[],      // severity is fail or omitted
+  warnings: Finding[]
+}
+```
+
+`ok` is true only when `findings` is empty. `guarantee` is
+`unconditional` only when there are no warnings and the extract itself
+was not doubted. Those two fields are the ones a consumer can act on
+without understanding every code.
+
+## Finding
+
+```
+{
+  code: string,             // diagnostic id from -01, or an extension
+  id: string,               // subject (ref, nonce, epoch, "extract")
+  detail: string,           // operator-facing sentence
+  severity?: "fail" | "warn"
+}
+```
+
+Unknown properties on a finding are allowed. The schema says so. A
+producer may add `ref`, `amount`, or a language tag without a version
+bump, as long as it does not rename or reuse `code` / `id` / `detail`.
+
+## Relation to `guarantee`
+
+`guarantee` is not a finding. It is a statement about the report. A
+consumer that only understands `ok` and `guarantee` already knows
+whether to treat the books as closed. Findings explain why.
+
+A warning such as `unauthenticated-extract` keeps `ok` true and forces
+`guarantee=conditional`. That split is the point of `MUST-T10-14`: the
+human output already prints both. The JSON object must not hide either.
+
+## Versioning
+
+`findingObjectVersion` is an integer. A consumer that sees a version it
+does not implement must not claim it understood the object. It may
+still read `ok` and `guarantee` if those keys are present and typed as
+here; that is a courtesy, not a contract.
+
+Adding an optional field on a finding is not a version bump. Removing
+or renaming a required envelope field is. Adding a new `code` is not a
+version bump (see unknown codes).
+
+## Unknown codes
+
+Carry-and-mark, not fail-closed on the code itself.
+
+- If `ok` is false, an unknown `code` does not make the report
+  healthier. Leave `ok` false.
+- If `ok` is true and a finding or warning carries a code the consumer
+  does not know, the consumer must not keep an unconditional
+  guarantee. Mark the row (`unrecognized: true` is enough) and treat
+  `guarantee` as conditional.
+- The consumer must not invent a failure solely because a code is new.
+  That would make adding a diagnostic a breaking change.
+
+Fail-closed on the *envelope* (`ok`, `guarantee`) stays. Fail-closed on
+an unknown *string* would punish evolution.
+
+## Extensibility
+
+New codes are lowercase kebab-case. A vendor prefix (`x-…`) is for
+local diagnostics that will not be asked of another implementation.
+Do not put a vendor prefix on a code that `-02` might later name.
+
+## `-02` recommendation
+
+Do not make this object normative in `-02`.
+
+`-01` kept the codes diagnostic so two implementations could still
+disagree on how they print. Turning the envelope into a MUST before a
+second implementation has emitted it would freeze field names we have
+only used ourselves.
+
+What `-02` can say, if it says anything:
+
+- An implementation that emits machine-readable findings MUST include
+  `ok` and `guarantee` with the meanings already in `-01`.
+- Finding `code` values remain diagnostic identifiers.
+- A published JSON shape is optional (`MAY`) and, if used, SHOULD
+  match this version-1 envelope.
+
+The schema in `docs/finding-object.schema.json` is the running check
+for that MAY, not a draft section.

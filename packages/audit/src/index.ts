@@ -14,25 +14,31 @@ import {
   type SignedRailExtract,
 } from "@cedulon/x402-adapter";
 
-export type FindingCode =
-  | "settlement-without-receipt"
-  | "receipt-without-settlement"
-  | "receipt-chain-break"
-  | "checkpoint-total-mismatch"
-  | "checkpoint-head-mismatch"
-  | "duplicate-ref"
-  | "settlement-mismatch"
-  | "equivocation"
-  | "window-coverage"
-  | "settled-without-ref"
-  | "unauthenticated-extract"
-  | "extract-key-mismatch"
-  | "extract-scope-mismatch"
-  | "extract-settlement-mismatch"
-  | "trust-key-unreadable"
-  | "unstated-audit-window"
-  | "malformed-amount"
-  | "countersign-bad";
+export const FINDING_CODES = [
+  "settlement-without-receipt",
+  "receipt-without-settlement",
+  "receipt-chain-break",
+  "checkpoint-total-mismatch",
+  "checkpoint-head-mismatch",
+  "duplicate-ref",
+  "settlement-mismatch",
+  "equivocation",
+  "window-coverage",
+  "settled-without-ref",
+  "unauthenticated-extract",
+  "extract-key-mismatch",
+  "extract-scope-mismatch",
+  "extract-settlement-mismatch",
+  "trust-key-unreadable",
+  "unstated-audit-window",
+  "malformed-amount",
+  "countersign-bad",
+] as const;
+
+export type FindingCode = (typeof FINDING_CODES)[number];
+
+/** Diagnostic envelope version. Not a wire format until a later draft says so. */
+export const FINDING_OBJECT_VERSION = 1;
 
 /**
  * Trust root the verifier supplies out of band. Without it a rail extract only
@@ -608,6 +614,28 @@ export function audit(input: {
     warnings,
     guarantee: warnings.length === 0 && !doubtedExtract ? "unconditional" : "conditional",
     summary,
+  };
+}
+
+export type FindingObject = {
+  findingObjectVersion: typeof FINDING_OBJECT_VERSION;
+  ok: boolean;
+  guarantee: AuditReport["guarantee"];
+  summary: string;
+  receipts: number;
+  findings: Finding[];
+  warnings: Finding[];
+};
+
+export function toFindingObject(report: AuditReport, receiptCount = 0): FindingObject {
+  return {
+    findingObjectVersion: FINDING_OBJECT_VERSION,
+    ok: report.ok,
+    guarantee: report.guarantee,
+    summary: report.summary,
+    receipts: receiptCount,
+    findings: report.findings,
+    warnings: report.warnings,
   };
 }
 
