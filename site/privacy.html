@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cedulon — Privacy Policy</title>
+    <meta name="description" content="The Cedulon MCP server runs on your machine and makes no network requests. It has no server to send anything to. This page states what it holds, what it writes, and what we can see, which is nothing.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Cedulon">
+    <meta property="og:title" content="Cedulon — Privacy Policy">
+    <meta property="og:description" content="The Cedulon MCP server runs on your machine and makes no network requests. There is no server of ours to receive your data.">
+    <meta property="og:url" content="https://cedulon.com/privacy.html">
+    <meta property="og:image" content="https://cedulon.com/og.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="mast">
+        <nav>
+          <a href="index.html">Cedulon</a>
+          <a href="verify.html">Verify</a>
+          <a href="spec.html">Spec</a>
+          <a href="panel/index.html">Panel</a>
+        </nav>
+      </header>
+
+      <h1>Privacy Policy</h1>
+      <p class="tagline">Last updated 27 August 2026.</p>
+      <p class="lede">
+        The Cedulon MCP server runs on your own machine and speaks to your MCP
+        client over standard input and output. We do not host it, we do not
+        operate a service behind it, and there is no endpoint of ours for it to
+        talk to.
+      </p>
+
+      <h2>What we collect</h2>
+      <p>
+        Nothing. We receive no data from the server, because the server sends
+        none. This is not a policy commitment we ask you to take on trust: the
+        published package and the seven packages it depends on contain no HTTP
+        client, no socket, and no telemetry, and its only dependency outside
+        the project is the official Model Context Protocol SDK. The source is
+        <a href="https://github.com/dogrucanemek-alt/cedulon">public</a> and the
+        dependency list is short enough to read.
+      </p>
+
+      <h2>What the server holds while it runs</h2>
+      <p>
+        In memory, for the lifetime of the process: the spend requests made in
+        the session (amount, currency, payee, a nonce, and the name of the
+        calling tool), the signed receipts derived from them, the epoch
+        checkpoint, and the policy limits you configured. Ending the process
+        discards all of it.
+      </p>
+
+      <h2>What it writes to disk</h2>
+      <p>
+        By default, nothing. If you set the <code>CEDULON_STATE_PATH</code>
+        environment variable, the ledger described above is written as JSON to
+        that path, on your machine, so that a session can resume. You choose
+        the path, you can delete the file at any time, and we never see it.
+      </p>
+
+      <h2>Third parties</h2>
+      <p>
+        None. No analytics, no crash reporting, no update check, no content
+        delivery network, no advertising, and no data sharing of any kind. The
+        server has no mechanism to do these things.
+      </p>
+
+      <h2>Retention</h2>
+      <p>
+        In-memory state lasts as long as the process. A state file, if you
+        enabled one, lasts until you delete it. We hold nothing, so we retain
+        nothing and there is nothing for us to delete on your behalf.
+      </p>
+
+      <h2>Children</h2>
+      <p>
+        Cedulon is a developer tool and is not directed at children. It
+        collects no data from anyone, including children.
+      </p>
+
+      <h2>One thing that does use the network, and is not in the package</h2>
+      <p>
+        The repository also contains an optional demonstration that reads a
+        public blockchain RPC endpoint you supply, to reconcile a receipt chain
+        against a real settlement window. It is read-only, it holds no wallet
+        and no key, and it is <em>not</em> part of the packaged MCP server or
+        the desktop extension. It runs only if you clone the repository and
+        invoke it yourself with an endpoint of your choosing.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If this policy changes, the date above changes with it, and the change
+        is visible in the repository history alongside the code it describes.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Emek Can Dogru — <a href="mailto:e.dogru@conarium.dev">e.dogru@conarium.dev</a>.
+        Security reports and privacy questions both reach the same address.
+      </p>
+
+      <footer class="colophon">
+        <p><a href="https://github.com/dogrucanemek-alt/cedulon">Source</a> · <a href="spec.html">Draft</a> · <a href="verify.html">Run as a verifier</a> · <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Quickstart</a></p>
+        <p>Apache-2.0 · A <a href="https://verax-ai.com">VERAX</a> product · © 2026 Emek Can Dogru</p>
+      </footer>
+    </div>
+  </body>
+</html>

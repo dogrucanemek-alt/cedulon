@@ -76,3 +76,23 @@ Policy knobs (demo defaults in parentheses):
 - `CEDULON_PAYER` (`payer-1`)
 
 The rail is the in-process mock. No wallet, no RPC, no network.
+
+## Privacy Policy
+
+<https://cedulon.com/privacy.html>
+
+The short version, which that page states at length. This server runs on your
+machine and speaks to your client over stdio. It makes no network requests:
+this package and the six packages it depends on contain no HTTP client, no
+socket, and no telemetry, and the only dependency outside the project is the
+official Model Context Protocol SDK. It collects nothing, because there is no
+endpoint of ours to collect it.
+
+While it runs it holds, in memory, the spend requests of the session (amount,
+currency, payee, nonce, calling tool name), the receipts derived from them,
+the checkpoint, and your policy limits. It writes nothing to disk unless you
+set `CEDULON_STATE_PATH`, in which case that ledger is written as JSON to the
+path you chose, on your machine. No analytics, no crash reporting, no update
+check, no third-party sharing.
+
+Privacy questions and security reports: <e.dogru@conarium.dev>.

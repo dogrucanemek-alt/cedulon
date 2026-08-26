@@ -30,6 +30,10 @@ export function mcpbManifest() {
     documentation: "https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md",
     repository: { type: "git", url: "https://github.com/dogrucanemek-alt/cedulon" },
     license: pkg.license,
+    // Required from manifest_version 0.2 for a local connector. A missing or
+    // incomplete privacy policy is an immediate rejection, so this is derived
+    // rather than typed twice: the same URL is linked from the README.
+    privacy_policies: ["https://cedulon.com/privacy.html"],
     keywords: ["audit", "receipts", "policy", "spend", "cose", "x402"],
     server: {
       type: "node",

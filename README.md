@@ -147,6 +147,14 @@ Brand names come from `packages/core/src/brand.ts` only.
 Citation metadata is in `CITATION.cff`. The archived -00 release is
 published as https://doi.org/10.5281/zenodo.22099792
 
+## Privacy Policy
+
+<https://cedulon.com/privacy.html>
+
+The MCP server runs on your machine and makes no network requests. It collects
+nothing, because there is no endpoint of ours to collect it. `packages/mcp-server/README.md`
+states what it holds while it runs and what it writes if you ask it to.
+
 ## License
 
 Apache-2.0
