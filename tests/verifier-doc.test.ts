@@ -38,6 +38,36 @@ function documentedRuns(markdown: string): Array<{ command: string; expected: st
 describe("run-as-verifier doc", () => {
   const runs = documentedRuns(doc);
 
+  // The file shipped with two sections numbered 6, and inserting a section
+  // silently moved the targets of its own cross-references.
+  const sections = [...doc.matchAll(/^## (\d+)\./gm)].map((m) => Number(m[1]));
+
+  it("numbers its sections 1..n once each", () => {
+    assert.deepEqual(
+      sections,
+      sections.map((_, i) => i + 1),
+    );
+  });
+
+  it("does not restate the suite size", () => {
+    // Twice this file named a count the suite had already moved past. The run
+    // prints its own total; a second copy here only goes stale.
+    const claim = doc.match(/\*?\*?\d+\*?\*?\s+tests?\s+passing/i);
+    assert.equal(
+      claim,
+      null,
+      `remove the hard-coded count ${JSON.stringify(claim?.[0])}: it goes stale on the next test added`,
+    );
+  });
+
+  it("cross-references sections that exist", () => {
+    const referenced = [...doc.matchAll(/[Ss]ection (\d+)/g)].map((m) => Number(m[1]));
+    assert.notEqual(referenced.length, 0, "expected the doc to cross-reference its sections");
+    for (const n of referenced) {
+      assert.ok(sections.includes(n), `text points at section ${n}, which does not exist`);
+    }
+  });
+
   it("documents the commands it claims to", () => {
     assert.deepEqual(
       runs.map((r) => r.command),

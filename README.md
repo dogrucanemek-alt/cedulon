@@ -39,6 +39,11 @@ npm run demo
 amount, null-ref, garbage chain head) and exits 0 only when every bypass
 is caught; a missed bypass makes it exit non-zero.
 
+`npm run demo:live` reconciles a real Base Sepolia USDC window instead of a
+fixture. Read-only: it needs an RPC URL in `CEDULON_RPC_URL` and no wallet,
+key, or transaction. Against an account whose receipts you do not hold, every
+settlement the chain reports comes back as a gap.
+
 A third party can reproduce this without trusting us:
 `docs/RUN_AS_VERIFIER.md`.
 

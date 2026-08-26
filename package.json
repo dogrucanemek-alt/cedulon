@@ -22,7 +22,8 @@
     "demo:bypass": "node --experimental-strip-types examples/demo/src/bypass.ts",
     "demo:bypasses": "node --experimental-strip-types examples/demo/src/bypass.ts all",
     "audit": "node --experimental-strip-types examples/demo/src/audit-cli.ts",
-    "demo:export": "node --experimental-strip-types examples/demo/src/export.ts"
+    "demo:export": "node --experimental-strip-types examples/demo/src/export.ts",
+    "demo:live": "node --experimental-strip-types examples/demo/src/live-audit.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

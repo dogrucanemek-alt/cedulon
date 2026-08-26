@@ -2,8 +2,16 @@
 
 `npm run test:all` is green; `npx tsc --noEmit` is silent; `npm run audit`
 exits 0 and the four bypass demos fail as designed. `docs/RUN_AS_VERIFIER.md`
-carries the count to expect and the exact output of each demo, and part of the
-suite checks that file against what the commands actually print.
+carries the exact output of each demo, and part of the suite checks that file
+against what the commands actually print.
+
+Those demos run on fixtures. `npm run demo:live` does not: it reads a real
+Base Sepolia USDC window over an RPC endpoint and reconciles it against a
+receipt chain. A 128-settlement window was read from the live chain and every
+one of the 128 came back as `settlement-without-receipt`, at
+`guarantee=conditional` — a chain read is not a signed extract from the rail
+operator. That is the whole of what runs against a real rail today: reading.
+Nothing here holds a wallet or signs a transaction.
 
 The three -00 drafts are posted on the IETF datatracker and the repository is
 archived at `10.5281/zenodo.22099792`. The core packages carry no runtime
