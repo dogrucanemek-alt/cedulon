@@ -12,3 +12,9 @@ spec/idnits-out.txt
 
 # kramdown-rfc reference cache
 spec/.refcache/
+
+# kramdown-rfc cache (repo root, when run from there)
+.refcache/
+
+# kramdown-rfc HTML render (not the submitted artifact)
+spec/*.html
