@@ -161,7 +161,7 @@ describe("mcp-server stdio JSON-RPC", () => {
     // The bundle ships a tool list of its own, which a desktop host shows
     // before anything runs. A tool renamed here and not there would advertise
     // something the server does not answer to.
-    const { mcpbManifest } = await import("../scripts/mcpb-manifest.mjs");
+    const { mcpbManifest } = await import("../scripts/mcpb-manifest.ts");
     const manifest = mcpbManifest();
     const rpc = new StdioRpc();
     try {

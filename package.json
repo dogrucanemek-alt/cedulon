@@ -24,7 +24,7 @@
     "audit": "node --experimental-strip-types examples/demo/src/audit-cli.ts",
     "demo:export": "node --experimental-strip-types examples/demo/src/export.ts",
     "demo:live": "node --experimental-strip-types examples/demo/src/live-audit.ts",
-    "mcpb": "node scripts/build-mcpb.mjs"
+    "mcpb": "node --experimental-strip-types scripts/build-mcpb.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

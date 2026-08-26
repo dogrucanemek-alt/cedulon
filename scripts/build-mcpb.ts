@@ -11,7 +11,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mcpbManifest } from "./mcpb-manifest.mjs";
+import { mcpbManifest } from "./mcpb-manifest.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = mcpbManifest();
