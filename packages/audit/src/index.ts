@@ -32,8 +32,7 @@ export type FindingCode =
   | "trust-key-unreadable"
   | "unstated-audit-window"
   | "malformed-amount"
-  | "countersign-bad"
-  | "ok";
+  | "countersign-bad";
 
 /**
  * Trust root the verifier supplies out of band. Without it a rail extract only
@@ -48,7 +47,7 @@ export type RailTrustPin = {
 };
 
 export type Finding = {
-  code: Exclude<FindingCode, "ok">;
+  code: FindingCode;
   detail: string;
   id: string;
   severity?: "fail" | "warn";
