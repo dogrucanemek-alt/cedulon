@@ -31,8 +31,15 @@ work outside it. `demo:live` uses `base-extract` from the workspace.
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
 desktop install. The 0.2.3 bundle was built and unpacked, and the server inside
 it answered `initialize`, listed exactly the tools its manifest declares, and
-returned a signed receipt. It is not submitted to any directory: Glama requires
-an account and a bot check, and Smithery takes an HTTPS endpoint or a bundle.
+returned a signed receipt. Smithery takes an HTTPS endpoint or such a bundle;
+neither has been submitted there.
+
+The server is listed on Glama at `dogrucanemek-alt/cedulon`, where the license
+grades A and quality is untested: Glama tests a server by building and running
+it, which needs a Glama release, which needs a Docker build. The `Dockerfile`
+here is that build — the image was built and the server inside it answered
+`initialize`, listed five tools, and returned a signed receipt — but the release
+itself has not been made.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
 where `0.2.2` is the current version. `server.json` is the entry it was published

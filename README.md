@@ -108,6 +108,17 @@ artifact, not source.
 `smithery.yaml` is the older ecosystem format and is not submitted; Smithery's
 current instructions take an HTTPS endpoint or an `.mcpb` bundle.
 
+There is also a `Dockerfile`, for hosts and directories that build the
+repository rather than install the package:
+
+```bash
+docker build -t cedulon .
+docker run -i --rm cedulon
+```
+
+The protocol is the container's stdin/stdout, so it needs `-i`. It needs no
+credentials: the server settles on a mock rail and holds no wallet.
+
 
 ## Layout
 

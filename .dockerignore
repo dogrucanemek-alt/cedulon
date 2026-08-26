@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+**/dist
+build
+.git
+.github
+docs
+examples
+spec
+tests
+*.tgz
+*.log
