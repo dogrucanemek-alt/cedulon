@@ -19,9 +19,14 @@ dependencies; `@cedulon/mcp-server` depends only on the official MCP SDK.
 
 Eight packages are published on npm, so the server runs without a clone:
 `npx -y @cedulon/mcp-server`. Seven are at `0.2.0`; `@cedulon/mcp-server` is at
-`0.2.2`. Those versions carry the requirements added in `-01`, including the
+`0.2.3`. Those versions carry the requirements added in `-01`, including the
 pinned-key comparison and the window checks; `0.1.0` predates them.
-`@cedulon/base-extract` and `@cedulon/mcp-guard` are not published.
+
+`@cedulon/base-extract` and `@cedulon/mcp-guard` are not published and are
+marked `private`, so a workspace publish skips them rather than relying on
+this sentence staying true. Neither is packaged for release: their entry
+points name TypeScript sources, which works inside the repo and would not
+work outside it. `demo:live` uses `base-extract` from the workspace.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
 where `0.2.2` is the current version. `server.json` is the entry it was published
