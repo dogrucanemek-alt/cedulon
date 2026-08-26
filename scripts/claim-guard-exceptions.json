@@ -1,0 +1,17 @@
+[
+  {
+    "file": "docs/EXTERNAL_REVIEW.md",
+    "contains": "81 passing tests did not notice",
+    "reason": "Historical record of a past failure mode, not a live suite-size claim. Updating the number would falsify the timeline."
+  },
+  {
+    "file": "docs/EXTERNAL_REVIEW.md",
+    "contains": "all 97 tests passed",
+    "reason": "Historical record of what Iman re-ran at commit bdddc4c, not a claim about the current tree."
+  },
+  {
+    "file": "docs/RELEASE_MANIFEST_00.md",
+    "contains": "81/81 passing",
+    "reason": "Snapshot of the frozen -00 release at that commit. The sentence is dated by 'at this commit'; it is not a live claim."
+  }
+]
