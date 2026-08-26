@@ -12,6 +12,16 @@ const TOOLS = [
     name: "cedulon_spend",
     description:
       "Policy-gated spend on the mock rail. Allow returns a signed COSE receipt JSON. Deny returns the fail-closed reason.",
+    annotations: {
+      title: "Spend on the mock rail",
+      // Appends a receipt and consumes window budget. It overwrites nothing,
+      // and repeating it spends again, so it is neither destructive nor
+      // idempotent. No socket is opened; see openWorldHint below.
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -29,6 +39,11 @@ const TOOLS = [
     name: "cedulon_audit",
     description:
       "Reconcile the in-process receipt chain and checkpoint against the rail extract. Returns audit: balanced or findings.",
+    annotations: {
+      title: "Audit the receipt chain",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -54,6 +69,11 @@ const TOOLS = [
     name: "cedulon_verify_receipt",
     description:
       "Verify a spend receipt COSE_Sign1 (and payee countersignature when present).",
+    annotations: {
+      title: "Verify a spend receipt",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -70,11 +90,21 @@ const TOOLS = [
     name: "cedulon_export_ledger",
     description:
       "Export receipts, checkpoint, and rail extract in the same JSON shape as npm run demo:export.",
+    annotations: {
+      title: "Export the ledger",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
   },
   {
     name: "cedulon_status",
     description: "Server version, policy summary, receipt count, and chain head hash.",
+    annotations: {
+      title: "Server status",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
   },
 ] as const;

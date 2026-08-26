@@ -196,6 +196,41 @@ describe("mcp-server stdio JSON-RPC", () => {
     }
   });
 
+  it("every tool carries the annotations the directory requires", async () => {
+    // The Anthropic connector directory rejects a submission whose tools lack
+    // a title and the applicable read-only or destructive hint. Reading them
+    // off the wire is what a reviewer's client does.
+    const rpc = new StdioRpc();
+    try {
+      await rpc.handshake();
+      const listed = await rpc.request("tools/list", {});
+      const tools = (
+        listed.result as {
+          tools: Array<{
+            name: string;
+            annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean };
+          }>;
+        }
+      ).tools;
+      for (const tool of tools) {
+        const a = tool.annotations;
+        assert.ok(a, `${tool.name} has no annotations`);
+        assert.equal(typeof a.title, "string", `${tool.name} has no annotation title`);
+        assert.notEqual(a.title, "", `${tool.name} has an empty annotation title`);
+        assert.equal(typeof a.readOnlyHint, "boolean", `${tool.name} declares no readOnlyHint`);
+        if (a.readOnlyHint === false) {
+          assert.equal(
+            typeof a.destructiveHint,
+            "boolean",
+            `${tool.name} writes, so it must say whether it is destructive`,
+          );
+        }
+      }
+    } finally {
+      rpc.close();
+    }
+  });
+
   it("spend allow returns a signed receipt; over-limit is deny", async () => {
     const rpc = new StdioRpc();
     try {
