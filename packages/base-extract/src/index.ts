@@ -185,6 +185,21 @@ function asLogs(value: unknown): RpcLog[] {
   return value as RpcLog[];
 }
 
+export {
+  BASE_SEPOLIA_CHAIN_ID,
+  ERC20_TRANSFER_SELECTOR,
+  argvRequestsKey,
+  broadcastAllowed,
+  encodeTransferCalldata,
+  executeWrite,
+  formatWriteResult,
+  loadWriteKey,
+  planTransfer,
+  type BroadcastFn,
+  type IntendedTransfer,
+  type WriteResult,
+} from "./write-plan.ts";
+
 function dedupeLogs(logs: RpcLog[]): RpcLog[] {
   const seen = new Set<string>();
   const out: RpcLog[] = [];

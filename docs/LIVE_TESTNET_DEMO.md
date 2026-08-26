@@ -86,8 +86,37 @@ That is the Phase 2 claim in miniature: an authenticated rail extract
 turns an ungated transfer into a finding. Completeness is still
 conditional until the extract itself is signed.
 
-## 5. What this repository will not do
+## 5. Write path (dry-run)
 
-- It will not send a transaction.
+The repository can now construct the transfer it would send. Default is
+`--dry-run` in all but name: `npm run demo:write` prints the intended
+Base Sepolia USDC transfer and does not sign or publish.
+
+```bash
+npm run demo:write -- --from "$ADDRESS" --to "$PAYEE" --amount 1000000
+```
+
+Expected stdout starts with `dry-run: would send` and ends with
+`broadcast=refused (need --broadcast and CEDULON_ALLOW_BROADCAST=1)`.
+No RPC is opened. No key is read.
+
+Publishing is fail-closed. Both of these must be present, or nothing
+is sent:
+
+- `--broadcast` on the command line
+- `CEDULON_ALLOW_BROADCAST=1` in the environment
+
+The key is never an argv flag. Set `CEDULON_WRITE_KEY_FILE` to a file
+outside the repository (`.write-key` is gitignored) or `CEDULON_WRITE_KEY`
+in the environment. Passing `--key` is refused.
+
+A fixture with a matching receipt is the measure for this path: a Base
+USDC settlement whose `ref` is on a spend receipt must not produce
+`settlement-without-receipt`. That test is offline.
+
+## 6. What this repository will not do
+
+- It will not send a transaction unless both publish gates above are
+  set, and this runbook does not set them.
 - It will not embed an RPC URL or a private key.
 - `npm run test:all` stays offline.

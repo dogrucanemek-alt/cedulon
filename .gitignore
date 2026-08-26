@@ -7,6 +7,7 @@ build/
 coverage/
 *.log
 .env
+.write-key
 .DS_Store
 .turbo
 spec/author-tools-*-response.bin
