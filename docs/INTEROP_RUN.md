@@ -1,11 +1,14 @@
 # Interop run
 
-Pin: `6d15834` is the last content commit of this package (interop doc,
-finding object, and the dry-run write path). A runner who was mailed a
-SHA should check out that SHA; it contains this file.
+Pin: check out `080c872`. It carries this file, the finding object, the
+dry-run write path, and the line-ending fix in the documentation test
+helper, so every command below runs from it. Later commits may exist;
+the pin is the point both sides agreed to compare, not a claim about the
+tip of the branch. A runner who was mailed a different SHA should use
+that one instead.
 
 ```
-PIN=6d15834
+PIN=080c872
 ```
 
 This is a clean-clone run for an independent implementer. It is not the

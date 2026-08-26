@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -16,6 +17,19 @@ describe("interop-run doc", () => {
   it("does not restate the suite size", () => {
     const claim = doc.match(/\*?\*?\d+\*?\*?\s+tests?\s+passing/i);
     assert.equal(claim, null, `remove the hard-coded count ${JSON.stringify(claim?.[0])}`);
+  });
+
+  it("pins a commit this clone can actually check out", () => {
+    const pin = doc.match(/^PIN=([0-9a-f]{7,40})$/m)?.[1];
+    assert.ok(pin, "the doc must carry a PIN= line");
+    // A rewritten or never-pushed SHA reaches the runner as a dead pin.
+    // Resolving it here is what a runner's `git checkout` would do.
+    const type = execFileSync("git", ["cat-file", "-t", `${pin}^{commit}`], {
+      cwd: root,
+      encoding: "utf8",
+    }).trim();
+    assert.equal(type, "commit", `PIN=${pin} does not resolve to a commit`);
+    execFileSync("git", ["merge-base", "--is-ancestor", pin, "HEAD"], { cwd: root });
   });
 
   it("names the required commands", () => {
