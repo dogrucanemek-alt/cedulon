@@ -13,7 +13,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "build:packages": "npm run build -w @cedulon/cose && npm run build -w @cedulon/core && npm run build -w @cedulon/receipts && npm run build -w @cedulon/manifest && npm run build -w @cedulon/checkpoint && npm run build -w @cedulon/x402-adapter && npm run build -w @cedulon/audit && npm run build -w @cedulon/mcp-server",
-    "test:all": "npm run build:packages && node --experimental-strip-types --test tests/fail-closed.test.ts tests/policy.test.ts tests/replay-manifest.test.ts tests/receipts-demo.test.ts tests/cose.test.ts tests/checkpoint.test.ts tests/audit.test.ts tests/extract-binding.test.ts tests/mcp-server.test.ts tests/base-extract.test.ts",
+    "test:all": "npm run build:packages && node --experimental-strip-types --test tests/fail-closed.test.ts tests/policy.test.ts tests/replay-manifest.test.ts tests/receipts-demo.test.ts tests/cose.test.ts tests/checkpoint.test.ts tests/audit.test.ts tests/extract-binding.test.ts tests/mcp-server.test.ts tests/base-extract.test.ts tests/release-manifest.test.ts",
     "extract": "node --experimental-strip-types packages/base-extract/src/cli.ts",
     "mcp": "node --experimental-strip-types packages/mcp-server/src/index.ts",
     "tamper": "node --experimental-strip-types examples/demo/src/tamper.ts",

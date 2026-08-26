@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { audit, type Finding } from "@cedulon/audit";
 import {
@@ -17,7 +18,10 @@ import {
   type RailSettlement,
 } from "@cedulon/x402-adapter";
 
-export const MCP_SERVER_VERSION = "0.2.0";
+// Read from package.json rather than restating it: the version reaches clients
+// through `initialize` and through `cedulon_status`, and a second hand-written
+// copy drifts the moment a release bumps only one of them.
+export const MCP_SERVER_VERSION: string = createRequire(import.meta.url)("../package.json").version;
 
 export type SpendArgs = {
   amount: string;

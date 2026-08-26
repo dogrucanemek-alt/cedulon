@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const serverEntry = join(root, "packages", "mcp-server", "src", "index.ts");
+const packageVersion: string = JSON.parse(
+  readFileSync(join(root, "packages", "mcp-server", "package.json"), "utf8"),
+).version;
 
 const TOOL_NAMES = [
   "cedulon_spend",
@@ -137,6 +141,22 @@ class StdioRpc {
 }
 
 describe("mcp-server stdio JSON-RPC", () => {
+  it("introduces itself as the version it ships as", async () => {
+    // 0.2.1 went to npm announcing 0.2.0, because the version was written out
+    // a second time in the source and only the manifest was bumped. Clients see
+    // this string, and so does cedulon_status.
+    const rpc = new StdioRpc();
+    try {
+      const init = await rpc.handshake();
+      assert.equal(init.error, undefined);
+      const info = (init.result as { serverInfo: { name: string; version: string } }).serverInfo;
+      assert.equal(info.name, "cedulon");
+      assert.equal(info.version, packageVersion);
+    } finally {
+      rpc.close();
+    }
+  });
+
   it("initialize then tools/list exposes five named schemas", async () => {
     const rpc = new StdioRpc();
     try {
@@ -256,7 +276,7 @@ describe("mcp-server stdio JSON-RPC", () => {
         receiptCount?: number;
         chainHead?: string | null;
       };
-      assert.equal(beforeBody.version, "0.2.0");
+      assert.equal(beforeBody.version, packageVersion);
       assert.equal(beforeBody.policy?.maxAmount, "10");
       assert.equal(beforeBody.receiptCount, 0);
       assert.equal(beforeBody.chainHead, null);
