@@ -1,5 +1,9 @@
 # Cedulon Threat Model
 
+Requirement texts are defined in the Internet-Draft Security
+Considerations. This file is the threat narrative and the
+traceability map.
+
 This document is an **informative** companion to
 `spec/draft-dogru-cedulon-01.md`. The Internet-Draft Security
 Considerations section is authoritative for protocol requirements.

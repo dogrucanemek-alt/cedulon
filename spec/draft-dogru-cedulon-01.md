@@ -46,13 +46,25 @@ informative:
   RFC7942:
   RFC9110:
   RFC9421:
-  BATES-ATTP:
+  BATES-ATP:
     title: "Agent Transaction Protocol (ATP)"
     author:
       - ins: D. Bates
         name: David Asher Bates
     date: 2026-05
-    target: https://datatracker.ietf.org/doc/draft-bates-atp/00/
+    target: https://datatracker.ietf.org/doc/html/draft-bates-atp
+  X402:
+    title: "x402: An Open Standard for Internet-Native Payments"
+    author:
+      - org: x402 Foundation
+    date: 2026
+    target: https://www.x402.org/
+  AP2:
+    title: "Agent Payments Protocol (AP2)"
+    author:
+      - org: Google Agentic Commerce
+    date: 2025-09
+    target: https://ap2-protocol.org/ap2/specification/
   GRIGG:
     title: "Triple Entry Accounting"
     author:
@@ -106,14 +118,14 @@ informative:
       - ins: E. C. Dogru
         name: Emek Can Dogru
     date: 2026-08
-    target: https://github.com/dogrucanemek-alt/cedulon/blob/master/spec/draft-dogru-cedulon-reattestation-00.md
+    target: https://github.com/dogrucanemek-alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/spec/draft-dogru-cedulon-reattestation-00.md
   STREAMING:
     title: "Cedulon Streaming Reconciliation: Continuous Completeness for Agent Spend"
     author:
       - ins: E. C. Dogru
         name: Emek Can Dogru
     date: 2026-08
-    target: https://github.com/dogrucanemek-alt/cedulon/blob/master/spec/draft-dogru-cedulon-streaming-00.md
+    target: https://github.com/dogrucanemek-alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/spec/draft-dogru-cedulon-streaming-00.md
 ---
 
 --- abstract
@@ -143,10 +155,10 @@ author's eventual intended track, if the work is taken up, is a
 Standards Track profile of COSE {{RFC9052}} and CWT {{RFC8392}} for
 agent-spend receipts. This -01 does not claim IETF consensus.
 
-Agents can now pay. Open HTTP 402 protocols attach stablecoin settlement
-to ordinary requests. Card networks and processors issue agent-scoped
-tokens. Google's Agent Payments Protocol (AP2) binds user intent to
-signed mandates.
+Agents can now pay. Open HTTP 402 protocols {{X402}} attach
+stablecoin settlement to ordinary requests. Card networks and
+processors issue agent-scoped tokens. Google's Agent Payments
+Protocol (AP2) {{AP2}} binds user intent to signed mandates.
 
 What is missing is an interoperable **audit layer**: a machine-checkable
 answer to "was this spend allowed by policy, against which offer, and
@@ -172,7 +184,7 @@ precise enough that two implementations reach the same finding on the
 same evidence. The novelty is interoperability, not the idea.
 
 Neighbor drafts are complementary, not substitutes.
-draft-bates-atp {{BATES-ATTP}} covers tamper-evident causal lineage as
+draft-bates-atp {{BATES-ATP}} covers tamper-evident causal lineage as
 a signed DAG. Cedulon is the completeness layer: a spend that never
 produced a receipt is visible when an authenticated rail extract is
 reconciled (`MUST-T10-1`).
@@ -605,26 +617,42 @@ for reference, not to require an evaluation order: no step
 short-circuits another, and an implementation may evaluate them in any
 order that produces the same set of findings.
 
+When a step names an identifier in backticks, that identifier
+SHOULD be used for the condition in diagnostic output. The
+normative requirement is the behaviour: report the condition,
+identified by the `ref` or other handle given in the step. The
+identifiers are not an interoperability surface.
+
 1. Establish the subject of the audit. When an extract is supplied,
    the settlement records it carries are the ones reconciled; a
    settlement list from any other source MUST NOT be substituted for
    them (`MUST-T10-12`). If the caller supplies both and they differ,
-   emit `extract-settlement-mismatch` and reconcile the extract.
+   the verifier MUST report that the caller-supplied list disagrees
+   with the extract, and MUST still reconcile the extract. The
+   identifier `extract-settlement-mismatch` SHOULD be used for this
+   condition in diagnostic output.
 2. Verify the extract signature against the out-of-band rail key
-   (`MUST-T10-8`, `MUST-T10-9`). If no key is pinned, emit
-   `unauthenticated-extract` and treat the guarantee as conditional
-   (`MUST-T10-7`). If a key is pinned and cannot be decoded, emit
-   `trust-key-unreadable`. If a key is pinned and the signature does
-   not verify against it, or verifies against a different key, emit
-   `extract-key-mismatch`. A finding that puts the extract itself in
-   doubt MUST prevent an unconditional guarantee.
-3. Check scope. Report each settlement record outside the declared
-   window as `extract-scope-mismatch` (`MUST-T10-10`), and, when the
-   verifier states an expected account, rail, or window, report an
-   extract that does not cover it as `extract-scope-mismatch`
-   (`MUST-T10-11`). If the verifier stated no period, emit
-   `unstated-audit-window` and treat the guarantee as conditional
-   (`MUST-T10-15`).
+   (`MUST-T10-8`, `MUST-T10-9`). If no key is pinned, the verifier
+   MUST treat the completeness guarantee as conditional
+   (`MUST-T10-7`). The identifier `unauthenticated-extract` SHOULD
+   be used for this condition in diagnostic output. If a key is
+   pinned and cannot be decoded, the verifier MUST report that the
+   pinned key is unreadable. The identifier `trust-key-unreadable`
+   SHOULD be used for this condition. If a key is pinned and the
+   signature does not verify against it, or verifies against a
+   different key, the verifier MUST report that the extract is not
+   signed by the pinned key. The identifier `extract-key-mismatch`
+   SHOULD be used for this condition. A finding that puts the
+   extract itself in doubt MUST prevent an unconditional guarantee.
+3. Check scope. The verifier MUST report each settlement record
+   whose `timestampMs` falls outside the declared window, identified
+   by that record's `ref` (`MUST-T10-10`). When the verifier states
+   an expected account, rail, or window, it MUST report an extract
+   that does not cover it (`MUST-T10-11`). The identifier
+   `extract-scope-mismatch` SHOULD be used for both conditions. If
+   the verifier stated no period, it MUST treat the guarantee as
+   conditional (`MUST-T10-15`). The identifier
+   `unstated-audit-window` SHOULD be used for this condition.
 4. Decode each Spend Receipt COSE_Sign1. Reject if Ed25519 verify
    fails, if `kid` does not match the configured issuer key, if the
    content type is not the receipt type, or if the decoded claim map
@@ -637,27 +665,42 @@ order that produces the same set of findings.
    other check regardless of window.
 6. Walk receipts in issuer order. The first `prevReceiptHash` MUST
    be null. Each later `prevReceiptHash` MUST equal `receiptHash` of
-   the previous receipt. A miss is `receipt-chain-break`.
+   the previous receipt. A miss MUST be reported as a break in the
+   receipt chain. The identifier `receipt-chain-break` SHOULD be
+   used for this condition.
 7. Index settled receipts and extract records by `ref`. A `ref`
-   that appears more than once on either side is `duplicate-ref`
-   (`MUST-T10-6`).
+   that appears more than once on either side MUST be reported as a
+   repeated reference (`MUST-T10-6`). The identifier `duplicate-ref`
+   SHOULD be used for this condition.
 8. For each `ref` that appears exactly once on each side, require a
    one-to-one match on `ref` AND `amount` AND `currency`
-   (`MUST-T10-1`). Amount or currency mismatch is
-   `settlement-mismatch`. A settlement with no receipt is
-   `settlement-without-receipt` (`MUST-T10-2`). A settled receipt
-   with no extract row is `receipt-without-settlement`
-   (`MUST-T10-3`). A settled receipt with a null rail ref is
-   `settled-without-ref`.
-9. A `ref` reported as `duplicate-ref` MUST still be reconciled by
-   amount rather than dropped from the comparison
+   (`MUST-T10-1`). Amount or currency mismatch MUST be reported as
+   a settlement that does not match its receipt, identified by that
+   `ref`. The identifier `settlement-mismatch` SHOULD be used for
+   this condition. A settlement with no receipt MUST be reported as
+   lacking a receipt, identified by its `ref` (`MUST-T10-2`). The
+   identifier `settlement-without-receipt` SHOULD be used for this
+   condition. A settled receipt with no extract row MUST be reported
+   as a completeness failure (`MUST-T10-3`). The identifier
+   `receipt-without-settlement` SHOULD be used for this condition.
+   A settled receipt with a null rail ref MUST be reported as
+   settled without a rail reference. The identifier
+   `settled-without-ref` SHOULD be used for this condition.
+9. A `ref` already reported as repeating MUST still be reconciled
+   by amount rather than dropped from the comparison
    (`MUST-T10-13`). For each currency under that `ref`, compare the
    total settled against the total receipted. A settled total that
-   exceeds the receipted total is `settlement-without-receipt`, and
-   the finding MUST state the unaccounted amount. An amount that
-   cannot be parsed as an integer is `malformed-amount`; a verifier
-   MUST still report findings for the remaining records rather than
-   abandon the audit.
+   exceeds the receipted total MUST be reported as a settlement
+   lacking a receipt, and the finding MUST state the unaccounted
+   amount. The identifier `settlement-without-receipt` SHOULD be
+   used for this condition. A settled total that is less than the
+   receipted total MUST be reported as a settlement that does not
+   match its receipt, identified by that `ref`. The identifier
+   `settlement-mismatch` SHOULD be used for this condition. An
+   amount on that repeating `ref` that cannot be parsed as an
+   integer MUST be reported without abandoning the audit; the
+   identifier `malformed-amount` SHOULD be used for this condition.
+   A verifier MUST still report findings for the remaining records.
 10. Aborted receipts are not matched to extract rows and are not
     added to totals.
 11. Decode each checkpoint. Reject a failed signature. Require
@@ -665,39 +708,54 @@ order that produces the same set of findings.
    receipts in `[startMs, endMs)` as defined above
    (`MUST-T11-2`).
 12. Every chained receipt MUST fall in exactly one checkpoint
-    window. A gap or double count is `window-coverage`
-    (`MUST-T11-7`, `MUST-T11-8`).
+    window. A gap or double count MUST be reported as a window
+    coverage failure (`MUST-T11-7`, `MUST-T11-8`). The identifier
+    `window-coverage` SHOULD be used for this condition.
 13. Walk checkpoints in epoch order. `prevCheckpointHash` MUST
     equal the SHA-256 of the previous checkpoint COSE bytes, or null
     for genesis (`MUST-T11-4`).
 14. If two successfully verified checkpoints share an epoch number
-    and have different hashes, emit `equivocation`
-    (`MUST-T11-3`).
-15. If any fail-severity finding exists, the audit MUST fail
-    (`MUST-T10-4`).
+    and have different hashes, the verifier MUST report
+    equivocation (`MUST-T11-3`). The identifier `equivocation`
+    SHOULD be used for this condition.
+15. If any finding remains that is not a warning (a warning is a
+    condition that only makes the completeness guarantee
+    conditional), the audit MUST fail (`MUST-T10-4`).
 
 ## Finding codes
 
-| Code | Severity | Meaning |
+The identifiers below are for diagnostic output. They are not an
+interoperability surface. A finding object that can be carried on
+the wire is outside the scope of this document and may be defined
+later. Two implementations interoperate when they accept the same
+inputs and fail or warn on the same conditions, not when they
+print the same strings.
+
+A condition that makes the audit fail is a finding. A condition
+that only makes the completeness guarantee conditional is a
+warning. Warnings MUST still appear in operator-facing output
+(`MUST-T10-14`).
+
+| Code | Effect | Meaning |
 |---|---|---|
-| settlement-without-receipt | fail | Extract row has no matching settled receipt |
-| receipt-without-settlement | fail | Settled receipt ref is not on the extract |
-| settlement-mismatch | fail | Same ref, different amount or currency |
-| duplicate-ref | fail | Ref appears more than once on one side |
-| settled-without-ref | fail | `outcome` is settled and `x402PaymentRef` is null |
-| receipt-chain-break | fail | Signature or `prevReceiptHash` failed |
-| checkpoint-total-mismatch | fail | Totals, count, signature, or checkpoint chain failed |
-| checkpoint-head-mismatch | fail | `chainHeadHash` is not the last in-window receipt |
-| equivocation | fail | Two distinct hashes for one epoch |
-| window-coverage | fail | Gap, overlap, or non-adjacent / non-consecutive windows |
-| unauthenticated-extract | warn | No pinned rail key, or the extract has no verifiable signature; guarantee is conditional |
-| extract-key-mismatch | fail | Extract is signed by a key other than the pinned rail key, or does not verify against it |
-| trust-key-unreadable | fail | The pinned rail key could not be decoded; the verifier's configuration is at fault |
-| extract-scope-mismatch | fail | A record falls outside the declared window, or the extract does not cover the expected account, rail, or window |
-| extract-settlement-mismatch | fail | A caller-supplied settlement list disagrees with the extract; the extract is authoritative |
-| malformed-amount | fail | An `amount` could not be parsed as an integer |
-| unstated-audit-window | warn | The verifier stated no period, so the extract defined its own; guarantee is conditional |
-| countersign-bad | fail | Present payee countersignature failed verify |
+| settlement-without-receipt | audit fails | Extract row has no matching settled receipt, or a repeating `ref` settled more than it receipted |
+| receipt-without-settlement | audit fails | Settled receipt ref is not on the extract |
+| settlement-mismatch | audit fails | Same `ref`, different amount or currency, including a repeating `ref` that settled less than it receipted |
+| duplicate-ref | audit fails | Ref appears more than once on one side |
+| settled-without-ref | audit fails | `outcome` is settled and `x402PaymentRef` is null |
+| receipt-chain-break | audit fails | Signature or `prevReceiptHash` failed |
+| checkpoint-total-mismatch | audit fails | Totals, count, signature, or checkpoint chain failed |
+| checkpoint-head-mismatch | audit fails | `chainHeadHash` is not the last in-window receipt |
+| equivocation | audit fails | Two distinct hashes for one epoch |
+| window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows |
+| unauthenticated-extract | guarantee conditional | No pinned rail key, or the extract has no verifiable signature |
+| extract-key-mismatch | audit fails | Extract is signed by a key other than the pinned rail key, or does not verify against it |
+| trust-key-unreadable | audit fails | The pinned rail key could not be decoded; the verifier's configuration is at fault |
+| extract-scope-mismatch | audit fails | A record falls outside the declared window, or the extract does not cover the expected account, rail, or window |
+| extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract; the extract is authoritative |
+| malformed-amount | audit fails | An amount on a `ref` already reported as repeating that could not be parsed as an integer |
+| unstated-audit-window | guarantee conditional | The verifier stated no period, so the extract defined its own |
+| countersign-bad | audit fails | Present payee countersignature failed verify |
 
 A finding that puts the extract itself in doubt (`extract-key-mismatch`,
 `trust-key-unreadable`, `extract-scope-mismatch`, or
@@ -788,68 +846,154 @@ This section is authoritative for the protocol requirements in this
 document. The companion repository file `THREAT_MODEL.md` is
 informative and MUST NOT be read as overriding this section.
 
-Prompt injection (T1):
-: The PDP MUST use structured fields only (`MUST-T1-1`). Unbound
-  spend MUST be `noManifest` and still gated (`MUST-T1-2`). Hosts
-  SHOULD confirm first-use payees (`SHOULD-T1-3`).
+Requirement identifiers take the form KEYWORD-Tn-k, where KEYWORD
+is MUST, SHOULD, or MAY, n is the threat number in this section,
+and k is a sequence number within that threat. MUST-T8-custody is
+the custody prohibition under T8. The tables below define the
+requirement text those citations refer to.
 
-Runaway spend (T2):
-: Velocity and limits are mandatory (`MUST-T2-1`, `MUST-T2-2`).
-  Fail-closed deny on engine fault (`MUST-T2-3`). Denied attempts
-  MUST NOT count as success (`MUST-T2-4`).
+## T1: Prompt injection leads to unauthorized spend
 
-Replay (T3):
-: Unique nonce on allow (`MUST-T3-1`); reuse denied
-  (`MUST-T3-2`); expired manifest denied (`MUST-T3-3`);
-  single-use hashed decision (`MUST-T3-4`). Nonce stores SHOULD
-  persist outside tests (`SHOULD-T3-5`).
+| ID | Requirement |
+|---|---|
+| MUST-T1-1 | The PDP MUST decide from structured request fields and stored policy, not from model-generated prose. |
+| MUST-T1-2 | A spend that is not bound to a verified Trade Manifest MUST be marked `no-manifest` on the Spend Receipt and MUST still be subject to limit, velocity, and scope policy. |
+| SHOULD-T1-3 | Hosts SHOULD require a human confirmation channel for first-use payees. |
+| MAY-T1-4 | An implementation MAY refuse all `no-manifest` spend. |
 
-Forgery (T4):
-: Signed canonical receipts (`MUST-T4-1`, `MUST-T4-2`) with the
-  claim set in `MUST-T4-3`, `MUST-T4-4`, and `MUST-T4-7`.
-  Protected-header `kid` is mandatory (`MUST-T4-8`). Hash chaining
-  is recommended (`SHOULD-T4-5`).
+## T2: Runaway agent (loop spend)
 
-Bypass (T5):
-: Single gated interface (`MUST-T5-1`). No rail secrets in prompts
-  (`MUST-T5-2`). Hosts SHOULD isolate the PDP (`SHOULD-T5-3`).
+| ID | Requirement |
+|---|---|
+| MUST-T2-1 | Policy MUST express a maximum payment count per configured time window (velocity). |
+| MUST-T2-2 | Policy MUST express a maximum amount per payment and a maximum cumulative amount per window. |
+| MUST-T2-3 | If the PDP is unreachable, uninitialized, or throws during evaluation, the spend MUST be denied (fail-closed, default deny). |
+| MUST-T2-4 | A denied attempt MUST NOT increment the allowed-spend counters as if it had succeeded. |
+| SHOULD-T2-5 | Implementations SHOULD emit a stable reason code for velocity and limit denials. |
 
-TOCTOU (T6):
-: Settlement fields MUST match the six-field decision hash
-  (`MUST-T6-1`). The allow is a COSE_Sign1 Decision Token
-  (`MUST-T6-4`) consumed on first use (`MUST-T6-2`). A failed
-  signature or expired token MUST be rejected (`MUST-T6-5`).
+## T3: Replay of payment authority
 
-Key leakage (T7):
-: Secret key material MUST NOT appear in artifacts (`MUST-T7-1`).
-  Examples MUST use mock keys (`MUST-T7-2`). Production SHOULD use
-  an HSM or OS key store (`SHOULD-T7-3`).
+| ID | Requirement |
+|---|---|
+| MUST-T3-1 | Every spend attempt that the PDP allows MUST include a nonce that the implementation has not accepted before. |
+| MUST-T3-2 | A second attempt that reuses a nonce MUST be denied. |
+| MUST-T3-3 | A Trade Manifest MUST carry an expiry; a spend against an expired manifest MUST be denied. |
+| MUST-T3-4 | A PDP allow decision MUST be bound to a hash of the request fields it evaluated and MUST be single-use. |
+| SHOULD-T3-5 | Nonce stores SHOULD persist across process restart when the deployment is not a test fixture. |
 
-Counterparty (T8):
-: Manifest bind (`MUST-T8-1`, `MUST-T8-2`). Evidence bundle
-  (`MUST-T8-3`) is not an award (`MUST-T8-4`).
-  `manifestHash` is the SHA-256 of the signed COSE bytes
-  (`MUST-T8-7`). A present payee countersignature MUST verify
-  (`MUST-T8-8`); absence is allowed (`MAY-T8-9`).
+## T4: Receipt forgery or repudiation
 
-Privacy (T9):
-: See {{privacy}}.
+| ID | Requirement |
+|---|---|
+| MUST-T4-1 | A Spend Receipt MUST be signed by the Receipt Issuer over a canonical encoding of its claims. |
+| MUST-T4-2 | Verifiers MUST reject a receipt whose signature does not validate or whose canonical bytes do not match the signed payload. |
+| MUST-T4-3 | A Spend Receipt MUST include `payer`, `payee`, `amount`, `currency`, `policyHash`, `timestampMs`, and `nonce`. |
+| MUST-T4-4 | A Spend Receipt MUST include `manifestHash` or an explicit `noManifest` flag, never an ambiguous empty hash. Empty optional values are CBOR null; labels are never absent. |
+| SHOULD-T4-5 | Receipts SHOULD form a hash chain (`prevReceiptHash`) so omission is detectable within one issuer stream. |
+| MAY-T4-6 | Parties MAY register the signed receipt as a SCITT statement to obtain a COSE receipt. |
+| MUST-T4-7 | A Spend Receipt MUST include `outcome` (`settled` or `aborted`). A settled receipt MUST have a non-null rail ref. Aborted receipts MUST NOT enter checkpoint totals. |
+| MUST-T4-8 | COSE_Sign1 protected headers MUST use alg -19 (Ed25519), a mandatory `kid`, and a payload-specific content type. Verifiers MUST reject a `kid` that does not match the configured issuer key. |
 
-Rail bypass completeness (T10):
-: Verifiers MUST reconcile an authenticated extract to receipts
-  with one-to-one `ref`+amount+currency matching
-  (`MUST-T10-1`, `MUST-T10-6`, `MUST-T10-7`) and MUST fail the
-  audit when any fail-severity finding exists (`MUST-T10-4`).
-  See {{reconciliation}}.
+## T5: Policy bypass via direct rail access
 
-Checkpoint suppression (T11):
-: Checkpoints MUST be signed and chained (`MUST-T11-1`,
-  `MUST-T11-4`). Totals, count, and `chainHeadHash` MUST match
-  the half-open window (`MUST-T11-2`, `MUST-T11-7`).
-  Equivocation MUST be reported (`MUST-T11-3`). Continuity and
-  prefix-deletion detection that go beyond the presented chain are
-  **conditional** on an external transparency witness
-  (`MUST-T11-9`).
+| ID | Requirement |
+|---|---|
+| MUST-T5-1 | The agent-facing spend interface MUST invoke the PDP and MUST NOT expose a parallel ungated rail call to the model. |
+| MUST-T5-2 | Rail credentials, wallet handles, and facilitator tokens MUST NOT be placed in tool results or prompts. |
+| SHOULD-T5-3 | Hosts SHOULD run the PDP and signing keys in a process the model runtime cannot write. |
+| MAY-T5-4 | A deployment MAY use OS or hardware isolation between the model and the PDP. |
+
+## T6: TOCTOU between policy check and payment
+
+| ID | Requirement |
+|---|---|
+| MUST-T6-1 | Payment settlement MUST use the same six `requestHash` fields the PDP evaluated: amount, currency, payee, tool, nonce, and `manifestHash`. |
+| MUST-T6-2 | An allow decision MUST be consumed on the first settlement attempt, success or fail-closed abort, and MUST NOT authorize a later different request. |
+| SHOULD-T6-3 | Implementations SHOULD treat a decision older than a short TTL as expired. |
+| MUST-T6-4 | An allow Decision Token MUST be COSE_Sign1 with CWT private-use labels -70301..-70305 (`requestHash`, `policyHash`, `expiryMs`, `nonce`, `singleUseId`) and content type `application/cedulon-decision+cbor`. |
+| MUST-T6-5 | A party that accepts a Decision Token MUST reject a failed signature, a `kid` or content-type mismatch, a claim-map mismatch, or an expired `expiryMs`. |
+
+## T7: Signing-key leakage
+
+| ID | Requirement |
+|---|---|
+| MUST-T7-1 | Secret key material MUST NOT appear in receipts, manifests, logs, or example output. |
+| MUST-T7-2 | Example and test keys MUST be generated at runtime or stored as clearly fake fixtures, never as production secrets. |
+| SHOULD-T7-3 | Production deployments SHOULD use an HSM or OS key store and SHOULD rotate keys. |
+| MAY-T7-4 | Implementations MAY encrypt keys at rest. |
+
+## T8: Counterparty price gouging or defective delivery
+
+| ID | Requirement |
+|---|---|
+| MUST-T8-1 | A Trade Manifest MUST bind goods or service description, price, currency, acceptance-criteria hash, cancel condition, and expiry. |
+| MUST-T8-2 | A spend bound to a manifest MUST be denied if the requested amount or currency differs from the manifest. |
+| MUST-T8-3 | If delivery bytes do not hash to the acceptance-criteria hash, the implementation MUST be able to produce a Dispute Evidence Bundle containing the manifest, the spend receipt, and the delivery hash. |
+| MUST-T8-4 | The Dispute Evidence Bundle MUST NOT be described as an arbitral award or escrow release. |
+| MUST-T8-7 | `manifestHash` MUST be the SHA-256 of the signed Trade Manifest COSE bytes and MUST NOT include the issuer public key encoding. |
+| SHOULD-T8-5 | Manifests SHOULD reference an AP2 mandate hash when one exists. |
+| MAY-T8-6 | Parties MAY add an optional escrow actor as a third-party role interface; this project MUST NOT implement custody. |
+| MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
+| MUST-T8-8 | If a payee countersignature is present, a verifier MUST reject it when the signature fails, when `kid` or content type does not match the configured payee key, or when the payload is not the issuer COSE_Sign1 bytes. |
+| MAY-T8-9 | A payee MAY attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. |
+
+## MUST-T8-custody
+
+Implementations of this specification MUST NOT take custody of
+funds or operate escrow. See also {{escrow-role}}.
+
+## T9: PII leakage into the transparency log
+
+See also {{privacy}}.
+
+| ID | Requirement |
+|---|---|
+| MUST-T9-1 | A transparency encoding MUST support omitting or hashing payer/payee identifiers and MUST support amount redaction or range/bucket encoding. |
+| MUST-T9-2 | Implementations MUST NOT write raw government-ID, payment-instrument PAN, or street address fields into a public transparency statement. |
+| SHOULD-T9-3 | Default public anchors SHOULD publish `policyHash`, `manifestHash`, `receiptHash`, and timestamp rather than full claim sets. |
+| MAY-T9-4 | A private auditor MAY receive an unredacted receipt out of band. |
+
+## T10: Secret spend via rail bypass
+
+See {{reconciliation}}.
+
+| ID | Requirement |
+|---|---|
+| MUST-T10-1 | A verifier MUST match each extract settlement to a settled receipt on `ref` AND `amount` AND `currency`. |
+| MUST-T10-2 | A settlement with no matching receipt MUST be reported as a completeness failure identified by that settlement `ref`. |
+| MUST-T10-3 | A settled Spend Receipt whose `x402PaymentRef` is not on the extract MUST be reported as a completeness failure. |
+| MUST-T10-4 | An audit that has any fail-severity completeness finding MUST fail (non-zero status in the companion tool). |
+| SHOULD-T10-5 | Hosts SHOULD still apply T5 (no ungated rail in the model process). Completeness does not replace prevention. |
+| MUST-T10-6 | A `ref` that appears more than once among settled receipts or among extract rows MUST be reported as `duplicate-ref`. |
+| MUST-T10-7 | A verifier MUST obtain the extract from the rail or from a rail signature. With no pinned rail key, an unverifiable extract MUST be reported as `unauthenticated-extract` and makes the completeness guarantee conditional. With a pinned key, see MUST-T10-8: the extract MUST fail closed rather than warn. |
+| MUST-T10-8 | A verifier MUST obtain the rail public key out of band and MUST verify the extract signature against that key, not against a key the extract carries. Without such a key the guarantee is conditional. |
+| MUST-T10-9 | Keys MUST be compared by SubjectPublicKeyInfo DER encoding rather than by any text encoding. A pinned key that cannot be decoded MUST be reported as `trust-key-unreadable`, not as a key mismatch. |
+| MUST-T10-10 | Every settlement record whose `timestampMs` falls outside the extract's declared window MUST be reported as `extract-scope-mismatch`, identified by that record's `ref`. This check MUST run whether or not a key is pinned. |
+| MUST-T10-11 | When the verifier states an expected account, rail, or window, an extract that does not cover it MUST fail closed as `extract-scope-mismatch`. |
+| MUST-T10-12 | When an extract is supplied, the records it carries are the subject of reconciliation. A settlement list from another source MUST NOT be substituted; a disagreeing list MUST be reported as `extract-settlement-mismatch`. |
+| MUST-T10-13 | A `ref` reported as `duplicate-ref` MUST still be reconciled by aggregate amount per currency, and a shortfall MUST state the unaccounted amount. An unparseable amount MUST be reported as `malformed-amount` without aborting the audit. |
+| MUST-T10-14 | An implementation MUST surface the guarantee and any warnings in any human-readable audit report it produces, not only in a returned structure. |
+| MUST-T10-15 | A verifier that has not stated the period under audit MUST emit `unstated-audit-window` and MUST treat the guarantee as conditional, because an unstated period leaves the extract free to define its own. |
+| MUST-T10-16 | When an extract is supplied, only receipts whose `timestampMs` falls in its declared window are reconciled against it. A receipt outside that window MUST NOT be reported as a completeness failure against that extract. |
+
+In MUST-T10-4, a completeness finding that makes the audit fail is
+distinct from a warning that only makes the guarantee conditional.
+The verification algorithm states that distinction by behaviour
+({{reconciliation}}).
+
+## T11: Checkpoint suppression or rollback
+
+| ID | Requirement |
+|---|---|
+| MUST-T11-1 | An epoch checkpoint MUST be COSE-signed and MUST bind epoch number, time window, receipt count, chain-head hash, per-currency totals, and the previous checkpoint hash. |
+| MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the last in-window receipt hash. |
+| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. |
+| MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
+| SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
+| MAY-T11-6 | A test deployment MAY use an in-process append-only log as the witness. |
+| MUST-T11-7 | Checkpoint windows MUST be half-open `[startMs, endMs)`. Every chained receipt MUST fall in exactly one window. |
+| MUST-T11-8 | Presented checkpoint epochs MUST be consecutive and adjacent windows MUST meet at `endMs = next.startMs`. |
+| MUST-T11-9 | Prefix-deletion and suppression claims that go beyond the presented chain are conditional on an external transparency witness. |
 
 Issuer self-attestation:
 : A Receipt Issuer that also produces the only copy of the extract
@@ -1033,11 +1177,11 @@ not specify those profiles.
 
 # Informative Notes on Adjacent Protocols
 
-x402 uses HTTP 402 {{RFC9110}} to negotiate stablecoin payment. AP2
-uses signed mandates as verifiable credentials. Cedulon does not
-replace either protocol. Profiles built on HTTP Message Signatures
+x402 {{X402}} uses HTTP 402 {{RFC9110}} to negotiate stablecoin
+payment. AP2 {{AP2}} uses signed mandates as verifiable credentials.
+Cedulon does not replace either protocol. Profiles built on HTTP Message Signatures
 {{RFC9421}} authenticate bots; they are not a spend receipt.
-draft-bates-atp {{BATES-ATTP}} is a lineage neighbor. It does not
+draft-bates-atp {{BATES-ATP}} is a lineage neighbor. It does not
 define rail-extract completeness.
 
 draft-vauban-x402-stark-receipts {{VAUBAN}} specifies complementary
@@ -1066,8 +1210,9 @@ as adjacent work. Pablo Play found that a repeated reference hid the
 unaccounted amount, and filed a written reproduction. Neither reviewed
 this text, and any error in it is the author's.
 
-Field survey notes and the informative threat-model table in the
-companion repository helped shape the MUST identifiers used here.
+Field survey notes and the informative threat-model narrative in the
+companion repository helped shape the requirement identifiers used
+here. Those identifiers are defined in {{security}}.
 
 # Appendix A. Test Vectors {#vectors}
 {:numbered="false"}

@@ -37,7 +37,7 @@
     <abstract>
 
 
-<?line 119?>
+<?line 131?>
 
 <t>This document defines the Cedulon Protocol, an audit layer for
 agent-to-agent commerce. Payment rails such as HTTP 402 flows (x402) and
@@ -66,7 +66,7 @@ x402 or AP2; it sits above them.</t>
   <middle>
 
 
-<?line 137?>
+<?line 149?>
 
 <section anchor="introduction"><name>Introduction</name>
 
@@ -75,10 +75,10 @@ author's eventual intended track, if the work is taken up, is a
 Standards Track profile of COSE <xref target="RFC9052"/> and CWT <xref target="RFC8392"/> for
 agent-spend receipts. This -01 does not claim IETF consensus.</t>
 
-<t>Agents can now pay. Open HTTP 402 protocols attach stablecoin settlement
-to ordinary requests. Card networks and processors issue agent-scoped
-tokens. Google's Agent Payments Protocol (AP2) binds user intent to
-signed mandates.</t>
+<t>Agents can now pay. Open HTTP 402 protocols <xref target="X402"/> attach
+stablecoin settlement to ordinary requests. Card networks and
+processors issue agent-scoped tokens. Google's Agent Payments
+Protocol (AP2) <xref target="AP2"/> binds user intent to signed mandates.</t>
 
 <t>What is missing is an interoperable <strong>audit layer</strong>: a machine-checkable
 answer to "was this spend allowed by policy, against which offer, and
@@ -104,7 +104,7 @@ precise enough that two implementations reach the same finding on the
 same evidence. The novelty is interoperability, not the idea.</t>
 
 <t>Neighbor drafts are complementary, not substitutes.
-draft-bates-atp <xref target="BATES-ATTP"/> covers tamper-evident causal lineage as
+draft-bates-atp <xref target="BATES-ATP"/> covers tamper-evident causal lineage as
 a signed DAG. Cedulon is the completeness layer: a spend that never
 produced a receipt is visible when an authenticated rail extract is
 reconciled (<spanx style="verb">MUST-T10-1</spanx>).</t>
@@ -677,27 +677,43 @@ for reference, not to require an evaluation order: no step
 short-circuits another, and an implementation may evaluate them in any
 order that produces the same set of findings.</t>
 
+<t>When a step names an identifier in backticks, that identifier
+<bcp14>SHOULD</bcp14> be used for the condition in diagnostic output. The
+normative requirement is the behaviour: report the condition,
+identified by the <spanx style="verb">ref</spanx> or other handle given in the step. The
+identifiers are not an interoperability surface.</t>
+
 <t><list style="numbers" type="1">
   <t>Establish the subject of the audit. When an extract is supplied,
 the settlement records it carries are the ones reconciled; a
 settlement list from any other source <bcp14>MUST NOT</bcp14> be substituted for
 them (<spanx style="verb">MUST-T10-12</spanx>). If the caller supplies both and they differ,
-emit <spanx style="verb">extract-settlement-mismatch</spanx> and reconcile the extract.</t>
+the verifier <bcp14>MUST</bcp14> report that the caller-supplied list disagrees
+with the extract, and <bcp14>MUST</bcp14> still reconcile the extract. The
+identifier <spanx style="verb">extract-settlement-mismatch</spanx> <bcp14>SHOULD</bcp14> be used for this
+condition in diagnostic output.</t>
   <t>Verify the extract signature against the out-of-band rail key
-(<spanx style="verb">MUST-T10-8</spanx>, <spanx style="verb">MUST-T10-9</spanx>). If no key is pinned, emit
-<spanx style="verb">unauthenticated-extract</spanx> and treat the guarantee as conditional
-(<spanx style="verb">MUST-T10-7</spanx>). If a key is pinned and cannot be decoded, emit
-<spanx style="verb">trust-key-unreadable</spanx>. If a key is pinned and the signature does
-not verify against it, or verifies against a different key, emit
-<spanx style="verb">extract-key-mismatch</spanx>. A finding that puts the extract itself in
-doubt <bcp14>MUST</bcp14> prevent an unconditional guarantee.</t>
-  <t>Check scope. Report each settlement record outside the declared
-window as <spanx style="verb">extract-scope-mismatch</spanx> (<spanx style="verb">MUST-T10-10</spanx>), and, when the
-verifier states an expected account, rail, or window, report an
-extract that does not cover it as <spanx style="verb">extract-scope-mismatch</spanx>
-(<spanx style="verb">MUST-T10-11</spanx>). If the verifier stated no period, emit
-<spanx style="verb">unstated-audit-window</spanx> and treat the guarantee as conditional
-(<spanx style="verb">MUST-T10-15</spanx>).</t>
+(<spanx style="verb">MUST-T10-8</spanx>, <spanx style="verb">MUST-T10-9</spanx>). If no key is pinned, the verifier
+<bcp14>MUST</bcp14> treat the completeness guarantee as conditional
+(<spanx style="verb">MUST-T10-7</spanx>). The identifier <spanx style="verb">unauthenticated-extract</spanx> <bcp14>SHOULD</bcp14>
+be used for this condition in diagnostic output. If a key is
+pinned and cannot be decoded, the verifier <bcp14>MUST</bcp14> report that the
+pinned key is unreadable. The identifier <spanx style="verb">trust-key-unreadable</spanx>
+<bcp14>SHOULD</bcp14> be used for this condition. If a key is pinned and the
+signature does not verify against it, or verifies against a
+different key, the verifier <bcp14>MUST</bcp14> report that the extract is not
+signed by the pinned key. The identifier <spanx style="verb">extract-key-mismatch</spanx>
+<bcp14>SHOULD</bcp14> be used for this condition. A finding that puts the
+extract itself in doubt <bcp14>MUST</bcp14> prevent an unconditional guarantee.</t>
+  <t>Check scope. The verifier <bcp14>MUST</bcp14> report each settlement record
+whose <spanx style="verb">timestampMs</spanx> falls outside the declared window, identified
+by that record's <spanx style="verb">ref</spanx> (<spanx style="verb">MUST-T10-10</spanx>). When the verifier states
+an expected account, rail, or window, it <bcp14>MUST</bcp14> report an extract
+that does not cover it (<spanx style="verb">MUST-T10-11</spanx>). The identifier
+<spanx style="verb">extract-scope-mismatch</spanx> <bcp14>SHOULD</bcp14> be used for both conditions. If
+the verifier stated no period, it <bcp14>MUST</bcp14> treat the guarantee as
+conditional (<spanx style="verb">MUST-T10-15</spanx>). The identifier
+<spanx style="verb">unstated-audit-window</spanx> <bcp14>SHOULD</bcp14> be used for this condition.</t>
   <t>Decode each Spend Receipt COSE_Sign1. Reject if Ed25519 verify
 fails, if <spanx style="verb">kid</spanx> does not match the configured issuer key, if the
 content type is not the receipt type, or if the decoded claim map
@@ -710,27 +726,42 @@ requires extracts that cover it. Receipts remain subject to every
 other check regardless of window.</t>
   <t>Walk receipts in issuer order. The first <spanx style="verb">prevReceiptHash</spanx> <bcp14>MUST</bcp14>
 be null. Each later <spanx style="verb">prevReceiptHash</spanx> <bcp14>MUST</bcp14> equal <spanx style="verb">receiptHash</spanx> of
-the previous receipt. A miss is <spanx style="verb">receipt-chain-break</spanx>.</t>
+the previous receipt. A miss <bcp14>MUST</bcp14> be reported as a break in the
+receipt chain. The identifier <spanx style="verb">receipt-chain-break</spanx> <bcp14>SHOULD</bcp14> be
+used for this condition.</t>
   <t>Index settled receipts and extract records by <spanx style="verb">ref</spanx>. A <spanx style="verb">ref</spanx>
-that appears more than once on either side is <spanx style="verb">duplicate-ref</spanx>
-(<spanx style="verb">MUST-T10-6</spanx>).</t>
+that appears more than once on either side <bcp14>MUST</bcp14> be reported as a
+repeated reference (<spanx style="verb">MUST-T10-6</spanx>). The identifier <spanx style="verb">duplicate-ref</spanx>
+<bcp14>SHOULD</bcp14> be used for this condition.</t>
   <t>For each <spanx style="verb">ref</spanx> that appears exactly once on each side, require a
 one-to-one match on <spanx style="verb">ref</spanx> AND <spanx style="verb">amount</spanx> AND <spanx style="verb">currency</spanx>
-(<spanx style="verb">MUST-T10-1</spanx>). Amount or currency mismatch is
-<spanx style="verb">settlement-mismatch</spanx>. A settlement with no receipt is
-<spanx style="verb">settlement-without-receipt</spanx> (<spanx style="verb">MUST-T10-2</spanx>). A settled receipt
-with no extract row is <spanx style="verb">receipt-without-settlement</spanx>
-(<spanx style="verb">MUST-T10-3</spanx>). A settled receipt with a null rail ref is
-<spanx style="verb">settled-without-ref</spanx>.</t>
-  <t>A <spanx style="verb">ref</spanx> reported as <spanx style="verb">duplicate-ref</spanx> <bcp14>MUST</bcp14> still be reconciled by
-amount rather than dropped from the comparison
+(<spanx style="verb">MUST-T10-1</spanx>). Amount or currency mismatch <bcp14>MUST</bcp14> be reported as
+a settlement that does not match its receipt, identified by that
+<spanx style="verb">ref</spanx>. The identifier <spanx style="verb">settlement-mismatch</spanx> <bcp14>SHOULD</bcp14> be used for
+this condition. A settlement with no receipt <bcp14>MUST</bcp14> be reported as
+lacking a receipt, identified by its <spanx style="verb">ref</spanx> (<spanx style="verb">MUST-T10-2</spanx>). The
+identifier <spanx style="verb">settlement-without-receipt</spanx> <bcp14>SHOULD</bcp14> be used for this
+condition. A settled receipt with no extract row <bcp14>MUST</bcp14> be reported
+as a completeness failure (<spanx style="verb">MUST-T10-3</spanx>). The identifier
+<spanx style="verb">receipt-without-settlement</spanx> <bcp14>SHOULD</bcp14> be used for this condition.
+A settled receipt with a null rail ref <bcp14>MUST</bcp14> be reported as
+settled without a rail reference. The identifier
+<spanx style="verb">settled-without-ref</spanx> <bcp14>SHOULD</bcp14> be used for this condition.</t>
+  <t>A <spanx style="verb">ref</spanx> already reported as repeating <bcp14>MUST</bcp14> still be reconciled
+by amount rather than dropped from the comparison
 (<spanx style="verb">MUST-T10-13</spanx>). For each currency under that <spanx style="verb">ref</spanx>, compare the
 total settled against the total receipted. A settled total that
-exceeds the receipted total is <spanx style="verb">settlement-without-receipt</spanx>, and
-the finding <bcp14>MUST</bcp14> state the unaccounted amount. An amount that
-cannot be parsed as an integer is <spanx style="verb">malformed-amount</spanx>; a verifier
-<bcp14>MUST</bcp14> still report findings for the remaining records rather than
-abandon the audit.</t>
+exceeds the receipted total <bcp14>MUST</bcp14> be reported as a settlement
+lacking a receipt, and the finding <bcp14>MUST</bcp14> state the unaccounted
+amount. The identifier <spanx style="verb">settlement-without-receipt</spanx> <bcp14>SHOULD</bcp14> be
+used for this condition. A settled total that is less than the
+receipted total <bcp14>MUST</bcp14> be reported as a settlement that does not
+match its receipt, identified by that <spanx style="verb">ref</spanx>. The identifier
+<spanx style="verb">settlement-mismatch</spanx> <bcp14>SHOULD</bcp14> be used for this condition. An
+amount on that repeating <spanx style="verb">ref</spanx> that cannot be parsed as an
+integer <bcp14>MUST</bcp14> be reported without abandoning the audit; the
+identifier <spanx style="verb">malformed-amount</spanx> <bcp14>SHOULD</bcp14> be used for this condition.
+A verifier <bcp14>MUST</bcp14> still report findings for the remaining records.</t>
   <t>Aborted receipts are not matched to extract rows and are not
 added to totals.</t>
   <t>Decode each checkpoint. Reject a failed signature. Require
@@ -738,78 +769,93 @@ added to totals.</t>
    receipts in <spanx style="verb">[startMs, endMs)</spanx> as defined above
    (<spanx style="verb">MUST-T11-2</spanx>).</t>
   <t>Every chained receipt <bcp14>MUST</bcp14> fall in exactly one checkpoint
-window. A gap or double count is <spanx style="verb">window-coverage</spanx>
-(<spanx style="verb">MUST-T11-7</spanx>, <spanx style="verb">MUST-T11-8</spanx>).</t>
+window. A gap or double count <bcp14>MUST</bcp14> be reported as a window
+coverage failure (<spanx style="verb">MUST-T11-7</spanx>, <spanx style="verb">MUST-T11-8</spanx>). The identifier
+<spanx style="verb">window-coverage</spanx> <bcp14>SHOULD</bcp14> be used for this condition.</t>
   <t>Walk checkpoints in epoch order. <spanx style="verb">prevCheckpointHash</spanx> <bcp14>MUST</bcp14>
 equal the SHA-256 of the previous checkpoint COSE bytes, or null
 for genesis (<spanx style="verb">MUST-T11-4</spanx>).</t>
   <t>If two successfully verified checkpoints share an epoch number
-and have different hashes, emit <spanx style="verb">equivocation</spanx>
-(<spanx style="verb">MUST-T11-3</spanx>).</t>
-  <t>If any fail-severity finding exists, the audit <bcp14>MUST</bcp14> fail
-(<spanx style="verb">MUST-T10-4</spanx>).</t>
+and have different hashes, the verifier <bcp14>MUST</bcp14> report
+equivocation (<spanx style="verb">MUST-T11-3</spanx>). The identifier <spanx style="verb">equivocation</spanx>
+<bcp14>SHOULD</bcp14> be used for this condition.</t>
+  <t>If any finding remains that is not a warning (a warning is a
+condition that only makes the completeness guarantee
+conditional), the audit <bcp14>MUST</bcp14> fail (<spanx style="verb">MUST-T10-4</spanx>).</t>
 </list></t>
 
 </section>
 <section anchor="finding-codes"><name>Finding codes</name>
 
+<t>The identifiers below are for diagnostic output. They are not an
+interoperability surface. A finding object that can be carried on
+the wire is outside the scope of this document and may be defined
+later. Two implementations interoperate when they accept the same
+inputs and fail or warn on the same conditions, not when they
+print the same strings.</t>
+
+<t>A condition that makes the audit fail is a finding. A condition
+that only makes the completeness guarantee conditional is a
+warning. Warnings <bcp14>MUST</bcp14> still appear in operator-facing output
+(<spanx style="verb">MUST-T10-14</spanx>).</t>
+
 <texttable>
       <ttcol align='left'>Code</ttcol>
-      <ttcol align='left'>Severity</ttcol>
+      <ttcol align='left'>Effect</ttcol>
       <ttcol align='left'>Meaning</ttcol>
       <c>settlement-without-receipt</c>
-      <c>fail</c>
-      <c>Extract row has no matching settled receipt</c>
+      <c>audit fails</c>
+      <c>Extract row has no matching settled receipt, or a repeating <spanx style="verb">ref</spanx> settled more than it receipted</c>
       <c>receipt-without-settlement</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>Settled receipt ref is not on the extract</c>
       <c>settlement-mismatch</c>
-      <c>fail</c>
-      <c>Same ref, different amount or currency</c>
+      <c>audit fails</c>
+      <c>Same <spanx style="verb">ref</spanx>, different amount or currency, including a repeating <spanx style="verb">ref</spanx> that settled less than it receipted</c>
       <c>duplicate-ref</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>Ref appears more than once on one side</c>
       <c>settled-without-ref</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c><spanx style="verb">outcome</spanx> is settled and <spanx style="verb">x402PaymentRef</spanx> is null</c>
       <c>receipt-chain-break</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>Signature or <spanx style="verb">prevReceiptHash</spanx> failed</c>
       <c>checkpoint-total-mismatch</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>Totals, count, signature, or checkpoint chain failed</c>
       <c>checkpoint-head-mismatch</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c><spanx style="verb">chainHeadHash</spanx> is not the last in-window receipt</c>
       <c>equivocation</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>Two distinct hashes for one epoch</c>
       <c>window-coverage</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>Gap, overlap, or non-adjacent / non-consecutive windows</c>
       <c>unauthenticated-extract</c>
-      <c>warn</c>
-      <c>No pinned rail key, or the extract has no verifiable signature; guarantee is conditional</c>
+      <c>guarantee conditional</c>
+      <c>No pinned rail key, or the extract has no verifiable signature</c>
       <c>extract-key-mismatch</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>Extract is signed by a key other than the pinned rail key, or does not verify against it</c>
       <c>trust-key-unreadable</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>The pinned rail key could not be decoded; the verifier's configuration is at fault</c>
       <c>extract-scope-mismatch</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>A record falls outside the declared window, or the extract does not cover the expected account, rail, or window</c>
       <c>extract-settlement-mismatch</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>A caller-supplied settlement list disagrees with the extract; the extract is authoritative</c>
       <c>malformed-amount</c>
-      <c>fail</c>
-      <c>An <spanx style="verb">amount</spanx> could not be parsed as an integer</c>
+      <c>audit fails</c>
+      <c>An amount on a <spanx style="verb">ref</spanx> already reported as repeating that could not be parsed as an integer</c>
       <c>unstated-audit-window</c>
-      <c>warn</c>
-      <c>The verifier stated no period, so the extract defined its own; guarantee is conditional</c>
+      <c>guarantee conditional</c>
+      <c>The verifier stated no period, so the extract defined its own</c>
       <c>countersign-bad</c>
-      <c>fail</c>
+      <c>audit fails</c>
       <c>Present payee countersignature failed verify</c>
 </texttable>
 
@@ -912,81 +958,263 @@ auditor <bcp14>MAY</bcp14> receive an unredacted receipt out of band
 document. The companion repository file <spanx style="verb">THREAT_MODEL.md</spanx> is
 informative and <bcp14>MUST NOT</bcp14> be read as overriding this section.</t>
 
+<t>Requirement identifiers take the form KEYWORD-Tn-k, where KEYWORD
+is <bcp14>MUST</bcp14>, <bcp14>SHOULD</bcp14>, or <bcp14>MAY</bcp14>, n is the threat number in this section,
+and k is a sequence number within that threat. <bcp14>MUST</bcp14>-T8-custody is
+the custody prohibition under T8. The tables below define the
+requirement text those citations refer to.</t>
+
+<section anchor="t1-prompt-injection-leads-to-unauthorized-spend"><name>T1: Prompt injection leads to unauthorized spend</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T1-1</c>
+      <c>The PDP <bcp14>MUST</bcp14> decide from structured request fields and stored policy, not from model-generated prose.</c>
+      <c><bcp14>MUST</bcp14>-T1-2</c>
+      <c>A spend that is not bound to a verified Trade Manifest <bcp14>MUST</bcp14> be marked <spanx style="verb">no-manifest</spanx> on the Spend Receipt and <bcp14>MUST</bcp14> still be subject to limit, velocity, and scope policy.</c>
+      <c><bcp14>SHOULD</bcp14>-T1-3</c>
+      <c>Hosts <bcp14>SHOULD</bcp14> require a human confirmation channel for first-use payees.</c>
+      <c><bcp14>MAY</bcp14>-T1-4</c>
+      <c>An implementation <bcp14>MAY</bcp14> refuse all <spanx style="verb">no-manifest</spanx> spend.</c>
+</texttable>
+
+</section>
+<section anchor="t2-runaway-agent-loop-spend"><name>T2: Runaway agent (loop spend)</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T2-1</c>
+      <c>Policy <bcp14>MUST</bcp14> express a maximum payment count per configured time window (velocity).</c>
+      <c><bcp14>MUST</bcp14>-T2-2</c>
+      <c>Policy <bcp14>MUST</bcp14> express a maximum amount per payment and a maximum cumulative amount per window.</c>
+      <c><bcp14>MUST</bcp14>-T2-3</c>
+      <c>If the PDP is unreachable, uninitialized, or throws during evaluation, the spend <bcp14>MUST</bcp14> be denied (fail-closed, default deny).</c>
+      <c><bcp14>MUST</bcp14>-T2-4</c>
+      <c>A denied attempt <bcp14>MUST NOT</bcp14> increment the allowed-spend counters as if it had succeeded.</c>
+      <c><bcp14>SHOULD</bcp14>-T2-5</c>
+      <c>Implementations <bcp14>SHOULD</bcp14> emit a stable reason code for velocity and limit denials.</c>
+</texttable>
+
+</section>
+<section anchor="t3-replay-of-payment-authority"><name>T3: Replay of payment authority</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T3-1</c>
+      <c>Every spend attempt that the PDP allows <bcp14>MUST</bcp14> include a nonce that the implementation has not accepted before.</c>
+      <c><bcp14>MUST</bcp14>-T3-2</c>
+      <c>A second attempt that reuses a nonce <bcp14>MUST</bcp14> be denied.</c>
+      <c><bcp14>MUST</bcp14>-T3-3</c>
+      <c>A Trade Manifest <bcp14>MUST</bcp14> carry an expiry; a spend against an expired manifest <bcp14>MUST</bcp14> be denied.</c>
+      <c><bcp14>MUST</bcp14>-T3-4</c>
+      <c>A PDP allow decision <bcp14>MUST</bcp14> be bound to a hash of the request fields it evaluated and <bcp14>MUST</bcp14> be single-use.</c>
+      <c><bcp14>SHOULD</bcp14>-T3-5</c>
+      <c>Nonce stores <bcp14>SHOULD</bcp14> persist across process restart when the deployment is not a test fixture.</c>
+</texttable>
+
+</section>
+<section anchor="t4-receipt-forgery-or-repudiation"><name>T4: Receipt forgery or repudiation</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T4-1</c>
+      <c>A Spend Receipt <bcp14>MUST</bcp14> be signed by the Receipt Issuer over a canonical encoding of its claims.</c>
+      <c><bcp14>MUST</bcp14>-T4-2</c>
+      <c>Verifiers <bcp14>MUST</bcp14> reject a receipt whose signature does not validate or whose canonical bytes do not match the signed payload.</c>
+      <c><bcp14>MUST</bcp14>-T4-3</c>
+      <c>A Spend Receipt <bcp14>MUST</bcp14> include <spanx style="verb">payer</spanx>, <spanx style="verb">payee</spanx>, <spanx style="verb">amount</spanx>, <spanx style="verb">currency</spanx>, <spanx style="verb">policyHash</spanx>, <spanx style="verb">timestampMs</spanx>, and <spanx style="verb">nonce</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T4-4</c>
+      <c>A Spend Receipt <bcp14>MUST</bcp14> include <spanx style="verb">manifestHash</spanx> or an explicit <spanx style="verb">noManifest</spanx> flag, never an ambiguous empty hash. Empty optional values are CBOR null; labels are never absent.</c>
+      <c><bcp14>SHOULD</bcp14>-T4-5</c>
+      <c>Receipts <bcp14>SHOULD</bcp14> form a hash chain (<spanx style="verb">prevReceiptHash</spanx>) so omission is detectable within one issuer stream.</c>
+      <c><bcp14>MAY</bcp14>-T4-6</c>
+      <c>Parties <bcp14>MAY</bcp14> register the signed receipt as a SCITT statement to obtain a COSE receipt.</c>
+      <c><bcp14>MUST</bcp14>-T4-7</c>
+      <c>A Spend Receipt <bcp14>MUST</bcp14> include <spanx style="verb">outcome</spanx> (<spanx style="verb">settled</spanx> or <spanx style="verb">aborted</spanx>). A settled receipt <bcp14>MUST</bcp14> have a non-null rail ref. Aborted receipts <bcp14>MUST NOT</bcp14> enter checkpoint totals.</c>
+      <c><bcp14>MUST</bcp14>-T4-8</c>
+      <c>COSE_Sign1 protected headers <bcp14>MUST</bcp14> use alg -19 (Ed25519), a mandatory <spanx style="verb">kid</spanx>, and a payload-specific content type. Verifiers <bcp14>MUST</bcp14> reject a <spanx style="verb">kid</spanx> that does not match the configured issuer key.</c>
+</texttable>
+
+</section>
+<section anchor="t5-policy-bypass-via-direct-rail-access"><name>T5: Policy bypass via direct rail access</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T5-1</c>
+      <c>The agent-facing spend interface <bcp14>MUST</bcp14> invoke the PDP and <bcp14>MUST NOT</bcp14> expose a parallel ungated rail call to the model.</c>
+      <c><bcp14>MUST</bcp14>-T5-2</c>
+      <c>Rail credentials, wallet handles, and facilitator tokens <bcp14>MUST NOT</bcp14> be placed in tool results or prompts.</c>
+      <c><bcp14>SHOULD</bcp14>-T5-3</c>
+      <c>Hosts <bcp14>SHOULD</bcp14> run the PDP and signing keys in a process the model runtime cannot write.</c>
+      <c><bcp14>MAY</bcp14>-T5-4</c>
+      <c>A deployment <bcp14>MAY</bcp14> use OS or hardware isolation between the model and the PDP.</c>
+</texttable>
+
+</section>
+<section anchor="t6-toctou-between-policy-check-and-payment"><name>T6: TOCTOU between policy check and payment</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T6-1</c>
+      <c>Payment settlement <bcp14>MUST</bcp14> use the same six <spanx style="verb">requestHash</spanx> fields the PDP evaluated: amount, currency, payee, tool, nonce, and <spanx style="verb">manifestHash</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T6-2</c>
+      <c>An allow decision <bcp14>MUST</bcp14> be consumed on the first settlement attempt, success or fail-closed abort, and <bcp14>MUST NOT</bcp14> authorize a later different request.</c>
+      <c><bcp14>SHOULD</bcp14>-T6-3</c>
+      <c>Implementations <bcp14>SHOULD</bcp14> treat a decision older than a short TTL as expired.</c>
+      <c><bcp14>MUST</bcp14>-T6-4</c>
+      <c>An allow Decision Token <bcp14>MUST</bcp14> be COSE_Sign1 with CWT private-use labels -70301..-70305 (<spanx style="verb">requestHash</spanx>, <spanx style="verb">policyHash</spanx>, <spanx style="verb">expiryMs</spanx>, <spanx style="verb">nonce</spanx>, <spanx style="verb">singleUseId</spanx>) and content type <spanx style="verb">application/cedulon-decision+cbor</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T6-5</c>
+      <c>A party that accepts a Decision Token <bcp14>MUST</bcp14> reject a failed signature, a <spanx style="verb">kid</spanx> or content-type mismatch, a claim-map mismatch, or an expired <spanx style="verb">expiryMs</spanx>.</c>
+</texttable>
+
+</section>
+<section anchor="t7-signing-key-leakage"><name>T7: Signing-key leakage</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T7-1</c>
+      <c>Secret key material <bcp14>MUST NOT</bcp14> appear in receipts, manifests, logs, or example output.</c>
+      <c><bcp14>MUST</bcp14>-T7-2</c>
+      <c>Example and test keys <bcp14>MUST</bcp14> be generated at runtime or stored as clearly fake fixtures, never as production secrets.</c>
+      <c><bcp14>SHOULD</bcp14>-T7-3</c>
+      <c>Production deployments <bcp14>SHOULD</bcp14> use an HSM or OS key store and <bcp14>SHOULD</bcp14> rotate keys.</c>
+      <c><bcp14>MAY</bcp14>-T7-4</c>
+      <c>Implementations <bcp14>MAY</bcp14> encrypt keys at rest.</c>
+</texttable>
+
+</section>
+<section anchor="t8-counterparty-price-gouging-or-defective-delivery"><name>T8: Counterparty price gouging or defective delivery</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T8-1</c>
+      <c>A Trade Manifest <bcp14>MUST</bcp14> bind goods or service description, price, currency, acceptance-criteria hash, cancel condition, and expiry.</c>
+      <c><bcp14>MUST</bcp14>-T8-2</c>
+      <c>A spend bound to a manifest <bcp14>MUST</bcp14> be denied if the requested amount or currency differs from the manifest.</c>
+      <c><bcp14>MUST</bcp14>-T8-3</c>
+      <c>If delivery bytes do not hash to the acceptance-criteria hash, the implementation <bcp14>MUST</bcp14> be able to produce a Dispute Evidence Bundle containing the manifest, the spend receipt, and the delivery hash.</c>
+      <c><bcp14>MUST</bcp14>-T8-4</c>
+      <c>The Dispute Evidence Bundle <bcp14>MUST NOT</bcp14> be described as an arbitral award or escrow release.</c>
+      <c><bcp14>MUST</bcp14>-T8-7</c>
+      <c><spanx style="verb">manifestHash</spanx> <bcp14>MUST</bcp14> be the SHA-256 of the signed Trade Manifest COSE bytes and <bcp14>MUST NOT</bcp14> include the issuer public key encoding.</c>
+      <c><bcp14>SHOULD</bcp14>-T8-5</c>
+      <c>Manifests <bcp14>SHOULD</bcp14> reference an AP2 mandate hash when one exists.</c>
+      <c><bcp14>MAY</bcp14>-T8-6</c>
+      <c>Parties <bcp14>MAY</bcp14> add an optional escrow actor as a third-party role interface; this project <bcp14>MUST NOT</bcp14> implement custody.</c>
+      <c><bcp14>MUST</bcp14>-T8-custody</c>
+      <c>Implementations of this specification <bcp14>MUST NOT</bcp14> take custody of funds or operate escrow.</c>
+      <c><bcp14>MUST</bcp14>-T8-8</c>
+      <c>If a payee countersignature is present, a verifier <bcp14>MUST</bcp14> reject it when the signature fails, when <spanx style="verb">kid</spanx> or content type does not match the configured payee key, or when the payload is not the issuer COSE_Sign1 bytes.</c>
+      <c><bcp14>MAY</bcp14>-T8-9</c>
+      <c>A payee <bcp14>MAY</bcp14> attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence <bcp14>MUST NOT</bcp14> invalidate the issuer receipt.</c>
+</texttable>
+
+</section>
+<section anchor="must-t8-custody"><name>MUST-T8-custody</name>
+
+<t>Implementations of this specification <bcp14>MUST NOT</bcp14> take custody of
+funds or operate escrow. See also <xref target="escrow-role"/>.</t>
+
+</section>
+<section anchor="t9-pii-leakage-into-the-transparency-log"><name>T9: PII leakage into the transparency log</name>
+
+<t>See also <xref target="privacy"/>.</t>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T9-1</c>
+      <c>A transparency encoding <bcp14>MUST</bcp14> support omitting or hashing payer/payee identifiers and <bcp14>MUST</bcp14> support amount redaction or range/bucket encoding.</c>
+      <c><bcp14>MUST</bcp14>-T9-2</c>
+      <c>Implementations <bcp14>MUST NOT</bcp14> write raw government-ID, payment-instrument PAN, or street address fields into a public transparency statement.</c>
+      <c><bcp14>SHOULD</bcp14>-T9-3</c>
+      <c>Default public anchors <bcp14>SHOULD</bcp14> publish <spanx style="verb">policyHash</spanx>, <spanx style="verb">manifestHash</spanx>, <spanx style="verb">receiptHash</spanx>, and timestamp rather than full claim sets.</c>
+      <c><bcp14>MAY</bcp14>-T9-4</c>
+      <c>A private auditor <bcp14>MAY</bcp14> receive an unredacted receipt out of band.</c>
+</texttable>
+
+</section>
+<section anchor="t10-secret-spend-via-rail-bypass"><name>T10: Secret spend via rail bypass</name>
+
+<t>See <xref target="reconciliation"/>.</t>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T10-1</c>
+      <c>A verifier <bcp14>MUST</bcp14> match each extract settlement to a settled receipt on <spanx style="verb">ref</spanx> AND <spanx style="verb">amount</spanx> AND <spanx style="verb">currency</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T10-2</c>
+      <c>A settlement with no matching receipt <bcp14>MUST</bcp14> be reported as a completeness failure identified by that settlement <spanx style="verb">ref</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T10-3</c>
+      <c>A settled Spend Receipt whose <spanx style="verb">x402PaymentRef</spanx> is not on the extract <bcp14>MUST</bcp14> be reported as a completeness failure.</c>
+      <c><bcp14>MUST</bcp14>-T10-4</c>
+      <c>An audit that has any fail-severity completeness finding <bcp14>MUST</bcp14> fail (non-zero status in the companion tool).</c>
+      <c><bcp14>SHOULD</bcp14>-T10-5</c>
+      <c>Hosts <bcp14>SHOULD</bcp14> still apply T5 (no ungated rail in the model process). Completeness does not replace prevention.</c>
+      <c><bcp14>MUST</bcp14>-T10-6</c>
+      <c>A <spanx style="verb">ref</spanx> that appears more than once among settled receipts or among extract rows <bcp14>MUST</bcp14> be reported as <spanx style="verb">duplicate-ref</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T10-7</c>
+      <c>A verifier <bcp14>MUST</bcp14> obtain the extract from the rail or from a rail signature. With no pinned rail key, an unverifiable extract <bcp14>MUST</bcp14> be reported as <spanx style="verb">unauthenticated-extract</spanx> and makes the completeness guarantee conditional. With a pinned key, see <bcp14>MUST</bcp14>-T10-8: the extract <bcp14>MUST</bcp14> fail closed rather than warn.</c>
+      <c><bcp14>MUST</bcp14>-T10-8</c>
+      <c>A verifier <bcp14>MUST</bcp14> obtain the rail public key out of band and <bcp14>MUST</bcp14> verify the extract signature against that key, not against a key the extract carries. Without such a key the guarantee is conditional.</c>
+      <c><bcp14>MUST</bcp14>-T10-9</c>
+      <c>Keys <bcp14>MUST</bcp14> be compared by SubjectPublicKeyInfo DER encoding rather than by any text encoding. A pinned key that cannot be decoded <bcp14>MUST</bcp14> be reported as <spanx style="verb">trust-key-unreadable</spanx>, not as a key mismatch.</c>
+      <c><bcp14>MUST</bcp14>-T10-10</c>
+      <c>Every settlement record whose <spanx style="verb">timestampMs</spanx> falls outside the extract's declared window <bcp14>MUST</bcp14> be reported as <spanx style="verb">extract-scope-mismatch</spanx>, identified by that record's <spanx style="verb">ref</spanx>. This check <bcp14>MUST</bcp14> run whether or not a key is pinned.</c>
+      <c><bcp14>MUST</bcp14>-T10-11</c>
+      <c>When the verifier states an expected account, rail, or window, an extract that does not cover it <bcp14>MUST</bcp14> fail closed as <spanx style="verb">extract-scope-mismatch</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T10-12</c>
+      <c>When an extract is supplied, the records it carries are the subject of reconciliation. A settlement list from another source <bcp14>MUST NOT</bcp14> be substituted; a disagreeing list <bcp14>MUST</bcp14> be reported as <spanx style="verb">extract-settlement-mismatch</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T10-13</c>
+      <c>A <spanx style="verb">ref</spanx> reported as <spanx style="verb">duplicate-ref</spanx> <bcp14>MUST</bcp14> still be reconciled by aggregate amount per currency, and a shortfall <bcp14>MUST</bcp14> state the unaccounted amount. An unparseable amount <bcp14>MUST</bcp14> be reported as <spanx style="verb">malformed-amount</spanx> without aborting the audit.</c>
+      <c><bcp14>MUST</bcp14>-T10-14</c>
+      <c>An implementation <bcp14>MUST</bcp14> surface the guarantee and any warnings in any human-readable audit report it produces, not only in a returned structure.</c>
+      <c><bcp14>MUST</bcp14>-T10-15</c>
+      <c>A verifier that has not stated the period under audit <bcp14>MUST</bcp14> emit <spanx style="verb">unstated-audit-window</spanx> and <bcp14>MUST</bcp14> treat the guarantee as conditional, because an unstated period leaves the extract free to define its own.</c>
+      <c><bcp14>MUST</bcp14>-T10-16</c>
+      <c>When an extract is supplied, only receipts whose <spanx style="verb">timestampMs</spanx> falls in its declared window are reconciled against it. A receipt outside that window <bcp14>MUST NOT</bcp14> be reported as a completeness failure against that extract.</c>
+</texttable>
+
+<t>In <bcp14>MUST</bcp14>-T10-4, a completeness finding that makes the audit fail is
+distinct from a warning that only makes the guarantee conditional.
+The verification algorithm states that distinction by behaviour
+(<xref target="reconciliation"/>).</t>
+
+</section>
+<section anchor="t11-checkpoint-suppression-or-rollback"><name>T11: Checkpoint suppression or rollback</name>
+
+<texttable>
+      <ttcol align='left'>ID</ttcol>
+      <ttcol align='left'>Requirement</ttcol>
+      <c><bcp14>MUST</bcp14>-T11-1</c>
+      <c>An epoch checkpoint <bcp14>MUST</bcp14> be COSE-signed and <bcp14>MUST</bcp14> bind epoch number, time window, receipt count, chain-head hash, per-currency totals, and the previous checkpoint hash.</c>
+      <c><bcp14>MUST</bcp14>-T11-2</c>
+      <c>Verifiers <bcp14>MUST</bcp14> reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose <spanx style="verb">receiptCount</spanx> is wrong, or whose <spanx style="verb">chainHeadHash</spanx> is not the last in-window receipt hash.</c>
+      <c><bcp14>MUST</bcp14>-T11-3</c>
+      <c>Two verified checkpoints for the same epoch with different hashes <bcp14>MUST</bcp14> be reported as equivocation.</c>
+      <c><bcp14>MUST</bcp14>-T11-4</c>
+      <c>A broken checkpoint hash chain <bcp14>MUST</bcp14> fail verification.</c>
+      <c><bcp14>SHOULD</bcp14>-T11-5</c>
+      <c>Checkpoints <bcp14>SHOULD</bcp14> be registered with a Transparency Service when one is configured.</c>
+      <c><bcp14>MAY</bcp14>-T11-6</c>
+      <c>A test deployment <bcp14>MAY</bcp14> use an in-process append-only log as the witness.</c>
+      <c><bcp14>MUST</bcp14>-T11-7</c>
+      <c>Checkpoint windows <bcp14>MUST</bcp14> be half-open <spanx style="verb">[startMs, endMs)</spanx>. Every chained receipt <bcp14>MUST</bcp14> fall in exactly one window.</c>
+      <c><bcp14>MUST</bcp14>-T11-8</c>
+      <c>Presented checkpoint epochs <bcp14>MUST</bcp14> be consecutive and adjacent windows <bcp14>MUST</bcp14> meet at <spanx style="verb">endMs = next.startMs</spanx>.</c>
+      <c><bcp14>MUST</bcp14>-T11-9</c>
+      <c>Prefix-deletion and suppression claims that go beyond the presented chain are conditional on an external transparency witness.</c>
+</texttable>
+
 <dl>
-  <dt>Prompt injection (T1):</dt>
-  <dd>
-    <t>The PDP <bcp14>MUST</bcp14> use structured fields only (<spanx style="verb">MUST-T1-1</spanx>). Unbound
-spend <bcp14>MUST</bcp14> be <spanx style="verb">noManifest</spanx> and still gated (<spanx style="verb">MUST-T1-2</spanx>). Hosts
-<bcp14>SHOULD</bcp14> confirm first-use payees (<spanx style="verb">SHOULD-T1-3</spanx>).</t>
-  </dd>
-  <dt>Runaway spend (T2):</dt>
-  <dd>
-    <t>Velocity and limits are mandatory (<spanx style="verb">MUST-T2-1</spanx>, <spanx style="verb">MUST-T2-2</spanx>).
-Fail-closed deny on engine fault (<spanx style="verb">MUST-T2-3</spanx>). Denied attempts
-<bcp14>MUST NOT</bcp14> count as success (<spanx style="verb">MUST-T2-4</spanx>).</t>
-  </dd>
-  <dt>Replay (T3):</dt>
-  <dd>
-    <t>Unique nonce on allow (<spanx style="verb">MUST-T3-1</spanx>); reuse denied
-(<spanx style="verb">MUST-T3-2</spanx>); expired manifest denied (<spanx style="verb">MUST-T3-3</spanx>);
-single-use hashed decision (<spanx style="verb">MUST-T3-4</spanx>). Nonce stores <bcp14>SHOULD</bcp14>
-persist outside tests (<spanx style="verb">SHOULD-T3-5</spanx>).</t>
-  </dd>
-  <dt>Forgery (T4):</dt>
-  <dd>
-    <t>Signed canonical receipts (<spanx style="verb">MUST-T4-1</spanx>, <spanx style="verb">MUST-T4-2</spanx>) with the
-claim set in <spanx style="verb">MUST-T4-3</spanx>, <spanx style="verb">MUST-T4-4</spanx>, and <spanx style="verb">MUST-T4-7</spanx>.
-Protected-header <spanx style="verb">kid</spanx> is mandatory (<spanx style="verb">MUST-T4-8</spanx>). Hash chaining
-is recommended (<spanx style="verb">SHOULD-T4-5</spanx>).</t>
-  </dd>
-  <dt>Bypass (T5):</dt>
-  <dd>
-    <t>Single gated interface (<spanx style="verb">MUST-T5-1</spanx>). No rail secrets in prompts
-(<spanx style="verb">MUST-T5-2</spanx>). Hosts <bcp14>SHOULD</bcp14> isolate the PDP (<spanx style="verb">SHOULD-T5-3</spanx>).</t>
-  </dd>
-  <dt>TOCTOU (T6):</dt>
-  <dd>
-    <t>Settlement fields <bcp14>MUST</bcp14> match the six-field decision hash
-(<spanx style="verb">MUST-T6-1</spanx>). The allow is a COSE_Sign1 Decision Token
-(<spanx style="verb">MUST-T6-4</spanx>) consumed on first use (<spanx style="verb">MUST-T6-2</spanx>). A failed
-signature or expired token <bcp14>MUST</bcp14> be rejected (<spanx style="verb">MUST-T6-5</spanx>).</t>
-  </dd>
-  <dt>Key leakage (T7):</dt>
-  <dd>
-    <t>Secret key material <bcp14>MUST NOT</bcp14> appear in artifacts (<spanx style="verb">MUST-T7-1</spanx>).
-Examples <bcp14>MUST</bcp14> use mock keys (<spanx style="verb">MUST-T7-2</spanx>). Production <bcp14>SHOULD</bcp14> use
-an HSM or OS key store (<spanx style="verb">SHOULD-T7-3</spanx>).</t>
-  </dd>
-  <dt>Counterparty (T8):</dt>
-  <dd>
-    <t>Manifest bind (<spanx style="verb">MUST-T8-1</spanx>, <spanx style="verb">MUST-T8-2</spanx>). Evidence bundle
-(<spanx style="verb">MUST-T8-3</spanx>) is not an award (<spanx style="verb">MUST-T8-4</spanx>).
-<spanx style="verb">manifestHash</spanx> is the SHA-256 of the signed COSE bytes
-(<spanx style="verb">MUST-T8-7</spanx>). A present payee countersignature <bcp14>MUST</bcp14> verify
-(<spanx style="verb">MUST-T8-8</spanx>); absence is allowed (<spanx style="verb">MAY-T8-9</spanx>).</t>
-  </dd>
-  <dt>Privacy (T9):</dt>
-  <dd>
-    <t>See <xref target="privacy"/>.</t>
-  </dd>
-  <dt>Rail bypass completeness (T10):</dt>
-  <dd>
-    <t>Verifiers <bcp14>MUST</bcp14> reconcile an authenticated extract to receipts
-with one-to-one <spanx style="verb">ref</spanx>+amount+currency matching
-(<spanx style="verb">MUST-T10-1</spanx>, <spanx style="verb">MUST-T10-6</spanx>, <spanx style="verb">MUST-T10-7</spanx>) and <bcp14>MUST</bcp14> fail the
-audit when any fail-severity finding exists (<spanx style="verb">MUST-T10-4</spanx>).
-See <xref target="reconciliation"/>.</t>
-  </dd>
-  <dt>Checkpoint suppression (T11):</dt>
-  <dd>
-    <t>Checkpoints <bcp14>MUST</bcp14> be signed and chained (<spanx style="verb">MUST-T11-1</spanx>,
-<spanx style="verb">MUST-T11-4</spanx>). Totals, count, and <spanx style="verb">chainHeadHash</spanx> <bcp14>MUST</bcp14> match
-the half-open window (<spanx style="verb">MUST-T11-2</spanx>, <spanx style="verb">MUST-T11-7</spanx>).
-Equivocation <bcp14>MUST</bcp14> be reported (<spanx style="verb">MUST-T11-3</spanx>). Continuity and
-prefix-deletion detection that go beyond the presented chain are
-<strong>conditional</strong> on an external transparency witness
-(<spanx style="verb">MUST-T11-9</spanx>).</t>
-  </dd>
   <dt>Issuer self-attestation:</dt>
   <dd>
     <t>A Receipt Issuer that also produces the only copy of the extract
@@ -1021,6 +1249,7 @@ out of scope for this revision.</t>
   </dd>
 </dl>
 
+</section>
 <section anchor="escrow-role"><name>Optional escrow role</name>
 
 <t>Parties <bcp14>MAY</bcp14> name an escrow actor in a Trade Manifest as a
@@ -1203,11 +1432,11 @@ not specify those profiles.</t>
 </section>
 <section anchor="informative-notes-on-adjacent-protocols"><name>Informative Notes on Adjacent Protocols</name>
 
-<t>x402 uses HTTP 402 <xref target="RFC9110"/> to negotiate stablecoin payment. AP2
-uses signed mandates as verifiable credentials. Cedulon does not
-replace either protocol. Profiles built on HTTP Message Signatures
+<t>x402 <xref target="X402"/> uses HTTP 402 <xref target="RFC9110"/> to negotiate stablecoin
+payment. AP2 <xref target="AP2"/> uses signed mandates as verifiable credentials.
+Cedulon does not replace either protocol. Profiles built on HTTP Message Signatures
 <xref target="RFC9421"/> authenticate bots; they are not a spend receipt.
-draft-bates-atp <xref target="BATES-ATTP"/> is a lineage neighbor. It does not
+draft-bates-atp <xref target="BATES-ATP"/> is a lineage neighbor. It does not
 define rail-extract completeness.</t>
 
 <t>draft-vauban-x402-stark-receipts <xref target="VAUBAN"/> specifies complementary
@@ -1461,13 +1690,31 @@ completeness.</t>
   <seriesInfo name="DOI" value="10.17487/RFC9421"/>
 </reference>
 
-<reference anchor="BATES-ATTP" target="https://datatracker.ietf.org/doc/draft-bates-atp/00/">
+<reference anchor="BATES-ATP" target="https://datatracker.ietf.org/doc/html/draft-bates-atp">
   <front>
     <title>Agent Transaction Protocol (ATP)</title>
     <author initials="D." surname="Bates" fullname="David Asher Bates">
       <organization></organization>
     </author>
     <date year="2026" month="May"/>
+  </front>
+</reference>
+<reference anchor="X402" target="https://www.x402.org/">
+  <front>
+    <title>x402: An Open Standard for Internet-Native Payments</title>
+    <author >
+      <organization>x402 Foundation</organization>
+    </author>
+    <date year="2026"/>
+  </front>
+</reference>
+<reference anchor="AP2" target="https://ap2-protocol.org/ap2/specification/">
+  <front>
+    <title>Agent Payments Protocol (AP2)</title>
+    <author >
+      <organization>Google Agentic Commerce</organization>
+    </author>
+    <date year="2025" month="September"/>
   </front>
 </reference>
 <reference anchor="GRIGG" target="https://iang.org/papers/triple_entry.html">
@@ -1533,7 +1780,7 @@ completeness.</t>
     <date year="2026" month="May"/>
   </front>
 </reference>
-<reference anchor="REATTEST" target="https://github.com/dogrucanemek-alt/cedulon/blob/master/spec/draft-dogru-cedulon-reattestation-00.md">
+<reference anchor="REATTEST" target="https://github.com/dogrucanemek-alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/spec/draft-dogru-cedulon-reattestation-00.md">
   <front>
     <title>Cedulon Re-Attestation: Carrying Spend Evidence Across Algorithm Retirement</title>
     <author initials="E. C." surname="Dogru" fullname="Emek Can Dogru">
@@ -1542,7 +1789,7 @@ completeness.</t>
     <date year="2026" month="August"/>
   </front>
 </reference>
-<reference anchor="STREAMING" target="https://github.com/dogrucanemek-alt/cedulon/blob/master/spec/draft-dogru-cedulon-streaming-00.md">
+<reference anchor="STREAMING" target="https://github.com/dogrucanemek-alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/spec/draft-dogru-cedulon-streaming-00.md">
   <front>
     <title>Cedulon Streaming Reconciliation: Continuous Completeness for Agent Spend</title>
     <author initials="E. C." surname="Dogru" fullname="Emek Can Dogru">
@@ -1558,7 +1805,7 @@ completeness.</t>
 </references>
 
 
-<?line 1074?>
+<?line 1218?>
 
 <section numbered="false" anchor="acknowledgments"><name>Acknowledgments</name>
 
@@ -1570,8 +1817,9 @@ as adjacent work. Pablo Play found that a repeated reference hid the
 unaccounted amount, and filed a written reproduction. Neither reviewed
 this text, and any error in it is the author's.</t>
 
-<t>Field survey notes and the informative threat-model table in the
-companion repository helped shape the <bcp14>MUST</bcp14> identifiers used here.</t>
+<t>Field survey notes and the informative threat-model narrative in the
+companion repository helped shape the requirement identifiers used
+here. Those identifiers are defined in <xref target="security"/>.</t>
 
 </section>
 <section numbered="false" anchor="vectors"><name>Appendix A. Test Vectors</name>
@@ -1625,381 +1873,447 @@ expiresAtMs=1700000000000, ap2MandateHash=null.</t>
   </back>
 
 <!-- ##markdown-source:
-H4sIAAAAAAAAA9V96XbbSJbmfzxFjPNHSiqC5qbV7eph2sq0Or2oLbmq69Tp
-UwIJUEKbJFgAKJllu5+ln2WebO53740FIGVnVff8mKxTmRSWQMSNu28Rx3FU
-5/U8OzNPXmTpel4sz8x4acbrNK/N62STlWZWlGZ8my3ruC5i/mFeFItFVk6z
-J1EymZTZ/ZnRl6O0mC6TBQ2XlsmsjtPitlzHU7kZ9/pRmtR0c9AbHMW9k3hw
-FE3pwm1Rbs5MvpwVUbWeLPKqyotlvVlluJhmq4z+tayjfFWembpcV/Wg1zvt
-DaKkzJIzU2XT6KEoP96WxXp1Fn3MNvRXehYZE7tp4XeCqfOvMptm+Up+r4p5
-Pt3wz6sXF9fXUVUny/QvCb2V8deyqFokZf2Xv66LOqvOzCyZV1m0yuUDdTG1
-/81llvirKsq6zGaV/LFZuN9TAG5ZV1Gyru+Kkseg/xtaJw193jUvuuYlYMYX
-BZLni+yjeZEsgxtFeXtm/nD+fvxv5vr817fvXr/7lwvz+uLNxfX5S3N18f7X
-8+sLfnBarJc1gHu9LgkwfC1bJPn8zGRd3pz/rZvTpalFy6JcJHV+n2Fi739+
-Mej3T/Xn0WA4sj9Phif686Q3HNif/WP7wMnw1F09HdkRTnuHA/9zaH+eHNnX
-Tk9HA/+THgBGNCd0HDzS7/fsz9Ggj58/ja/Pr+Lx9fXlGa/UYrYg7XWZLKtk
-WhNumcuyoB0r5mZvfH25/4Sf9luCf2LZkpdd8xNhaKVX7Z68TO7z1IyrO6IP
-fz9E7kOZQVLeZvWZuavrVXX29Ck9kdRlMv2Yld08q2dd2smnRDNPhVwmGCpO
-6tXTXu8pDfDL+4tffmmu5brMV/PMnGNbzXjKG5wvb7+xhIuu+aXMb29bS7gg
-jPLX7dQfmXeeLG95rqtklZXV05pn8ZcMs+je1Ys5vXU5fnHx7vVFc7pX68Ui
-MWlmkjKv7xZZnU+TjrnNCvpZ5vRzVRYrohbalNxkdfBnMs/r5BvLet01l8k0
-J/JtLez1epo0bsna+qPTEf35h/GHn8Zvm5P8NOoNzNX1+P2v5r2wBvMzI545
-/1RnS3Cj3RMROkzWE4Ll+6zKknJ69z+DCfc8aIyZxcSRyo+xMq0KeHH14tX7
-dy9+ba7i3bomGs7MT8SICCOEb/OE879lhKyM+ZUh7mYuPFedb8y7SZWV9/TI
-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
-Ki+hIuIYPLawX/BOp3azUiYKikDGPhbyQ2dtvLOwEtZlrV334c8/BJe+AnHk
-QcgStQ6S7bdYf/B47+ATtRKWRNycxKfWYrVcnVg9GOPBAakg9I0sPTiIHtFV
-xMimWc0LsrbE2MUeAyiM3IkathHbRrUYuLzLzPhfs17lBQC/jKKUkP2rCIiP
-e6Nenx7SjXqBT38xSKEze6J4KqUHk2V0AGlq2LoFK14qYHXHKTYOBIz4TdEW
-gSXCm8c5HJjiDTtZJKpqEwLj4BO/mxIt3nQ1uY+BIxzOhL4ACW8SSA1gal60
-ptiL9tZLJLhwWkWs8xR9tN+nndt6wTwU63lqHqC0w/IRX4GCRr7J7H16lyxv
-2UMSkJqkrPHDHTMps+QjTIxQP+LAMvREix26GkTpq5DfMuijSh3KZcawvvmY
-E3MLQBkDlGrTuQQ0YgsV9CdiJyF3QEyVA8+8CHAsPD5Vg3Rrcx3ry5ecTwLt
-3M+vbU8rIVzsHCp3rK4T5iWGDCSvjcuBa/GOjopkXntRRg0s2sE76P4sv2Uf
-ohD8x4xTTHiYSPZeqUGV3wDsO1X7E5YOj4UxVI8Wo6gKFeg2ICI4tongiiVs
-VRepkMwBdchmPpGnZvbAk3nGrHMi34O/S9xHEpyQaIWfrtWAeS22ygDcMCBI
-JasG09phM4laezpCcPkqk7DfqDvo9qM9zroBkcyz5W19R9tU3UF4wvZQaxwe
-tQ5zM9qCikvOWMWGn4NWxcmJ8+xTPi1uSbm+y6cHB8gxy0oVUnnpxB8GoFW1
-U3UYheQZUbgARiBGJQlLRArWXeHkTXUWiRCdsI9yvVQByOGe7JZruewSaFUf
-rn+OT0ydfeI03dpa1CQlyWQgKS7Uh3FN06fGQkpYsyoEn39oaQMI7olbLJPk
-P5V2YQ4g9AVstCZusokS9/ou4yLivcPLoZCwW6BfnsMXSXhGrx4dHg6PaC8c
-2kUWCbz7azpdrwSW/V4v7vd76r5D6h/YXhCV1A/8PfbK3ym2eiy2rAlTQ2C5
-OwPjLZfmnaEJzJbmrZFpGCXNm4emZY7w7aapYXWpff/akdmyPfjFp15x5+eO
-TcuGABL62ydmh1Wwc6BT0zYF1lBH7X3aMm8FNFbYZ2hu6fC7PtIHeL1OLpDw
-SvZTr5izjvDCa8UtrOj31Z/3d29+nzdfUr6bS+zz5qPwrN5afp+3n/S1HXdG
-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
-eDJNT6eHBJ60N5Ad+b+rqSCywrgAAA==
+H4sIAAAAAAAAA9196XbjVpLmfzwFJv3DkppgctOa7eqRM2Vb7dw6Jddy6vQp
+gQQooZMiWACYSlU6+1nmWebJJr6IuBsISrJr5s+4TtkUieXeuLGvSZJETdEs
+8pP42cs8Wy/K5Ul8uoxP11nRxK/T+7yK52UVn17nyyZpyoQ/xC/L29u8muXP
+onQ6rfJPJ7HeHGXlbJne0uOyKp03SVZeV+tkJj8mg2GUpQ39OBqMDpLBUTI6
+iGb0xXVZ3Z/ExXJeRvV6elvUdVEum/tVji+zfJXTv5ZNVKyqk7ip1nUzGgyO
+B6MorfL0JK7zWXRXVh+vq3K9Ook+5vf0V3YSxXFil4XPKZbOn6p8lhcr+bwq
+F8Xsnj9evDy/vIzqJl1mf0vprpzflkf1bVo1f/v7umzy+iSep4s6j1aFvKAp
+Z+a/hawSf9Vl1VT5vJY/7m/t5xkAt2zqKF03N2XFz6D/x7RPevRZP37Zj18B
+ZvylQPLsNv8Yv0yX3g9ldX0S//Hsw+mf48uzn9++e/3u38/j1+dvzi/PXsUX
+5x9+Prs85wtn5XrZALiX64oAw9/lt2mxOInzPh/O/9TD6dPSomVZ3aZN8SnH
+wj788HI0HB7rx4PReGI+Ho2P9OPRYDwyH4eH5oKj8bH99nhinnA82B+5j2Pz
+8ejA3HZ8PBm5j3QBMCJc0KF3yXA4MB8noyE+fn96eXaRnF6+P+GNGsQWnL2s
+0mWdzhpCrfh9VdKBlYt4hy7efcZXuxPBP4mcyKt+/D0haK3fmiN5lX4qsvi0
+viHycL/7uL0vK0ir67w5iW+aZlWfPH9OV6RNlc4+5lW/yJt5nw7yOZHM85vm
+dvFcSGaK5yVps6In/HkyGIV7+YxvQKHviCriC+BqWmVMo+fLJq+WeZO8ZYjF
+79N7xrXu7TEK4WnxD4QjtLCCycTfRecW7u7u+riNl05XnL4fdUHbvNwH9fvR
+FlDzWn4sy+tFLpymmFkWE65pPxkcdy4rXY2Slb6Kl0ZfPK9X+ayYFzPeHBb7
+44fzH38Ml3tZFSt67RnIJD6dMcEUy+sHcOK8H/9YFdfXLZw4Jwp135sVb0GE
+Il1e8zJX6Sqv6ucNr+JvOVbRBzLQXe9PX56/e30eLvdifXubxlkep1XR3Nzm
+BKq0F1/nJX2sCvpIQFgR96ENF3HeeH+mi6JJH9jW6z4d2qwgdtja2Ov1LA1+
+kr0NJ8cT+vOPp798f/p2E0nji8vTDz/HH4TVEpKBkOOzz02+BHd/ABH+mK6n
+BMsPeZ2n1ezmnyUtoapP/NAEK0uIw1cfExUCNfDi4uVPH969/Dncxbt1Qzwx
+j78nxk4YIXKQF1z8IyfqZ1ZSx0SBRHpWSi3u43fTOq8+0SVn83k+20aABpcu
+ZjdVOfvYxqZbAoH/kw+Bw98DgVoeluSrpJSdJVPZGSDw5vTDf/xydhFCgGhw
+tSBUneUg43lBdFLO44viemn3bw64FvCcC/0+tOV/78enREH0/jp+k1Z/X29w
+138v05JYXFblHZf903C4lYclaf339FMys1sMEOL05eVpi/Bk16+Io9Qb+36T
+zm6KZQ4FST+CleR1TWyMSLpcPACPy378Q1otVDg7KFyWt/4P/r67OfMj+57z
+sxKSgGlS82aCHf/07v3rs7+0zl90M2Ixi9jDhYtZledLkESLuq2mWMwSFQDx
+D4vy7iF0IIXnp3K1uf2XN1VRN+UKIta74J9mBDf8LGEEm4cPSHw4O70kPeKy
+BQtRk2jLyWlDErphoULrTKvqHrC4AAOIz0gxyAGk01lV0vmfLgBA4tR0Y1NU
+OWDyADTaGqCDR4cWGOjSnbC4pjevp1DtnrOyN0uXtIKPSbponqve93y6KKfP
+84OjYT6aZMPp6Ph4OMqOZkNSsPePZ6M8PZ5P5sf746PZ6Dhjkfq8S7cnVdyB
+JRkM+rcZGOslQfPN+dsfu4F5QVpyequYVC5nBZ2GgrWEGF6X61owLye5AXqy
+KCbw/v8SlLWBioIxISMN/4rTaQ3MbqLo8qaoY0LqNdNYls+J5dRxc5Mbi8fq
+XT0SUAQgmHMLY85FqTHn+INYJaRr9Y3aFldkItRxvZ7dxGkd/3R5+T6GTJ+D
+mOMdEM8uBF90C/2zyWOjetWi5sXpgraQ3ce3JSmin9LFmp59eZPf05rjZdn0
+4uk9Vntb54tPed2L6P5sTVSTknlVLJLZoqyJ2YptFs9u8tlHlrNpLJwrrpnY
+lGjpScR80uhTXpG2R1uks8FvjFD0zOuUEIIu4F3F+WeGYd9CSrVEgl8KIyHL
+ozfpspgTLsc7+rqSBHkVT3OCHe1VYLRLkI3fywqtVHhfFgS9O8KViA4lXS9w
+OMt7XCr8wXDMnZfvLs6ev/zTZTxbpMUtGbG0wDkp8HTlNUE0c6+J8lVJ58BQ
+WOH5dY+Bgd0kuhu7XaEfBnbru6i+weExrJYlXki0yIdN6wbmmEctiHcCFga6
+eJe9IYvM14SAhI+4f16RqPKegLenWFKN/dN16yUthDCQtVB63eI+urvJ5a32
+0FZ0SPwNnxIZqzGpKdA3pnzy9H8wF8VyUpqLMovIcAHEgN0v4pJ+qO6KOucr
+LHFU+d/XxHjrmCigKekQ6RuoxATitI68hfXjc9rsoi4tPaXxq6JerQm/LVv/
+nl5JOLWT6xc9oHMEErsjO4yJIi5XulN2KNBXM+iMpPBblCOY0G30fEggkgsN
+cbWmjFhvBoN7P3qB5dZFAyCDhkAsfeECt0VGS4iib2DxMd3w8UZ7b0taKW3x
+A5EeGRUne3HIJgpQ9PS2aGTvdLua17J7Qhl1S3xbx/knumNNeyB8g2KbxSxT
+e3ExZ/DC4YIHNulHOsj1qsf4EBmDtAYlEdGunNoIhI+/fFFHwNevDCoQAH8H
+lwF955hTQOF1X7aSDIa0nVygJ4Rzfnb5A4FxSZhYr2sCkSigzAOW5R3IqC/G
+suVijll9+QILG2tpGtLb4PuZLohqiqVPHwTSsiJFOSULEdhEnIEW9BJ2N5nb
+gARbAWBi0PnKinCtrtd5rDuZlSvAryRI1X21cwnEoaEchYYyLY3+QyuDjk4U
+RBaFHAUvR9mScl/s+k+gOIIQO89InuI0lnwHGYB5hW3Fe3ueHNjbOyH8u1XF
+lZkLLiJUru9yYGP87C4FsQFr+CzSBXF/eiuxbmHMPcta724K4lDMJZk3EXnT
+cqb3IFd6GlFjviiI0vPs357FfyLuCNJmTsRrAXsk4N2umqRY/heZTGC5VbQo
+yxX2okKK9kPSko5GGTnff0NrNMImJZV7xbgNkVNkEcCUNuuKhM+puMLyapVW
+zT0/rL4pVoLLVYm3kJU8Z+51Clxf1nQlUfg9LeOa0X4NkQRBs1gwtsO0rkjD
+JLSgAzCkTei+UC57na6Yp3gYSxZtPCcWQiz8plxk8WxNOm5GkKTt8jk1kIHK
++kkWgnsT1yurPnw+lrHkNWmXd7RhMA6QODOsTFgrIIJzq7JENkv2Ry6oQA8k
+3vXli9yf4IevX3dpkdCw8MpUbNpyHpmDdw6U+M0vF5fx23eXTPRm6SBt3hEY
+l9mCPD/aucItyeVRohdf7fahu+QgWJhFiqaARLmkU7JaIM5D0Rf7JblzDUZv
+JPkyIlEjP7FQMOyN0S4r14TICftS4mlZfvyY54xHX76oS4XI6hZyviI0JLiJ
+OAWy4CpghMGFGrJxSoKFfs0gQmpx8XxbR+Kx0bfQjyk9nt1LX7/247d5AWGE
+65lL0dHQn7RBJlOANrJcmUFRTNeNPB/gALe6K6rcsk9ovYxSFm5EBRFYFFZ8
+h2eLWMTCIbjo77qcNySTcpA5814juOubdMV7jozEN994OgZ9JFj3VOsSIa1o
+kBqThhge9B467mW5vr6RFRI/jIsWOhF5zm54gTUp4EQi4lARvSPi74w8Fc1l
+SSJvQZhL8PBYGGjhngUuPwtAJ3QiWF/fTAlArErL3tmwkxVUegdJvpoE7ZrZ
+ZcvTSkdnXceEGzN6ewXRRrK5SmRl4D/rGqhICEMMCbqD1UZfnf4YyPbmxixB
+rRbmcjgI4aSig5GIrYzim3n6Fj3gE2mT4NisJbH+To+EWc2aoa/G0tWRVXWz
+2FDccJAMmdi+iS/zimyJkrjYvdAeVCtESOr4GS5+1pP/grLx+cPZf/xy/uHs
+FT5f/HT6+rX9EOkVFz+9++X1K/fJ3fny3Zs3Z29fyc3gFMFX0bM3p395Jjj1
+7N37y/N3b09fPwMuN4GeghMUTY0Pn7BMlbUMfKWY0h90z/cv3//v/zWc0Nn9
+D41U0NHJHwhF0B+AnrwNfFH/JEASi1ytwIlBRYsFneyKmOwCajWxPNKSl0Kt
+pFL9FZD5z5P4X6ez1XDyB/0CGw6+NDALvmSYbX6zcbMAseOrjtdYaAbftyAd
+rvf0L8HfBu7el//6b0DqOBke/dsfIsGReQlhz+yQ0EeICvLvhH6GiRQbE+kk
+OiF5aawyy4stWu/tidW0t2ekGotE0WrgyMaJrjT4QKLkuixFlMCFWkC/JhmL
+/8zWFYvjnop59trQvbS+IoUacNODVJ/lcJ1brb5HdLIqwAPEiHAilLQroz8R
+5ZHiwtwnirotup33r97vYq8MHLJnmBMyHecwb9kwIfJuKtLGSeFwFiqri1Zy
+kRSkH2mFokEJtzOWIgvyJZSJwFZ8HMRsOBKEW6YjtNqclCpAnF4pMF+JwoX/
+gOXfQivyoas2twD06laP+Sf68wpKSgwgEkzpItIkr5alQYSreL5ISVFi5mQW
+YAFLj2pIDNbgqW/qqx49Z1nK90Ten3Sn/BY5qiv1UV8RNIzNfA6lujKnILoN
+HwFgU4cGNlsCbHgx+JZto+zS0/DiC8E1tU6OJ2NiHo2YsNdF3UAYpLTijSNg
+Kzyn80YYIBSy5lGkwtNKtpiRcrIrMpQgUUqxrEL6YoYVbs0IZdWp4RfFaTFd
+FbWVpKw0pCR64FS4WSOeQF8s8muCgVoq5ha2RUGAaTUtSKwsxJpVy7/hIxeN
+s8pJha1BJ5ZALmHX6E7IrIYR0Ythg5B2RCwjJsoR04HUhFmZiekJWP0NLvWh
+kABrSQBxbnjDlZKO4sSV4KX5S6gamAQcpN0K2tATruTVv9T5eXbVp6PFsWa6
+2ISNMD6SD8DTMxGiiiKhlF3QyeNMPEMQghZyE5AlfRWcSMiH/qBXA/WNvCEJ
+RvhOWtwyK+/MMnyPDS/im/i0IgOsyZlpOCPihi2vKreKcrJapPTMcgrrqLbv
+sEhN0p1Y83/TPwgcVgWpAyv6OkkEbEnyBz6HJOGTeA42g+/gcHgOToiVWS9p
+9z+/PvL7py2/h9Qb47UBOv8/eq0Qf/xc6X3HgGpXoBQJC7lnqwJny+oY6XwL
+MuZJ+bCOqPwzpA1Og3VcKGNZugJNgUNEs1TMPcHzeVHBa6hK2L7Rwb7p9hPK
+InCfkyGeBJkX+QKyELqL1evwyBPDtiOPbQs/b0oYB9BX2anWM1zWIoph6Mrg
+QTP6chZohLPiBlsRh6flLIrbgvCbtPFyxso3W0pwaIitUFsbb0QrI2I0f4yu
+YFbOLWTYC8h2gDCINdlaJKHJTP9HnvUitm+IwdTC75zrEJgau3eM8dhX+bJg
+U5ylW60+5YiQXuIr8Ftz8E1N/tp7wIRP5HSpLEmFKLv6AoZG2mJJzCvgQsYw
+qIvPkRzOSZcAdSdhwc8SLZClFm5jWpKF2wFjDHNE5lRsEHrMUhmAvfkA+2Fn
+hMdw3Y8j/Ih3kxIIdXqWVlXBrqiIrVwPkeFRhTew9vidoG5IvwS7udzj7rcH
+4bHKHXMGLISEcdKb+TiZcMgYI9V7medZ7SIUDZMcC66l8TclYMpJOhWX7Spt
+bnYZSVpqgSoBbT87TgyGbUonwXFMFkIELAvDicD8j+qHhrUKGMfTVHwC7EAS
+lguHFjxst2kzu/EeMDJkHjIdUibVHgf8jS4hdrCoEkZb2GEokab7KSVmTRoR
+a7+kfYNKI7Pk3ZhdO8LQNB59YZURX3lhBYFdmhITIgSyfnta9ulfsOoDQbUg
+kGQ8Vc4X5StKkSpKYlcGegrhResbzxDm4BItKiUxtWZFR/x9RY0MP76SHaZZ
+5JkLHDXiAJLVU2DmEjNeE2bcI62Oc15mYNdGz+HDt5ixoy/BOpZ4YzlXgqCX
+4kxAEPfANd8aAMzjGiRCZOE7XlM23V2ITaJCpA7ewyvwkc1vsdzg8toXTtOG
+CtuPUHHY9FSdz5lbzmUGRh9FyYZFFNhMiZhH8Q6WCBcZTP0K3BVRIk/hgro4
+K27ZYYZYRMw4DDoglWnw61+HyfF//nVA/9q72qWnGnYW75xfvIsno+EhLXdF
+vBsJR0LTBmmMa9sTO3jCNist3iErOBntHwjCIq2QEFbhkH+GS8NTbMWFDHVr
+LltYpGxckfC5TRHn5Tfwitn2c5YfJH5KvNvsN70mdSrTuKNxlOFGUSXJwnt3
+cf5ngt+CFD84VOCjFT0zr08bUjV3o+hc0IYkzWJNh3qVrkZvBGuYqasuWxLs
+6lUpTq6X37/7QMg5zeHsjNLFXXoP13GOyNkLeODVYW+wDxq8pyfj7uV6sVC/
+6a1HXJ5Y8MMqyvGyvGHHD/EcZNPhOaJk36YruIBnJN4S9S+yD7hl6yn1msPS
+AxK+FbGpI2fjEPYQ/ORUDd8pkgqFMm9D1AcCQ35HGklSCYv9sizFaVv0ywrQ
+WO1CjOZhnm+ZuC/u0cf5EJLTc16xMesPIErPD6f2j7dgDUlmmyu/TSsi8ygw
+ezV66kdL+XIRcKu07taiIl+L8vQ7VpxIPwl9qCpB5pDvxDfCFchmlK8PVcX5
+pqVlM/qEstFFnsFbVTcollsQK7qrSCtkUkLYjpNnaG1wUwKlvCge/N93NnQn
+0FgLFxbMMW7tDjQkGwirchCZ0JlZ/WjiK0sTYByxyF9jviX+lVQ4yxnJbvg1
+SRL+P10hmv6viLZZjd/xq9hckusleftHRc1f4zeOv3ay1RYv5ZstNtNKzcf2
+y611Sxe1aM7pLuqbseJ6BwpSNSODPL7JP+/yk3wq3nyWCxwKYjtCRgiKOY04
+nQMEAy+oiJXi+e57evr3pOTm6fKFJRC+jCjROl3p8yZj4dfgYbA/NQD6IZ/T
+Az9s8R6ZteEmz5GE49pg27pMuEB+jX9ZFiwEGPH5yxeI4cGL0cTD0RGJYkR5
+5mTskaV+C2/9CxwvbiqEsgvVL5le+bBCjxUWQd8UyFUyXECsK7NqCd/kah46
+RcwoCxMoC/xo9XrRI6803wJeNxI0ov4Cn4h7mScgz8R5yuLvvJv4QG7ST1Dh
+aNsJ1hFdhfC+8ojsUNmO0bPNK2zMbwp9PwPbXhKT9AJFTQnfObgq7bS5Q0KP
+yDvEbuD0kCcl8h2U0wo8zJeD/GaYEPeRNVRF/dsiDXtqrpM0L5HPYOJ2/A5a
+ylXlORS3iDK95NvaEIVHC5H30oDG6NnOUGDYqLXghW8cpbHpwBlNtZNQEXEM
+frawX/BOq3azUiYKikDGXObzQ2ttvDOwEtZlrF374i/feF99BeLIhZAlah2k
+m3ex/uDw3sInaiUwibg5So6NxWq4OrF6MMa9PVJB6B15trcXbdFVxMimVS1K
+srbE2MUZAyiM3KkathHbRo0YuHzKzPhfs17lBADfjMIhn/2rCEgOB5PBkC7S
+g3qJV/8aI6Uu3hHFUyndWyyjA0hTo9YtWPFWAasbTrmxIGDED0VbBJYIbx6n
+cGCJV+xk0eIEk/vnveJfZkSLV31N9mPgCIeLfV+ARDcJpDFgGr9sLXEQ7ayX
+SHjhrIpE1yn66HBIJ7dxQ3xXrhdZfAelHZaP+AoUNPJOZu+zm3R5zR4Sj9Qk
+hY0v7sXTKk8/wsTw9SOOK0NPNNihu0GQvvb5LYNeM3J6dDvD+upjQczNA2UC
+UKpNZxPSiC3U0J+InfjcATFVjjvzJsCxcPlMDdKNw7Wsr1hyOgm0c7e+tj2t
+hHDe+ajCsrqen6foM5CiiW1OXIt39FQk897LKgqwqIN30O/z4pp9iELwH3PO
+MOHHRHL2Sg2q/Hpg71Ttj1g6bAtjqB4tRlHtK9BtQERwbBPBlUvYqjZSIYkD
+6pDNXR5Pw+yBF/OCWedU3gd/l7iPJDgh0Qq3XKMB815M5QK4oUeQSlYB0+qw
+mUStPZ4guHyRS9hv0h/1h9EOJ92ASBb58rq5oWOqbyA8YXuoNQ6PWo+5GR1B
+zWWBrGLDz0G74mTFRf65mJXXpFzfFLO9PaSa5ZUKqaKy4g8PoF21M3UYheQa
+UbgARiBGLflKRArGXWHlTX0SiRCdso9yvVQByOGe/Fqqx3QLtKtfLn9IjuIm
+/8xpu42xqElKkslAUlyoD8+NQ58aCylhzaoQfPmmpQ0guCdusVySAVXa+TmB
+0Bdw0JrIySZKMhjajIuIzw43+0LCHIG+eQFfJOEZ3Xqwvz8+oLOwaBcZJHDu
+r9lsvRJYDgeDZDgcqPsOGYBge15UUl/wW+yV3yi2Biy2jAnTQGDZX0axs1zC
+X8axZ7aEP03iwCgJf9yPW+YI/xyaGkaX2nW3HcQbtgff+Nwp7nzdYdyyIYCE
+7uejuMMq6HzQcdw2BdZQR83vdGTOCgh2OGRobujwXS8ZArxOJxdIOCX7uVPM
+WUd46bTiFlYMh+rP+82HP+TDlxTwcItDPnwUszUb2x/y8ZO+1vHLxNeBBD3C
+C4ABLKZ/Im1hO3SGfOai/vPhr+Sq5A8BvId85IC3A0/nQ13afQt4R78XdiOG
+XeZ7BYKljRiCnUQyYgBuIZIRw9B5OF+qg9Pflr2UocnOyZfWN9m+BoD0XI2t
+ExkxBENf4yb0WvGrFgw5UvR7YDhWndmGwVqLHwsL+q0MYywIqmH81obHDN8u
+4h0zOL0Qv/udhY3T3EXTrTXQaxRgo6gbf0WnnxSYDB2LKKAdKPKY+ZH656+G
+ZEeni+td2N/J8Jj+OstG+/vD457aOkcHk69fWYGJr/NljpDFWfbq4lRsXDjg
+6WHi4jTGEYI4HP1EiiWnI4gPwWkscF1fjellvjaINaQCEBZuGXa1vF4X9Y0p
+nBBbC7VSnfaHMgaxPXrbrnLm/yMXGonwyGUmP0Mvk0Sjp9lHAMOEwEDKMXYP
+c66nzvSyug8tU7gsOc9WzQgGCb1J/DLIIzVJ6yhzNe6CDXv4Ys0GxPs1mROz
+n/N71FHQU16dfYBdE2r35RRoJKDn6zn9ks+6ndeJvDVSUJZEnTsrzuk0Wrzx
+QOWkgWXEJJD2LRp9kKgeu9SkXeeHtg4KEpU18ow0ss0gCK0HegKjDS1R4w2e
+7dgmHfbXKHzVgLdeQATJiJJs5NK6Mo0KKvcFBpISjap+g7GJZUQmghlfEWX/
+zSZIXEVXf+WqXH7C8FnPUXkvvvn2255Z1n9esTHQ4o9fvmklBcE/0rpGHUcm
+rSn2t5O6xCYNT/pODnZePM0xYMKK0UNOM0Is+BEL51vb9KKFWQHiBfOSF/zD
+qYvPCWcwSEjOlA8YPyXtzHsYh8f9/KvgUduc1VHbWW0yQUyuS9b30rjEvfHL
+svgseVNkIgUuXfErSJlJY7MjnNc5T7WmSUM+kXOuHkjSiKaJmTM1iZn8bT/M
+GsNZaoK58dGjwGh9yxUWnifXy3fQHIgoSL7oi8/N5imKxtCRbNJyBKijcMMN
+AGd6B9myx8EyC8CYDf5iHqk3wHkL1N5/EhPW+3+Xu7In/s4oPGHDCFMvSepA
+A+XfxH5Gnme1B0lzAKgr85TYWZBp74o99/b8PPm9PXGU6e9RwNCR8W3DVdz5
+x0+kPzSm7AfOYtHgcxSdwYG6kR0oZ6nqAytcPzCh/RpftnSsCGqVNW92uhNn
+d8PwE19qQvePBZus4tRpJmFHF4hpcDqUKyeIbb2an+MYJJXhe16u92VkchJv
+0sU84RIWLwMyvvqrfLgQc6Wn35/BQtm90uwZJw25oJED3uXso75raesqSKko
+NyKkkv/jF7JyGa4RK1sTgWxoTLY9LbP7DTEeeWLcPN2GpHl1hO4i1D2hZn6M
+WPLXN2F9hobLScVblPfKIVMucwOeZiU8FHQa1Xq59HyoXkGvxXXrRyug8UnK
+ri648BuTyBkpr4FQE5V0nZIS0cDvVsd+OSzHyV1YYCmZ37J5kl6f8toVaIE/
+wo3DGXD8/qq4JvyPU/TjErWXWfQUdRglB29sAjtWoY5lhbqj46Kp88W8z7hg
+jwS1VVKL3daxAG4iaE/V8oqI3fb5SffBcbqdmlcbVYgeysVc8B5FrgTtnn/z
+HyEh9No/ZHGc+itPmwiVfzWXVKO+Hk/hRbEUe+xIfoYf0ZQ4cS4MXcI666bu
+qZcIzy2WS/EiRiaNSZav6fN6DGYrkiZTVN26Lmm6lnzkuKf3DBE4CQPCQtqD
+52mT+i8swgkMLuiUPA8QQb5EmsQqVw+v7oEE+9/XpFR4oD0W0LqN8Qv8HgBM
+Ryy9RL3QKotl5F+o7N8I0FSqRnCrJat0KuWqFjySwGG0D6+cPL7i9nQJrSbh
+dNcMeuOVj0GSNQAQmERCU72busXnt4V2lvForrDMwTcbYiFw5AmjqJ7fg9Lx
+RjQiLtagA9S2AKi9BeZtg9oNytrqOuf90Ktu+ITpBL11iGVpa1olhU4fwSXE
+gVp/tV4GVo4R5UjYj+/SCsztJJDhkdYH1iTo7hUNptZ4I+V+um6TCb1nb88j
+lL29qNXUYJpz5opZiUIifRoguKy0cK0EbDVRABKJ85LYvM3zRtMa0wjfAhQB
+ChDUPhGxvyD1Iffe2y6wZAxgpdfAxCRm9+NkMAjKfj21FE4XbREhThBQIl2P
+DhAI7S25T4CpRI2Ru8C66G360XgJBCrsvcEGYmnI0Y+kjoG08jUt8F5qGFSN
+kAw7CLJAodCcPSC9qgIcvVNWuVlcodnPd6XQFz/0xKcNX35Bjtx36GBs4kZB
+yRH6NiIMv25QyvuIPoJiwyvdgdTvJ4ZaoRgbrUfTCVPz3m+5bGV+5bOp4cCm
+2UofEw5TthjKt06URp4odUb8NDcJ2oyOQuZILyltXxOgMBkucnT9QFEWSbZE
++w8xoWzhiitZ0cNRtEU2NrQOOQP0xJDF+yQVyEmPy7hVA3Ui7eVig5sWMSwH
+YdWsaILi1aHmo+jVkfBCbvFhVVL6Stav5Tji2NCN2MfXpC5KlId7hsRez5Ce
+Yaj1esX4lIbGhJg85rRIcssjOoCrrUnAWeUtizz9lIfq6Bz1PI3pLkIMKu/m
+I4LbXHqe+olNpMMs4EfmxLM8rQup9edao837yAC56cfvC9YeReLEOUfTxRlI
+wFLB/yJi/pEamaE7CC828tuy9puUTQQ+PMSGQ3ggzsuAlUcyT9kAf0uPiyD1
+IC/kpoSvSeQ4rxxSdatJfiOXAJH2UQOB9bPOmS9qy+RrsTpbOjV6eHGwxUUr
+NG7pXUZ2aNCVyjiKuFBdrf1efF182la+HVlNYoOFtcwMbnDhTD6NPYWJ7uFT
+XPJW5723nIXgpatGXjIXu4M49lOrktzTZI9WvpfoY4IT61s0jNjb09fv7Tlj
+2hht7nZTEceJEpKWh2hrBafNnXYGsclUUg1kUqS9AnkxCwRQqqb5TNemSHkR
+OXFMiGxqNVSyPNZ58LRF3jZHXrTNkfdwen+0EQ/kpfTiKw3jcW0jZBA++EE6
+/B3E5K56JN/4KEzF7GaI7cp022iDHyB0dvrVX2sjBXORf/462U4N16JZBxYD
+luvbqeQsmIOPdgwuMoeTIOmucT13yOVCq6kVPaLWZv03hhlHCuJF6mVW6sMi
+eZjLwzS9iywM2IftB2k5+9rAVaQfozcYpEXq7WmXgnQ/gikUtU1TKpZrUpaI
+iVzLD1+1xl6UNXc2bAl5nrQbtuBrGziqjQ7Bl0e889RmVJ3TyrpwwCI3lxEo
+c5MTq60Nww2UZusg84O4evZf6Sy3WKPZJjWxwHp+H10tiUf1Tfz5Ow7x9gV5
+fZAeqR9UCnR8RoLFl2zp8LbnxWecZp5WC7aBsNCaQyH0S5TlxG2J9e5KXAyO
+fvbJmyxjkaLijaADYra80+7js8ss0Vaj+cxFF+AtnA1Mv1lRpM/txfSzkz5G
+n4MSQYfHqjTM7pZFIrjxx+5OKlHbdldtz+MiNUxi5Mi1nTjM+62B0KDLnmmn
+F7QDsbFLg+eXuJSzaxgbiAFDy/Kyrjk1rDRmD4PY1YpyntIJuzFoWRHnPiWz
+opqt+URFV7MaTstZB8vOBAKw5FtG/uV9JNlPUpFoajOt4wClCmg3pPYhG86Q
+sLwCbu4oXa+c356eOk1nH0n0fuTS0tR3ZEbaZmMqvS1s+MPVENHtWZFeL0sO
+DtMhkwUqjdJsp3QDHdOCCA+Y5jcp8sEJPJ6jzTWliNoWRC52AyuyrOKSlYhE
+N9EgVIhik/Jyt4XaZkeF3b64VQ5hJHd8IjgNifCNPqdCWxxuyj5Z10J7ojxw
+83HHOLY4M8Ru5c7NevjC+b6Mv6lE/zzXmOYFN1Dw7+Xyeo2D3uuuawLZzEu8
+nOZe2x4+H13EbYDZfq0x6rHxpLUWMHPzJvV4mXIiu5VOm9L6quRRiQGArDgr
+ajZJuRmxVQ58v5Bf/eOaUHpXyRnS7R6eOmPTQshZnHEnnha8hEdwNRppZevj
+zs4c9yTlPJma5pKxTgwI/JmOiwxsxivxALE+1XHQC6CLR7Q098DK2ubtbL36
+0OSZ+2Db5lxSkOERbag9St6smao1TferL0S8FmwtTm1QrPc4GnmPUBg5x+Dm
+fjrdh3jEFhRwmwnW7S9a1+CO3FrG6gV3rnbWlDZc8Ey5zkHLscXHqcdjISjO
+j237FFOBaWGyCQVDDICDpYInQuE0dpIQQmTdmCwPz5HKxgNOv1xPVfuH9iJF
+vq12pRY9+9G4LwaFxIpk3d1+qc7QILOMrRqw8UxpzFUKXY0G6wQGo3Sn1yne
+8Dr9aaPJqvgp8AzrGQaahO4gOB3Ne5tgX040CAtNn+TGCY8Xd27zrXUdMHNw
+eyCoBZ9v8G91M1j3i1v4Fm+Bzzk3HQadS97il3gcJaMJWlZwGILxIqyj8Tvh
+fNAMgLlNhhESxfsfSQFowrx/zRjSPABDAF2pAI1XmyG1FK6WdiP0z5zgNxYr
+hSlz/Wi/r/5i7831w6pH2/5i7y7OZJsh6TtWW7TEGopTTJgULAMMEOFAAkwG
+OI4+U9+MZt1LgOu3KVevvxOvXI7Ma3ph3atoWyClENrPmB5j2xXr1dpL1FBX
+3w0eqDDIZ2k1OVLUc62aV3VKXLZVfp1WGee/k7Jn7OsDgni6+Bh4akyND1Rw
+IQExUTdadIm7TmSrWpVAbLHwuq/eYrsbSl61CigBeFhm1nj1g2ypVBbpUQvQ
+guKitjwx2VT8c8I3e4SLB2yl3cM+D/f43PatiRnmd9+GIkyMmVkxli+RAMMm
+peNgHd+WrCCjGRdXHhHCS6tQxq3O3coGV5LiZK0zH1UPulSjbC0pPphtMH+i
+9IyO+pjlIHxKhEqwei6TI1K0a2c5R2/tOSOR8U9mYcA1LVyCrpXHnb59FV9J
+Oov+YRJWrlr6nkQANlsCGGHRBSym5qB1cyCi5L6isWjWFcthxiKH2AbpE5Vz
+OfS2WuKt6k6jsEGR7eZO0IhduMSW5WInG6LfmPZtC8NbvPpZTbLv0wwMtwfn
+YDYbsXRAPLG9GT6Tuh1aMQzSW/h4i+A11GtW7TbyJOmLXmDdC0/FK8imDjKx
+thyDudfzTusd2jSya9F6kwfq+ZNWe2xZh21r7TMD4QNACs/KnLYFGrIxhHD8
+qHNWlStkONnEJcmtKGoZ/OWTHh+FZQSW9CR2wzTFS+z5KSaM9XCcWoD5tqX8
+ouBH7qc7E/nJkB76raEnlKcd2Gu6hYHDhy1EYxJejGGgoDP1nGRDiv6ruMqQ
+e5D4t9PPQ7Kkc8tQIVxtWijOnrzvkM3hCU/idN1szkPfp7khgi0uHQhj0yHV
+Ia0nUpwtTQhU6574blO5t7FrS4DwUJSuWbeMf2g2Wd5tupCQeWIkzlP5RWjV
+GWcO20A2O8W4C0UP0wAVpzBEwwGBIuyk4Dx1DE1JsPT4pigUeo1Mtckyucp0
+WBgOQ0PC+dKt6SDzU3Kvcxl+Ysns89JtISUJJGn4g1NZjI7voSXripsxIxyg
+SUjhmRUBUxGXczQcka7IsUp+c95qNAEVHk93eoYfvGKomPjhKdrrQzGQdu9S
+aryFUuQevp31aFRBbAggRLp8F/lRtziKr+RpiXnSk5BqOFZ925viwhvlaIxq
+3FujN/xeF25rpdxb3dmLrXT0deGHYG0mlOTtnOsFhhPxot6VpoHifI1Ga66a
+21t7fZNqRMCLJwnaLjNpPOJcRogq5/V2r5HZX/Gp1MiIt7YOtSC+8i9mxfFJ
+h7AvTrLlvRUFQru1ZcWST6NpafGO+1ioIu55DyV+BcvUJU51OzbDG9OFNDDU
+JAibKeNL4IkJYP+gCwXVazGb7/2f5gs1abHh7ljFvRcjiLbGCDzHmebiGjbt
+d44sJXmShxMUoc9K+uMwTgbN3Lk2/F6cpswdIrYTaWkdkwLc8prcpgyZyR42
+EES7YL8enj3X7GsclKnO4GCRcxlJIMs+Db1Ell46qpazc5CydbruYOWs+GWS
+SyqwksEiek/0dIwIvE+MW4poYBP8ofZFj+tXL7ApqwSzQXBWfM5Bwpngzq/x
+SwiKX3UIJVpX5Smj8maZ53bVBnWnducoHjjzNH1J8tnMTbEqh/b+DKW/ucpZ
+wkXjaTxSFrFN499Yz0VLsYcer3TcygBtbdSakRtPBE6oeutY2GZvup52vDDK
+ZoeOY7bqFLyNrQZW+sZaUP6+3XMA6cjk57YWGBwbj3M5C0Ud+wkaG42h/CZd
+Hd6TTaC5OoEuD5AqJVyfYoVIwnrG9oO4LGUog/qmrUbDeNWeVLLlFcja2f6G
+dpKJ5xLlfBLarjr6LDnQ4wNBtbFoYmpSdTszcs+2C9cifnpES4XYeMqP6arH
+FSsL/lBxC6/UZGM85z/9lA2Tn4FnbwmJ0VO7uc+v8VubD26iflJb2spCI1J3
+Sd5ePIlh0hGx2co7itqLBUnIqnRmqhccCpazPWwlNU4dkbPN09l8NtBLcqK9
+uN6LQFX5tg7LA5hhN1pO4O8+jGZsvP3UpCc/IeDTgn8ryiI/PRK9CZf2BM53
+uhHybsfrbfR7I/T9oh30k0lyGF4FBJXOhKE1tvn+pWc5pk/ygqhv3DtB35q0
+pqTQRUf85gGqCIJ7mwGmugwPSC0f7iZ4txQ+5GrVE3STbu/3vYRNtrVvU46m
+6M6N/zpDm1vjmjvdgVQkDnaFmXtbw3JckP9gisJu7DLFt0VSIwtpUchuSbKS
+qjSXWW4mB4UTNLdEYHGZJgzbMIkkSJ14oSO02GoTeRgScjBuB7t7Ng3apIv7
+AJb+7z0zEfOR01hGfAxwitxzIY3oAUWQ5OC8U+pe0BQ7UsxLgUW7ESx+h3rZ
+DmpyntW9MVjcDKliGdn0Zx4Dklj2KOioLy68jCvj6PMU+V4kOhWy7XgEH889
+AY8wBflxWwllhueyAmrUqnN6VFl+rE02OyoSMOmK+Anq4qTUUUO25pIQZOjH
+VphBoFLhwl4SwCQN8sB1jIDWUbWnkCIvyk/ydhZk5XpSqaO4a1yMV2NOZuq+
+bJjbf3k1nei1yE17wYwSnbvC86eWWcLQXJTX2onC5S1qK9+hRHbsoFq2Bdgh
+0J7Cx6nsrwvS9O9nmA067Md7e6afTn9vLzad6IH6Zs6ta0pup2MwrG5z3jt7
+wt6fS5L2i9i232IfAjclF+DYNjixafS9y3lHe3vvvfm9WARYqhkaIJNIW0OT
+TFW+DODAAt6/eg+nVzggKbbzG4rNYnrf7aSdEMa8GB0/Ret4p7erGa4rshMQ
+8CWPYt0x+Xjs/SJesgv3tPQ9XHPWqHFUqQyXZejgjrCDAh6B/W+2mLC9BcLe
+AUw97MuQRjgSjpHe2V5Hay+vc2zuk8l1MNcr2wO7MbARIBbB+7gEfwIoqdpu
+TuspMxb6XLnPsSJ6ERRP1AfYJD5nu3ou/R7QXnxTGJQh3kUQqwPbvp87cCgw
+3McSt3QhxJLP57Z5vDZykdkgoR9z+wCxzURV2ygI/BIeW0JaiTJqL8Jy7rop
+/4u1E/7FrUOa3ttWVmMPF/QRfr6jG3EnGkxrIhMOVGZrMsR4GFNH40MlvIuc
+lkZ2QG3HmsmsUDuXWhxr+fIa89+Y6aOhfmaGD83T24KzKMt5VK0xrypK6ABe
+o535CYH7Nv1c3K5vjda2AhEJlb2wv5H0WC9ECZTLaOW4UPUvN5mF/cN4/B+1
+Tbr/BldhYKbQ6otq72FR7D1uaB7HySZ4luVx/IgECq3YZjqxxZswx53gGS2R
+VEwg/cFNJT+xKeMCN7qxMt2eZVgQ8OZeeACA7I3IYV9mu4Wjyh2ufpJ2p5Bq
+NTo2stPPiZmRSBnLQmSksH0AU7qdIs4J2fHl5euNXijiRpThxOpGkkIcNyOW
+UZLkbKl6Bve6MbmthKoRvQyJbJhVW8FoWBD6XLvplDAkzBilW9rFwiNrM5hS
+5picmunY0G9b7Iaz0Rf3nJ7PXVR4ZgfBjCVGaxRK5EahbLQV1hwLdp5vZF8Z
+fye0hEhnsPgt6vWrr193taZW57gUTZd2EHUMk9NuR/pD98S4yJ8YF58RumdO
+uTRsRbHKf2PjRsD07fwway6KWYJId34XNItytQfCMHTbL1F8muWVouaXb8zm
+uZONdFUIHmOL/bVWRuoobdvdkiupec6IDttamqa0QRK7TZs2hZgavs6zdKbV
+BtF0PfuYe+0FDEYdS6pIZ2dUcFXuZBxdQ3dfstVy/srUv/QMG0kKRirGnven
+b5mY6QsUcqdZhqoO6XueGiC4IYBuGSMhTmGvep0Mf69NqYF2AmmPsws65PfC
+LClpNhCmuvlhfQRpXN6dofRj4TWnpidqxLo+7UoGSdDjP+WiFAuMPReq3zFD
+NdFjN1RCS783McUWhWtn3Vq75W74Akzc1Ixh9ysoajMN1s5HNjNVTNcXWBQ1
+doIgDhHo1eVPH85OL//25t2rs9f9W+neVJjJ9p/ygG2Jcp+ycAU+VIXSmFsv
+d3b1Kjo8LG2M1cWVOT+f/eVP7z4QqJfJx57OYNbvokLQr6esmdGJAEl2rykR
+gYDFEGCRa2YErq5BGrV8ND2/SSeGmqPXgueYajl5Sj828t/M5NYGVuZPgvRN
+MZW4hph2l0daZw9xY8JIyiygJflFLdzUQ1oxzwo30nnOZpdEqS6HJ+jYdMu1
+d/+lB0/KScb9EMQjSQjwj1znoiI8QVT4a+yDOmyNpKZkMlRXDCQQHyPUbLJd
+OIulw3RQ5Zvn1PGwVTusHvyQ72KBlLieNASeOu/H/ltH7A572pSYzgFPZlYM
++o7ZLoh2WEwohFpFI9Pcz+l8YAKfmSGLhVtLNEFfzZ/K2hm0NjNPp4CyL5Op
+AyqGdhwEUXK2JzdPZg5dK0h0qow46B4cS9PaLIOvr62mLkcn8QfChLv0Xuev
+7CzKciUX7T4ZIUaMEKrNSmLpZ66640JnURZNE62Z1Uq9zGi/KdWOgequf/oj
+Pv2HX7Gp8epQ1q1qr6enhi/DeT15UGJsByXG2ZoHzriKPLFmBWcNEhpLb+70
+115gAbR2zqds7tKedo57ugmLbDfrfD55o521SKy1QOMf7hDAiQRkFGYhlpIi
+i10/oAinHaowI6k5MoY3EwcvFwkyBtPGhGn5akGIRmLMHo/KoPsno9qYUU2y
+VWSPBiDWQWVbQNZGY5bBYKna7PbCFtmY9gi2071MvfPPYmx4kPR+CF6twxDM
+W8LDDh8y5od0sSg7+05a9L2w5fiuxZV1HmwZ4RW+SnDHjfu1/hBzk8c82Sgu
+gwFghnMXbqR2FjRAcSMuQ2QaMzK9ZVAwy7eYtII7HTshi7muzdRjeBqQu+Ra
+knj+OpsD0siSPksOlWLW5MQybTqva2AG2ygrUq60ad0TkWvCyHXakgRuq36p
+VNsqeqiTHVxqogz6hzNhZHpsco2YTV2FYmb8BbcjYkXAvrzbzWJ2oDZYuJbx
+tp3buXpsK/DUZwgifNAEvp6XL74xFDqYMC5xbWn6Gb5+8ujr21PPH5t5LsOI
+4K25nZKYQS6WdBaQudxn/DmcbCTpgHag0Qu/ras+biqjkXxUnzCq2woQRXMp
+FPd6d5Ad0A7B7yJgVbLnQnRyr4ReNUqEqE2nYZRN3Xryf5KgRflTx5l6Y0qd
+nYR+ktKoLzR8w8M5fPRwbA6D14jfH5G125Wozo9ojcOyadwduZpW5KGsqdps
+fxIuGkMLvOa/7ZbJ3gg8srrjZHhsW4RjHKnrVi2lXWa+u9IO5OsMPQOC8q3+
+VmqW8rCuwoetNWKWv+2fGL1nes+TCz8VqXacFmilnBf4ZC63b9X3f8rbFP9W
+b5N/PPvM+7i5rOefJosND2q00l6DeljfAjYO+6XZueabjqRToF8lrK+yNOEl
+Hu21YuOnDql1v0MXXy+DHYJwABEeD6P9P0RIOc8Z3cNKq2ZMszvDI819q7Rt
+BJ3eXYgDpsruUk7YKxeif0zz5i5X4ScvMVFIjrcoNhycxJfvXl6++8Vev/IC
+OsaVIx3fnogQB6K+q07mpRdYCnFpecXn1vhtVRAM/KyW8PuncPt4ciAK13Kb
+9vLUFtC92Bt97end0gWnFyK2NYztBGOXcqZ7D3HqQOyFbs1Zil1Tt/Zykbme
+g9Yh7PXJDgEw8QHQ1aI6aJEk3s/23B2VYzI5ot/XmQ07wUluSG7bJbpnRHYv
+bMm968/8emB8WtjDOtzdPpPJb23HvZlR37NMtqyCMWS2NA1XsBKWoF22+9Zq
+EqxUu11bijs8YWc2bRzJGfCgfCTG+WTqOmTqusiJz0nn2tuUo1uLrmickXU9
+q93XXlQu/5wCx2wesf+SEedyye/MN6AqMwczSOJ8K7BWlH+xS7XUlrWzBfr8
+IPvjY27U7NpqUrWmIkhjZ95Pi7ceMh28d1c59mfJQePuP128wbuJGQIkvARe
+tmHJJVcCYf0eVz1kYtjwKRNjJf5S3a90w2yMCY3yAR6dmIF6gmcynfu6XF+r
+N5xsb7jHkB5vplw/9XSP1GTYOlD8oUnhPVlKEOXaGgZtz9LuabEr0NVHhaPA
+T/b4yGdTV/77Rj6Hb1a3SXe4l1VhVQi2b7PDMG+He00jJWIRW2bfuUExwWJ9
+Z8xGIVoQGw63NVF9advrfk+s2ASKwzdB025ZOmb3HUUmquG3cM8bFhiINaOs
+M4RFzfRacht7NaToI2bQ5tGe99IUPNMOT9+P7KB0PmM24Tm39jPCuR4BH21Y
+LGnGnaisHabASTFNRUwWMoOqLBHKrcpF7lTUF7GZvcNCwW3UoI9NxAlgbBzw
+m5zE1EkY5d5Dv3ZuD7e8Wi+FtE1thCw+fNuRkES6LaEwmEK5UYjzG6dQhsL4
+t06hlACQC9B2DKH0J7AG53qscnxjlK2dKOrd/th4W2shmh7qOhLUQ+WO4Z++
+7Qq+3zrvaGNM42877mjrcaP/MidZfvkiXyXAU9OH+fKY7Lfzc6M38PRWiTb5
+IVuS8VHkPcjGt/tPFkXHKop+XyhYRhk+/31hYJm/+LwVDPYJ4Zil0sPhYHrK
+XRyEhH9DKNh6KoOIcAAL6/YIedwxi63uEHH8T4aI3ZSPLeFh2Co+JR2r4aja
+e/y7IsRW8xkOTozmKVIPrgO2zsWVEGnv8FYj3d+AdEgr5QWHnEs4DhfE2vZm
+XmV0aSulvfU/oRtFEA8cWGf8Rg8HW/30QDOHbc0POkqyvTdodXawjLG3jKzl
+JtPWUl2lPJvVUE9fZWsFxkbUBs7a65lrKmHr1lDgEZ4JH+VX3kutI7xw/8ir
+kkll7ToF20A/TPfdVnBzwDpC4FGxBXJkTFzu47mhb6jwvRzqXOGx197yrPSq
+cnbxmBR2LmkPdn/A8L/a7IzSqs4inNosiGOOLr8Ehd9dZ9Fq39JaxmEHHfyG
+ETX8p1ch3poK4cpumPy9op+HsGd7Lz4pAX16QWTHcIYeT0qw+yczawOZvTkF
+AQNEQnwLfEcPg08mMXWOkHEi6jeNkAlmT2nJU1BYIN0zXbtZngzjrgsmXQSQ
+CvYFzehn3w63Q2KIvXRNcon9SS4B1LoGumyMWwnaOJhmYZ24saXghKGi81Cs
+n6S1KR7ke/bQoIdH2+ltbwbWudjfP/ghGPQgevV6uTmvIWjS2N4uZNy2xn1P
+7Nq3fViL6dG3QTEP7Lu9wJFZ4LZubZrnva01rNd6NlQGWl2S/A6xT+kP+4Ln
+CEmBGlfbFPUWTvVQJVN7t2OP4z/AoFsJPK4fD1PS9TW6sDVBLkiYbqzuWW6A
+oY/q6E9jm9NwjRSXukkhz+3W7hcdTVBcHxW6Kuii0t78lqQfUdEldvNIFZK0
+dX5q4ZHODnugyKi9wv2Qlf+G4ROS2fNPjJwIy7im+SxVh6N53JNngZiqwfbm
+Dh6jtI6+iNuaIuIVD7dC9CpqH+t7GOZTPqrntibFaBdkMhzOl55i2du43a+v
+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
+x7N9Ak82GMmJ/B86ut8wZOwAAA==
 
 -->
 
