@@ -70,6 +70,12 @@ Claude Desktop / Claude Code / Cursor. Nothing to clone and nothing to build:
 }
 ```
 
+In Claude Code that config is one command:
+
+```bash
+claude mcp add cedulon -- npx -y @cedulon/mcp-server
+```
+
 Policy limits come from the environment: `CEDULON_MAX_AMOUNT`,
 `CEDULON_MAX_CUMULATIVE`, `CEDULON_MAX_PAYMENTS`, `CEDULON_WINDOW_MS`,
 `CEDULON_ALLOWED_PAYEES`, `CEDULON_ALLOWED_CURRENCIES`,
@@ -82,8 +88,9 @@ Working inside this repository instead, against the sources:
 npm run mcp
 ```
 
-Registry files (`server.json`, `smithery.yaml`) are prepared in this
-repository. Directory submissions stay with the publisher.
+The server is listed in the MCP Registry as
+`io.github.dogrucanemek-alt/cedulon`; `server.json` is the entry it is published
+from. `smithery.yaml` is prepared but not submitted.
 
 
 ## Layout
