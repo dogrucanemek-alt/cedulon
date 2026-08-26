@@ -17,7 +17,7 @@ import {
   type RailSettlement,
 } from "@cedulon/x402-adapter";
 
-export const MCP_SERVER_VERSION = "0.1.0";
+export const MCP_SERVER_VERSION = "0.2.0";
 
 export type SpendArgs = {
   amount: string;

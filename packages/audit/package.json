@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/audit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reconcile a rail extract against the Cedulon receipt chain.",
   "license": "Apache-2.0",
   "type": "module",
@@ -40,8 +40,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/checkpoint": "^0.1.0",
-    "@cedulon/receipts": "^0.1.0",
-    "@cedulon/x402-adapter": "^0.1.0"
+    "@cedulon/checkpoint": "^0.2.0",
+    "@cedulon/receipts": "^0.2.0",
+    "@cedulon/x402-adapter": "^0.2.0"
   }
 }

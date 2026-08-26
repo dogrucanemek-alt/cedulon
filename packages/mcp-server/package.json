@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local stdio MCP server for policy-gated Cedulon spend and audit.",
   "license": "Apache-2.0",
   "type": "module",
@@ -43,12 +43,12 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/audit": "^0.1.0",
-    "@cedulon/checkpoint": "^0.1.0",
-    "@cedulon/core": "^0.1.0",
-    "@cedulon/cose": "^0.1.0",
-    "@cedulon/receipts": "^0.1.0",
-    "@cedulon/x402-adapter": "^0.1.0",
+    "@cedulon/audit": "^0.2.0",
+    "@cedulon/checkpoint": "^0.2.0",
+    "@cedulon/core": "^0.2.0",
+    "@cedulon/cose": "^0.2.0",
+    "@cedulon/receipts": "^0.2.0",
+    "@cedulon/x402-adapter": "^0.2.0",
     "@modelcontextprotocol/sdk": "^1.30.0"
   }
 }

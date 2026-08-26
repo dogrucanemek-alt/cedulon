@@ -256,7 +256,7 @@ describe("mcp-server stdio JSON-RPC", () => {
         receiptCount?: number;
         chainHead?: string | null;
       };
-      assert.equal(beforeBody.version, "0.1.0");
+      assert.equal(beforeBody.version, "0.2.0");
       assert.equal(beforeBody.policy?.maxAmount, "10");
       assert.equal(beforeBody.receiptCount, 0);
       assert.equal(beforeBody.chainHead, null);

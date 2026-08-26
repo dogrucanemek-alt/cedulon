@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/manifest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Signed trade manifests issued before a Cedulon spend.",
   "license": "Apache-2.0",
   "type": "module",
@@ -40,7 +40,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/core": "^0.1.0",
-    "@cedulon/cose": "^0.1.0"
+    "@cedulon/core": "^0.2.0",
+    "@cedulon/cose": "^0.2.0"
   }
 }
