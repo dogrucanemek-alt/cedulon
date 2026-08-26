@@ -1,15 +1,11 @@
 # Interop run
 
-Pin: check out `080c872`. It carries this file, the finding object, the
-dry-run write path, and the line-ending fix in the documentation test
-helper, so every command below runs from it. Later commits may exist;
-the pin is the point both sides agreed to compare, not a claim about the
-tip of the branch. A runner who was mailed a different SHA should use
-that one instead.
-
-```
-PIN=080c872
-```
+Pin: check out the commit SHA you were mailed. This file travels inside
+it, so if you are reading this from a checkout of that SHA you have the
+right one. The SHA is not written here on purpose: a commit cannot name
+itself, and every attempt leaves a pointer that goes stale the moment
+the next commit lands or history is rewritten. Both sides quote the SHA
+in the thread instead, where it is timestamped and cannot drift.
 
 This is a clean-clone run for an independent implementer. It is not the
 general verifier walkthrough; that is `docs/RUN_AS_VERIFIER.md`.

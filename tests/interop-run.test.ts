@@ -1,5 +1,4 @@
 import { strict as assert } from "node:assert";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -19,17 +18,12 @@ describe("interop-run doc", () => {
     assert.equal(claim, null, `remove the hard-coded count ${JSON.stringify(claim?.[0])}`);
   });
 
-  it("pins a commit this clone can actually check out", () => {
-    const pin = doc.match(/^PIN=([0-9a-f]{7,40})$/m)?.[1];
-    assert.ok(pin, "the doc must carry a PIN= line");
-    // A rewritten or never-pushed SHA reaches the runner as a dead pin.
-    // Resolving it here is what a runner's `git checkout` would do.
-    const type = execFileSync("git", ["cat-file", "-t", `${pin}^{commit}`], {
-      cwd: root,
-      encoding: "utf8",
-    }).trim();
-    assert.equal(type, "commit", `PIN=${pin} does not resolve to a commit`);
-    execFileSync("git", ["merge-base", "--is-ancestor", pin, "HEAD"], { cwd: root });
+  it("does not hard-code a commit SHA", () => {
+    // A commit cannot name itself, so any SHA written here points at an
+    // earlier commit and dies when history is rewritten. One such pin was
+    // already mailed-ready and unreachable. The SHA belongs in the thread.
+    const sha = doc.match(/\b[0-9a-f]{7,40}\b/);
+    assert.equal(sha, null, `remove the hard-coded SHA ${JSON.stringify(sha?.[0])}`);
   });
 
   it("names the required commands", () => {
