@@ -1,14 +1,47 @@
 {
   "name": "@cedulon/base-extract",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "private": true,
+  "description": "Read-only Base Sepolia USDC Transfer logs as a Cedulon rail extract.",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "./src/index.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogrucanemek-alt/cedulon.git",
+    "directory": "packages/base-extract"
+  },
+  "homepage": "https://github.com/dogrucanemek-alt/cedulon/tree/master/packages/base-extract",
+  "bugs": {
+    "url": "https://github.com/dogrucanemek-alt/cedulon/issues"
+  },
+  "keywords": [
+    "cedulon",
+    "base",
+    "usdc"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
-    "@cedulon/x402-adapter": "*"
+    "@cedulon/x402-adapter": "^0.2.0"
   }
 }

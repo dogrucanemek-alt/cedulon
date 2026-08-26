@@ -6,6 +6,7 @@
   "type": "module",
   "dependencies": {
     "@cedulon/audit": "*",
+    "@cedulon/base-extract": "*",
     "@cedulon/checkpoint": "*",
     "@cedulon/core": "*",
     "@cedulon/cose": "*",

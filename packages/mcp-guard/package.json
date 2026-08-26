@@ -1,15 +1,48 @@
 {
   "name": "@cedulon/mcp-guard",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "private": true,
+  "description": "Fail-closed MCP tools/call wrapper for Cedulon spend.",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "./src/index.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogrucanemek-alt/cedulon.git",
+    "directory": "packages/mcp-guard"
+  },
+  "homepage": "https://github.com/dogrucanemek-alt/cedulon/tree/master/packages/mcp-guard",
+  "bugs": {
+    "url": "https://github.com/dogrucanemek-alt/cedulon/issues"
+  },
+  "keywords": [
+    "cedulon",
+    "mcp"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
-    "@cedulon/core": "*",
-    "@cedulon/x402-adapter": "*"
+    "@cedulon/core": "^0.2.0",
+    "@cedulon/manifest": "^0.2.0",
+    "@cedulon/x402-adapter": "^0.2.0"
   }
 }

@@ -25,9 +25,8 @@ pinned-key comparison and the window checks; `0.1.0` predates them.
 
 `@cedulon/base-extract` and `@cedulon/mcp-guard` are not published and are
 marked `private`, so a workspace publish skips them rather than relying on
-this sentence staying true. Neither is packaged for release: their entry
-points name TypeScript sources, which works inside the repo and would not
-work outside it. `demo:live` uses `base-extract` from the workspace.
+this sentence staying true. Both build to `dist` like the other packages;
+they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
 desktop install. The 0.2.3 bundle was built and unpacked, and the server inside
