@@ -8,7 +8,7 @@ export type DocumentedRun = {
 };
 
 export function documentedRuns(markdown: string): DocumentedRun[] {
-  const fences = [...markdown.matchAll(/```(\w*)\n([\s\S]*?)```/g)].map((m) => ({
+  const fences = [...markdown.matchAll(/```(\w*)\r?\n([\s\S]*?)```/g)].map((m) => ({
     lang: m[1],
     body: m[2],
   }));
@@ -16,7 +16,7 @@ export function documentedRuns(markdown: string): DocumentedRun[] {
   for (let i = 0; i < fences.length - 1; i += 1) {
     const [block, next] = [fences[i], fences[i + 1]];
     if (block.lang !== "bash" || next.lang !== "") continue;
-    const lines = block.body.trim().split("\n");
+    const lines = block.body.trim().split(/\r?\n/);
     const optional = lines[0] === "# optional";
     const commandLines = optional ? lines.slice(1) : lines;
     // Only single-command blocks have one output block to compare against.
