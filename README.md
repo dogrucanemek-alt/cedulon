@@ -5,8 +5,9 @@ policy, signed spend receipt (SCITT-anchorable).
 
 Cedulon is **not** a payment rail. It sits above x402 and AP2.
 
-No npm publish, no real wallets, no network rails: everything runs locally
-against mock fixtures.
+The packages are on npm and the MCP server is in the MCP Registry, but nothing
+here touches money: no real wallets and no network rails, only mock fixtures.
+`cedulon_spend` settles on a mock rail and says so in its own description.
 
 Core packages carry zero runtime dependencies; the MCP server package
 depends only on the official MCP SDK.
@@ -107,7 +108,8 @@ packages/mcp-server     stdio MCP server (official SDK)
 packages/x402-adapter   HTTP 402 adapter + mock rail extract
 packages/base-extract   read-only Base Sepolia USDC → RailExtract
 examples/demo           runaway, dispute, bypass, audit CLI
-spec/draft-dogru-cedulon-00.md
+spec/                   draft-dogru-cedulon-01 (current), -00, plus the
+                        reattestation and streaming drafts
 THREAT_MODEL.md
 docs/RUN_AS_VERIFIER.md
 ```

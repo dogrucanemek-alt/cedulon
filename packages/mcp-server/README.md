@@ -26,13 +26,15 @@ The binary is `cedulon-mcp` (compiled JavaScript, no
 node packages/mcp-server/dist/index.js
 ```
 
-From a packed or published install:
+From the published package, without a clone:
 
 ```bash
-npx cedulon-mcp
+npx -y @cedulon/mcp-server
 ```
 
-`npx @cedulon/mcp-server` is the same once the package is on the npm registry.
+`npx cedulon-mcp` is the same binary from a packed or already-installed copy.
+The server is also listed in the MCP Registry as
+`io.github.dogrucanemek-alt/cedulon`.
 
 From the repository source tree (development):
 

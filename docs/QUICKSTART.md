@@ -17,7 +17,8 @@ audit. No wallet. No network rail. No clone, unless you want to read the code.
 ```
 
 - Claude Desktop: add it to the MCP servers file, then restart Claude.
-- Claude Code: add the same block to `.mcp.json` or your user MCP config.
+- Claude Code: `claude mcp add cedulon -- npx -y @cedulon/mcp-server`, or add
+  the same block to `.mcp.json` by hand.
 - Cursor: Settings → MCP → add the same command.
 
 That is the whole install. The published package is compiled JavaScript, so
