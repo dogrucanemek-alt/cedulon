@@ -1,11 +1,11 @@
 # Interop run
 
-Pin: `a37362d` plus the commits that add this file. After this package
-closes, the `PIN` line below is the commit to clone. A runner who was
-mailed a SHA should check out that SHA; it contains this file.
+Pin: `6d15834` is the last content commit of this package (interop doc,
+finding object, and the dry-run write path). A runner who was mailed a
+SHA should check out that SHA; it contains this file.
 
 ```
-PIN=a37362d
+PIN=6d15834
 ```
 
 This is a clean-clone run for an independent implementer. It is not the
