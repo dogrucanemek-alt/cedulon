@@ -28,11 +28,14 @@ Abstract
    the document requires it to be reported as conditional.  Checkpoints
    carry the suppression guarantee, so this revision profiles the
    checkpoint as a Signed Statement, gives the verification algorithm a
-   step that consumes the transparency receipts returned for them, and
-   states what a witness that holds a checkpoint the presented chain
-   omits is called.  It also defines a Dispute Evidence Bundle
-   (evidence, not an award) and optional SCITT anchoring.  Cedulon is
-   not a competitor to x402 or AP2; it sits above them.
+   step that consumes the transparency receipts returned for
+   checkpoints, names what a witness holding a checkpoint the presented
+   chain omits reports, brings equivocation within reach by comparing
+   recorded copies against the presented chain, and states how
+   checkpoint totals may be withheld without withholding the fact that
+   they were.  It also defines a Dispute Evidence Bundle (evidence, not
+   an award) and optional SCITT anchoring.  Cedulon is not a competitor
+   to x402 or AP2; it sits above them.
 
 Status of This Memo
 
@@ -44,12 +47,9 @@ Status of This Memo
    working documents as Internet-Drafts.  The list of current Internet-
    Drafts is at https://datatracker.ietf.org/drafts/current/.
 
-   Internet-Drafts are draft documents valid for a maximum of six months
-   and may be updated, replaced, or obsoleted by other documents at any
-   time.  It is inappropriate to use Internet-Drafts as reference
-   material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 28 February 2027.
+
+
 
 
 
@@ -57,6 +57,13 @@ Dogru                   Expires 28 February 2027                [Page 1]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 28 February 2027.
 
 Copyright Notice
 
@@ -75,7 +82,7 @@ Table of Contents
    2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   4
    3.  Architecture  . . . . . . . . . . . . . . . . . . . . . . . .   5
      3.1.  Policy Decision Point . . . . . . . . . . . . . . . . . .   5
-     3.2.  Receipt Issuer  . . . . . . . . . . . . . . . . . . . . .   5
+     3.2.  Receipt Issuer  . . . . . . . . . . . . . . . . . . . . .   6
      3.3.  Anchor / SCITT  . . . . . . . . . . . . . . . . . . . . .   6
    4.  Trade Manifest  . . . . . . . . . . . . . . . . . . . . . . .   6
    5.  Spend Receipt . . . . . . . . . . . . . . . . . . . . . . . .   7
@@ -99,13 +106,6 @@ Table of Contents
    11. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  24
    12. SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  25
    13. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  25
-   14. Security Considerations . . . . . . . . . . . . . . . . . . .  26
-     14.1.  T1: Prompt injection leads to unauthorized spend . . . .  26
-     14.2.  T2: Runaway agent (loop spend) . . . . . . . . . . . . .  27
-     14.3.  T3: Replay of payment authority  . . . . . . . . . . . .  27
-     14.4.  T4: Receipt forgery or repudiation . . . . . . . . . . .  28
-     14.5.  T5: Policy bypass via direct rail access . . . . . . . .  29
-     14.6.  T6: TOCTOU between policy check and payment  . . . . . .  29
 
 
 
@@ -114,6 +114,13 @@ Dogru                   Expires 28 February 2027                [Page 2]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   14. Security Considerations . . . . . . . . . . . . . . . . . . .  26
+     14.1.  T1: Prompt injection leads to unauthorized spend . . . .  26
+     14.2.  T2: Runaway agent (loop spend) . . . . . . . . . . . . .  27
+     14.3.  T3: Replay of payment authority  . . . . . . . . . . . .  27
+     14.4.  T4: Receipt forgery or repudiation . . . . . . . . . . .  28
+     14.5.  T5: Policy bypass via direct rail access . . . . . . . .  29
+     14.6.  T6: TOCTOU between policy check and payment  . . . . . .  29
      14.7.  T7: Signing-key leakage  . . . . . . . . . . . . . . . .  30
      14.8.  T8: Counterparty price gouging or defective delivery . .  30
      14.9.  MUST-T8-custody  . . . . . . . . . . . . . . . . . . . .  31
@@ -155,13 +162,6 @@ Internet-Draft                   Cedulon                     August 2026
    a valid signature.  A counterparty can ship the wrong artifact.  A
    transparency log, if used at all, is proprietary.
 
-   Cedulon fills that gap.  It does not clear funds, hold custody, or
-   operate a payment facilitator.  An optional escrow actor is defined
-   only as a third-party role interface (Section 14.13).
-   Implementations of this specification MUST NOT take custody of funds
-   or operate escrow (MUST-T8-custody).
-
-
 
 
 
@@ -169,6 +169,12 @@ Dogru                   Expires 28 February 2027                [Page 3]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   Cedulon fills that gap.  It does not clear funds, hold custody, or
+   operate a payment facilitator.  An optional escrow actor is defined
+   only as a third-party role interface (Section 14.13).
+   Implementations of this specification MUST NOT take custody of funds
+   or operate escrow (MUST-T8-custody).
 
    The control is an old one.  Reconciling an internal ledger against an
    external statement is what double-entry bookkeeping [PACIOLI] made
@@ -212,12 +218,6 @@ Internet-Draft                   Cedulon                     August 2026
 
    Receipt Issuer:  The party that signs Spend Receipts.
 
-   Anchor:  An optional SCITT Transparency Service [RFC9943] that
-      registers a signed statement and returns a COSE receipt [RFC9942].
-
-   Dispute Evidence Bundle:  A package of the Trade Manifest, the Spend
-
-
 
 
 
@@ -226,6 +226,10 @@ Dogru                   Expires 28 February 2027                [Page 4]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   Anchor:  An optional SCITT Transparency Service [RFC9943] that
+      registers a signed statement and returns a COSE receipt [RFC9942].
+
+   Dispute Evidence Bundle:  A package of the Trade Manifest, the Spend
       Receipt, and a delivery hash.  It is evidence for a later human or
       legal process.  It is not an arbitral award and not an escrow
       release.
@@ -267,13 +271,9 @@ Internet-Draft                   Cedulon                     August 2026
    single-use (MUST-T6-2), and MAY be carried to the adapter that
    performs settlement.
 
-3.2.  Receipt Issuer
 
-   After the adapter attempts settlement (success or a recorded deny
-   that still needs an audit trail for an allowed-then-aborted path),
-   the Receipt Issuer signs a Spend Receipt over a canonical encoding
-   (MUST-T4-1).  Verifiers reject bad signatures and byte mismatch
-   (MUST-T4-2).
+
+
 
 
 
@@ -281,6 +281,14 @@ Dogru                   Expires 28 February 2027                [Page 5]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+3.2.  Receipt Issuer
+
+   After the adapter attempts settlement (success or a recorded deny
+   that still needs an audit trail for an allowed-then-aborted path),
+   the Receipt Issuer signs a Spend Receipt over a canonical encoding
+   (MUST-T4-1).  Verifiers reject bad signatures and byte mismatch
+   (MUST-T4-2).
 
 3.3.  Anchor / SCITT
 
@@ -321,14 +329,6 @@ Internet-Draft                   Cedulon                     August 2026
    requested amount or currency differs from the manifest (MUST-T8-2) or
    if the manifest is expired (MUST-T3-3).
 
-   A spend that is not bound to a verified manifest MUST be marked
-   noManifest on the receipt and MUST still pass limit, velocity, and
-   scope checks (MUST-T1-2).  An implementation MAY refuse all
-   noManifest spend (MAY-T1-4).
-
-
-
-
 
 
 
@@ -337,6 +337,11 @@ Dogru                   Expires 28 February 2027                [Page 6]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   A spend that is not bound to a verified manifest MUST be marked
+   noManifest on the receipt and MUST still pass limit, velocity, and
+   scope checks (MUST-T1-2).  An implementation MAY refuse all
+   noManifest spend (MAY-T1-4).
 
 5.  Spend Receipt
 
@@ -381,11 +386,6 @@ Internet-Draft                   Cedulon                     August 2026
 
                                   Table 1
 
-   A receipt with outcome = settled MUST have a non-null x402PaymentRef
-   (MUST-T4-7).  An aborted receipt MUST NOT be added into checkpoint
-   totals.
-
-
 
 
 
@@ -393,6 +393,10 @@ Dogru                   Expires 28 February 2027                [Page 7]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   A receipt with outcome = settled MUST have a non-null x402PaymentRef
+   (MUST-T4-7).  An aborted receipt MUST NOT be added into checkpoint
+   totals.
 
    All twelve labels in Section 6.1 are always present.  An empty
    optional value is encoded as CBOR null, never by omitting the label.
@@ -436,10 +440,6 @@ Internet-Draft                   Cedulon                     August 2026
    this condition.  A Dispute Evidence Bundle that includes a verified
    countersignature has stronger evidence that the payee accepted those
    bytes; the bundle is still not an award (MUST-T8-4).
-
-
-
-
 
 
 
@@ -770,14 +770,14 @@ Internet-Draft                   Cedulon                     August 2026
    receiptCount MUST equal the number of receipts (settled and aborted)
    whose timestampMs falls in that window. chainHeadHash MUST equal
    receiptHash of the last receipt in that window, or null if the window
-   is empty (MUST-T11-2). totals MUST sum only receipts with outcome =
-   settled.
+   is empty (MUST-T11-2).  Where totals is present it MUST sum only
+   receipts with outcome = settled; the one permitted absence is the
+   signed redaction below.
 
-   An issuer that publishes a checkpoint without its totals MUST encode
-   totals as null in the signed payload (MUST-T11-12).  An empty map is
-   an honest zero for an empty window and is not a redaction.  Because
-   the redaction is inside the signature, it cannot be added to, or
-   removed from, a checkpoint after signing.
+
+
+
+
 
 
 
@@ -785,6 +785,12 @@ Dogru                   Expires 28 February 2027               [Page 14]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   An issuer that publishes a checkpoint without its totals MUST encode
+   totals as null in the signed payload (MUST-T11-12).  An empty map is
+   an honest zero for an empty window and is not a redaction.  Because
+   the redaction is inside the signature, it cannot be added to, or
+   removed from, a checkpoint after signing.
 
    A verifier MUST NOT accept a redaction asserted anywhere but the
    signed payload (MUST-T11-13).  A presentation-layer flag alongside a
@@ -831,12 +837,6 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-
-
-
-
-
-
 Dogru                   Expires 28 February 2027               [Page 15]
 
 Internet-Draft                   Cedulon                     August 2026
@@ -844,8 +844,9 @@ Internet-Draft                   Cedulon                     August 2026
 
    A verifier MAY be given such receipts for the period under audit.  It
    is a distinct input from the presented checkpoint chain, and
-   supplying it is optional: a verifier given none behaves exactly as in
-   -01 (MUST-T11-10).  Supplying an empty set is not the same as
+   supplying it is optional: a verifier given none performs the same
+   steps, and reports the same findings, that it would if this input did
+   not exist (MUST-T11-10).  Supplying an empty set is not the same as
    supplying none.  An empty set says a witness is configured and
    recorded nothing, which is itself reportable; absence says no witness
    was consulted.
@@ -889,7 +890,6 @@ Internet-Draft                   Cedulon                     August 2026
    One data dependency is worth naming, because "any order" read naively
    would break it.  Step 15 decides which transparency receipts, and
    which statement bodies, survive checking.  Steps 14 and 16 consume
-   what survives.  An implementation that ran step 14 against unchecked
 
 
 
@@ -898,6 +898,7 @@ Dogru                   Expires 28 February 2027               [Page 16]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   what survives.  An implementation that ran step 14 against unchecked
    bodies, or step 16 against unchecked receipts, would not produce the
    same set of findings, so that order is not among the permitted ones.
    Nothing else in this list feeds another step.
@@ -945,7 +946,6 @@ Internet-Draft                   Cedulon                     August 2026
         fails, if kid does not match the configured issuer key, if the
         content type is not the receipt type, or if the decoded claim
         map does not match the presented claims (MUST-T4-2, MUST-T4-8).
-
 
 
 
@@ -1052,12 +1052,12 @@ Internet-Draft                   Cedulon                     August 2026
 
    13.  Walk checkpoints in epoch order. prevCheckpointHash MUST equal
         the SHA-256 of the previous checkpoint COSE bytes, or null for
-        genesis (MUST-T11-4).
+        genesis (MUST-T11-4).  The identifier checkpoint-total-mismatch
+        SHOULD be used for a broken chain, which is the fourth condition
+        its table row names.
 
-   14.  If two successfully verified checkpoints share an epoch number
-        and have different hashes, the verifier MUST report equivocation
-        (MUST-T11-3).  The identifier equivocation SHOULD be used for
-        this condition.  The checkpoints compared here are those
+
+
 
 
 
@@ -1066,6 +1066,10 @@ Dogru                   Expires 28 February 2027               [Page 19]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   14.  If two successfully verified checkpoints share an epoch number
+        and have different hashes, the verifier MUST report equivocation
+        (MUST-T11-3).  The identifier equivocation SHOULD be used for
+        this condition.  The checkpoints compared here are those
         presented *together with* any carried by verified transparency
         receipts (step 15).  Comparing only the presented chain cannot
         raise this finding: MUST-T11-8, applied in step 12, requires
@@ -1110,10 +1114,6 @@ Internet-Draft                   Cedulon                     August 2026
    A condition that makes the audit fail is a finding.  A condition that
    only makes the completeness guarantee conditional is a warning.
    Warnings MUST still appear in operator-facing output (MUST-T10-14).
-
-
-
-
 
 
 
@@ -1431,24 +1431,24 @@ Internet-Draft                   Cedulon                     August 2026
 
 14.1.  T1: Prompt injection leads to unauthorized spend
 
-      +=============+==============================================+
-      | ID          | Requirement                                  |
-      +=============+==============================================+
-      | MUST-T1-1   | The PDP MUST decide from structured request  |
-      |             | fields and stored policy, not from model-    |
-      |             | generated prose.                             |
-      +-------------+----------------------------------------------+
-      | MUST-T1-2   | A spend that is not bound to a verified      |
-      |             | Trade Manifest MUST be marked no-manifest on |
-      |             | the Spend Receipt and MUST still be subject  |
-      |             | to limit, velocity, and scope policy.        |
-      +-------------+----------------------------------------------+
-      | SHOULD-T1-3 | Hosts SHOULD require a human confirmation    |
-      |             | channel for first-use payees.                |
-      +-------------+----------------------------------------------+
-      | MAY-T1-4    | An implementation MAY refuse all no-manifest |
-      |             | spend.                                       |
-      +-------------+----------------------------------------------+
+       +=============+=============================================+
+       | ID          | Requirement                                 |
+       +=============+=============================================+
+       | MUST-T1-1   | The PDP MUST decide from structured request |
+       |             | fields and stored policy, not from model-   |
+       |             | generated prose.                            |
+       +-------------+---------------------------------------------+
+       | MUST-T1-2   | A spend that is not bound to a verified     |
+       |             | Trade Manifest MUST be marked noManifest on |
+       |             | the Spend Receipt and MUST still be subject |
+       |             | to limit, velocity, and scope policy.       |
+       +-------------+---------------------------------------------+
+       | SHOULD-T1-3 | Hosts SHOULD require a human confirmation   |
+       |             | channel for first-use payees.               |
+       +-------------+---------------------------------------------+
+       | MAY-T1-4    | An implementation MAY refuse all noManifest |
+       |             | spend.                                      |
+       +-------------+---------------------------------------------+
 
 
 
@@ -1458,7 +1458,7 @@ Dogru                   Expires 28 February 2027               [Page 26]
 Internet-Draft                   Cedulon                     August 2026
 
 
-                                 Table 9
+                                  Table 9
 
 14.2.  T2: Runaway agent (loop spend)
 
@@ -2466,11 +2466,13 @@ Dogru                   Expires 28 February 2027               [Page 44]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   Nicholas Templeman and Walter Hawkins each ran the suite from a clean
-   clone and reported their figures, which is the basis for the byte-
-   stability claim in Section 16.  Nicholas Templeman classified his own
-   run honestly as a repetition of the author's checks rather than an
-   independent implementation.
+   Nicholas Templeman ran the suite from a clean clone on a different
+   operating system and reported his figures, and classified his own run
+   honestly as a repetition of the author's checks rather than an
+   independent implementation.  Walter Hawkins did not run it; he read
+   the reported figures and pressed for the run to be stated precisely
+   enough to be repeatable, which is why the conditions and not only the
+   totals appear in Section 16.
 
    None of them reviewed this text, and any error in it is the author's.
 
@@ -2510,8 +2512,6 @@ Appendix A.  Test Vectors
    expiresAtMs=1700000000000, ap2MandateHash=null.
 
    COSE_Sign1 hex (whitespace ignored; identical to the locked test):
-
-
 
 
 

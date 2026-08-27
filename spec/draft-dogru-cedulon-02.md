@@ -145,10 +145,13 @@ under audit; otherwise the document requires it to be reported as
 conditional. Checkpoints carry the suppression guarantee, so this
 revision profiles the checkpoint as a Signed Statement, gives the
 verification algorithm a step that consumes the transparency receipts
-returned for them, and states what a witness that holds a checkpoint
-the presented chain omits is called. It also defines a Dispute Evidence
-Bundle (evidence, not an award) and optional SCITT anchoring. Cedulon
-is not a competitor to x402 or AP2; it sits above them.
+returned for checkpoints, names what a witness holding a checkpoint the
+presented chain omits reports, brings equivocation within reach by
+comparing recorded copies against the presented chain, and states how
+checkpoint totals may be withheld without withholding the fact that
+they were. It also defines a Dispute Evidence Bundle (evidence, not an
+award) and optional SCITT anchoring. Cedulon is not a competitor to
+x402 or AP2; it sits above them.
 
 --- middle
 
@@ -605,8 +608,9 @@ The checkpoint window is half-open `[startMs, endMs)`
 (`MUST-T11-7`). `receiptCount` MUST equal the number of receipts
 (settled and aborted) whose `timestampMs` falls in that window.
 `chainHeadHash` MUST equal `receiptHash` of the last receipt in that
-window, or null if the window is empty (`MUST-T11-2`). `totals`
-MUST sum only receipts with `outcome` = `settled`.
+window, or null if the window is empty (`MUST-T11-2`). Where `totals`
+is present it MUST sum only receipts with `outcome` = `settled`; the
+one permitted absence is the signed redaction below.
 
 An issuer that publishes a checkpoint without its totals MUST encode
 `totals` as null in the signed payload (`MUST-T11-12`). An empty map
@@ -659,7 +663,8 @@ the statement it recorded.
 
 A verifier MAY be given such receipts for the period under audit. It
 is a distinct input from the presented checkpoint chain, and supplying
-it is optional: a verifier given none behaves exactly as in -01
+it is optional: a verifier given none performs the same steps, and
+reports the same findings, that it would if this input did not exist
 (`MUST-T11-10`). Supplying an empty set is not the same as supplying
 none. An empty set says a witness is configured and recorded nothing,
 which is itself reportable; absence says no witness was consulted.
@@ -815,7 +820,9 @@ identifiers are not an interoperability surface.
     `window-coverage` SHOULD be used for this condition.
 13. Walk checkpoints in epoch order. `prevCheckpointHash` MUST
     equal the SHA-256 of the previous checkpoint COSE bytes, or null
-    for genesis (`MUST-T11-4`).
+    for genesis (`MUST-T11-4`). The identifier
+    `checkpoint-total-mismatch` SHOULD be used for a broken chain,
+    which is the fourth condition its table row names.
 14. If two successfully verified checkpoints share an epoch number
     and have different hashes, the verifier MUST report
     equivocation (`MUST-T11-3`). The identifier `equivocation`
@@ -1039,9 +1046,9 @@ requirement text those citations refer to.
 | ID | Requirement |
 |---|---|
 | MUST-T1-1 | The PDP MUST decide from structured request fields and stored policy, not from model-generated prose. |
-| MUST-T1-2 | A spend that is not bound to a verified Trade Manifest MUST be marked `no-manifest` on the Spend Receipt and MUST still be subject to limit, velocity, and scope policy. |
+| MUST-T1-2 | A spend that is not bound to a verified Trade Manifest MUST be marked `noManifest` on the Spend Receipt and MUST still be subject to limit, velocity, and scope policy. |
 | SHOULD-T1-3 | Hosts SHOULD require a human confirmation channel for first-use payees. |
-| MAY-T1-4 | An implementation MAY refuse all `no-manifest` spend. |
+| MAY-T1-4 | An implementation MAY refuse all `noManifest` spend. |
 
 ## T2: Runaway agent (loop spend)
 
@@ -1450,11 +1457,13 @@ and is also the author of {{SCHROCK}}, cited here as adjacent work.
 Pablo Play found that a repeated reference hid the unaccounted amount,
 and filed a written reproduction.
 
-Nicholas Templeman and Walter Hawkins each ran the suite from a clean
-clone and reported their figures, which is the basis for the
-byte-stability claim in {{impl-status}}. Nicholas Templeman classified
-his own run honestly as a repetition of the author's checks rather
-than an independent implementation.
+Nicholas Templeman ran the suite from a clean clone on a different
+operating system and reported his figures, and classified his own run
+honestly as a repetition of the author's checks rather than an
+independent implementation. Walter Hawkins did not run it; he read the
+reported figures and pressed for the run to be stated precisely enough
+to be repeatable, which is why the conditions and not only the totals
+appear in {{impl-status}}.
 
 None of them reviewed this text, and any error in it is the author's.
 
