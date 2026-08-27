@@ -13,7 +13,7 @@ one of the 128 came back as `settlement-without-receipt`, at
 operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 
-The three -00 drafts and `-01` (rev 01) are posted on the IETF datatracker.
+The three -00 drafts and `-02` (rev 02) are posted on the IETF datatracker.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
@@ -21,7 +21,11 @@ official MCP SDK.
 Eight packages are published on npm, so the server runs without a clone:
 `npx -y @cedulon/mcp-server`. Seven are at `0.2.0`; `@cedulon/mcp-server` is at
 `0.2.4`. Those versions carry the requirements added in `-01`, including the
-pinned-key comparison and the window checks; `0.1.0` predates them.
+pinned-key comparison and the window checks; `0.1.0` predates them. The
+requirements `-02` adds — the transparency witness, the withheld and
+not-anchored conditions, and signed totals redaction — are in this repository
+but not yet in any published package, so check a claim against the repository
+rather than an installed version.
 
 Every tool the server exposes carries a title and the hint that applies to it:
 four read-only, and `cedulon_spend`, which appends a receipt and is therefore
@@ -65,8 +69,15 @@ check in `tests/mcp-server.test.ts` compare those declarations against each
 other.
 
 Round 1 of external review is folded in, and the normative points it produced
-are written into `spec/draft-dogru-cedulon-01.md`, which is posted on the
-datatracker as rev 01. See `docs/EXTERNAL_REVIEW.md` for the findings and
-what changed.
+are written into `spec/draft-dogru-cedulon-01.md`, posted on the datatracker
+as rev 01. See `docs/EXTERNAL_REVIEW.md` for the findings and what changed.
+
+Round 2 produced `spec/draft-dogru-cedulon-02.md`, posted as rev 02. Two
+readers showed that the checkpoint carried the T11 guarantee while nothing
+registered it or read it back: the anchoring section profiled only the receipt,
+no verification step consumed a transparency receipt, equivocation could not
+fire against a chain its own rules make consecutive, and a window total had no
+redaction rule. `MUST-T11-10` through `MUST-T11-14` close those, and
+`MUST-T9-5` carries the window total into the privacy requirements.
 
 To reproduce any of the above, see `docs/RUN_AS_VERIFIER.md`.
