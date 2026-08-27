@@ -37,6 +37,39 @@ export function kidFromPublicKeyPem(publicKeyPem: string): Uint8Array {
   return new Uint8Array(createHash("sha256").update(der).digest().subarray(0, 8));
 }
 
+/**
+ * The same key can be written as PEM or as bare base64 SPKI, and PEM itself
+ * tolerates different line widths. Comparing the DER bytes asks whether two
+ * spellings name the same key; comparing the text asks whether they were typed
+ * the same way. Returns null when the input is not a public key at all, which a
+ * caller has to tell apart from a key that simply does not match.
+ */
+export function toSpkiDer(key: string): Buffer | null {
+  const trimmed = key.trim();
+  const attempt = trimmed.includes("-----BEGIN")
+    ? { key: trimmed, format: "pem" as const }
+    : {
+        key: Buffer.from(trimmed.replace(/\s+/g, ""), "base64"),
+        format: "der" as const,
+        type: "spki" as const,
+      };
+  try {
+    return createPublicKey(attempt as Parameters<typeof createPublicKey>[0]).export({
+      type: "spki",
+      format: "der",
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** True only when both spellings resolve to the same public key. */
+export function sameSpkiKey(a: string, b: string): boolean {
+  const left = toSpkiDer(a);
+  const right = toSpkiDer(b);
+  return left !== null && right !== null && left.equals(right);
+}
+
 export function publicKeyPemFromPrivate(privateKeyPem: string): string {
   return createPublicKey(createPrivateKey(privateKeyPem))
     .export({ type: "spki", format: "pem" })

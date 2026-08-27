@@ -119,7 +119,11 @@ describe("finding object schema", () => {
     assert.equal(parsed.guarantee, "conditional");
     assert.equal(parsed.receipts, 2);
     assert.equal(parsed.findings.length, 0);
-    assert.equal(parsed.warnings.length, 1);
-    assert.equal(parsed.warnings[0].code, "unauthenticated-extract");
+    // The demo hands the audit neither root, and the report names both gaps
+    // rather than reporting a balance as if it settled the question.
+    assert.deepEqual(
+      parsed.warnings.map((w) => w.code).sort(),
+      ["unauthenticated-extract", "unauthenticated-issuer"],
+    );
   });
 });

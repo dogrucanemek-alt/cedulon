@@ -7,6 +7,7 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
+  sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
@@ -59,11 +60,12 @@ export class MemoryTransparencyService {
     };
   }
 
+  /** The log answering about its own receipt: checked against this log's key. */
   verifyInclusion(receipt: InclusionReceipt): boolean {
     if (this.leaves[receipt.index] !== receipt.statementHash) {
       return false;
     }
-    return verifyCoseSign1(Buffer.from(receipt.coseHex, "hex"), receipt.issuerPublicKeyPem, CTY_INCLUSION);
+    return verifyInclusionReceipt(receipt, this.publicKeyPem);
   }
 
   size(): number {
@@ -78,12 +80,35 @@ export function anchorReceipt(ts: MemoryTransparencyService, signed: SignedRecei
   return ts.register(signed.coseHex);
 }
 
-export function verifyInclusionReceipt(receipt: InclusionReceipt): boolean {
+/**
+ * `expectedWitnessKeyPem` is the log's key, held out of band. Without it this
+ * checks the receipt against the key it carries, so anyone able to mint a
+ * keypair can assert that a statement is in a log they invented.
+ *
+ * The signed payload carries `index` and `treeHead` as well; comparing only
+ * `statementHash` would let the envelope claim a position in the log that its
+ * own signature does not support.
+ */
+export function verifyInclusionReceipt(
+  receipt: InclusionReceipt,
+  expectedWitnessKeyPem?: string,
+): boolean {
+  if (
+    expectedWitnessKeyPem !== undefined &&
+    !sameSpkiKey(receipt.issuerPublicKeyPem, expectedWitnessKeyPem)
+  ) {
+    return false;
+  }
   if (!verifyCoseSign1(Buffer.from(receipt.coseHex, "hex"), receipt.issuerPublicKeyPem, CTY_INCLUSION)) {
     return false;
   }
   try {
-    return decodeInclusionPayload(receipt.coseHex).statementHash === receipt.statementHash;
+    const signed = decodeInclusionPayload(receipt.coseHex);
+    return (
+      signed.statementHash === receipt.statementHash &&
+      signed.index === receipt.index &&
+      signed.treeHead === receipt.treeHead
+    );
   } catch {
     return false;
   }

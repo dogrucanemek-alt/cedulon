@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@cedulon/checkpoint": "^0.2.0",
+    "@cedulon/cose": "^0.2.0",
     "@cedulon/receipts": "^0.2.0",
     "@cedulon/x402-adapter": "^0.2.0"
   }

@@ -8,6 +8,7 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
+  sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
   type CborMap,
@@ -163,7 +164,15 @@ export function redactCheckpointTotals(claims: CheckpointClaims): CheckpointClai
   return { ...claims, totals: null };
 }
 
-export function verifyCheckpoint(signed: SignedCheckpoint): boolean {
+/**
+ * `expectedIssuerKeyPem` is the key the verifier holds out of band. Without it
+ * the checkpoint is checked against the key it carries, which proves internal
+ * consistency and nothing about who published the epoch.
+ */
+export function verifyCheckpoint(signed: SignedCheckpoint, expectedIssuerKeyPem?: string): boolean {
+  if (expectedIssuerKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedIssuerKeyPem)) {
+    return false;
+  }
   const bytes = Buffer.from(signed.coseHex, "hex");
   if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_CHECKPOINT)) {
     return false;

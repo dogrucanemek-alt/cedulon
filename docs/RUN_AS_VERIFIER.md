@@ -54,12 +54,23 @@ receipts=2
 findings=0
 guarantee=conditional
 warn	unauthenticated-extract	rail extract is unsigned; completeness guarantee is conditional
+warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them, so the completeness guarantee is conditional
 ```
 
-Read the last two lines before you trust the first one. This demo passes no
-rail extract and no pin, so the books balance against what the issuer itself
-recorded. That is a conditional result, and the audit says so. Section 8 shows
-what an unconditional one requires.
+Read the warnings before you trust the first line. This demo passes no rail
+extract, no pin and no issuer key, so the books balance against what the issuer
+itself recorded, checked against the key those same records carry. That is a
+conditional result, and the audit says so. Section 8 shows what an
+unconditional one requires.
+
+Two roots, not one. The rail pin answers who reported the settlements;
+`issuerTrust` answers who was entitled to issue receipts and checkpoints for
+them. Without the second, anyone who can mint a keypair can sign a receipt for
+a settlement they never made and the row stops looking uncovered - the receipt
+verifies against the key it carries, which is a question that answers itself.
+Receipts that do not match the pinned issuer are reported as
+`issuer-key-mismatch` and left out of the reconciliation, so the settlement they
+pointed at stays reported.
 
 ## 4. Four bypass kinds (must all fail)
 
@@ -176,6 +187,9 @@ audit({
     accountId: "acct-1",
     railId: "base-sepolia-usdc",
   },
+  issuerTrust: {
+    publicKeyPem: issuerKeyYouAlreadyHold,   // never taken from the receipts
+  },
 });
 ```
 
@@ -183,3 +197,22 @@ Without `trust` the report stays `conditional` and says why. With `trust`, a
 mismatched key is `extract-key-mismatch`, a wrong account, rail, or short
 window is `extract-scope-mismatch`, and a caller-supplied settlement array that
 disagrees with the extract is `extract-settlement-mismatch` — the extract wins.
+
+A third root appears once you configure a transparency witness: pass
+`witnessTrust: { publicKeyPem: logKeyYouAlreadyHold }` alongside
+`inclusionReceipts`. An inclusion receipt checked against the key it carries
+proves that some log is internally consistent, and an anchoring nobody can
+check is enough to silence `checkpoint-not-anchored`. Without the pin the report
+warns with `unauthenticated-witness`.
+
+The same argument applies to the receipts. Without `issuerTrust` every receipt
+and checkpoint is checked against the key it carries, so an attacker who mints
+their own keypair can issue a receipt for a settlement they were never
+authorised to make and the naked row goes quiet. With `issuerTrust`, a receipt
+from any other key is `issuer-key-mismatch` and is not counted as coverage, so
+the settlement it named stays reported; an issuer key you supply but that cannot
+be read is `trust-key-unreadable` on `id: "issuer"`, which is a broken setting
+rather than evidence against the receipts. The same three functions take the key
+directly for callers outside `audit()`: `verifyReceipt(signed, issuerKey)`,
+`verifyCheckpoint(signed, issuerKey)` and
+`verifyDecisionToken(signed, nowMs, issuerKey)`.

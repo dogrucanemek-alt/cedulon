@@ -9,6 +9,7 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
+  sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
@@ -78,13 +79,6 @@ export function isValidAmount(amount: string): boolean {
 
 export function isValidNonce(nonce: string): boolean {
   return Buffer.byteLength(nonce, "utf8") >= NONCE_MIN_BYTES;
-}
-
-export function padNonce(nonce: string): string {
-  if (isValidNonce(nonce)) {
-    return nonce;
-  }
-  return nonce.padEnd(NONCE_MIN_BYTES, "0");
 }
 
 export function generateReceiptKeys(): { publicKeyPem: string; privateKeyPem: string } {
@@ -181,7 +175,10 @@ export function signReceiptJson(
   return { claims, signature, publicKeyPem, encoding: "json" };
 }
 
-export function verifyReceiptJson(signed: SignedReceipt): boolean {
+export function verifyReceiptJson(signed: SignedReceipt, expectedIssuerKeyPem?: string): boolean {
+  if (expectedIssuerKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedIssuerKeyPem)) {
+    return false;
+  }
   if (signed.claims.noManifest !== (signed.claims.manifestHash === null)) {
     return false;
   }
@@ -211,7 +208,10 @@ export function signReceiptCose(
   };
 }
 
-export function verifyReceiptCose(signed: SignedReceipt): boolean {
+export function verifyReceiptCose(signed: SignedReceipt, expectedIssuerKeyPem?: string): boolean {
+  if (expectedIssuerKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedIssuerKeyPem)) {
+    return false;
+  }
   if (!signed.coseHex) {
     return false;
   }
@@ -260,8 +260,17 @@ export function signReceiptUnchecked(
   };
 }
 
-export function verifyReceipt(signed: SignedReceipt): boolean {
-  return signed.encoding === "json" ? verifyReceiptJson(signed) : verifyReceiptCose(signed);
+/**
+ * Verifying against `signed.publicKeyPem` alone proves the receipt is internally
+ * consistent: any key can sign any body, including its own. Pass the issuer key
+ * the verifier holds out of band to ask the question that matters - whether this
+ * issuer signed it. The parameter is optional so existing callers keep their
+ * behaviour; an audit that omits it is told so in its report.
+ */
+export function verifyReceipt(signed: SignedReceipt, expectedIssuerKeyPem?: string): boolean {
+  return signed.encoding === "json"
+    ? verifyReceiptJson(signed, expectedIssuerKeyPem)
+    : verifyReceiptCose(signed, expectedIssuerKeyPem);
 }
 
 function issuerCoseBytes(signed: SignedReceipt): Uint8Array {

@@ -69,10 +69,11 @@ receipts=2
 findings=0
 guarantee=conditional
 warn	unauthenticated-extract	rail extract is unsigned; completeness guarantee is conditional
+warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them, so the completeness guarantee is conditional
 ```
 
-The last two lines are the point: a balance without a pinned extract is
-conditional. Exit 0.
+The warnings are the point: a balance without a pinned extract and a pinned
+issuer key is conditional. Exit 0.
 
 ## 5. Four bypasses, all FAIL
 

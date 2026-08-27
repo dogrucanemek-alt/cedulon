@@ -162,7 +162,7 @@ describe("rail extract binding", () => {
     const result = gatedSettleWithLedger(
       engine(),
       {
-        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "real", nowMs: NOW, tool: "spend" },
+        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "real".padEnd(16, "-"), nowMs: NOW, tool: "spend" },
         payer: "payer-1",
         paymentHeader: "mock",
       },
@@ -185,7 +185,7 @@ describe("rail extract binding", () => {
     const ok = gatedSettleWithLedger(
       engine(),
       {
-        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "solo", nowMs: NOW, tool: "spend" },
+        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "solo".padEnd(16, "-"), nowMs: NOW, tool: "spend" },
         payer: "payer-1",
         paymentHeader: "mock",
       },
@@ -475,7 +475,7 @@ describe("rail extract binding", () => {
     const result = gatedSettleWithLedger(
       engine(),
       {
-        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "dup", nowMs: NOW, tool: "spend" },
+        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "dup".padEnd(16, "-"), nowMs: NOW, tool: "spend" },
         payer: "payer-1",
         paymentHeader: "mock",
       },
@@ -520,7 +520,7 @@ describe("rail extract binding", () => {
     const first = gatedSettleWithLedger(
       engine(),
       {
-        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "in", nowMs: NOW, tool: "spend" },
+        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "in".padEnd(16, "-"), nowMs: NOW, tool: "spend" },
         payer: "payer-1",
         paymentHeader: "mock",
       },
@@ -533,7 +533,7 @@ describe("rail extract binding", () => {
     const second = gatedSettleWithLedger(
       engine(),
       {
-        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "out", nowMs: later, tool: "spend" },
+        req: { amount: 1n, currency: "USD", payee: "payee-1", nonce: "out".padEnd(16, "-"), nowMs: later, tool: "spend" },
         payer: "payer-1",
         paymentHeader: "mock",
       },

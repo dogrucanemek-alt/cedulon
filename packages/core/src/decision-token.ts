@@ -7,6 +7,7 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
+  sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
@@ -82,7 +83,18 @@ export function signDecisionToken(
   };
 }
 
-export function verifyDecisionToken(signed: SignedDecisionToken, nowMs?: number): boolean {
+/**
+ * `expectedIssuerKeyPem` is the issuer key the caller holds out of band. Omitted,
+ * the token is checked against the key it carries, which any minted key satisfies.
+ */
+export function verifyDecisionToken(
+  signed: SignedDecisionToken,
+  nowMs?: number,
+  expectedIssuerKeyPem?: string,
+): boolean {
+  if (expectedIssuerKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedIssuerKeyPem)) {
+    return false;
+  }
   const bytes = Buffer.from(signed.coseHex, "hex");
   if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_DECISION)) {
     return false;

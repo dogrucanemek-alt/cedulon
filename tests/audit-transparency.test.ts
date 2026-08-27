@@ -38,7 +38,7 @@ function chainReceipts(
         noManifest: true,
         x402PaymentRef: `x402-n${i}`,
         timestampMs: 1_700_000_000_000 + i,
-        nonce: `n${i}`.padEnd(16, "0"),
+        nonce: `n${i}`.padEnd(16, "-"),
         prevReceiptHash: prev,
         outcome: "settled",
       },
@@ -162,13 +162,19 @@ describe("A — transparency witness on the audit path", () => {
     const cp = oneCheckpoint(k, receipts);
     const ts = new MemoryTransparencyService(fixtureEd25519Pems());
     const inc = anchorCheckpoint(ts, cp);
-    const held = trustedExtract(receipts, [cp], { inclusionReceipts: [inc] });
+    const issuerTrust = { publicKeyPem: k.publicKeyPem };
+    const witnessTrust = { publicKeyPem: ts.publicKeyPem };
+    const held = trustedExtract(receipts, [cp], {
+      inclusionReceipts: [inc],
+      issuerTrust,
+      witnessTrust,
+    });
     assert.equal(held.ok, true);
     assert.equal(held.guarantee, "unconditional");
     assert.equal(held.warnings.length, 0);
     // A witness that holds it reads the same as no witness at all. The witness
     // earns its place by what it reports when the chain is short, not here.
-    const none = trustedExtract(receipts, [cp]);
+    const none = trustedExtract(receipts, [cp], { issuerTrust });
     assert.deepEqual(held.findings, none.findings);
     assert.deepEqual(held.warnings, none.warnings);
     assert.equal(held.guarantee, none.guarantee);
@@ -178,7 +184,9 @@ describe("A — transparency witness on the audit path", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
     const cp = oneCheckpoint(k, receipts);
-    const without = trustedExtract(receipts, [cp]);
+    const without = trustedExtract(receipts, [cp], {
+      issuerTrust: { publicKeyPem: k.publicKeyPem },
+    });
     // Pinned to the pre-witness behaviour, not to another run of the same call.
     assert.equal(without.ok, true);
     assert.equal(without.guarantee, "unconditional");
