@@ -9,6 +9,7 @@
 /scripts/** text eol=lf
 /site/** text eol=lf
 
+/.gitattributes text eol=lf
 /.dockerignore text eol=lf
 /.env.example text eol=lf
 /.gitignore text eol=lf
