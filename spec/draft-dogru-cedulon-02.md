@@ -157,7 +157,7 @@ is not a competitor to x402 or AP2; it sits above them.
 *Note to Readers:* This document is submitted as Informational. The
 author's eventual intended track, if the work is taken up, is a
 Standards Track profile of COSE {{RFC9052}} and CWT {{RFC8392}} for
-agent-spend receipts. This -01 does not claim IETF consensus.
+agent-spend receipts. This -02 does not claim IETF consensus.
 
 Agents can now pay. Open HTTP 402 protocols {{X402}} attach
 stablecoin settlement to ordinary requests. Card networks and
@@ -375,7 +375,8 @@ Absence of a countersignature MUST NOT invalidate the issuer
 receipt (`MAY-T8-9`). If a countersignature is present, a
 verifier MUST reject it when the signature fails, when `kid` or
 content type does not match the configured payee key, or when
-label -70401 is not the issuer COSE bytes (`MUST-T8-8`). A
+label -70401 is not the issuer COSE bytes (`MUST-T8-8`). The
+identifier `countersign-bad` SHOULD be used for this condition. A
 Dispute Evidence Bundle that includes a verified countersignature
 has stronger evidence that the payee accepted those bytes; the
 bundle is still not an award (`MUST-T8-4`).
@@ -421,7 +422,7 @@ Checkpoint labels (`MUST-T11-1`):
 | -70103 | endMs | uint |
 | -70104 | receiptCount | uint |
 | -70105 | chainHeadHash | tstr / null |
-| -70106 | totals | map tstr -> tstr |
+| -70106 | totals | map tstr -> tstr / null |
 | -70107 | prevCheckpointHash | tstr / null |
 
 Manifest labels (`MUST-T8-1`):
@@ -585,7 +586,13 @@ checkpoint hash chains verify, and checkpoint totals equal the sum of
 without a receipt, the missing receipt is itself the evidence
 (`MUST-T10-2`).
 
-## Checkpoint claims
+A checkpoint published with its totals withheld ({{redaction}}) cannot
+contribute the last of those to the property. It is not a violation of
+completeness and it is not a demonstration of it either: the
+comparison was not made, and a result that rests on a comparison
+nobody made is conditional (`MUST-T11-12`).
+
+## Checkpoint claims {#redaction}
 
 An epoch checkpoint MUST be COSE_Sign1-signed with the header profile
 in {{cose-profile}} and MUST bind all of the following
@@ -692,6 +699,14 @@ for reference, not to require an evaluation order: no step
 short-circuits another, and an implementation may evaluate them in any
 order that produces the same set of findings.
 
+One data dependency is worth naming, because "any order" read naively
+would break it. Step 15 decides which transparency receipts, and which
+statement bodies, survive checking. Steps 14 and 16 consume what
+survives. An implementation that ran step 14 against unchecked bodies,
+or step 16 against unchecked receipts, would not produce the same set
+of findings, so that order is not among the permitted ones. Nothing
+else in this list feeds another step.
+
 When a step names an identifier in backticks, that identifier
 SHOULD be used for the condition in diagnostic output. The
 normative requirement is the behaviour: report the condition,
@@ -781,7 +796,11 @@ identifiers are not an interoperability surface.
 11. Decode each checkpoint. Reject a failed signature. Require
    `receiptCount`, `chainHeadHash`, and `totals` to match the
    receipts in `[startMs, endMs)` as defined above
-   (`MUST-T11-2`). If the signed `totals` is null, the verifier
+   (`MUST-T11-2`). The identifier `checkpoint-total-mismatch`
+   SHOULD be used for a failed signature, a wrong `receiptCount`,
+   or totals that disagree, and `checkpoint-head-mismatch` for a
+   `chainHeadHash` that is not the last in-window receipt. If the
+   signed `totals` is null, the verifier
    cannot perform the totals comparison for that checkpoint. It
    MUST report that the comparison was skipped and MUST treat the
    completeness guarantee as conditional; the absence of a
@@ -803,10 +822,10 @@ identifiers are not an interoperability surface.
     SHOULD be used for this condition. The checkpoints compared
     here are those presented **together with** any carried by
     verified transparency receipts (step 15). Comparing only the
-    presented chain cannot raise this finding: step 13 requires
-    that chain to be consecutive, so no two of its members share an
-    epoch. A copy recorded by a witness is where the second one is
-    found.
+    presented chain cannot raise this finding: `MUST-T11-8`, applied
+    in step 12, requires that chain's epochs to be consecutive, so no
+    two of its members share an epoch. A copy recorded by a witness
+    is where the second one is found.
 15. If transparency receipts were supplied, discard any whose
     signature fails (`MUST-T11-10`). The survivors are the recorded
     statement hashes used in step 16. Where a receipt also carries
@@ -875,8 +894,14 @@ guarantee, not merely fail the audit.
 
 An unconditional guarantee therefore requires all of: an extract, a
 pinned rail key the extract's signature verifies against, a stated
-period the extract covers, and no finding that puts the extract in
-doubt. Anything less is conditional, and the report MUST say so.
+period the extract covers, no finding that puts the extract in
+doubt, and no warning that withholds part of the comparison. A
+checkpoint whose totals were signed as withheld
+(`checkpoint-totals-redacted`) removes a comparison the guarantee
+rests on, and a presented checkpoint a supplied witness does not
+hold (`checkpoint-not-anchored`) leaves part of the chain
+unwitnessed. Either one makes the result conditional. Anything less
+than the whole list is conditional, and the report MUST say so.
 
 An implementation MUST make the guarantee and any warnings visible in
 whatever human-readable audit report it produces under this document,
@@ -953,8 +978,9 @@ Cedulon does not define a new transparency algorithm.
 An epoch checkpoint MUST be registrable on the same terms
 (`MUST-T11-14`). Its Signed Statement carries the checkpoint
 COSE_Sign1 object as the payload and `application/cedulon-checkpoint+cbor`
-as the content type, which {{iana}} already registers. Nothing else
-about registration differs from a receipt.
+as the content type, which is among the media types {{iana}} asks to
+have registered and which, until then, is a placeholder like the rest.
+Nothing else about registration differs from a receipt.
 
 This is a short section for a requirement -01 was missing, and the
 omission mattered more than its length suggests. -01 asked for
@@ -1142,7 +1168,7 @@ The verification algorithm states that distinction by behaviour
 | ID | Requirement |
 |---|---|
 | MUST-T11-1 | An epoch checkpoint MUST be COSE-signed and MUST bind epoch number, time window, receipt count, chain-head hash, per-currency totals, and the previous checkpoint hash. |
-| MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the last in-window receipt hash. |
+| MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the last in-window receipt hash. Where the signed totals are null, MUST-T11-12 governs instead: there is no total to disagree with, the comparison is reported as skipped, and the count and chain-head checks still apply. |
 | MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those presented together with those carried by verified transparency receipts; the presented chain alone cannot satisfy this requirement, because MUST-T11-8 makes its epochs consecutive. |
 | MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
 | SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
@@ -1366,10 +1392,11 @@ Ed25519 (`-19`) in {{RFC9864}}.
 ## Streaming reconciliation
 
 Epoch checkpoints in this document are batch windows. A later
-revision (-02) may define a continuous, second-scale profile
+revision may define a continuous, second-scale profile
 {{STREAMING}} in which the same completeness relation is evaluated
 as settlements arrive, without waiting for an epoch close. That
-work does not change the matching rules in this document.
+work does not change the matching rules in this document, and it
+did not arrive in this revision either.
 
 ## Generalization
 
