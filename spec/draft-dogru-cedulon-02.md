@@ -798,7 +798,9 @@ identifiers are not an interoperability surface.
    A verifier MUST still report findings for the remaining records.
 10. Aborted receipts are not matched to extract rows and are not
     added to totals.
-11. Decode each checkpoint. Reject a failed signature. Require
+11. Decode each checkpoint. Reject a failed signature, and reject a
+   `kid` that does not match the key obtained for the checkpoint
+   issuer, on the same terms as a receipt (`MUST-T4-8`). Require
    `receiptCount`, `chainHeadHash`, and `totals` to match the
    receipts in `[startMs, endMs)` as defined above
    (`MUST-T11-2`). The identifier `checkpoint-total-mismatch`
@@ -1011,9 +1013,9 @@ auditor MAY receive an unredacted receipt out of band
 The paragraph above counts receipt fields. A checkpoint publishes
 something a receipt does not: a per-currency total for a whole
 window, which discloses trading volume even when every individual
-receipt is redacted. -01 gave no rule for it, so an implementation
-could publish that total, or withhold it in a way no verifier could
-recognise, and neither reading contradicted the text.
+receipt is redacted (`MUST-T9-5`). -01 gave no rule for it, so an
+implementation could publish that total, or withhold it in a way no
+verifier could recognise, and neither reading contradicted the text.
 
 The rule is the one stated in {{reconciliation}}: `totals` MAY be
 withheld by signing it as null (`MUST-T11-12`), and only that form
@@ -1106,7 +1108,7 @@ requirement text those citations refer to.
 
 | ID | Requirement |
 |---|---|
-| MUST-T7-1 | Secret key material MUST NOT appear in receipts, manifests, logs, or example output. |
+| MUST-T7-1 | Secret key material MUST NOT appear in receipts, checkpoints, manifests, decision tokens, logs, or example output. |
 | MUST-T7-2 | Example and test keys MUST be generated at runtime or stored as clearly fake fixtures, never as production secrets. |
 | SHOULD-T7-3 | Production deployments SHOULD use an HSM or OS key store and SHOULD rotate keys. |
 | MAY-T7-4 | Implementations MAY encrypt keys at rest. |
@@ -1141,6 +1143,7 @@ See also {{privacy}}.
 | MUST-T9-2 | Implementations MUST NOT write raw government-ID, payment-instrument PAN, or street address fields into a public transparency statement. |
 | SHOULD-T9-3 | Default public anchors SHOULD publish `policyHash`, `manifestHash`, `receiptHash`, and timestamp rather than full claim sets. |
 | MAY-T9-4 | A private auditor MAY receive an unredacted receipt out of band. |
+| MUST-T9-5 | A checkpoint discloses a per-currency window total, which the receipt-field rules above do not cover. Withholding it is governed by MUST-T11-12 and MUST-T11-13: null in the signed payload, and no other form of redaction honoured. |
 
 ## T10: Secret spend via rail bypass
 

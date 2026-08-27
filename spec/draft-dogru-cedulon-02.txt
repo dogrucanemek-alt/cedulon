@@ -129,7 +129,7 @@ Internet-Draft                   Cedulon                     August 2026
      14.12. T11: Checkpoint suppression or rollback  . . . . . . . .  34
      14.13. Optional escrow role . . . . . . . . . . . . . . . . . .  37
    15. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  37
-   16. Implementation Status . . . . . . . . . . . . . . . . . . . .  37
+   16. Implementation Status . . . . . . . . . . . . . . . . . . . .  38
      16.1.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  39
    17. Evolution and Future Work (Informative) . . . . . . . . . . .  40
      17.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  40
@@ -1029,7 +1029,9 @@ Internet-Draft                   Cedulon                     August 2026
    10.  Aborted receipts are not matched to extract rows and are not
         added to totals.
 
-   11.  Decode each checkpoint.  Reject a failed signature.  Require
+   11.  Decode each checkpoint.  Reject a failed signature, and reject a
+        kid that does not match the key obtained for the checkpoint
+        issuer, on the same terms as a receipt (MUST-T4-8).  Require
         receiptCount, chainHeadHash, and totals to match the receipts in
         [startMs, endMs) as defined above (MUST-T11-2).  The identifier
         checkpoint-total-mismatch SHOULD be used for a failed signature,
@@ -1055,8 +1057,6 @@ Internet-Draft                   Cedulon                     August 2026
         genesis (MUST-T11-4).  The identifier checkpoint-total-mismatch
         SHOULD be used for a broken chain, which is the fourth condition
         its table row names.
-
-
 
 
 
@@ -1391,9 +1391,9 @@ Internet-Draft                   Cedulon                     August 2026
    The paragraph above counts receipt fields.  A checkpoint publishes
    something a receipt does not: a per-currency total for a whole
    window, which discloses trading volume even when every individual
-   receipt is redacted. -01 gave no rule for it, so an implementation
-   could publish that total, or withhold it in a way no verifier could
-   recognise, and neither reading contradicted the text.
+   receipt is redacted (MUST-T9-5). -01 gave no rule for it, so an
+   implementation could publish that total, or withhold it in a way no
+   verifier could recognise, and neither reading contradicted the text.
 
 
 
@@ -1635,21 +1635,22 @@ Internet-Draft                   Cedulon                     August 2026
 
 14.7.  T7: Signing-key leakage
 
-      +=============+===============================================+
-      | ID          | Requirement                                   |
-      +=============+===============================================+
-      | MUST-T7-1   | Secret key material MUST NOT appear in        |
-      |             | receipts, manifests, logs, or example output. |
-      +-------------+-----------------------------------------------+
-      | MUST-T7-2   | Example and test keys MUST be generated at    |
-      |             | runtime or stored as clearly fake fixtures,   |
-      |             | never as production secrets.                  |
-      +-------------+-----------------------------------------------+
-      | SHOULD-T7-3 | Production deployments SHOULD use an HSM or   |
-      |             | OS key store and SHOULD rotate keys.          |
-      +-------------+-----------------------------------------------+
-      | MAY-T7-4    | Implementations MAY encrypt keys at rest.     |
-      +-------------+-----------------------------------------------+
+        +=============+===========================================+
+        | ID          | Requirement                               |
+        +=============+===========================================+
+        | MUST-T7-1   | Secret key material MUST NOT appear in    |
+        |             | receipts, checkpoints, manifests,         |
+        |             | decision tokens, logs, or example output. |
+        +-------------+-------------------------------------------+
+        | MUST-T7-2   | Example and test keys MUST be generated   |
+        |             | at runtime or stored as clearly fake      |
+        |             | fixtures, never as production secrets.    |
+        +-------------+-------------------------------------------+
+        | SHOULD-T7-3 | Production deployments SHOULD use an HSM  |
+        |             | or OS key store and SHOULD rotate keys.   |
+        +-------------+-------------------------------------------+
+        | MAY-T7-4    | Implementations MAY encrypt keys at rest. |
+        +-------------+-------------------------------------------+
 
                                   Table 15
 
@@ -1673,7 +1674,6 @@ Internet-Draft                   Cedulon                     August 2026
     |                 | receipt, and the delivery hash.              |
     +-----------------+----------------------------------------------+
     | MUST-T8-4       | The Dispute Evidence Bundle MUST NOT be      |
-    |                 | described as an arbitral award or escrow     |
 
 
 
@@ -1682,6 +1682,7 @@ Dogru                   Expires 28 February 2027               [Page 30]
 Internet-Draft                   Cedulon                     August 2026
 
 
+    |                 | described as an arbitral award or escrow     |
     |                 | release.                                     |
     +-----------------+----------------------------------------------+
     | MUST-T8-7       | manifestHash MUST be the SHA-256 of the      |
@@ -1732,32 +1733,37 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-
 Dogru                   Expires 28 February 2027               [Page 31]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
-    +=============+==================================================+
-    | ID          | Requirement                                      |
-    +=============+==================================================+
-    | MUST-T9-1   | A transparency encoding MUST support omitting or |
-    |             | hashing payer/payee identifiers and MUST support |
-    |             | amount redaction or range/bucket encoding.       |
-    +-------------+--------------------------------------------------+
-    | MUST-T9-2   | Implementations MUST NOT write raw government-   |
-    |             | ID, payment-instrument PAN, or street address    |
-    |             | fields into a public transparency statement.     |
-    +-------------+--------------------------------------------------+
-    | SHOULD-T9-3 | Default public anchors SHOULD publish            |
-    |             | policyHash, manifestHash, receiptHash, and       |
-    |             | timestamp rather than full claim sets.           |
-    +-------------+--------------------------------------------------+
-    | MAY-T9-4    | A private auditor MAY receive an unredacted      |
-    |             | receipt out of band.                             |
-    +-------------+--------------------------------------------------+
+    +=============+===================================================+
+    | ID          | Requirement                                       |
+    +=============+===================================================+
+    | MUST-T9-1   | A transparency encoding MUST support omitting or  |
+    |             | hashing payer/payee identifiers and MUST support  |
+    |             | amount redaction or range/bucket encoding.        |
+    +-------------+---------------------------------------------------+
+    | MUST-T9-2   | Implementations MUST NOT write raw government-ID, |
+    |             | payment-instrument PAN, or street address fields  |
+    |             | into a public transparency statement.             |
+    +-------------+---------------------------------------------------+
+    | SHOULD-T9-3 | Default public anchors SHOULD publish policyHash, |
+    |             | manifestHash, receiptHash, and timestamp rather   |
+    |             | than full claim sets.                             |
+    +-------------+---------------------------------------------------+
+    | MAY-T9-4    | A private auditor MAY receive an unredacted       |
+    |             | receipt out of band.                              |
+    +-------------+---------------------------------------------------+
+    | MUST-T9-5   | A checkpoint discloses a per-currency window      |
+    |             | total, which the receipt-field rules above do not |
+    |             | cover.  Withholding it is governed by MUST-T11-12 |
+    |             | and MUST-T11-13: null in the signed payload, and  |
+    |             | no other form of redaction honoured.              |
+    +-------------+---------------------------------------------------+
 
-                                 Table 17
+                                  Table 17
 
 14.11.  T10: Secret spend via rail bypass
 
@@ -1780,12 +1786,6 @@ Internet-Draft                   Cedulon                     August 2026
      +--------------+-----------------------------------------------+
      | MUST-T10-4   | An audit that has any fail-severity           |
      |              | completeness finding MUST fail (non-zero      |
-     |              | status in the companion tool).                |
-     +--------------+-----------------------------------------------+
-     | SHOULD-T10-5 | Hosts SHOULD still apply T5 (no ungated rail  |
-     |              | in the model process).  Completeness does not |
-     |              | replace prevention.                           |
-     +--------------+-----------------------------------------------+
 
 
 
@@ -1794,6 +1794,12 @@ Dogru                   Expires 28 February 2027               [Page 32]
 Internet-Draft                   Cedulon                     August 2026
 
 
+     |              | status in the companion tool).                |
+     +--------------+-----------------------------------------------+
+     | SHOULD-T10-5 | Hosts SHOULD still apply T5 (no ungated rail  |
+     |              | in the model process).  Completeness does not |
+     |              | replace prevention.                           |
+     +--------------+-----------------------------------------------+
      | MUST-T10-6   | A ref that appears more than once among       |
      |              | settled receipts or among extract rows MUST   |
      |              | be reported as duplicate-ref.                 |
@@ -1836,12 +1842,6 @@ Internet-Draft                   Cedulon                     August 2026
      |              | reported as extract-settlement-mismatch.      |
      +--------------+-----------------------------------------------+
      | MUST-T10-13  | A ref reported as duplicate-ref MUST still be |
-     |              | reconciled by aggregate amount per currency,  |
-     |              | and a shortfall MUST state the unaccounted    |
-     |              | amount.  An unparseable amount MUST be        |
-     |              | reported as malformed-amount without aborting |
-     |              | the audit.                                    |
-     +--------------+-----------------------------------------------+
 
 
 
@@ -1850,6 +1850,12 @@ Dogru                   Expires 28 February 2027               [Page 33]
 Internet-Draft                   Cedulon                     August 2026
 
 
+     |              | reconciled by aggregate amount per currency,  |
+     |              | and a shortfall MUST state the unaccounted    |
+     |              | amount.  An unparseable amount MUST be        |
+     |              | reported as malformed-amount without aborting |
+     |              | the audit.                                    |
+     +--------------+-----------------------------------------------+
      | MUST-T10-14  | An implementation MUST surface the guarantee  |
      |              | and any warnings in any human-readable audit  |
      |              | report it produces, not only in a returned    |
@@ -1892,12 +1898,6 @@ Internet-Draft                   Cedulon                     August 2026
     |              | is not the last in-window receipt hash.  Where  |
     |              | the signed totals are null, MUST-T11-12 governs |
     |              | instead: there is no total to disagree with,    |
-    |              | the comparison is reported as skipped, and the  |
-    |              | count and chain-head checks still apply.        |
-    +--------------+-------------------------------------------------+
-    | MUST-T11-3   | Two verified checkpoints for the same epoch     |
-    |              | with different hashes MUST be reported as       |
-    |              | equivocation.  The checkpoints compared are     |
 
 
 
@@ -1906,6 +1906,12 @@ Dogru                   Expires 28 February 2027               [Page 34]
 Internet-Draft                   Cedulon                     August 2026
 
 
+    |              | the comparison is reported as skipped, and the  |
+    |              | count and chain-head checks still apply.        |
+    +--------------+-------------------------------------------------+
+    | MUST-T11-3   | Two verified checkpoints for the same epoch     |
+    |              | with different hashes MUST be reported as       |
+    |              | equivocation.  The checkpoints compared are     |
     |              | those presented together with those carried by  |
     |              | verified transparency receipts; the presented   |
     |              | chain alone cannot satisfy this requirement,    |
@@ -1948,12 +1954,6 @@ Internet-Draft                   Cedulon                     August 2026
     +--------------+-------------------------------------------------+
     | MUST-T11-11  | A verified receipt binding a checkpoint absent  |
     |              | from the presented chain MUST be reported as a  |
-    |              | withheld checkpoint, and MUST NOT be reported   |
-    |              | as a window coverage failure.  A presented      |
-    |              | checkpoint with no verified receipt, where a    |
-    |              | witness was supplied, MUST be reported and      |
-    |              | makes the guarantee conditional.                |
-    +--------------+-------------------------------------------------+
 
 
 
@@ -1962,6 +1962,12 @@ Dogru                   Expires 28 February 2027               [Page 35]
 Internet-Draft                   Cedulon                     August 2026
 
 
+    |              | withheld checkpoint, and MUST NOT be reported   |
+    |              | as a window coverage failure.  A presented      |
+    |              | checkpoint with no verified receipt, where a    |
+    |              | witness was supplied, MUST be reported and      |
+    |              | makes the guarantee conditional.                |
+    +--------------+-------------------------------------------------+
     | MUST-T11-12  | Withheld checkpoint totals MUST be encoded as   |
     |              | null in the signed payload.  A verifier MUST    |
     |              | report that the totals comparison was skipped   |
@@ -2003,12 +2009,6 @@ Internet-Draft                   Cedulon                     August 2026
       settlement.  Cedulon does not detect extract-external agreement.
 
    Reversal, refund, and partial settlement:  State machines for
-      reversal, refund, and partial settlement are out of scope for this
-      revision.
-
-
-
-
 
 
 
@@ -2017,6 +2017,9 @@ Dogru                   Expires 28 February 2027               [Page 36]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+      reversal, refund, and partial settlement are out of scope for this
+      revision.
 
 14.13.  Optional escrow role
 
@@ -2060,11 +2063,8 @@ Internet-Draft                   Cedulon                     August 2026
    to change, and readers should treat them as placeholders rather than
    as stable identifiers.
 
-16.  Implementation Status
 
-   This section is to be removed before publishing as an RFC.
 
-   RFC 7942 [RFC7942] note.
 
 
 
@@ -2073,6 +2073,12 @@ Dogru                   Expires 28 February 2027               [Page 37]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+16.  Implementation Status
+
+   This section is to be removed before publishing as an RFC.
+
+   RFC 7942 [RFC7942] note.
 
    Implementation:  A companion implementation with a runnable
       verification suite at https://github.com/dogrucanemek-alt/cedulon
@@ -2116,12 +2122,6 @@ Internet-Draft                   Cedulon                     August 2026
       checking the repair rather than reported: the first attempt
       asserted the totals redaction in a field outside the signature,
       which let a checkpoint with wrong signed totals be re-presented as
-      redacted and silence the mismatch.  That is the defect MUST-T11-13
-      now forbids, and it was the same shape as the bypass -01 was
-      written to fix.
-
-
-
 
 
 
@@ -2129,6 +2129,10 @@ Dogru                   Expires 28 February 2027               [Page 38]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+      redacted and silence the mismatch.  That is the defect MUST-T11-13
+      now forbids, and it was the same shape as the bypass -01 was
+      written to fix.
 
    Note on distribution: the requirements in this document are
    implemented in the repository at the commit named in the release
@@ -2174,10 +2178,6 @@ Internet-Draft                   Cedulon                     August 2026
       identifier, checkpoint-withheld, rather than being folded into
       window-coverage (MUST-T11-11).  The reporter asked which way it
       should go.  Coverage says the record shown is incomplete; a
-      withheld checkpoint says the party under audit is holding a record
-      it did not show.  An operator who sees one identifier for both
-      cannot tell an incomplete record from a concealed one, which is
-      the distinction the whole threat is about.
 
 
 
@@ -2185,6 +2185,11 @@ Dogru                   Expires 28 February 2027               [Page 39]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+      withheld checkpoint says the party under audit is holding a record
+      it did not show.  An operator who sees one identifier for both
+      cannot tell an incomplete record from a concealed one, which is
+      the distinction the whole threat is about.
 
    *  A checkpoint with no receipt in a supplied witness is a warning
       rather than a failure.  A witness may be configured after
@@ -2229,11 +2234,6 @@ Internet-Draft                   Cedulon                     August 2026
    algorithm countersign or receipt them.  The principle is that
    structures outlive ciphers.  The first concrete example is the
    profile's own move from generic EdDSA (-8) to Ed25519 (-19) in
-   [RFC9864].
-
-
-
-
 
 
 
@@ -2241,6 +2241,8 @@ Dogru                   Expires 28 February 2027               [Page 40]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   [RFC9864].
 
 17.2.  Streaming reconciliation
 
@@ -2288,8 +2290,6 @@ Internet-Draft                   Cedulon                     August 2026
               Requirement Levels", BCP 14, RFC 2119,
               DOI 10.17487/RFC2119, March 1997,
               <https://www.rfc-editor.org/rfc/rfc2119>.
-
-
 
 
 
