@@ -657,11 +657,24 @@ it is optional: a verifier given none behaves exactly as in -01
 none. An empty set says a witness is configured and recorded nothing,
 which is itself reportable; absence says no witness was consulted.
 
-Before a receipt may be used for anything, the verifier MUST check
-that its signature verifies, and that the statement it binds is the
-checkpoint it is presented with (`MUST-T11-10`). A receipt whose
-statement hash does not match the checkpoint bound to it proves
-nothing about that checkpoint and MUST be ignored rather than counted.
+A receipt binds a statement hash, not a statement. The body is not
+carried by the receipt and a verifier will often not hold it. Two
+levels of checking follow from that, and they are not the same
+(`MUST-T11-10`).
+
+Every receipt MUST have its signature verified before it counts for
+anything. That is what establishes the hash as one the service signed
+for, and it is all that comparing recorded hashes against presented
+ones requires: the verifier computes the statement hash of each
+presented checkpoint itself.
+
+A receipt accompanied by the statement body carries more, and MUST be
+checked further before that body is relied on. The body's statement
+hash MUST equal the hash the receipt binds, and the body MUST itself
+verify as a checkpoint. A body that fails either check proves nothing
+and MUST be ignored rather than counted, while the receipt it came
+with remains usable for the hash comparison. Equivocation is the case
+that needs a body, because it compares claims rather than hashes.
 
 What such a receipt establishes, and what it does not, is worth
 stating plainly. It establishes that the service signed for that
@@ -795,10 +808,12 @@ identifiers are not an interoperability surface.
     epoch. A copy recorded by a witness is where the second one is
     found.
 15. If transparency receipts were supplied, discard any whose
-    signature fails or whose statement hash does not match the
-    checkpoint bound to it, and any whose checkpoint does not
-    itself verify (`MUST-T11-10`). Only the survivors are used in
-    steps 14 and 16.
+    signature fails (`MUST-T11-10`). The survivors are the recorded
+    statement hashes used in step 16. Where a receipt also carries
+    the statement body, discard that body unless its statement hash
+    equals the one the receipt binds and it verifies as a
+    checkpoint; the surviving bodies are what step 14 compares.
+    Discarding a body does not discard its receipt.
 16. Compare the surviving witness records against the presented
     chain (`MUST-T11-11`). For each presented checkpoint with no
     surviving record, report that it is not anchored; the
@@ -1135,7 +1150,7 @@ The verification algorithm states that distinction by behaviour
 | MUST-T11-7 | Checkpoint windows MUST be half-open `[startMs, endMs)`. Every chained receipt MUST fall in exactly one window. |
 | MUST-T11-8 | Presented checkpoint epochs MUST be consecutive and adjacent windows MUST meet at `endMs = next.startMs`. |
 | MUST-T11-9 | Prefix-deletion and suppression claims that go beyond the presented chain are conditional on an external transparency witness. A report MUST NOT present a completeness guarantee as settling suppression when no witness was consulted. |
-| MUST-T11-10 | Transparency receipts are an optional, separate input. A verifier given none MUST behave as it did without this input. Before use, a receipt MUST verify, its statement hash MUST match the checkpoint bound to it, and that checkpoint MUST itself verify; receipts failing any of these MUST be discarded rather than counted. |
+| MUST-T11-10 | Transparency receipts are an optional, separate input. A verifier given none MUST behave as it did without this input. A receipt MUST have its signature verified before it counts for anything. Where a receipt also carries the statement body, that body MUST NOT be relied on unless its statement hash equals the one the receipt binds and it verifies as a checkpoint; a discarded body does not discard its receipt. |
 | MUST-T11-11 | A verified receipt binding a checkpoint absent from the presented chain MUST be reported as a withheld checkpoint, and MUST NOT be reported as a window coverage failure. A presented checkpoint with no verified receipt, where a witness was supplied, MUST be reported and makes the guarantee conditional. |
 | MUST-T11-12 | Withheld checkpoint totals MUST be encoded as null in the signed payload. A verifier MUST report that the totals comparison was skipped and MUST treat the guarantee as conditional; `receiptCount` and `chainHeadHash` MUST still be checked. |
 | MUST-T11-13 | A redaction asserted outside the signed payload MUST NOT be honoured, and structural claims MUST NOT be redacted. A checkpoint that fails verification MUST NOT be treated as redacted. |
