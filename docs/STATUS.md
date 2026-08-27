@@ -20,8 +20,16 @@ official MCP SDK.
 
 Eight packages are published on npm, so the server runs without a clone:
 `npx -y @cedulon/mcp-server`. Seven are at `0.2.0`; `@cedulon/mcp-server` is at
-`0.2.3`. Those versions carry the requirements added in `-01`, including the
+`0.2.4`. Those versions carry the requirements added in `-01`, including the
 pinned-key comparison and the window checks; `0.1.0` predates them.
+
+Every tool the server exposes carries a title and the hint that applies to it:
+four read-only, and `cedulon_spend`, which appends a receipt and is therefore
+neither destructive nor idempotent. All five declare `openWorldHint: false`,
+which is a measurement rather than a claim: this package and the six it depends
+on contain no HTTP client and no socket, and their only dependency outside the
+project is the MCP SDK. A test reads those annotations off the wire, so a tool
+added without them fails the suite instead of failing a review.
 
 `@cedulon/base-extract` and `@cedulon/mcp-guard` are not published and are
 marked `private`, so a workspace publish skips them rather than relying on
@@ -29,10 +37,19 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.2.3 bundle was built and unpacked, and the server inside
-it answered `initialize`, listed exactly the tools its manifest declares, and
-returned a signed receipt. Smithery takes an HTTPS endpoint or such a bundle;
-neither has been submitted there.
+desktop install. The 0.2.4 bundle was built and unpacked, and the server inside
+it answered `initialize`, reported `0.2.4`, and listed five tools with their
+annotations intact. The builder installs the published version rather than the
+working tree, so it refuses to build a version npm does not have; that is what
+keeps the bundle honest about what a user receives.
+
+The bundle's manifest declares its privacy policy at
+<https://cedulon.com/privacy.html>, which is also linked from the README that
+ships inside the package. A missing or incomplete privacy policy is an outright
+rejection from the Anthropic connector directory, so a test checks the manifest
+declaration, the HTTPS scheme, and the shipped README together. Nothing has been
+submitted to that directory yet. Smithery takes an HTTPS endpoint or a bundle;
+neither has been submitted there either.
 
 The server is listed on Glama at `dogrucanemek-alt/cedulon`. License and
 quality both grade A; the release is 0.2.3 and Install Server is active. The
