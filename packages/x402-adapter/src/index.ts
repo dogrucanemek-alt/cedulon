@@ -183,6 +183,13 @@ function issue(
   engine: PolicyEngine | null = null,
   ledger?: RailLedger,
 ): PayResult {
+  // Every path that mints a receipt refuses the same input the same way. The
+  // gated path checks earlier so a rejected request never reaches the policy
+  // counters; without this second check the unguarded path would throw out of
+  // signReceipt where its sibling returns a payment error.
+  if (!isValidNonce(input.req.nonce)) {
+    return deny402(input.req, "nonce-too-short");
+  }
   const policyHash = engine
     ? sha256Hex(canonical(policyDocument(engine.policy)))
     : sha256Hex("no-policy");

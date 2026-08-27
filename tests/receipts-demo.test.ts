@@ -14,7 +14,7 @@ import {
   verifyReceipt,
   counterSign,
 } from "@cedulon/receipts";
-import { gatedSettle } from "@cedulon/x402-adapter";
+import { gatedSettle, unguardedSettle } from "@cedulon/x402-adapter";
 import { wrapToolsCall } from "@cedulon/mcp-guard";
 import { runDispute } from "../examples/demo/src/dispute.ts";
 import { assertRunaway, runRunaway } from "../examples/demo/src/runaway.ts";
@@ -49,6 +49,21 @@ describe("receipts and hash chain", () => {
     const short = pay("a");
     assert.equal(short.status, 402);
     assert.equal(short.reason, "nonce-too-short");
+
+    // Every path that mints a receipt refuses the same input the same way. The
+    // unguarded demo path reached signReceipt directly and threw instead, which
+    // is a crash where the guarded path returns a payment error.
+    const unguarded = unguardedSettle(
+      {
+        req: { amount: 1n, currency: "USD", payee: "q", nonce: "a", nowMs: 1 },
+        payer: "p",
+        paymentHeader: "mock",
+      },
+      keys,
+      1,
+    );
+    assert.equal(unguarded.status, 402);
+    assert.equal(unguarded.reason, "nonce-too-short");
 
     const first = pay("a".padEnd(16, "-"));
     assert.equal(first.status, 200);
