@@ -36,6 +36,33 @@ describe("release manifest", () => {
     assert.equal(server.version, pkg.version);
   });
 
+  // The site once carried "Open source (MIT)" in its og:description while the
+  // LICENSE file, all eleven package manifests, and the page's own footer said
+  // Apache-2.0. It was a marketing sentence written apart from the file it
+  // describes, and nothing compared the two. This does.
+  it("no published surface names a licence the project does not use", () => {
+    const declared = read("../package.json").license as string;
+    const surfaces = [
+      "../README.md",
+      "../site/index.html",
+      "../site/verify.html",
+      "../site/spec.html",
+      "../site/privacy.html",
+      "../packages/mcp-server/README.md",
+    ];
+    const others = ["MIT", "GPL", "AGPL", "LGPL", "BSD", "MPL", "Unlicense", "ISC"];
+    for (const surface of surfaces) {
+      const text = readFileSync(new URL(surface, import.meta.url), "utf8");
+      for (const name of others) {
+        assert.doesNotMatch(
+          text,
+          new RegExp(`\\b${name}\\b`),
+          `${surface} names ${name}, but this project is ${declared}`,
+        );
+      }
+    }
+  });
+
   // The connector directory rejects a local connector outright when the
   // privacy policy is missing or incomplete, and the policy has to be
   // reachable from three places at once: the manifest, the README that ships
