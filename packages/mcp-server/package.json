@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/mcp-server",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "mcpName": "io.github.dogrucanemek-alt/cedulon",
   "description": "Local stdio MCP server for policy-gated Cedulon spend and audit.",
   "license": "Apache-2.0",
