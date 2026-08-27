@@ -62,7 +62,8 @@ export type PanelCheckpoint = {
   startMs: number;
   endMs: number;
   receiptCount: number;
-  totals: Record<string, string>;
+  /** `null` when the checkpoint was signed with its totals withheld. */
+  totals: Record<string, string> | null;
   chainHead: string | null;
   hash: string;
 };

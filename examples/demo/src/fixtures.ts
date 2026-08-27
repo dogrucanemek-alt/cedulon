@@ -32,7 +32,7 @@ export type PanelCheckpoint = {
   startMs: number;
   endMs: number;
   receiptCount: number;
-  totals: Record<string, string>;
+  totals: Record<string, string> | null;
   chainHead: string | null;
   hash: string;
 };

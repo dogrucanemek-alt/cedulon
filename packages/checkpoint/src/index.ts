@@ -6,6 +6,7 @@ export {
   checkpointToCbor,
   findCheckpointChainBreak,
   findEquivocation,
+  redactCheckpointTotals,
   signCheckpoint,
   totalsFromReceipts,
   verifyCheckpoint,

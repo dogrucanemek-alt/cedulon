@@ -5,8 +5,10 @@ import {
   MemoryTransparencyService,
   anchorCheckpoint,
   buildCheckpointClaims,
+  redactCheckpointTotals,
   signCheckpoint,
   statementHashOfCheckpoint,
+  verifyCheckpoint,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
 import { fixtureEd25519Pems } from "@cedulon/cose";
@@ -154,16 +156,22 @@ describe("A — transparency witness on the audit path", () => {
     );
   });
 
-  it("a holding witness lifts T11 conditionality (trusted extract stays unconditional)", () => {
+  it("a witness that holds the checkpoint adds nothing to the report", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
     const cp = oneCheckpoint(k, receipts);
     const ts = new MemoryTransparencyService(fixtureEd25519Pems());
     const inc = anchorCheckpoint(ts, cp);
-    const report = trustedExtract(receipts, [cp], { inclusionReceipts: [inc] });
-    assert.equal(report.ok, true);
-    assert.equal(report.guarantee, "unconditional");
-    assert.equal(report.warnings.length, 0);
+    const held = trustedExtract(receipts, [cp], { inclusionReceipts: [inc] });
+    assert.equal(held.ok, true);
+    assert.equal(held.guarantee, "unconditional");
+    assert.equal(held.warnings.length, 0);
+    // A witness that holds it reads the same as no witness at all. The witness
+    // earns its place by what it reports when the chain is short, not here.
+    const none = trustedExtract(receipts, [cp]);
+    assert.deepEqual(held.findings, none.findings);
+    assert.deepEqual(held.warnings, none.warnings);
+    assert.equal(held.guarantee, none.guarantee);
   });
 
   it("omitting inclusionReceipts keeps today's report (backward compatible)", () => {
@@ -171,19 +179,12 @@ describe("A — transparency witness on the audit path", () => {
     const receipts = chainReceipts(k, ["1"]);
     const cp = oneCheckpoint(k, receipts);
     const without = trustedExtract(receipts, [cp]);
-    const alsoWithout = trustedExtract(receipts, [cp]);
-    assert.equal(without.ok, alsoWithout.ok);
-    assert.deepEqual(without.findings, alsoWithout.findings);
-    assert.deepEqual(without.warnings, alsoWithout.warnings);
+    // Pinned to the pre-witness behaviour, not to another run of the same call.
+    assert.equal(without.ok, true);
     assert.equal(without.guarantee, "unconditional");
-    assert.equal(
-      without.warnings.some((f) => f.code === "checkpoint-not-anchored" || f.code === "checkpoint-withheld"),
-      false,
-    );
-    assert.equal(
-      without.findings.some((f) => f.code === "checkpoint-not-anchored" || f.code === "checkpoint-withheld"),
-      false,
-    );
+    assert.deepEqual(without.findings, []);
+    assert.deepEqual(without.warnings, []);
+    assert.equal(without.summary, "audit: balanced");
   });
 
   it("window-coverage still fires on its own condition, without a withheld finding", () => {
@@ -244,12 +245,24 @@ describe("B — equivocation via the witness", () => {
 });
 
 describe("C — checkpoint totals redaction", () => {
+  /** Sign a checkpoint for these receipts with its totals withheld. */
+  function redactedCheckpoint(
+    keys: { privateKeyPem: string; publicKeyPem: string },
+    receipts: SignedReceipt[],
+  ): SignedCheckpoint {
+    return signCheckpoint(
+      redactCheckpointTotals(
+        buildCheckpointClaims(1, receipts, 1_700_000_000_000, 1_700_000_000_010, null),
+      ),
+      keys.privateKeyPem,
+      keys.publicKeyPem,
+    );
+  }
+
   it("RED: redacted totals warn and stay conditional, and do not fail", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
-    const cp = oneCheckpoint(k, receipts);
-    const redacted = { ...cp, omitted: ["totals"] as Array<keyof typeof cp.claims> };
-    const report = trustedExtract(receipts, [redacted]);
+    const report = trustedExtract(receipts, [redactedCheckpoint(k, receipts)]);
     assert.equal(report.ok, true);
     assert.equal(report.guarantee, "conditional");
     assert.equal(
@@ -261,15 +274,9 @@ describe("C — checkpoint totals redaction", () => {
   it("redacted totals do not produce checkpoint-total-mismatch", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
-    const cp = oneCheckpoint(k, receipts);
-    const redacted = {
-      ...cp,
-      claims: { ...cp.claims, totals: {} },
-      omitted: ["totals"] as Array<keyof typeof cp.claims>,
-    };
     const report = audit({
       receipts,
-      checkpoints: [redacted],
+      checkpoints: [redactedCheckpoint(k, receipts)],
       settlements: settlementsOf(receipts),
     });
     assert.equal(
@@ -277,6 +284,17 @@ describe("C — checkpoint totals redaction", () => {
       false,
       `redacted totals must not be a mismatch: ${JSON.stringify(report.findings)}`,
     );
+  });
+
+  it("the redaction is inside the signature, so it survives a round trip", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const cp = redactedCheckpoint(k, receipts);
+    assert.equal(verifyCheckpoint(cp), true);
+    assert.equal(cp.claims.totals, null);
+    // Claiming totals that the signature does not carry is caught.
+    const forged = { ...cp, claims: { ...cp.claims, totals: { USD: "1" } } };
+    assert.equal(verifyCheckpoint(forged), false);
   });
 
   it("an empty totals object is not a redaction", () => {
@@ -303,16 +321,55 @@ describe("C — checkpoint totals redaction", () => {
     );
   });
 
-  it("structural field redaction is fail-closed", () => {
+  it("a structural claim missing from the payload is fail-closed", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
     const cp = oneCheckpoint(k, receipts);
-    const redacted = { ...cp, omitted: ["epoch"] as Array<keyof typeof cp.claims> };
+    // The COSE payload still says epoch 1; the presented claims say epoch 9.
+    const forged = { ...cp, claims: { ...cp.claims, epoch: 9 } };
+    assert.equal(verifyCheckpoint(forged), false);
     const report = audit({
       receipts,
-      checkpoints: [redacted],
+      checkpoints: [forged],
       settlements: settlementsOf(receipts),
     });
     assert.equal(report.ok, false);
+  });
+
+  it("a checkpoint whose signed totals are wrong fails however it is presented", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const honest = buildCheckpointClaims(1, receipts, 1_700_000_000_000, 1_700_000_000_010, null);
+    // The receipts settle 1 USD. This checkpoint signs a claim of 999.
+    const liar = signCheckpoint(
+      { ...honest, totals: { USD: "999" } },
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const asSigned = audit({
+      receipts,
+      checkpoints: [liar],
+      settlements: settlementsOf(receipts),
+    });
+    assert.equal(asSigned.ok, false, "a lying checkpoint must fail as signed");
+
+    // Same COSE bytes, re-presented as though the totals had been withheld.
+    // Redaction lives inside the signature, so this cannot clear the mismatch.
+    const dressed = { ...liar, claims: { ...liar.claims, totals: null } };
+    const asDressed = audit({
+      receipts,
+      checkpoints: [dressed],
+      settlements: settlementsOf(receipts),
+    });
+    assert.equal(
+      asDressed.ok,
+      false,
+      `redaction asserted outside the signature must not clear a mismatch: ${JSON.stringify(asDressed)}`,
+    );
+    assert.equal(
+      asDressed.warnings.some((f) => f.code === "checkpoint-totals-redacted"),
+      false,
+      "an unverifiable checkpoint does not get to claim a redaction",
+    );
   });
 });

@@ -31,7 +31,12 @@ export type CheckpointClaims = {
   endMs: number;
   receiptCount: number;
   chainHeadHash: string | null;
-  totals: Record<string, string>;
+  /**
+   * Per-currency settled totals for the window. `null` means the issuer published
+   * the checkpoint with its totals withheld. The distinction is inside the signature:
+   * an empty object is an honest zero, `null` is a redaction the issuer signed for.
+   */
+  totals: Record<string, string> | null;
   prevCheckpointHash: string | null;
 };
 
@@ -40,11 +45,6 @@ export type SignedCheckpoint = {
   publicKeyPem: string;
   encoding: "cose";
   coseHex: string;
-  /**
-   * Presentation-only. Not encoded in the COSE. `totals` may be omitted;
-   * structural keys (epoch, window, counts, hashes) may not — verify fails closed.
-   */
-  omitted?: Array<keyof CheckpointClaims>;
 };
 
 export function sha256Hex(data: string | Buffer): string {
@@ -109,7 +109,7 @@ export function checkpointToCbor(claims: CheckpointClaims): Uint8Array {
       [CHECKPOINT_CLAIM.endMs, claims.endMs],
       [CHECKPOINT_CLAIM.receiptCount, claims.receiptCount],
       [CHECKPOINT_CLAIM.chainHeadHash, claims.chainHeadHash],
-      [CHECKPOINT_CLAIM.totals, totalsToCbor(claims.totals)],
+      [CHECKPOINT_CLAIM.totals, claims.totals === null ? null : totalsToCbor(claims.totals)],
       [CHECKPOINT_CLAIM.prevCheckpointHash, claims.prevCheckpointHash],
     ]),
   );
@@ -136,7 +136,7 @@ export function checkpointFromCbor(bytes: Uint8Array): CheckpointClaims {
     endMs: num(CHECKPOINT_CLAIM.endMs),
     receiptCount: num(CHECKPOINT_CLAIM.receiptCount),
     chainHeadHash: textOrNull(CHECKPOINT_CLAIM.chainHeadHash),
-    totals: totalsFromCbor(totalsVal),
+    totals: totalsVal === null ? null : totalsFromCbor(totalsVal),
     prevCheckpointHash: textOrNull(CHECKPOINT_CLAIM.prevCheckpointHash),
   };
 }
@@ -155,20 +155,15 @@ export function signCheckpoint(
   };
 }
 
-const STRUCTURAL_CHECKPOINT_KEYS: ReadonlyArray<keyof CheckpointClaims> = [
-  "epoch",
-  "startMs",
-  "endMs",
-  "receiptCount",
-  "chainHeadHash",
-  "prevCheckpointHash",
-];
+/**
+ * Publish a checkpoint with its totals withheld. The redaction is part of what
+ * gets signed, so it cannot be asserted — or undone — after the fact.
+ */
+export function redactCheckpointTotals(claims: CheckpointClaims): CheckpointClaims {
+  return { ...claims, totals: null };
+}
 
 export function verifyCheckpoint(signed: SignedCheckpoint): boolean {
-  const omitted = new Set(signed.omitted ?? []);
-  if (STRUCTURAL_CHECKPOINT_KEYS.some((key) => omitted.has(key))) {
-    return false;
-  }
   const bytes = Buffer.from(signed.coseHex, "hex");
   if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_CHECKPOINT)) {
     return false;
@@ -176,11 +171,6 @@ export function verifyCheckpoint(signed: SignedCheckpoint): boolean {
   try {
     const msg = decodeCoseSign1(bytes);
     const decoded = checkpointFromCbor(msg.payload);
-    if (omitted.has("totals")) {
-      const { totals: _decodedTotals, ...decodedRest } = decoded;
-      const { totals: _claimedTotals, ...claimsRest } = signed.claims;
-      return canonical(decodedRest) === canonical(claimsRest);
-    }
     return canonical(decoded) === canonical(signed.claims);
   } catch {
     return false;

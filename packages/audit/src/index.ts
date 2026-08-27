@@ -343,7 +343,7 @@ export function findCheckpointTotalMismatches(
     }
     const inWindow = receiptsInWindow(receipts, cp);
     const expected = totalsFromReceipts(inWindow);
-    if (!cp.omitted?.includes("totals") && JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
+    if (cp.claims.totals !== null && JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
       findings.push({
         code: "checkpoint-total-mismatch",
         id: `epoch-${cp.claims.epoch}`,
@@ -661,16 +661,15 @@ export function audit(input: AuditInput): AuditReport {
     warnings.push(...witness.warnings);
   }
 
+  // A signed redaction is honest but unverifiable: say so, and drop the claim to
+  // conditional. Only a checkpoint that verifies gets to make this claim — an
+  // unverifiable one has already been reported above.
   for (const cp of input.checkpoints) {
-    const omitted = cp.omitted ?? [];
-    if (omitted.some((key) => key !== "totals")) {
-      continue;
-    }
-    if (omitted.includes("totals")) {
+    if (cp.claims.totals === null && verifyCheckpoint(cp)) {
       warnings.push({
         code: "checkpoint-totals-redacted",
         id: `epoch-${cp.claims.epoch}`,
-        detail: `checkpoint epoch ${cp.claims.epoch} totals were omitted; totals comparison skipped`,
+        detail: `checkpoint epoch ${cp.claims.epoch} was signed with its totals withheld; totals comparison skipped`,
         severity: "warn",
       });
     }
