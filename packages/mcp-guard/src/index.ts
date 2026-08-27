@@ -12,7 +12,13 @@ export type ToolResult = {
   isError: boolean;
 };
 
-const SPEND_TOOLS = new Set(["spend", "pay"]);
+/**
+ * Default names only. A guard keyed on tool names covers the names it was told
+ * about and nothing else, so a host whose paying tool is called something else
+ * has to say so through `spendTools`. Stated as a default rather than left to
+ * look like coverage.
+ */
+export const DEFAULT_SPEND_TOOLS = ["spend", "pay"] as const;
 
 export type GuardDeps = {
   engine: PolicyEngine | null;
@@ -20,11 +26,14 @@ export type GuardDeps = {
   payer: string;
   nowMs: number;
   inner?: (call: ToolCall) => ToolResult;
+  /** Tool names this host settles payments through. Replaces the default set. */
+  spendTools?: Iterable<string>;
 };
 
 export function wrapToolsCall(deps: GuardDeps): (call: ToolCall) => ToolResult {
+  const spendTools = new Set(deps.spendTools ?? DEFAULT_SPEND_TOOLS);
   return (call: ToolCall): ToolResult => {
-    if (!SPEND_TOOLS.has(call.name)) {
+    if (!spendTools.has(call.name)) {
       if (deps.inner) {
         return deps.inner(call);
       }

@@ -80,4 +80,31 @@ fire against a chain its own rules make consecutive, and a window total had no
 redaction rule. `MUST-T11-10` through `MUST-T11-14` close those, and
 `MUST-T9-5` carries the window total into the privacy requirements.
 
+Round 3 came from a static review by an outside reader and was measured rather
+than repeated: each claim was reproduced with a probe before any code moved.
+The heaviest was a complete bypass. `MUST-T10-8` says a rail extract must be
+verified against a key supplied out of band, "not against a key the extract
+carries" - but that lesson had been applied to the rail extract alone. Receipts,
+checkpoints, decision tokens and transparency inclusion receipts were still
+verified against the key travelling inside them, so an attacker who never
+touched the issuer key could mint their own, sign a receipt for an unauthorised
+settlement, and the audit reported nothing at all.
+
+`audit()` now takes `issuerTrust` and `witnessTrust` beside `trust`, and
+`verifyReceipt`, `verifyCheckpoint`, `verifyDecisionToken` and
+`verifyInclusionReceipt` each take the key to check against as an optional
+argument. A receipt that does not answer to the pinned issuer is reported as
+`issuer-key-mismatch` and is not counted as coverage, so the settlement it named
+stays reported. An audit given no issuer or witness key says so
+(`unauthenticated-issuer`, `unauthenticated-witness`) instead of reaching an
+unconditional guarantee. The same round closed a policy limit with no lower
+bound, an `allowedTools` list a caller could skip by omitting the field, a nonce
+padding that made two different requests share one receipt nonce, and a state
+file that stored the signing key with no mode and no atomic write.
+
+The spec side of this is still open: `MUST-T10-8` has no counterpart for
+receipts, checkpoints, decision tokens or inclusion receipts. That belongs in a
+later revision, written after the code it describes - which is the order that
+was got wrong once already.
+
 To reproduce any of the above, see `docs/RUN_AS_VERIFIER.md`.

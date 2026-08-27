@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { audit, type Finding } from "@cedulon/audit";
 import {
   buildCheckpointClaims,
@@ -275,7 +275,14 @@ export class CedulonSession {
     } catch {
       return;
     }
-    const parsed = JSON.parse(raw) as Persisted;
+    let parsed: Persisted;
+    try {
+      parsed = JSON.parse(raw) as Persisted;
+    } catch {
+      // A file that does not parse is not an empty ledger. Starting from zero
+      // here would quietly drop every receipt the state was holding.
+      throw new Error("cedulon-state-unreadable");
+    }
     if (parsed.version !== 1) {
       throw new Error("cedulon-state-version");
     }
@@ -319,8 +326,22 @@ export class CedulonSession {
         allowedSum: this.engine.store.counters.allowedSum.toString(),
       },
     };
-    mkdirSync(dirname(this.statePath), { recursive: true });
-    writeFileSync(this.statePath, `${JSON.stringify(payload)}\n`);
+    // The receipt private key is in this payload in the clear: there is no
+    // secret to encrypt it with here, so the file mode is the whole protection.
+    // And writeFileSync truncates before it writes - a crash in between leaves a
+    // short file that the next start would read as the whole ledger. Write to a
+    // temporary name in the same directory, then rename: on POSIX and on NTFS
+    // the swap is atomic, so a reader sees the old file or the new one.
+    const dir = dirname(this.statePath);
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const tmp = join(dir, `.${basename(this.statePath)}.${process.pid}.tmp`);
+    writeFileSync(tmp, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
+    try {
+      renameSync(tmp, this.statePath);
+    } catch (err) {
+      rmSync(tmp, { force: true });
+      throw err;
+    }
   }
 }
 
