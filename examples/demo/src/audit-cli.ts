@@ -24,7 +24,7 @@ for (let i = 0; i < 2; i += 1) {
         amount: 1n,
         currency: "USD",
         payee: "q",
-        nonce: `ok-${i}`,
+        nonce: `ok-${i}`.padEnd(16, "-"),
         nowMs: nowMs + i,
         tool: "spend",
       },

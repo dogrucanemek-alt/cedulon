@@ -54,6 +54,12 @@ export class PolicyEngine {
     if (this.store.usedNonces.has(req.nonce)) {
       return { allow: false, reason: "replay-nonce" };
     }
+    // A limit with only an upper bound is half a limit: a negative amount clears
+    // it, then subtracts from the cumulative counter and reopens a budget that
+    // was already spent. Zero passes no money and still burns a nonce and a slot.
+    if (req.amount <= 0n) {
+      return { allow: false, reason: "amount-not-positive" };
+    }
     if (req.amount > this.policy.maxAmount) {
       return { allow: false, reason: "limit-amount" };
     }
@@ -66,7 +72,10 @@ export class PolicyEngine {
     ) {
       return { allow: false, reason: "scope-currency" };
     }
-    if (this.policy.allowedTools && req.tool && !this.policy.allowedTools.includes(req.tool)) {
+    // An allow-list a caller can opt out of by omitting the field is not an
+    // allow-list. Once a list is configured, a request that names no tool is
+    // outside it.
+    if (this.policy.allowedTools && (req.tool === undefined || !this.policy.allowedTools.includes(req.tool))) {
       return { allow: false, reason: "scope-tool" };
     }
 

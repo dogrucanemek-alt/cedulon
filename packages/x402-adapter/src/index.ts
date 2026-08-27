@@ -14,7 +14,7 @@ import {
   type SignedManifest,
 } from "@cedulon/manifest";
 import {
-  padNonce,
+  isValidNonce,
   signReceipt,
   type SignedReceipt,
 } from "@cedulon/receipts";
@@ -114,6 +114,14 @@ export function gatedSettle(
     return challenge(input.req);
   }
 
+  // Padding a short nonce up to the minimum made two different requests share
+  // one receipt nonce while the policy engine still saw them as distinct. A
+  // nonce is the caller's promise that this request is not another one; a value
+  // too short to carry that promise is refused rather than repaired.
+  if (!isValidNonce(input.req.nonce)) {
+    return deny402(input.req, "nonce-too-short");
+  }
+
   if (input.manifest) {
     if (!verifyManifest(input.manifest)) {
       return deny402(input.req, "manifest-bad-sig");
@@ -197,7 +205,7 @@ function issue(
       noManifest: !input.manifest,
       x402PaymentRef: x402Ref,
       timestampMs: nowMs,
-      nonce: padNonce(input.req.nonce),
+      nonce: input.req.nonce,
       prevReceiptHash,
       outcome: "settled",
     },

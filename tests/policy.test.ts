@@ -30,13 +30,61 @@ function engine(extra: Partial<ConstructorParameters<typeof PolicyEngine>[0]> = 
 }
 
 describe("policy limits velocity scope", () => {
+  it("37 RED then GREEN: a negative amount cannot reopen an exhausted budget", () => {
+    // The per-payment check had an upper bound and no lower one, so a negative
+    // amount passed it, subtracted from the cumulative counter, and handed the
+    // spender back a budget they had already used.
+    const e = engine({ maxAmount: 100n, maxCumulative: 100n, maxPayments: 10 });
+    const base = { currency: "USD", payee: "ok", nowMs: 1, tool: "spend" };
+    assert.equal(e.evaluate({ ...base, amount: 100n, nonce: "a".padEnd(16, "-") }).allow, true);
+    assert.equal(e.evaluate({ ...base, amount: 1n, nonce: "b".padEnd(16, "-") }).reason, "limit-cumulative");
+
+    const negative = e.evaluate({ ...base, amount: -1000n, nonce: "c".padEnd(16, "-") });
+    assert.equal(negative.allow, false);
+    assert.equal(negative.reason, "amount-not-positive");
+    assert.equal(e.evaluate({ ...base, amount: 100n, nonce: "d".padEnd(16, "-") }).reason, "limit-cumulative");
+    assert.equal(e.store.counters.allowedSum, 100n, "the counter never moved backwards");
+    assert.equal(
+      e.store.usedNonces.has("c".padEnd(16, "-")),
+      false,
+      "a rejected request spends no nonce",
+    );
+
+    // Zero is refused for the same reason: it consumes a nonce and a slot while
+    // moving no money, which is a way to burn the payment count for free.
+    assert.equal(e.evaluate({ ...base, amount: 0n, nonce: "e".padEnd(16, "-") }).reason, "amount-not-positive");
+  });
+
+  it("38 RED then GREEN: a request with no tool cannot slip past an allowedTools list", () => {
+    // The check read `allowedTools && req.tool && ...`, so omitting the field
+    // skipped the list entirely. An allow-list that any caller can opt out of is
+    // not an allow-list.
+    const e = engine({ allowedTools: ["search"] });
+    const withoutTool = e.evaluate({
+      amount: 1n,
+      currency: "USD",
+      payee: "ok",
+      nonce: "a".padEnd(16, "-"),
+      nowMs: 1,
+    });
+    assert.equal(withoutTool.allow, false);
+    assert.equal(withoutTool.reason, "scope-tool");
+
+    // With no list configured the field stays optional, as before.
+    const open = engine({ allowedTools: undefined });
+    assert.equal(
+      open.evaluate({ amount: 1n, currency: "USD", payee: "ok", nonce: "b".padEnd(16, "-"), nowMs: 1 }).allow,
+      true,
+    );
+  });
+
   it("denies over per-payment limit", () => {
     const e = engine();
     const d = e.evaluate({
       amount: 11n,
       currency: "USD",
       payee: "ok",
-      nonce: "a",
+      nonce: "a".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     });
@@ -50,7 +98,7 @@ describe("policy limits velocity scope", () => {
       amount: 4n,
       currency: "USD",
       payee: "ok",
-      nonce: "a",
+      nonce: "a".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     });
@@ -58,7 +106,7 @@ describe("policy limits velocity scope", () => {
       amount: 2n,
       currency: "USD",
       payee: "ok",
-      nonce: "b",
+      nonce: "b".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     });
@@ -71,7 +119,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "ok",
-      nonce: "a",
+      nonce: "a".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     });
@@ -79,7 +127,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "ok",
-      nonce: "b",
+      nonce: "b".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     });
@@ -93,7 +141,7 @@ describe("policy limits velocity scope", () => {
         amount: 1n,
         currency: "USD",
         payee: "evil",
-        nonce: "a",
+        nonce: "a".padEnd(16, "-"),
         nowMs: 1,
         tool: "spend",
       }).reason,
@@ -108,7 +156,7 @@ describe("policy limits velocity scope", () => {
         amount: 1n,
         currency: "EUR",
         payee: "ok",
-        nonce: "a",
+        nonce: "a".padEnd(16, "-"),
         nowMs: 1,
         tool: "spend",
       }).reason,
@@ -123,7 +171,7 @@ describe("policy limits velocity scope", () => {
         amount: 1n,
         currency: "USD",
         payee: "ok",
-        nonce: "a",
+        nonce: "a".padEnd(16, "-"),
         nowMs: 1,
         tool: "other",
       }).reason,
@@ -137,7 +185,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "evil",
-      nonce: "bad",
+      nonce: "bad".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     });
@@ -146,7 +194,7 @@ describe("policy limits velocity scope", () => {
         amount: 1n,
         currency: "USD",
         payee: "ok",
-        nonce: "good",
+        nonce: "good".padEnd(16, "-"),
         nowMs: 1,
         tool: "spend",
       }).allow,
@@ -160,7 +208,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "ok",
-      nonce: "a",
+      nonce: "a".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     });
@@ -169,7 +217,7 @@ describe("policy limits velocity scope", () => {
         amount: 1n,
         currency: "USD",
         payee: "ok",
-        nonce: "b",
+        nonce: "b".padEnd(16, "-"),
         nowMs: 12,
         tool: "spend",
       }).allow,
@@ -182,7 +230,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "ok",
-      nonce: "n",
+      nonce: "n".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     };
@@ -195,7 +243,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "ok",
-      nonce: "n",
+      nonce: "n".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     };
@@ -213,7 +261,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "ok",
-      nonce: "n",
+      nonce: "n".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     };
@@ -232,7 +280,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "ok",
-      nonce: "n",
+      nonce: "n".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     };
@@ -268,7 +316,7 @@ describe("policy limits velocity scope", () => {
       amount: 1n,
       currency: "USD",
       payee: "ok",
-      nonce: "n",
+      nonce: "n".padEnd(16, "-"),
       nowMs: 1,
       tool: "spend",
     };

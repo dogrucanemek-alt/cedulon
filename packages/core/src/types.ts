@@ -34,6 +34,7 @@ export type DenyDecision = {
     | "engine-unavailable"
     | "engine-fault"
     | "default-deny"
+    | "amount-not-positive"
     | "limit-amount"
     | "limit-cumulative"
     | "velocity"

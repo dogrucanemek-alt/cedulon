@@ -38,7 +38,7 @@ export function runRunaway(nowMs = 1_700_000_000_000): {
           amount: 1n,
           currency: "USD",
           payee: "payee-1",
-          nonce: `n-${i}`,
+          nonce: `n-${i}`.padEnd(16, "-"),
           nowMs,
           tool: "spend",
         },

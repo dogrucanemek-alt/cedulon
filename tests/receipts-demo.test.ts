@@ -14,11 +14,51 @@ import {
   verifyReceipt,
   counterSign,
 } from "@cedulon/receipts";
+import { gatedSettle } from "@cedulon/x402-adapter";
 import { wrapToolsCall } from "@cedulon/mcp-guard";
 import { runDispute } from "../examples/demo/src/dispute.ts";
 import { assertRunaway, runRunaway } from "../examples/demo/src/runaway.ts";
 
 describe("receipts and hash chain", () => {
+  it("39 RED then GREEN: a nonce too short to be unique is refused, not padded into a collision", () => {
+    // The adapter used to pad a short nonce out to the minimum length, so "a"
+    // and "a0" became the same receipt nonce. The policy engine deduplicated on
+    // the raw value and let both through; reconciliation then saw one nonce for
+    // two payments. Silently repairing an input and then trusting the repair is
+    // the same shape as verifying a signature against the key it travels with.
+    const engine = new PolicyEngine({
+      maxAmount: 100n,
+      maxCumulative: 100n,
+      maxPayments: 10,
+      windowMs: 60_000,
+    });
+    const k = generateReceiptKeys();
+    const keys = { receiptPrivatePem: k.privateKeyPem, receiptPublicPem: k.publicKeyPem };
+    const pay = (nonce: string) =>
+      gatedSettle(
+        engine,
+        {
+          req: { amount: 1n, currency: "USD", payee: "q", nonce, nowMs: 1 },
+          payer: "p",
+          paymentHeader: "mock",
+        },
+        keys,
+        1,
+      );
+
+    const short = pay("a");
+    assert.equal(short.status, 402);
+    assert.equal(short.reason, "nonce-too-short");
+
+    const first = pay("a".padEnd(16, "-"));
+    assert.equal(first.status, 200);
+    assert.equal(first.receipt.claims.nonce, "a".padEnd(16, "-"), "the nonce is carried as given");
+    // A nonce that only differs beyond the old padding length stays distinct.
+    const second = pay("a0".padEnd(16, "-"));
+    assert.equal(second.status, 200);
+    assert.notEqual(second.receipt.claims.nonce, first.receipt.claims.nonce);
+  });
+
   it("verify fails after claim tamper", () => {
     const k = generateReceiptKeys();
     const signed = signReceipt(
@@ -33,7 +73,7 @@ describe("receipts and hash chain", () => {
         x402PaymentRef: null,
         outcome: "aborted",
         timestampMs: 1,
-        nonce: "n".padEnd(16, "0"),
+        nonce: "n".padEnd(16, "-"),
         prevReceiptHash: null,
       },
       k.privateKeyPem,
@@ -59,7 +99,7 @@ describe("receipts and hash chain", () => {
           x402PaymentRef: null,
           outcome: "aborted",
           timestampMs: 1,
-          nonce: "n".padEnd(16, "0"),
+          nonce: "n".padEnd(16, "-"),
           prevReceiptHash: null,
         },
         k.privateKeyPem,
@@ -82,7 +122,7 @@ describe("receipts and hash chain", () => {
         x402PaymentRef: null,
         outcome: "aborted",
         timestampMs: 1,
-        nonce: "n1".padEnd(16, "0"),
+        nonce: "n1".padEnd(16, "-"),
         prevReceiptHash: null,
       },
       k.privateKeyPem,
@@ -100,7 +140,7 @@ describe("receipts and hash chain", () => {
         x402PaymentRef: null,
         outcome: "aborted",
         timestampMs: 2,
-        nonce: "n2".padEnd(16, "0"),
+        nonce: "n2".padEnd(16, "-"),
         prevReceiptHash: receiptHash(a),
       },
       k.privateKeyPem,
@@ -124,7 +164,7 @@ describe("receipts and hash chain", () => {
         x402PaymentRef: null,
         outcome: "aborted",
         timestampMs: 1,
-        nonce: "n".padEnd(16, "0"),
+        nonce: "n".padEnd(16, "-"),
         prevReceiptHash: null,
       },
       k.privateKeyPem,
@@ -158,7 +198,7 @@ describe("receipts and hash chain", () => {
         x402PaymentRef: null,
         outcome: "aborted",
         timestampMs: 1,
-        nonce: "n".padEnd(16, "0"),
+        nonce: "n".padEnd(16, "-"),
         prevReceiptHash: null,
       },
       k.privateKeyPem,
@@ -185,7 +225,7 @@ describe("receipts and hash chain", () => {
         x402PaymentRef: "ref-1",
         outcome: "settled",
         timestampMs: 1,
-        nonce: "n".padEnd(16, "0"),
+        nonce: "n".padEnd(16, "-"),
         prevReceiptHash: null,
       },
       issuer.privateKeyPem,
@@ -234,6 +274,39 @@ describe("demo fixtures", () => {
 });
 
 describe("mcp-guard", () => {
+  it("44 RED then GREEN: the guarded tool names are the host's to state", () => {
+    // The set was hard-coded to "spend" and "pay", so a host whose paying tool
+    // is called anything else - including this project's own `cedulon_spend` -
+    // got a guard that waved it through. The names are configuration, and the
+    // default is documented as a default rather than as coverage.
+    const k = generateReceiptKeys();
+    const engine = () =>
+      new PolicyEngine({ maxAmount: 5n, maxCumulative: 5n, maxPayments: 3, windowMs: 1000 });
+    const args = { amount: "9", currency: "USD", payee: "q", nonce: "over".padEnd(16, "-") };
+    const keys = { receiptPrivatePem: k.privateKeyPem, receiptPublicPem: k.publicKeyPem };
+
+    const unnamed = wrapToolsCall({ engine: engine(), keys, payer: "p", nowMs: 1 });
+    assert.equal(
+      unnamed({ name: "cedulon_spend", arguments: args }).isError,
+      false,
+      "a name the guard was never told about is passed through, as documented",
+    );
+
+    const named = wrapToolsCall({
+      engine: engine(),
+      keys,
+      payer: "p",
+      nowMs: 1,
+      spendTools: ["cedulon_spend"],
+    });
+    const out = named({ name: "cedulon_spend", arguments: args });
+    assert.equal(out.isError, true, "once named, the over-limit spend is refused");
+    assert.equal(out.content[0].text.includes("limit-amount"), true);
+
+    // Naming your own tools replaces the default rather than adding to it.
+    assert.equal(named({ name: "spend", arguments: args }).isError, false);
+  });
+
   it("passes through non-spend tools", () => {
     const call = wrapToolsCall({
       engine: null,
@@ -254,7 +327,7 @@ describe("mcp-guard", () => {
     });
     const out = call({
       name: "spend",
-      arguments: { amount: "1", currency: "USD", payee: "q", nonce: "1" },
+      arguments: { amount: "1", currency: "USD", payee: "q", nonce: "1".padEnd(16, "-") },
     });
     assert.equal(out.isError, true);
     assert.equal(out.content[0].text.includes("engine-unavailable"), true);
@@ -276,7 +349,7 @@ describe("mcp-guard", () => {
     });
     const out = call({
       name: "spend",
-      arguments: { amount: "1", currency: "USD", payee: "q", nonce: "1" },
+      arguments: { amount: "1", currency: "USD", payee: "q", nonce: "1".padEnd(16, "-") },
     });
     assert.equal(out.isError, false);
   });

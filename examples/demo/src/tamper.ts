@@ -32,7 +32,7 @@ const receipt = signReceipt(
     noManifest: true,
     x402PaymentRef: "r",
     timestampMs: nowMs,
-    nonce: "n1".padEnd(16, "0"),
+    nonce: "n1".padEnd(16, "-"),
     prevReceiptHash: null,
     outcome: "settled",
   },

@@ -126,7 +126,7 @@ describe("phase 2 write path (dry-run, fail-closed)", () => {
         noManifest: true,
         x402PaymentRef: extract.settlements[0].ref,
         timestampMs: extract.settlements[0].timestampMs,
-        nonce: "n0".padEnd(16, "0"),
+        nonce: "n0".padEnd(16, "-"),
         prevReceiptHash: null,
         outcome: "settled",
       },

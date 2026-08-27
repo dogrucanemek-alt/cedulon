@@ -49,7 +49,7 @@ export function runDispute(nowMs = 1_700_000_000_000): {
         amount: 5n,
         currency: "USD",
         payee: "seller",
-        nonce: "trade-1",
+        nonce: "trade-1".padEnd(16, "-"),
         nowMs,
         tool: "spend",
       },

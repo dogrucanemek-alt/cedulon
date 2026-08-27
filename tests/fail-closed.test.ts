@@ -11,7 +11,7 @@ const req: SpendRequest = {
   amount: 1n,
   currency: "USD",
   payee: "p",
-  nonce: "n",
+  nonce: "n".padEnd(16, "-"),
   nowMs: 10,
 };
 

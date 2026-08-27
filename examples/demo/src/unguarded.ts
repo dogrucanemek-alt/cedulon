@@ -11,7 +11,7 @@ for (let i = 0; i < 100; i += 1) {
         amount: 1n,
         currency: "USD",
         payee: "payee-1",
-        nonce: `u-${i}`,
+        nonce: `u-${i}`.padEnd(16, "-"),
         nowMs,
       },
       payer: "payer-1",
