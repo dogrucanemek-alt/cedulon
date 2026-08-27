@@ -122,7 +122,7 @@ describe("replay and manifest expiry", () => {
     }
   });
 
-  it("no-manifest payment is flagged on receipt", () => {
+  it("noManifest payment is flagged on receipt", () => {
     const nowMs = 1000;
     const engine = new PolicyEngine({
       maxAmount: 10n,

@@ -61,15 +61,15 @@ document. The agent then calls a spend tool outside the principal's intent.
 **Mitigation.** Policy is not derived from model text. The PDP evaluates
 structured fields only (amount, currency, payee, tool name, manifest hash).
 A spend tool call that lacks a valid, unexpired, signature-verified manifest
-MAY proceed only as `no-manifest` and MUST still pass limit, velocity, and
+MAY proceed only as `noManifest` and MUST still pass limit, velocity, and
 scope checks. Injected natural language MUST NOT enlarge those checks.
 
 | ID | Requirement |
 |---|---|
 | MUST-T1-1 | The PDP MUST decide from structured request fields and stored policy, not from model-generated prose. |
-| MUST-T1-2 | A spend that is not bound to a verified Trade Manifest MUST be marked `no-manifest` on the Spend Receipt and MUST still be subject to limit, velocity, and scope policy. |
+| MUST-T1-2 | A spend that is not bound to a verified Trade Manifest MUST be marked `noManifest` on the Spend Receipt and MUST still be subject to limit, velocity, and scope policy. |
 | SHOULD-T1-3 | Hosts SHOULD require a human confirmation channel for first-use payees. |
-| MAY-T1-4 | An implementation MAY refuse all `no-manifest` spend. |
+| MAY-T1-4 | An implementation MAY refuse all `noManifest` spend. |
 
 ### T2 — Runaway agent (loop spend)
 
@@ -259,7 +259,7 @@ Optional registration in a transparency log makes suppression visible.
 
 | Threat | Mitigation (short) | MUST IDs |
 |---|---|---|
-| T1 Prompt injection | Structured PDP; `no-manifest` still gated | MUST-T1-1, MUST-T1-2 |
+| T1 Prompt injection | Structured PDP; `noManifest` still gated | MUST-T1-1, MUST-T1-2 |
 | T2 Runaway spend | Limits, velocity, fail-closed | MUST-T2-1, MUST-T2-2, MUST-T2-3, MUST-T2-4 |
 | T3 Replay | Nonce, expiry, single-use decision | MUST-T3-1, MUST-T3-2, MUST-T3-3, MUST-T3-4 |
 | T4 Forgery / denial | Signed canonical receipt, kid, outcome | MUST-T4-1, MUST-T4-2, MUST-T4-3, MUST-T4-4, MUST-T4-7, MUST-T4-8 |

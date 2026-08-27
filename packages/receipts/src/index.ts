@@ -154,7 +154,7 @@ export function claimsFromCbor(bytes: Uint8Array): SpendReceiptClaims {
 
 function assertClaimConsistency(claims: SpendReceiptClaims): void {
   if (claims.noManifest !== (claims.manifestHash === null)) {
-    throw new Error("no-manifest flag must match missing manifestHash");
+    throw new Error("noManifest flag must match missing manifestHash");
   }
   if (claims.outcome !== "settled" && claims.outcome !== "aborted") {
     throw new Error("outcome must be settled or aborted");

@@ -44,7 +44,7 @@ describe("receipts and hash chain", () => {
     assert.equal(verifyReceipt(tampered), false);
   });
 
-  it("rejects inconsistent no-manifest flag", () => {
+  it("rejects inconsistent noManifest flag", () => {
     const k = generateReceiptKeys();
     assert.throws(() =>
       signReceipt(
