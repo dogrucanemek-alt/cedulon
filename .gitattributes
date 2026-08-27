@@ -1,0 +1,31 @@
+# Text outside spec/ is stored as LF.
+# spec/ is intentionally unlisted: those drafts are frozen on the datatracker.
+# A normalization rule there would desync the tree from the published bytes.
+
+/docs/** text eol=lf
+/packages/** text eol=lf
+/tests/** text eol=lf
+/examples/** text eol=lf
+/scripts/** text eol=lf
+/site/** text eol=lf
+
+/.dockerignore text eol=lf
+/.env.example text eol=lf
+/.gitignore text eol=lf
+/CITATION.cff text eol=lf
+/Dockerfile text eol=lf
+/LICENSE text eol=lf
+/README.md text eol=lf
+/SECURITY.md text eol=lf
+/THREAT_MODEL.md text eol=lf
+/glama.json text eol=lf
+/package-lock.json text eol=lf
+/package.json text eol=lf
+/server.json text eol=lf
+/smithery.yaml text eol=lf
+/tsconfig.build.base.json text eol=lf
+/tsconfig.json text eol=lf
+
+# Binary. Last match wins, so this overrides /site/** for the PNG.
+*.png binary
+site/og.png binary
