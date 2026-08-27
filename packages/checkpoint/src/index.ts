@@ -21,5 +21,6 @@ export {
   decodeInclusionPayload,
   statementHashOfCheckpoint,
   statementHashOfReceipt,
+  verifyInclusionReceipt,
   type InclusionReceipt,
 } from "./transparency.ts";

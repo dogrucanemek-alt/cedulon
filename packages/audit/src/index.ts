@@ -3,8 +3,11 @@ import { createPublicKey } from "node:crypto";
 import {
   findCheckpointChainBreak,
   findEquivocation,
+  statementHashOfCheckpoint,
   totalsFromReceipts,
   verifyCheckpoint,
+  verifyInclusionReceipt,
+  type InclusionReceipt,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
 import { receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
@@ -33,6 +36,9 @@ export const FINDING_CODES = [
   "unstated-audit-window",
   "malformed-amount",
   "countersign-bad",
+  "checkpoint-not-anchored",
+  "checkpoint-withheld",
+  "checkpoint-totals-redacted",
 ] as const;
 
 export type FindingCode = (typeof FINDING_CODES)[number];
@@ -337,7 +343,7 @@ export function findCheckpointTotalMismatches(
     }
     const inWindow = receiptsInWindow(receipts, cp);
     const expected = totalsFromReceipts(inWindow);
-    if (JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
+    if (!cp.omitted?.includes("totals") && JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
       findings.push({
         code: "checkpoint-total-mismatch",
         id: `epoch-${cp.claims.epoch}`,
@@ -383,6 +389,58 @@ export function findEquivocationFinding(checkpoints: SignedCheckpoint[]): Findin
   };
 }
 
+function verifiedWitnessCheckpoints(receipts: InclusionReceipt[]): SignedCheckpoint[] {
+  const out: SignedCheckpoint[] = [];
+  for (const rec of receipts) {
+    if (!verifyInclusionReceipt(rec) || !rec.checkpoint) {
+      continue;
+    }
+    if (statementHashOfCheckpoint(rec.checkpoint) !== rec.statementHash) {
+      continue;
+    }
+    if (!verifyCheckpoint(rec.checkpoint)) {
+      continue;
+    }
+    out.push(rec.checkpoint);
+  }
+  return out;
+}
+
+function findTransparencyWitness(
+  checkpoints: SignedCheckpoint[],
+  inclusionReceipts: InclusionReceipt[],
+): { findings: Finding[]; warnings: Finding[] } {
+  const findings: Finding[] = [];
+  const warnings: Finding[] = [];
+  const valid = inclusionReceipts.filter(verifyInclusionReceipt);
+  const witnessHashes = new Set(valid.map((r) => r.statementHash));
+  const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
+
+  for (const cp of checkpoints) {
+    const hash = statementHashOfCheckpoint(cp);
+    if (!witnessHashes.has(hash)) {
+      warnings.push({
+        code: "checkpoint-not-anchored",
+        id: `epoch-${cp.claims.epoch}`,
+        detail: `checkpoint epoch ${cp.claims.epoch} has no inclusion receipt in the configured witness`,
+        severity: "warn",
+      });
+    }
+  }
+
+  for (const rec of valid) {
+    if (!presentedHashes.has(rec.statementHash)) {
+      findings.push({
+        code: "checkpoint-withheld",
+        id: rec.statementHash,
+        detail: `inclusion receipt index ${rec.index} binds statement ${rec.statementHash}, which is not in the presented checkpoint chain`,
+      });
+    }
+  }
+
+  return { findings, warnings };
+}
+
 /**
  * A key is bytes, not text. Compare SPKI DER so the same key still matches
  * when a rail publishes it in another envelope, and so an unreadable key is
@@ -423,13 +481,17 @@ function sameSettlements(a: RailSettlement[], b: RailSettlement[]): boolean {
   return left.every((k, i) => k === right[i]);
 }
 
-export function audit(input: {
+export type AuditInput = {
   receipts: SignedReceipt[];
   checkpoints: SignedCheckpoint[];
   settlements?: RailSettlement[];
   extract?: SignedRailExtract;
   trust?: RailTrustPin;
-}): AuditReport {
+  /** Checkpoint inclusion receipts. Absent ⇒ today's behaviour. Present ⇒ T11 witness is configured. */
+  inclusionReceipts?: InclusionReceipt[];
+};
+
+export function audit(input: AuditInput): AuditReport {
   const findings: Finding[] = [];
   const warnings: Finding[] = [];
 
@@ -587,8 +649,32 @@ export function audit(input: {
   if (chain) findings.push(chain);
   findings.push(...findCheckpointTotalMismatches(input.receipts, input.checkpoints));
   findings.push(...findWindowCoverage(input.receipts, input.checkpoints));
-  const equiv = findEquivocationFinding(input.checkpoints);
+  const equivPool = input.inclusionReceipts
+    ? [...input.checkpoints, ...verifiedWitnessCheckpoints(input.inclusionReceipts)]
+    : input.checkpoints;
+  const equiv = findEquivocationFinding(equivPool);
   if (equiv) findings.push(equiv);
+
+  if (input.inclusionReceipts) {
+    const witness = findTransparencyWitness(input.checkpoints, input.inclusionReceipts);
+    findings.push(...witness.findings);
+    warnings.push(...witness.warnings);
+  }
+
+  for (const cp of input.checkpoints) {
+    const omitted = cp.omitted ?? [];
+    if (omitted.some((key) => key !== "totals")) {
+      continue;
+    }
+    if (omitted.includes("totals")) {
+      warnings.push({
+        code: "checkpoint-totals-redacted",
+        id: `epoch-${cp.claims.epoch}`,
+        detail: `checkpoint epoch ${cp.claims.epoch} totals were omitted; totals comparison skipped`,
+        severity: "warn",
+      });
+    }
+  }
 
   const hard = findings.filter((f) => f.severity !== "warn");
   const missing = hard.filter((f) => f.code === "settlement-without-receipt");

@@ -40,6 +40,11 @@ export type SignedCheckpoint = {
   publicKeyPem: string;
   encoding: "cose";
   coseHex: string;
+  /**
+   * Presentation-only. Not encoded in the COSE. `totals` may be omitted;
+   * structural keys (epoch, window, counts, hashes) may not — verify fails closed.
+   */
+  omitted?: Array<keyof CheckpointClaims>;
 };
 
 export function sha256Hex(data: string | Buffer): string {
@@ -150,7 +155,20 @@ export function signCheckpoint(
   };
 }
 
+const STRUCTURAL_CHECKPOINT_KEYS: ReadonlyArray<keyof CheckpointClaims> = [
+  "epoch",
+  "startMs",
+  "endMs",
+  "receiptCount",
+  "chainHeadHash",
+  "prevCheckpointHash",
+];
+
 export function verifyCheckpoint(signed: SignedCheckpoint): boolean {
+  const omitted = new Set(signed.omitted ?? []);
+  if (STRUCTURAL_CHECKPOINT_KEYS.some((key) => omitted.has(key))) {
+    return false;
+  }
   const bytes = Buffer.from(signed.coseHex, "hex");
   if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_CHECKPOINT)) {
     return false;
@@ -158,6 +176,11 @@ export function verifyCheckpoint(signed: SignedCheckpoint): boolean {
   try {
     const msg = decodeCoseSign1(bytes);
     const decoded = checkpointFromCbor(msg.payload);
+    if (omitted.has("totals")) {
+      const { totals: _decodedTotals, ...decodedRest } = decoded;
+      const { totals: _claimedTotals, ...claimsRest } = signed.claims;
+      return canonical(decodedRest) === canonical(claimsRest);
+    }
     return canonical(decoded) === canonical(signed.claims);
   } catch {
     return false;

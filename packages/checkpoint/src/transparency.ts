@@ -19,6 +19,8 @@ export type InclusionReceipt = {
   treeHead: string;
   issuerPublicKeyPem: string;
   coseHex: string;
+  /** Statement body when the caller still holds it. Not part of the inclusion COSE. */
+  checkpoint?: SignedCheckpoint;
 };
 
 /** In-process append-only log. No network. SCITT/RFC 9943 spirit, not SCRAPI. */
@@ -76,11 +78,22 @@ export function anchorReceipt(ts: MemoryTransparencyService, signed: SignedRecei
   return ts.register(signed.coseHex);
 }
 
+export function verifyInclusionReceipt(receipt: InclusionReceipt): boolean {
+  if (!verifyCoseSign1(Buffer.from(receipt.coseHex, "hex"), receipt.issuerPublicKeyPem, CTY_INCLUSION)) {
+    return false;
+  }
+  try {
+    return decodeInclusionPayload(receipt.coseHex).statementHash === receipt.statementHash;
+  } catch {
+    return false;
+  }
+}
+
 export function anchorCheckpoint(
   ts: MemoryTransparencyService,
   signed: SignedCheckpoint,
 ): InclusionReceipt {
-  return ts.register(signed.coseHex);
+  return { ...ts.register(signed.coseHex), checkpoint: signed };
 }
 
 export function statementHashOfReceipt(signed: SignedReceipt): string {
