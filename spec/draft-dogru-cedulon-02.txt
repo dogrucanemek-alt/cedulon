@@ -132,12 +132,12 @@ Internet-Draft                   Cedulon                     August 2026
    16. Implementation Status . . . . . . . . . . . . . . . . . . . .  38
      16.1.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  39
    17. Evolution and Future Work (Informative) . . . . . . . . . . .  40
-     17.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  40
+     17.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  41
      17.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  41
      17.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  41
    18. Informative Notes on Adjacent Protocols . . . . . . . . . . .  41
-   19. References  . . . . . . . . . . . . . . . . . . . . . . . . .  41
-     19.1.  Normative References . . . . . . . . . . . . . . . . . .  41
+   19. References  . . . . . . . . . . . . . . . . . . . . . . . . .  42
+     19.1.  Normative References . . . . . . . . . . . . . . . . . .  42
      19.2.  Informative References . . . . . . . . . . . . . . . . .  43
    Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  44
    Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  45
@@ -2087,13 +2087,16 @@ Internet-Draft                   Cedulon                     August 2026
       not an IETF working-group item.
 
    Maturity:  Research code by a single implementer.  Three readers have
-      run the suite from a clean clone on their own machines and
-      reported matching figures, which is byte-stability across
-      environments rather than an independent implementation.  One
-      reader reports an independent implementation of the Signed
-      Statement identity, kept deliberately separate from this codebase;
-      no independent implementation of the reconciliation algorithm is
-      known to the author.
+      run the code on their own machines against a pinned commit and
+      reported figures matching the author's: two from a clean clone of
+      the whole suite, one re-running the published reproduction.  That
+      is byte-stability across environments, not an independent
+      implementation, and the distinction matters: the same code
+      agreeing with itself on three machines rules out a local accident
+      and nothing more.  One reader reports an independent
+      implementation of the Signed Statement identity, kept deliberately
+      separate from this codebase; no independent implementation of the
+      reconciliation algorithm is known to the author.
 
    Coverage:  The receipt, checkpoint, extract, reconciliation, and
       verification algorithm are implemented, including the transparency
@@ -2119,9 +2122,6 @@ Internet-Draft                   Cedulon                     August 2026
       independently confirmed by a second: the object carrying the T11
       guarantee was not profiled for registration and was never read
       during verification.  Repairing it turned up one more, found while
-      checking the repair rather than reported: the first attempt
-      asserted the totals redaction in a field outside the signature,
-      which let a checkpoint with wrong signed totals be re-presented as
 
 
 
@@ -2130,6 +2130,9 @@ Dogru                   Expires 28 February 2027               [Page 38]
 Internet-Draft                   Cedulon                     August 2026
 
 
+      checking the repair rather than reported: the first attempt
+      asserted the totals redaction in a field outside the signature,
+      which let a checkpoint with wrong signed totals be re-presented as
       redacted and silence the mismatch.  That is the defect MUST-T11-13
       now forbids, and it was the same shape as the bypass -01 was
       written to fix.
@@ -2174,10 +2177,7 @@ Internet-Draft                   Cedulon                     August 2026
    Two decisions inside those repairs are worth stating on their own,
    because a reader might reasonably have expected the other choice.
 
-   *  A recorded checkpoint the presented chain omits gets its own
-      identifier, checkpoint-withheld, rather than being folded into
-      window-coverage (MUST-T11-11).  The reporter asked which way it
-      should go.  Coverage says the record shown is incomplete; a
+
 
 
 
@@ -2186,6 +2186,10 @@ Dogru                   Expires 28 February 2027               [Page 39]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   *  A recorded checkpoint the presented chain omits gets its own
+      identifier, checkpoint-withheld, rather than being folded into
+      window-coverage (MUST-T11-11).  The reporter asked which way it
+      should go.  Coverage says the record shown is incomplete; a
       withheld checkpoint says the party under audit is holding a record
       it did not show.  An operator who sees one identifier for both
       cannot tell an incomplete record from a concealed one, which is
@@ -2225,6 +2229,19 @@ Internet-Draft                   Cedulon                     August 2026
    threat-model MUST lines for them belong in later revisions (-03 or
    later), written with the same discipline as this -02.
 
+
+
+
+
+
+
+
+
+Dogru                   Expires 28 February 2027               [Page 40]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
 17.1.  Re-attestation profile
 
    Algorithms retire.  A Spend Receipt or checkpoint signed under
@@ -2234,14 +2251,6 @@ Internet-Draft                   Cedulon                     August 2026
    algorithm countersign or receipt them.  The principle is that
    structures outlive ciphers.  The first concrete example is the
    profile's own move from generic EdDSA (-8) to Ed25519 (-19) in
-
-
-
-Dogru                   Expires 28 February 2027               [Page 40]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    [RFC9864].
 
 17.2.  Streaming reconciliation
@@ -2282,6 +2291,13 @@ Internet-Draft                   Cedulon                     August 2026
    time compliance decision; it does not define rail-extract
    completeness.
 
+
+
+Dogru                   Expires 28 February 2027               [Page 41]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
 19.  References
 
 19.1.  Normative References
@@ -2290,13 +2306,6 @@ Internet-Draft                   Cedulon                     August 2026
               Requirement Levels", BCP 14, RFC 2119,
               DOI 10.17487/RFC2119, March 1997,
               <https://www.rfc-editor.org/rfc/rfc2119>.
-
-
-
-Dogru                   Expires 28 February 2027               [Page 41]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
               (SHA and SHA-based HMAC and HKDF)", RFC 6234,
@@ -2335,6 +2344,16 @@ Internet-Draft                   Cedulon                     August 2026
               Initial Algorithms", RFC 9053, DOI 10.17487/RFC9053,
               August 2022, <https://www.rfc-editor.org/rfc/rfc9053>.
 
+
+
+
+
+
+Dogru                   Expires 28 February 2027               [Page 42]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
               JSON Object Signing and Encryption (JOSE) and CBOR Object
               Signing and Encryption (COSE)", RFC 9864,
@@ -2345,14 +2364,6 @@ Internet-Draft                   Cedulon                     August 2026
               Fournet, "CBOR Object Signing and Encryption (COSE)
               Receipts", RFC 9942, DOI 10.17487/RFC9942, June 2026,
               <https://www.rfc-editor.org/rfc/rfc9942>.
-
-
-
-
-Dogru                   Expires 28 February 2027               [Page 42]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    [RFC9943]  Birkholz, H., Delignat-Lavaud, A., Fournet, C., Deshpande,
               Y., and S. Lasker, "An Architecture for Trustworthy and
@@ -2391,6 +2402,14 @@ Internet-Draft                   Cedulon                     August 2026
    [PACIOLI]  Pacioli, L., "Summa de arithmetica, geometria, proportioni
               et proportionalita", 1494.
 
+
+
+
+Dogru                   Expires 28 February 2027               [Page 43]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    [REATTEST] Dogru, E. C., "Cedulon Re-Attestation: Carrying Spend
               Evidence Across Algorithm Retirement", August 2026,
               <https://github.com/dogrucanemek-
@@ -2401,14 +2420,6 @@ Internet-Draft                   Cedulon                     August 2026
               Code: The Implementation Status Section", BCP 205,
               RFC 7942, DOI 10.17487/RFC7942, July 2016,
               <https://www.rfc-editor.org/rfc/rfc7942>.
-
-
-
-
-Dogru                   Expires 28 February 2027               [Page 43]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    [RFC9110]  Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
               Ed., "HTTP Semantics", STD 97, RFC 9110,
@@ -2447,17 +2458,6 @@ Acknowledgments
    the question that decided the shape of the repair, namely whether a
    recorded checkpoint absent from the chain deserves its own identifier
    or belongs under window coverage.  Iman Schrock confirmed the finding
-   independently and drew its boundary, keeping it separate from the
-   extract-binding work already closed in -01.
-
-   Iman Schrock and Pablo Play ran the -00 implementation against the
-   pinned commit and reported the defects that produced -01.  Iman
-   Schrock found the two extract-binding defects, proposed the repair
-   -01 adopts, and is also the author of [SCHROCK], cited here as
-   adjacent work.  Pablo Play found that a repeated reference hid the
-   unaccounted amount, and filed a written reproduction.
-
-
 
 
 
@@ -2465,6 +2465,19 @@ Dogru                   Expires 28 February 2027               [Page 44]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   independently and drew its boundary, keeping it separate from the
+   extract-binding work already closed in -01.
+
+   Iman Schrock and Pablo Play ran the -00 implementation against the
+   pinned commit and reported the defects that produced -01.  Iman
+   Schrock found the two extract-binding defects, proposed the repair
+   -01 adopts, later reran the posted -01 from a clean clone against its
+   own pinned commit, and is also the author of [SCHROCK], cited here as
+   adjacent work.  Pablo Play found that a repeated reference hid the
+   unaccounted amount, filed a written reproduction, and re-ran that
+   reproduction against the pinned commit to confirm the figures quoted
+   from it.
 
    Nicholas Templeman ran the suite from a clean clone on a different
    operating system and reported his figures, and classified his own run
@@ -2495,6 +2508,20 @@ Appendix A.  Test Vectors
 
    COSE_Sign1 hex (whitespace ignored; identical to the locked test):
 
+
+
+
+
+
+
+
+
+
+Dogru                   Expires 28 February 2027               [Page 45]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    845830a301320378206170706c69636174696f6e2f636564756c6f6e2d
    726563656970742b63626f72044806e3fd8fda29bb60a0587cac3a0001
    11706770617965722d313a000111716770617965652d313a0001117261
@@ -2513,15 +2540,6 @@ Appendix A.  Test Vectors
 
    COSE_Sign1 hex (whitespace ignored; identical to the locked test):
 
-
-
-
-
-Dogru                   Expires 28 February 2027               [Page 45]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    845831a301320378216170706c69636174696f6e2f636564756c6f6e2d
    6d616e69666573742b63626f72044806e3fd8fda29bb60a0584aa73a00
    0112386d666978747572652d676f6f64733a0001123961313a0001123a
@@ -2535,24 +2553,6 @@ Author's Address
    Emek Can Dogru
    VERAX TEKNOLOJI LIMITED SIRKETI
    Email: e.dogru@cedulon.com
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

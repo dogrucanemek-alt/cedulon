@@ -1267,12 +1267,16 @@ Implementation:
 
 Maturity:
 : Research code by a single implementer. Three readers have run the
-  suite from a clean clone on their own machines and reported matching
-  figures, which is byte-stability across environments rather than an
-  independent implementation. One reader reports an independent
-  implementation of the Signed Statement identity, kept deliberately
-  separate from this codebase; no independent implementation of the
-  reconciliation algorithm is known to the author.
+  code on their own machines against a pinned commit and reported
+  figures matching the author's: two from a clean clone of the whole
+  suite, one re-running the published reproduction. That is
+  byte-stability across environments, not an independent
+  implementation, and the distinction matters: the same code agreeing
+  with itself on three machines rules out a local accident and nothing
+  more. One reader reports an independent implementation of the Signed
+  Statement identity, kept deliberately separate from this codebase; no
+  independent implementation of the reconciliation algorithm is known
+  to the author.
 
 Coverage:
 : The receipt, checkpoint, extract, reconciliation, and verification
@@ -1456,9 +1460,11 @@ extract-binding work already closed in -01.
 Iman Schrock and Pablo Play ran the -00 implementation against the
 pinned commit and reported the defects that produced -01. Iman Schrock
 found the two extract-binding defects, proposed the repair -01 adopts,
-and is also the author of {{SCHROCK}}, cited here as adjacent work.
-Pablo Play found that a repeated reference hid the unaccounted amount,
-and filed a written reproduction.
+later reran the posted -01 from a clean clone against its own pinned
+commit, and is also the author of {{SCHROCK}}, cited here as adjacent
+work. Pablo Play found that a repeated reference hid the unaccounted
+amount, filed a written reproduction, and re-ran that reproduction
+against the pinned commit to confirm the figures quoted from it.
 
 Nicholas Templeman ran the suite from a clean clone on a different
 operating system and reported his figures, and classified his own run
