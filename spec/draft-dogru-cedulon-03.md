@@ -1552,12 +1552,24 @@ Experience:
   condition this document exists to make detectable.
 
 Note on distribution: the requirements added in this revision are in
-the published `@cedulon` packages at version 0.3.0, not only in the
+the published `@cedulon` packages at version 0.3.1, not only in the
 repository. A reader can check a claim against an installed package
 rather than against a working tree. That order is deliberate: -00
 described requirements that its published package did not yet carry,
 a reader found the discrepancy, and this document does not repeat it.
 Versions 0.2.x and earlier predate everything in this revision.
+
+0.3.0 carried the same requirements and three defects that only appear
+away from the platform it was written on, which an independent runner
+found by taking up a standing invitation to break it. A directory that
+could not be written refused the lock before the record and left the
+refusal as an uncaught exception rather than the reason this document
+requires; the case for a symbolic link on the path used a call that
+does not exist in the module system the package declares, so it never
+reached its assertion; and repairing that revealed a fourth defect,
+that the state fingerprint was read before the path was checked, so a
+replaced path was reported as a conflicting writer rather than as a
+hijacked destination. 0.3.1 closes all four.
 
 ## Changes from -02 {#changes-02}
 
@@ -1792,7 +1804,11 @@ Statement identity is noted in {{impl-status}}, and he asked for it to
 be kept separate from any cross-implementation claim about Cedulon;
 that separation is his and is recorded here as he stated it. Pablo Play found that a repeated reference hid the unaccounted
 amount, filed a written reproduction, and re-ran that reproduction
-against the pinned commit to confirm the figures quoted from it.
+against the pinned commit to confirm the figures quoted from it. He
+later took up a standing invitation to break the implementation and
+ran the suite on a platform its author had not, which is how the three
+defects behind 0.3.1 were found and how a fourth came to light while
+they were being repaired.
 
 Nicholas Templeman ran the suite from a clean clone and reported his
 figures. He also corrected two claims in a row written about that run:

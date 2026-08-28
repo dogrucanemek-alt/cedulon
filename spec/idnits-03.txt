@@ -147,19 +147,19 @@ draft-dogru-cedulon-03.txt:
 114	     15.14. T12: Settlement without a recorded receipt . . . . . . .  44
 115	   16. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  46
 116	   17. Implementation Status . . . . . . . . . . . . . . . . . . . .  47
-117	     17.1.  Changes from -02 . . . . . . . . . . . . . . . . . . . .  48
-118	     17.2.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  50
+117	     17.1.  Changes from -02 . . . . . . . . . . . . . . . . . . . .  49
+118	     17.2.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  51
 119	   18. Evolution and Future Work (Informative) . . . . . . . . . . .  52
 120	     18.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  52
 121	     18.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  52
-122	     18.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  52
-123	   19. Informative Notes on Adjacent Protocols . . . . . . . . . . .  52
+122	     18.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  53
+123	   19. Informative Notes on Adjacent Protocols . . . . . . . . . . .  53
 124	   20. References  . . . . . . . . . . . . . . . . . . . . . . . . .  53
 125	     20.1.  Normative References . . . . . . . . . . . . . . . . . .  53
 126	     20.2.  Informative References . . . . . . . . . . . . . . . . .  54
 127	   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  56
 128	   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  57
-129	   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  57
+129	   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  58
 
 131	1.  Introduction
 
@@ -2208,444 +2208,460 @@ draft-dogru-cedulon-03.txt:
 2175	      to make detectable.
 
 2177	   Note on distribution: the requirements added in this revision are in
-2178	   the published @cedulon packages at version 0.3.0, not only in the
+2178	   the published @cedulon packages at version 0.3.1, not only in the
 2179	   repository.  A reader can check a claim against an installed package
 2180	   rather than against a working tree.  That order is deliberate: -00
 2181	   described requirements that its published package did not yet carry,
 2182	   a reader found the discrepancy, and this document does not repeat it.
 2183	   Versions 0.2.x and earlier predate everything in this revision.
 
-2185	17.1.  Changes from -02
-
-2187	   This revision has two subjects.  The first is that -02 stated a rule
-2188	   in one place and left it unstated everywhere the same rule applied.
-2189	   The second is T12, which no reader reported and which is not about an
-2190	   adversary at all.
-
-2192	   MUST-T10-8 requires a rail extract to be verified against a key the
-2193	   verifier obtained out of band, "not against a key the extract
-2194	   carries".  That sentence was written for the extract and nothing
-2195	   carried it to the other signed objects in the profile.  A Spend
-2196	   Receipt, an epoch checkpoint, a Decision Token and a transparency
-2197	   inclusion receipt were each left to be checked against the key
-2198	   travelling inside them, which is a question that answers itself.  A
-2199	   verifier following -02 to the letter therefore accepts a receipt
-2200	   signed by any key at all, and a receipt like that silences the
-2201	   settlement-without-receipt finding for the settlement it names.  The
-2202	   completeness property is then computed over evidence that answers to
-2203	   nobody.  Section 9 states the rule for the rest of them, and the
-2204	   verification algorithm now applies it.
-
-2206	   A reader raised the inclusion-receipt half of this against the posted
-2207	   -02 after checking the archived text against the implementation
-2208	   commit.  Following it into the code turned up the other three, along
-2209	   with two conditions that were not about keys at all.
-
-2211	   The first is that reporting a mismatch is not enough.  An
-2212	   implementation that names a foreign key and then still lets the
-2213	   receipt match its settlement has described the attack in its output
-2214	   while concluding that the books balance.  MUST-T4-10 now requires the
-2215	   settlement to stay reported.
-
-2217	   The second is that an expectation which only fires when the evidence
-2218	   is present can be cancelled by deleting the evidence.  A pinned payee
-2219	   key with no countersignature to check was silence, so removing a
-2220	   countersignature removed the question with it.  MUST-T4-14 closes
-2221	   that, and MUST-T11-17 closes the same shape in the witness: an
-2222	   inclusion receipt with its body stripped off can no longer bury a
-2223	   withholding, while still not being allowed to accuse anyone.
-
-2225	   T12 is new and is not about an adversary.  An issuer that settles,
-2226	   appends the receipt in memory and then writes its state will, when
-2227	   that write fails, leave the rail holding a settlement whose receipt
-2228	   exists nowhere durable.  Restarted, it reports settlement-without-
-2229	   receipt against itself.  The condition this document exists to make
-2230	   detectable was reachable through the implementation's own ordering,
-2231	   and no requirement in -02 said otherwise.
-
-2233	   The same first subject carries five requirements this section has not
-2234	   named so far, all of them stated in Section 9.  A pinned key that
-2235	   cannot be decoded MUST NOT fall back to the keys the objects carry
-2236	   (MUST-T4-11).  An issuer root may comprise more than one key, and a
-2237	   verifier must accept one that does, so a rotation inside the audited
-2238	   window does not force it to choose between findings against honest
-2239	   receipts and abandoning the pin (MUST-T4-12).  The same out-of-band
-2240	   rule reaches the payee countersignature (MUST-T4-13), the
-2241	   transparency witness (MUST-T11-15 and MUST-T11-16), and the Decision
-2242	   Token, whose consumer issued it and therefore already holds the key
-2243	   to check it with (MUST-T6-6).
-
-2245	   Two requirements belong to neither subject.  MUST-T7-5 and MUST-T7-6
-2246	   come from measuring the protection a stored signing key actually has
-2247	   instead of deriving it from the platform.  A mount that ignores
-2248	   filesystem permissions accepts the call and protects nothing, and a
-2249	   writable directory or a symbolic link anywhere on the path makes the
-2250	   file permission moot.  They are stated because the implementation
-2251	   reported protection it did not have.
-
-2253	   Two things are stated here that -02 got right and this revision keeps
-2254	   unchanged: the extract rule itself, and the treatment of a pinned key
-2255	   the verifier cannot decode.  What changed is their reach, and the
-2256	   change is not backward compatible.  Where a verifier pinned the rail
-2257	   key, supplied no issuer key, and was presented with receipts or
-2258	   checkpoints, -02 reported the guarantee as unconditional and this
-2259	   revision reports it as conditional.  Nothing about the evidence
-2260	   changed; what changed is that the guarantee now says which questions
-2261	   were never asked.  An audit presented with neither is unaffected, for
-2262	   the reason given in Section 9.1.
-
-2264	17.2.  Changes from -01
-
-2266	   This revision has one subject: the checkpoint, which carries the T11
-2267	   guarantee against suppression and rollback, was not wired into
-2268	   anything that could discharge it.
-
-2270	   A reader of -01 set out the gap and a second reader confirmed it
-2271	   independently.  Four things were wrong at once, and they were the
-2272	   same thing seen from four sides.  The SCITT anchoring section
-2273	   profiled the Spend Receipt and not the checkpoint, so SHOULD-T11-5
-2274	   asked for checkpoints to be registered without saying in what form
-2275	   (MUST-T11-14 now says).  None of the steps of the verification
-2276	   algorithm read a transparency receipt, so a deployment could follow
-2277	   SHOULD-T11-5 to the letter and still have a verifier that never
-2278	   consulted the witness (steps 15 and 16 now do).  MUST-T11-3,
-2279	   equivocation, could not fire at all: the only checkpoints compared
-2280	   were the presented ones, and MUST-T11-8 requires those to be
-2281	   consecutive, so no two of them can share an epoch.  A second copy is
-2282	   found in a witness, and nothing brought one in.  And the checkpoint
-2283	   binds a per-currency total for a window while the privacy section
-2284	   counted only receipt fields, so a window total could be published, or
-2285	   withheld, with no stated rule either way.
-
-2287	   The repairs are MUST-T11-10 through MUST-T11-14.  The transparency
-2288	   receipt is a new optional input; supplying none leaves the verifier
-2289	   behaving exactly as in -01, which is deliberate, because the point of
-2290	   the witness is to add a claim that could not be made before, not to
-2291	   withdraw one that could.
-
-2293	   Two decisions inside those repairs are worth stating on their own,
-2294	   because a reader might reasonably have expected the other choice.
-
-2296	   *  A recorded checkpoint the presented chain omits gets its own
-2297	      identifier, checkpoint-withheld, rather than being folded into
-2298	      window-coverage (MUST-T11-11).  The reporter asked which way it
-2299	      should go.  Coverage says the record shown is incomplete; a
-2300	      withheld checkpoint says the party under audit is holding a record
-2301	      it did not show.  An operator who sees one identifier for both
-2302	      cannot tell an incomplete record from a concealed one, which is
-2303	      the distinction the whole threat is about.
-
-2305	   *  A checkpoint with no receipt in a supplied witness is a warning
-2306	      rather than a failure.  A witness may be configured after
-2307	      checkpoints have already been issued, and an operator's own gap in
-2308	      anchoring is not evidence that anything was concealed.  The
-2309	      asymmetry is deliberate: what the witness holds and the chain does
-2310	      not is a finding, what the chain holds and the witness does not is
-2311	      a warning.
-
-2313	   One change is not a repair of -01 but of the first attempt at this
-2314	   revision, and it is recorded because the failure is instructive.
-2315	   Signed totals were first made redactable through a field carried
-2316	   alongside the checkpoint rather than inside the COSE payload.
-2317	   Anything outside the signature is chosen by whoever presents the
-2318	   object, which here is the party under audit, so a checkpoint whose
-2319	   signed totals disagreed with its receipts could be re-presented as
-2320	   redacted and the mismatch went unreported.  Redaction is now inside
-2321	   the signature and a redaction asserted anywhere else MUST be ignored
-2322	   (MUST-T11-12, MUST-T11-13).  This was the same shape as the bypass
-2323	   -01 was written to close: a check that a party under audit could
-2324	   switch off.
-
-2326	   Reversal, refund, partial settlement, and the escrow role remain out
-2327	   of scope and are still expected later, with no date. -01 said the
-2328	   same and this revision does not improve on it.
-
-2330	   The reporters are named in the Acknowledgments.
-
-2332	18.  Evolution and Future Work (Informative)
-
-2334	   This section is a direction, not a commitment.  The structures below
-2335	   are reserved in name only.  Normative wire formats, tests, and
-2336	   threat-model MUST lines for them belong in later revisions (-03 or
-2337	   later), written with the same discipline as this -02.
-
-2339	18.1.  Re-attestation profile
-
-2341	   Algorithms retire.  A Spend Receipt or checkpoint signed under
-2342	   Ed25519 today may need a later verifier that no longer accepts -19.
-2343	   A companion seed [REATTEST] sketches re-attestation: register the
-2344	   original COSE bytes as a SCITT Signed Statement and have a current
-2345	   algorithm countersign or receipt them.  The principle is that
-2346	   structures outlive ciphers.  The first concrete example is the
-2347	   profile's own move from generic EdDSA (-8) to Ed25519 (-19) in
-2348	   [RFC9864].
-
-2350	18.2.  Streaming reconciliation
-
-2352	   Epoch checkpoints in this document are batch windows.  A later
-2353	   revision may define a continuous, second-scale profile [STREAMING] in
-2354	   which the same completeness relation is evaluated as settlements
-2355	   arrive, without waiting for an epoch close.  That work does not
-2356	   change the matching rules in this document, and it did not arrive in
-2357	   this revision either.
-
-2359	18.3.  Generalization
-
-2361	   Payment is the special case that this -02 implements.  The same
-2362	   completeness calculus (an authenticated extract of consumed units
-2363	   reconciled to signed receipts) can apply to other consumable
-2364	   resources such as compute, data, or energy.  This document does not
-2365	   specify those profiles.
-
-2367	19.  Informative Notes on Adjacent Protocols
-
-2369	   x402 [X402] uses HTTP 402 [RFC9110] to negotiate stablecoin payment.
-2370	   AP2 [AP2] uses signed mandates as verifiable credentials.  Cedulon
-2371	   does not replace either protocol.  Profiles built on HTTP Message
-2372	   Signatures [RFC9421] authenticate bots; they are not a spend receipt.
-2373	   draft-bates-atp [BATES-ATP] is a lineage neighbor.  It does not
-2374	   define rail-extract completeness.
-
-2376	   draft-vauban-x402-stark-receipts [VAUBAN] specifies complementary
-2377	   x402 receipt-format variants that a Cedulon Spend Receipt MAY carry
-2378	   as a rail proof; it does not define rail-extract completeness. draft-
-2379	   schrock-ep-outcome-binding [SCHROCK] compares authorized action bytes
-2380	   to independently observed effects; it does not define rail-extract
-2381	   completeness. draft-marques-asqav-compliance-receipts [MARQUES]
-2382	   profiles access-control action receipts (the broader Acta family
-2383	   includes [ACTA]); it does not define rail-extract completeness.
-2384	   draft-hopley-x402-compliance-receipt [HOPLEY] records an admission-
-2385	   time compliance decision; it does not define rail-extract
-2386	   completeness.
-
-2388	20.  References
-
-2390	20.1.  Normative References
-
-2392	   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
-2393	              Requirement Levels", BCP 14, RFC 2119,
-2394	              DOI 10.17487/RFC2119, March 1997,
-2395	              <https://www.rfc-editor.org/rfc/rfc2119>.
-
-2397	   [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
-2398	              (SHA and SHA-based HMAC and HKDF)", RFC 6234,
-2399	              DOI 10.17487/RFC6234, May 2011,
-2400	              <https://www.rfc-editor.org/rfc/rfc6234>.
-
-2402	   [RFC6838]  Freed, N., Klensin, J., and T. Hansen, "Media Type
-2403	              Specifications and Registration Procedures", BCP 13,
-2404	              RFC 6838, DOI 10.17487/RFC6838, January 2013,
-2405	              <https://www.rfc-editor.org/rfc/rfc6838>.
-
-2407	   [RFC8032]  Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
-2408	              Signature Algorithm (EdDSA)", RFC 8032,
-2409	              DOI 10.17487/RFC8032, January 2017,
-2410	              <https://www.rfc-editor.org/rfc/rfc8032>.
-
-2412	   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
-2413	              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
-2414	              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
-
-2416	   [RFC8392]  Jones, M., Wahlstroem, E., Erdtman, S., and H. Tschofenig,
-2417	              "CBOR Web Token (CWT)", RFC 8392, DOI 10.17487/RFC8392,
-2418	              May 2018, <https://www.rfc-editor.org/rfc/rfc8392>.
-
-2420	   [RFC8949]  Bormann, C. and P. Hoffman, "Concise Binary Object
-2421	              Representation (CBOR)", STD 94, RFC 8949,
-2422	              DOI 10.17487/RFC8949, December 2020,
-2423	              <https://www.rfc-editor.org/rfc/rfc8949>.
-
-2425	   [RFC9052]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
-2426	              Structures and Process", STD 96, RFC 9052,
-2427	              DOI 10.17487/RFC9052, August 2022,
-2428	              <https://www.rfc-editor.org/rfc/rfc9052>.
-
-2430	   [RFC9053]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
-2431	              Initial Algorithms", RFC 9053, DOI 10.17487/RFC9053,
-2432	              August 2022, <https://www.rfc-editor.org/rfc/rfc9053>.
-
-2434	   [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
-2435	              JSON Object Signing and Encryption (JOSE) and CBOR Object
-2436	              Signing and Encryption (COSE)", RFC 9864,
-2437	              DOI 10.17487/RFC9864, October 2025,
-2438	              <https://www.rfc-editor.org/rfc/rfc9864>.
-
-2440	   [RFC9942]  Steele, O., Birkholz, H., Delignat-Lavaud, A., and C.
-2441	              Fournet, "CBOR Object Signing and Encryption (COSE)
-2442	              Receipts", RFC 9942, DOI 10.17487/RFC9942, June 2026,
-2443	              <https://www.rfc-editor.org/rfc/rfc9942>.
-
-2445	   [RFC9943]  Birkholz, H., Delignat-Lavaud, A., Fournet, C., Deshpande,
-2446	              Y., and S. Lasker, "An Architecture for Trustworthy and
-2447	              Transparent Digital Supply Chains", RFC 9943,
-2448	              DOI 10.17487/RFC9943, June 2026,
-2449	              <https://www.rfc-editor.org/rfc/rfc9943>.
-
-2451	20.2.  Informative References
-
-2453	   [ACTA]     Farley, T., "Signed Decision Receipts for Machine-to-
-2454	              Machine Access Control", June 2026,
-2455	              <https://datatracker.ietf.org/doc/draft-farley-acta-
-2456	              signed-receipts/>.
-
-2458	   [AP2]      Google Agentic Commerce, "Agent Payments Protocol (AP2)",
-2459	              September 2025,
-2460	              <https://ap2-protocol.org/ap2/specification/>.
-
-2462	   [BATES-ATP]
-2463	              Bates, D., "Agent Transaction Protocol (ATP)", May 2026,
-2464	              <https://datatracker.ietf.org/doc/html/draft-bates-atp>.
-
-2466	   [GRIGG]    Grigg, I., "Triple Entry Accounting", 2005,
-2467	              <https://iang.org/papers/triple_entry.html>.
-
-2469	   [HOPLEY]   Hopley, C., "Categorical Compliance Screening Receipt
-2470	              Format for Agentic-Payment Flows", May 2026,
-2471	              <https://datatracker.ietf.org/doc/draft-hopley-x402-
-2472	              compliance-receipt/>.
-
-2474	   [MARQUES]  Gomes Marques, J. A., "Compliance Profile of Signed Action
-2475	              Receipts for AI Agents", July 2026,
-2476	              <https://datatracker.ietf.org/doc/draft-marques-asqav-
-2477	              compliance-receipts/>.
-
-2479	   [PACIOLI]  Pacioli, L., "Summa de arithmetica, geometria, proportioni
-2480	              et proportionalita", 1494.
-
-2482	   [REATTEST] Dogru, E. C., "Cedulon Re-Attestation: Carrying Spend
-2483	              Evidence Across Algorithm Retirement", August 2026,
-2484	              <https://github.com/dogrucanemek-
-2485	              alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/
-2486	              spec/draft-dogru-cedulon-reattestation-00.md>.
-
-2488	   [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of Running
-2489	              Code: The Implementation Status Section", BCP 205,
-2490	              RFC 7942, DOI 10.17487/RFC7942, July 2016,
-2491	              <https://www.rfc-editor.org/rfc/rfc7942>.
-
-2493	   [RFC9110]  Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
-2494	              Ed., "HTTP Semantics", STD 97, RFC 9110,
-2495	              DOI 10.17487/RFC9110, June 2022,
-2496	              <https://www.rfc-editor.org/rfc/rfc9110>.
-
-2498	   [RFC9421]  Backman, A., Ed., Richer, J., Ed., and M. Sporny, "HTTP
-2499	              Message Signatures", RFC 9421, DOI 10.17487/RFC9421,
-2500	              February 2024, <https://www.rfc-editor.org/rfc/rfc9421>.
-
-2502	   [SCHROCK]  Schrock, I., "Outcome Binding for Authorized Actions and
-2503	              Independently Observed Effects", July 2026,
-2504	              <https://datatracker.ietf.org/doc/draft-schrock-ep-
-2505	              outcome-binding/>.
-
-2507	   [STREAMING]
-2508	              Dogru, E. C., "Cedulon Streaming Reconciliation:
-2509	              Continuous Completeness for Agent Spend", August 2026,
-2510	              <https://github.com/dogrucanemek-
-2511	              alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/
-2512	              spec/draft-dogru-cedulon-streaming-00.md>.
-
-2514	   [VAUBAN]   Vauban Research, "x402 STARK Receipt Format Extension",
-2515	              May 2026, <https://datatracker.ietf.org/doc/draft-vauban-
-2516	              x402-stark-receipts/>.
-
-2518	   [X402]     x402 Foundation, "x402: An Open Standard for Internet-
-2519	              Native Payments", 2026, <https://www.x402.org/>.
-
-2521	Acknowledgments
-
-2523	   Vernon Wharff set out the defect -02 repairs: that the object
-2524	   carrying the T11 guarantee was neither profiled for registration nor
-2525	   read during verification, and that the equivocation requirement could
-2526	   not fire against a presented chain.  He also asked the question that
-2527	   decided the shape of that repair, namely whether a recorded
-2528	   checkpoint absent from the chain deserves its own identifier or
-2529	   belongs under window coverage.  Iman Schrock confirmed the finding
-2530	   independently and drew its boundary, keeping it separate from the
-2531	   extract-binding work already closed in -01.
-
-2533	   Iman Schrock raised the first of this revision's two subjects,
-2534	   against the posted -02: whether the profile should accept a pinned
-2535	   witness key and report an absent or mismatched pin explicitly.  It
-2536	   should, and the same question turned out to be unanswered for three
-2537	   further objects.
-
-2539	   Iman Schrock and Pablo Play ran the -00 implementation against the
-2540	   pinned commit and reported the defects that produced -01.  Iman
-2541	   Schrock found the two extract-binding defects, proposed the repair
-2542	   -01 adopts, later reran the posted -01 from a clean clone against its
-2543	   own pinned commit, and is also the author of [SCHROCK], cited here as
-2544	   adjacent work.  He is the reader whose independent implementation of
-2545	   the Signed Statement identity is noted in Section 17, and he asked
-2546	   for it to be kept separate from any cross-implementation claim about
-2547	   Cedulon; that separation is his and is recorded here as he stated it.
-2548	   Pablo Play found that a repeated reference hid the unaccounted
-2549	   amount, filed a written reproduction, and re-ran that reproduction
-2550	   against the pinned commit to confirm the figures quoted from it.
-
-2552	   Nicholas Templeman ran the suite from a clean clone and reported his
-2553	   figures.  He also corrected two claims in a row written about that
-2554	   run: the install it named was not the strict from-lockfile form, and
-2555	   his platform was the same operating system family as the earlier
-2556	   ones, so the run corroborates the numbers and adds no cross-
-2557	   environment evidence.  He classified his own run honestly as a
-2558	   repetition of the author's checks rather than an independent
-2559	   implementation.  Walter Hawkins did not run it; he read the reported
-2560	   figures and pressed for the run to be stated precisely enough to be
-2561	   repeatable, which is why the conditions and not only the totals
-2562	   appear in Section 17.
-
-2564	   None of them reviewed this text, and any error in it is the author's.
-
-2566	   Field survey notes and the informative threat-model narrative in the
-2567	   companion repository helped shape the requirement identifiers used
-2568	   here.  Those identifiers are defined in Section 15.
-
-2570	Appendix A.  Test Vectors
-
-2572	   These vectors use RFC 8032 Ed25519 secret scalar #1 (fixture only;
-2573	   never a production key).  Hex is lowercase.  They MUST match the
-2574	   locked tests in the companion implementation.
-
-2576	   Receipt COSE_Sign1:
-
-2578	   Claims: payer=payer-1, payee=payee-1, amount=1, currency=USD,
-2579	   policyHash=aa, manifestHash=null, noManifest=true,
-2580	   x402PaymentRef=null, timestampMs=1700000000000,
-2581	   nonce=n100000000000000, prevReceiptHash=null, outcome=aborted.
-
-2583	   COSE_Sign1 hex (whitespace ignored; identical to the locked test):
-
-2585	   845830a301320378206170706c69636174696f6e2f636564756c6f6e2d
-2586	   726563656970742b63626f72044806e3fd8fda29bb60a0587cac3a0001
-2587	   11706770617965722d313a000111716770617965652d313a0001117261
-2588	   313a00011173635553443a000111746261613a00011175f63a00011176
-2589	   f53a00011177f63a000111781b0000018bcfe568003a00011179706e31
-2590	   30303030303030303030303030303a0001117af63a0001117b6761626f
-2591	   727465645840685c01aa778a850b9d35250406f092b6f5cb03fb359593
-2592	   0422533e28ac620ad439f5e7bd8ed1fa5ded90d4421a2de34f94d1d78d
-2593	   38a65812cb5315ee7f1cf403
-
-2595	   Manifest COSE_Sign1:
-
-2597	   Body: description=fixture-goods, amount=1, currency=USD,
-2598	   acceptanceCriteriaHash=00, cancelCondition=none,
-2599	   expiresAtMs=1700000000000, ap2MandateHash=null.
-
-2601	   COSE_Sign1 hex (whitespace ignored; identical to the locked test):
-
-2603	   845831a301320378216170706c69636174696f6e2f636564756c6f6e2d
-2604	   6d616e69666573742b63626f72044806e3fd8fda29bb60a0584aa73a00
-2605	   0112386d666978747572652d676f6f64733a0001123961313a0001123a
-2606	   635553443a0001123b6230303a0001123c646e6f6e653a0001123d1b00
-2607	   00018bcfe568003a0001123ef65840898628b1524a44ca641b5058c7a4
-2608	   7e71bd4ce1ca0782e03b511c23e0819c3771407d627216d0b104224ee8
-2609	   2cacffbd21e66fe035ed5ce4ee85b7bcd9c560ad02
-
-2611	Author's Address
-
-2613	   Emek Can Dogru
-2614	   VERAX TEKNOLOJI LIMITED SIRKETI
-2615	   Email: e.dogru@cedulon.com
+2185	   0.3.0 carried the same requirements and three defects that only
+2186	   appear away from the platform it was written on, which an independent
+2187	   runner found by taking up a standing invitation to break it.  A
+2188	   directory that could not be written refused the lock before the
+2189	   record and left the refusal as an uncaught exception rather than the
+2190	   reason this document requires; the case for a symbolic link on the
+2191	   path used a call that does not exist in the module system the package
+2192	   declares, so it never reached its assertion; and repairing that
+2193	   revealed a fourth defect, that the state fingerprint was read before
+2194	   the path was checked, so a replaced path was reported as a
+2195	   conflicting writer rather than as a hijacked destination. 0.3.1
+2196	   closes all four.
+
+2198	17.1.  Changes from -02
+
+2200	   This revision has two subjects.  The first is that -02 stated a rule
+2201	   in one place and left it unstated everywhere the same rule applied.
+2202	   The second is T12, which no reader reported and which is not about an
+2203	   adversary at all.
+
+2205	   MUST-T10-8 requires a rail extract to be verified against a key the
+2206	   verifier obtained out of band, "not against a key the extract
+2207	   carries".  That sentence was written for the extract and nothing
+2208	   carried it to the other signed objects in the profile.  A Spend
+2209	   Receipt, an epoch checkpoint, a Decision Token and a transparency
+2210	   inclusion receipt were each left to be checked against the key
+2211	   travelling inside them, which is a question that answers itself.  A
+2212	   verifier following -02 to the letter therefore accepts a receipt
+2213	   signed by any key at all, and a receipt like that silences the
+2214	   settlement-without-receipt finding for the settlement it names.  The
+2215	   completeness property is then computed over evidence that answers to
+2216	   nobody.  Section 9 states the rule for the rest of them, and the
+2217	   verification algorithm now applies it.
+
+2219	   A reader raised the inclusion-receipt half of this against the posted
+2220	   -02 after checking the archived text against the implementation
+2221	   commit.  Following it into the code turned up the other three, along
+2222	   with two conditions that were not about keys at all.
+
+2224	   The first is that reporting a mismatch is not enough.  An
+2225	   implementation that names a foreign key and then still lets the
+2226	   receipt match its settlement has described the attack in its output
+2227	   while concluding that the books balance.  MUST-T4-10 now requires the
+2228	   settlement to stay reported.
+
+2230	   The second is that an expectation which only fires when the evidence
+2231	   is present can be cancelled by deleting the evidence.  A pinned payee
+2232	   key with no countersignature to check was silence, so removing a
+2233	   countersignature removed the question with it.  MUST-T4-14 closes
+2234	   that, and MUST-T11-17 closes the same shape in the witness: an
+2235	   inclusion receipt with its body stripped off can no longer bury a
+2236	   withholding, while still not being allowed to accuse anyone.
+
+2238	   T12 is new and is not about an adversary.  An issuer that settles,
+2239	   appends the receipt in memory and then writes its state will, when
+2240	   that write fails, leave the rail holding a settlement whose receipt
+2241	   exists nowhere durable.  Restarted, it reports settlement-without-
+2242	   receipt against itself.  The condition this document exists to make
+2243	   detectable was reachable through the implementation's own ordering,
+2244	   and no requirement in -02 said otherwise.
+
+2246	   The same first subject carries five requirements this section has not
+2247	   named so far, all of them stated in Section 9.  A pinned key that
+2248	   cannot be decoded MUST NOT fall back to the keys the objects carry
+2249	   (MUST-T4-11).  An issuer root may comprise more than one key, and a
+2250	   verifier must accept one that does, so a rotation inside the audited
+2251	   window does not force it to choose between findings against honest
+2252	   receipts and abandoning the pin (MUST-T4-12).  The same out-of-band
+2253	   rule reaches the payee countersignature (MUST-T4-13), the
+2254	   transparency witness (MUST-T11-15 and MUST-T11-16), and the Decision
+2255	   Token, whose consumer issued it and therefore already holds the key
+2256	   to check it with (MUST-T6-6).
+
+2258	   Two requirements belong to neither subject.  MUST-T7-5 and MUST-T7-6
+2259	   come from measuring the protection a stored signing key actually has
+2260	   instead of deriving it from the platform.  A mount that ignores
+2261	   filesystem permissions accepts the call and protects nothing, and a
+2262	   writable directory or a symbolic link anywhere on the path makes the
+2263	   file permission moot.  They are stated because the implementation
+2264	   reported protection it did not have.
+
+2266	   Two things are stated here that -02 got right and this revision keeps
+2267	   unchanged: the extract rule itself, and the treatment of a pinned key
+2268	   the verifier cannot decode.  What changed is their reach, and the
+2269	   change is not backward compatible.  Where a verifier pinned the rail
+2270	   key, supplied no issuer key, and was presented with receipts or
+2271	   checkpoints, -02 reported the guarantee as unconditional and this
+2272	   revision reports it as conditional.  Nothing about the evidence
+2273	   changed; what changed is that the guarantee now says which questions
+2274	   were never asked.  An audit presented with neither is unaffected, for
+2275	   the reason given in Section 9.1.
+
+2277	17.2.  Changes from -01
+
+2279	   This revision has one subject: the checkpoint, which carries the T11
+2280	   guarantee against suppression and rollback, was not wired into
+2281	   anything that could discharge it.
+
+2283	   A reader of -01 set out the gap and a second reader confirmed it
+2284	   independently.  Four things were wrong at once, and they were the
+2285	   same thing seen from four sides.  The SCITT anchoring section
+2286	   profiled the Spend Receipt and not the checkpoint, so SHOULD-T11-5
+2287	   asked for checkpoints to be registered without saying in what form
+2288	   (MUST-T11-14 now says).  None of the steps of the verification
+2289	   algorithm read a transparency receipt, so a deployment could follow
+2290	   SHOULD-T11-5 to the letter and still have a verifier that never
+2291	   consulted the witness (steps 15 and 16 now do).  MUST-T11-3,
+2292	   equivocation, could not fire at all: the only checkpoints compared
+2293	   were the presented ones, and MUST-T11-8 requires those to be
+2294	   consecutive, so no two of them can share an epoch.  A second copy is
+2295	   found in a witness, and nothing brought one in.  And the checkpoint
+2296	   binds a per-currency total for a window while the privacy section
+2297	   counted only receipt fields, so a window total could be published, or
+2298	   withheld, with no stated rule either way.
+
+2300	   The repairs are MUST-T11-10 through MUST-T11-14.  The transparency
+2301	   receipt is a new optional input; supplying none leaves the verifier
+2302	   behaving exactly as in -01, which is deliberate, because the point of
+2303	   the witness is to add a claim that could not be made before, not to
+2304	   withdraw one that could.
+
+2306	   Two decisions inside those repairs are worth stating on their own,
+2307	   because a reader might reasonably have expected the other choice.
+
+2309	   *  A recorded checkpoint the presented chain omits gets its own
+2310	      identifier, checkpoint-withheld, rather than being folded into
+2311	      window-coverage (MUST-T11-11).  The reporter asked which way it
+2312	      should go.  Coverage says the record shown is incomplete; a
+2313	      withheld checkpoint says the party under audit is holding a record
+2314	      it did not show.  An operator who sees one identifier for both
+2315	      cannot tell an incomplete record from a concealed one, which is
+2316	      the distinction the whole threat is about.
+
+2318	   *  A checkpoint with no receipt in a supplied witness is a warning
+2319	      rather than a failure.  A witness may be configured after
+2320	      checkpoints have already been issued, and an operator's own gap in
+2321	      anchoring is not evidence that anything was concealed.  The
+2322	      asymmetry is deliberate: what the witness holds and the chain does
+2323	      not is a finding, what the chain holds and the witness does not is
+2324	      a warning.
+
+2326	   One change is not a repair of -01 but of the first attempt at this
+2327	   revision, and it is recorded because the failure is instructive.
+2328	   Signed totals were first made redactable through a field carried
+2329	   alongside the checkpoint rather than inside the COSE payload.
+2330	   Anything outside the signature is chosen by whoever presents the
+2331	   object, which here is the party under audit, so a checkpoint whose
+2332	   signed totals disagreed with its receipts could be re-presented as
+2333	   redacted and the mismatch went unreported.  Redaction is now inside
+2334	   the signature and a redaction asserted anywhere else MUST be ignored
+2335	   (MUST-T11-12, MUST-T11-13).  This was the same shape as the bypass
+2336	   -01 was written to close: a check that a party under audit could
+2337	   switch off.
+
+2339	   Reversal, refund, partial settlement, and the escrow role remain out
+2340	   of scope and are still expected later, with no date. -01 said the
+2341	   same and this revision does not improve on it.
+
+2343	   The reporters are named in the Acknowledgments.
+
+2345	18.  Evolution and Future Work (Informative)
+
+2347	   This section is a direction, not a commitment.  The structures below
+2348	   are reserved in name only.  Normative wire formats, tests, and
+2349	   threat-model MUST lines for them belong in later revisions (-03 or
+2350	   later), written with the same discipline as this -02.
+
+2352	18.1.  Re-attestation profile
+
+2354	   Algorithms retire.  A Spend Receipt or checkpoint signed under
+2355	   Ed25519 today may need a later verifier that no longer accepts -19.
+2356	   A companion seed [REATTEST] sketches re-attestation: register the
+2357	   original COSE bytes as a SCITT Signed Statement and have a current
+2358	   algorithm countersign or receipt them.  The principle is that
+2359	   structures outlive ciphers.  The first concrete example is the
+2360	   profile's own move from generic EdDSA (-8) to Ed25519 (-19) in
+2361	   [RFC9864].
+
+2363	18.2.  Streaming reconciliation
+
+2365	   Epoch checkpoints in this document are batch windows.  A later
+2366	   revision may define a continuous, second-scale profile [STREAMING] in
+2367	   which the same completeness relation is evaluated as settlements
+2368	   arrive, without waiting for an epoch close.  That work does not
+2369	   change the matching rules in this document, and it did not arrive in
+2370	   this revision either.
+
+2372	18.3.  Generalization
+
+2374	   Payment is the special case that this -02 implements.  The same
+2375	   completeness calculus (an authenticated extract of consumed units
+2376	   reconciled to signed receipts) can apply to other consumable
+2377	   resources such as compute, data, or energy.  This document does not
+2378	   specify those profiles.
+
+2380	19.  Informative Notes on Adjacent Protocols
+
+2382	   x402 [X402] uses HTTP 402 [RFC9110] to negotiate stablecoin payment.
+2383	   AP2 [AP2] uses signed mandates as verifiable credentials.  Cedulon
+2384	   does not replace either protocol.  Profiles built on HTTP Message
+2385	   Signatures [RFC9421] authenticate bots; they are not a spend receipt.
+2386	   draft-bates-atp [BATES-ATP] is a lineage neighbor.  It does not
+2387	   define rail-extract completeness.
+
+2389	   draft-vauban-x402-stark-receipts [VAUBAN] specifies complementary
+2390	   x402 receipt-format variants that a Cedulon Spend Receipt MAY carry
+2391	   as a rail proof; it does not define rail-extract completeness. draft-
+2392	   schrock-ep-outcome-binding [SCHROCK] compares authorized action bytes
+2393	   to independently observed effects; it does not define rail-extract
+2394	   completeness. draft-marques-asqav-compliance-receipts [MARQUES]
+2395	   profiles access-control action receipts (the broader Acta family
+2396	   includes [ACTA]); it does not define rail-extract completeness.
+2397	   draft-hopley-x402-compliance-receipt [HOPLEY] records an admission-
+2398	   time compliance decision; it does not define rail-extract
+2399	   completeness.
+
+2401	20.  References
+
+2403	20.1.  Normative References
+
+2405	   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+2406	              Requirement Levels", BCP 14, RFC 2119,
+2407	              DOI 10.17487/RFC2119, March 1997,
+2408	              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+2410	   [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
+2411	              (SHA and SHA-based HMAC and HKDF)", RFC 6234,
+2412	              DOI 10.17487/RFC6234, May 2011,
+2413	              <https://www.rfc-editor.org/rfc/rfc6234>.
+
+2415	   [RFC6838]  Freed, N., Klensin, J., and T. Hansen, "Media Type
+2416	              Specifications and Registration Procedures", BCP 13,
+2417	              RFC 6838, DOI 10.17487/RFC6838, January 2013,
+2418	              <https://www.rfc-editor.org/rfc/rfc6838>.
+
+2420	   [RFC8032]  Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
+2421	              Signature Algorithm (EdDSA)", RFC 8032,
+2422	              DOI 10.17487/RFC8032, January 2017,
+2423	              <https://www.rfc-editor.org/rfc/rfc8032>.
+
+2425	   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+2426	              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+2427	              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+2429	   [RFC8392]  Jones, M., Wahlstroem, E., Erdtman, S., and H. Tschofenig,
+2430	              "CBOR Web Token (CWT)", RFC 8392, DOI 10.17487/RFC8392,
+2431	              May 2018, <https://www.rfc-editor.org/rfc/rfc8392>.
+
+2433	   [RFC8949]  Bormann, C. and P. Hoffman, "Concise Binary Object
+2434	              Representation (CBOR)", STD 94, RFC 8949,
+2435	              DOI 10.17487/RFC8949, December 2020,
+2436	              <https://www.rfc-editor.org/rfc/rfc8949>.
+
+2438	   [RFC9052]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
+2439	              Structures and Process", STD 96, RFC 9052,
+2440	              DOI 10.17487/RFC9052, August 2022,
+2441	              <https://www.rfc-editor.org/rfc/rfc9052>.
+
+2443	   [RFC9053]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
+2444	              Initial Algorithms", RFC 9053, DOI 10.17487/RFC9053,
+2445	              August 2022, <https://www.rfc-editor.org/rfc/rfc9053>.
+
+2447	   [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
+2448	              JSON Object Signing and Encryption (JOSE) and CBOR Object
+2449	              Signing and Encryption (COSE)", RFC 9864,
+2450	              DOI 10.17487/RFC9864, October 2025,
+2451	              <https://www.rfc-editor.org/rfc/rfc9864>.
+
+2453	   [RFC9942]  Steele, O., Birkholz, H., Delignat-Lavaud, A., and C.
+2454	              Fournet, "CBOR Object Signing and Encryption (COSE)
+2455	              Receipts", RFC 9942, DOI 10.17487/RFC9942, June 2026,
+2456	              <https://www.rfc-editor.org/rfc/rfc9942>.
+
+2458	   [RFC9943]  Birkholz, H., Delignat-Lavaud, A., Fournet, C., Deshpande,
+2459	              Y., and S. Lasker, "An Architecture for Trustworthy and
+2460	              Transparent Digital Supply Chains", RFC 9943,
+2461	              DOI 10.17487/RFC9943, June 2026,
+2462	              <https://www.rfc-editor.org/rfc/rfc9943>.
+
+2464	20.2.  Informative References
+
+2466	   [ACTA]     Farley, T., "Signed Decision Receipts for Machine-to-
+2467	              Machine Access Control", June 2026,
+2468	              <https://datatracker.ietf.org/doc/draft-farley-acta-
+2469	              signed-receipts/>.
+
+2471	   [AP2]      Google Agentic Commerce, "Agent Payments Protocol (AP2)",
+2472	              September 2025,
+2473	              <https://ap2-protocol.org/ap2/specification/>.
+
+2475	   [BATES-ATP]
+2476	              Bates, D., "Agent Transaction Protocol (ATP)", May 2026,
+2477	              <https://datatracker.ietf.org/doc/html/draft-bates-atp>.
+
+2479	   [GRIGG]    Grigg, I., "Triple Entry Accounting", 2005,
+2480	              <https://iang.org/papers/triple_entry.html>.
+
+2482	   [HOPLEY]   Hopley, C., "Categorical Compliance Screening Receipt
+2483	              Format for Agentic-Payment Flows", May 2026,
+2484	              <https://datatracker.ietf.org/doc/draft-hopley-x402-
+2485	              compliance-receipt/>.
+
+2487	   [MARQUES]  Gomes Marques, J. A., "Compliance Profile of Signed Action
+2488	              Receipts for AI Agents", July 2026,
+2489	              <https://datatracker.ietf.org/doc/draft-marques-asqav-
+2490	              compliance-receipts/>.
+
+2492	   [PACIOLI]  Pacioli, L., "Summa de arithmetica, geometria, proportioni
+2493	              et proportionalita", 1494.
+
+2495	   [REATTEST] Dogru, E. C., "Cedulon Re-Attestation: Carrying Spend
+2496	              Evidence Across Algorithm Retirement", August 2026,
+2497	              <https://github.com/dogrucanemek-
+2498	              alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/
+2499	              spec/draft-dogru-cedulon-reattestation-00.md>.
+
+2501	   [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of Running
+2502	              Code: The Implementation Status Section", BCP 205,
+2503	              RFC 7942, DOI 10.17487/RFC7942, July 2016,
+2504	              <https://www.rfc-editor.org/rfc/rfc7942>.
+
+2506	   [RFC9110]  Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
+2507	              Ed., "HTTP Semantics", STD 97, RFC 9110,
+2508	              DOI 10.17487/RFC9110, June 2022,
+2509	              <https://www.rfc-editor.org/rfc/rfc9110>.
+
+2511	   [RFC9421]  Backman, A., Ed., Richer, J., Ed., and M. Sporny, "HTTP
+2512	              Message Signatures", RFC 9421, DOI 10.17487/RFC9421,
+2513	              February 2024, <https://www.rfc-editor.org/rfc/rfc9421>.
+
+2515	   [SCHROCK]  Schrock, I., "Outcome Binding for Authorized Actions and
+2516	              Independently Observed Effects", July 2026,
+2517	              <https://datatracker.ietf.org/doc/draft-schrock-ep-
+2518	              outcome-binding/>.
+
+2520	   [STREAMING]
+2521	              Dogru, E. C., "Cedulon Streaming Reconciliation:
+2522	              Continuous Completeness for Agent Spend", August 2026,
+2523	              <https://github.com/dogrucanemek-
+2524	              alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/
+2525	              spec/draft-dogru-cedulon-streaming-00.md>.
+
+2527	   [VAUBAN]   Vauban Research, "x402 STARK Receipt Format Extension",
+2528	              May 2026, <https://datatracker.ietf.org/doc/draft-vauban-
+2529	              x402-stark-receipts/>.
+
+2531	   [X402]     x402 Foundation, "x402: An Open Standard for Internet-
+2532	              Native Payments", 2026, <https://www.x402.org/>.
+
+2534	Acknowledgments
+
+2536	   Vernon Wharff set out the defect -02 repairs: that the object
+2537	   carrying the T11 guarantee was neither profiled for registration nor
+2538	   read during verification, and that the equivocation requirement could
+2539	   not fire against a presented chain.  He also asked the question that
+2540	   decided the shape of that repair, namely whether a recorded
+2541	   checkpoint absent from the chain deserves its own identifier or
+2542	   belongs under window coverage.  Iman Schrock confirmed the finding
+2543	   independently and drew its boundary, keeping it separate from the
+2544	   extract-binding work already closed in -01.
+
+2546	   Iman Schrock raised the first of this revision's two subjects,
+2547	   against the posted -02: whether the profile should accept a pinned
+2548	   witness key and report an absent or mismatched pin explicitly.  It
+2549	   should, and the same question turned out to be unanswered for three
+2550	   further objects.
+
+2552	   Iman Schrock and Pablo Play ran the -00 implementation against the
+2553	   pinned commit and reported the defects that produced -01.  Iman
+2554	   Schrock found the two extract-binding defects, proposed the repair
+2555	   -01 adopts, later reran the posted -01 from a clean clone against its
+2556	   own pinned commit, and is also the author of [SCHROCK], cited here as
+2557	   adjacent work.  He is the reader whose independent implementation of
+2558	   the Signed Statement identity is noted in Section 17, and he asked
+2559	   for it to be kept separate from any cross-implementation claim about
+2560	   Cedulon; that separation is his and is recorded here as he stated it.
+2561	   Pablo Play found that a repeated reference hid the unaccounted
+2562	   amount, filed a written reproduction, and re-ran that reproduction
+2563	   against the pinned commit to confirm the figures quoted from it.  He
+2564	   later took up a standing invitation to break the implementation and
+2565	   ran the suite on a platform its author had not, which is how the
+2566	   three defects behind 0.3.1 were found and how a fourth came to light
+2567	   while they were being repaired.
+
+2569	   Nicholas Templeman ran the suite from a clean clone and reported his
+2570	   figures.  He also corrected two claims in a row written about that
+2571	   run: the install it named was not the strict from-lockfile form, and
+2572	   his platform was the same operating system family as the earlier
+2573	   ones, so the run corroborates the numbers and adds no cross-
+2574	   environment evidence.  He classified his own run honestly as a
+2575	   repetition of the author's checks rather than an independent
+2576	   implementation.  Walter Hawkins did not run it; he read the reported
+2577	   figures and pressed for the run to be stated precisely enough to be
+2578	   repeatable, which is why the conditions and not only the totals
+2579	   appear in Section 17.
+
+2581	   None of them reviewed this text, and any error in it is the author's.
+
+2583	   Field survey notes and the informative threat-model narrative in the
+2584	   companion repository helped shape the requirement identifiers used
+2585	   here.  Those identifiers are defined in Section 15.
+
+2587	Appendix A.  Test Vectors
+
+2589	   These vectors use RFC 8032 Ed25519 secret scalar #1 (fixture only;
+2590	   never a production key).  Hex is lowercase.  They MUST match the
+2591	   locked tests in the companion implementation.
+
+2593	   Receipt COSE_Sign1:
+
+2595	   Claims: payer=payer-1, payee=payee-1, amount=1, currency=USD,
+2596	   policyHash=aa, manifestHash=null, noManifest=true,
+2597	   x402PaymentRef=null, timestampMs=1700000000000,
+2598	   nonce=n100000000000000, prevReceiptHash=null, outcome=aborted.
+
+2600	   COSE_Sign1 hex (whitespace ignored; identical to the locked test):
+
+2602	   845830a301320378206170706c69636174696f6e2f636564756c6f6e2d
+2603	   726563656970742b63626f72044806e3fd8fda29bb60a0587cac3a0001
+2604	   11706770617965722d313a000111716770617965652d313a0001117261
+2605	   313a00011173635553443a000111746261613a00011175f63a00011176
+2606	   f53a00011177f63a000111781b0000018bcfe568003a00011179706e31
+2607	   30303030303030303030303030303a0001117af63a0001117b6761626f
+2608	   727465645840685c01aa778a850b9d35250406f092b6f5cb03fb359593
+2609	   0422533e28ac620ad439f5e7bd8ed1fa5ded90d4421a2de34f94d1d78d
+2610	   38a65812cb5315ee7f1cf403
+2611	   Manifest COSE_Sign1:
+
+2613	   Body: description=fixture-goods, amount=1, currency=USD,
+2614	   acceptanceCriteriaHash=00, cancelCondition=none,
+2615	   expiresAtMs=1700000000000, ap2MandateHash=null.
+
+2617	   COSE_Sign1 hex (whitespace ignored; identical to the locked test):
+
+2619	   845831a301320378216170706c69636174696f6e2f636564756c6f6e2d
+2620	   6d616e69666573742b63626f72044806e3fd8fda29bb60a0584aa73a00
+2621	   0112386d666978747572652d676f6f64733a0001123961313a0001123a
+2622	   635553443a0001123b6230303a0001123c646e6f6e653a0001123d1b00
+2623	   00018bcfe568003a0001123ef65840898628b1524a44ca641b5058c7a4
+2624	   7e71bd4ce1ca0782e03b511c23e0819c3771407d627216d0b104224ee8
+2625	   2cacffbd21e66fe035ed5ce4ee85b7bcd9c560ad02
+
+2627	Author's Address
+
+2629	   Emek Can Dogru
+2630	   VERAX TEKNOLOJI LIMITED SIRKETI
+2631	   Email: e.dogru@cedulon.com
 
 
 

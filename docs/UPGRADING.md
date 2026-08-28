@@ -4,6 +4,27 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.3.1: no new breakage, four repairs
+
+Nothing in this section changes in 0.3.1. It repairs defects that only appear
+away from the platform 0.3.0 was written on, three of them reported by an
+independent runner who cloned the tagged commit and ran the suite on Linux, and
+a fourth found while repairing those.
+
+- A directory that cannot be written refuses the lock before it refuses the
+  record. Only `EEXIST` was recognised there, so the refusal arrived as an
+  uncaught exception instead of `{ ok: false, reason: "state-io" }`. If you
+  wrapped `spend()` in a try/catch to survive this, you no longer need to.
+- The state path is checked for symbolic links **before** the fingerprint is
+  read, not after. A replaced path used to produce a fingerprint mismatch and be
+  reported as `state-conflict`, which reads as another writer rather than as a
+  hijacked destination. It now raises `cedulon-state-symlink`, as documented.
+- The test covering that guarantee called `require` in a package declared as
+  ESM, so it never reached its assertion. The guarantee was untested on every
+  platform, not weakly tested on one.
+- `npm pack --json` returns an array in npm 10.9 and an object in earlier
+  versions; the packaging check accepts both.
+
 ## Why the audit answers differently
 
 Every signed object used to be verified against the key it carried. A receipt
