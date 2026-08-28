@@ -195,9 +195,10 @@ the session did not produce now fails loudly. `stateProtection` also reads the
 containing directory, distinguishes an absent file from an unprotected one, and
 the server refuses a state path that is a symlink.
 
-The spec side of this is still open: `MUST-T10-8` has no counterpart for
-receipts, checkpoints, decision tokens or inclusion receipts. That belongs in a
-later revision, written after the code it describes - which is the order that
-was got wrong once already.
+The spec side of this is closed in `-03`, written after the code it describes,
+which is the order that was got wrong once already. `MUST-T10-8` now has its
+counterpart for receipts and checkpoints (`MUST-T4-9`), for decision tokens
+(`MUST-T6-6`) and for inclusion receipts (`MUST-T11-15`). That draft is written
+and not submitted.
 
 To reproduce any of the above, see `docs/RUN_AS_VERIFIER.md`.

@@ -1512,12 +1512,14 @@ Coverage:
   the withheld and not-anchored conditions, and signed totals
   redaction. Every requirement added in this revision is implemented
   and covered by a red-then-green case before appearing in this text.
-  The cases behind `MUST-T7-5`, `MUST-T7-6`, `MUST-T12-1` and
-  `MUST-T12-2` need POSIX file modes or symbolic links and assert only
-  there; on Windows they return early, so a passing suite on that
-  platform does not exercise them. An independent runner reported that
-  distinction back from a Linux run after this text first claimed
-  otherwise.
+  Some of those cases need POSIX file modes or symbolic links and
+  assert only there; on Windows they return early. That leaves the
+  symbolic-link protections and the undo after a failed write
+  unexercised by a passing suite on Windows, while the protection
+  report and the refusal to settle without a durable record are
+  checked on both. An independent runner reported the distinction back
+  from a Linux run after this text first claimed otherwise, and this
+  is the second correction to the same sentence.
   The witness used in the suite is the in-process append-only log that
   `MAY-T11-6` permits; the implementation has not been run against a
   deployed Transparency Service, and it treats a receipt as a signature

@@ -138,11 +138,11 @@ Internet-Draft                   Cedulon                     August 2026
    16. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  46
    17. Implementation Status . . . . . . . . . . . . . . . . . . . .  47
      17.1.  Changes from -02 . . . . . . . . . . . . . . . . . . . .  49
-     17.2.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  51
+     17.2.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  50
    18. Evolution and Future Work (Informative) . . . . . . . . . . .  52
      18.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  52
      18.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  52
-     18.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  53
+     18.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  52
    19. Informative Notes on Adjacent Protocols . . . . . . . . . . .  53
    20. References  . . . . . . . . . . . . . . . . . . . . . . . . .  53
      20.1.  Normative References . . . . . . . . . . . . . . . . . .  53
@@ -2619,13 +2619,13 @@ Internet-Draft                   Cedulon                     August 2026
       witness input, the withheld and not-anchored conditions, and
       signed totals redaction.  Every requirement added in this revision
       is implemented and covered by a red-then-green case before
-      appearing in this text.  The cases behind MUST-T7-5, MUST-T7-6,
-      MUST-T12-1 and MUST-T12-2 need POSIX file modes or symbolic links
-      and assert only there; on Windows they return early, so a passing
-      suite on that platform does not exercise them.  An independent
-      runner reported that distinction back from a Linux run after this
-      text first claimed otherwise.  The witness used in the suite is
-      the in-process append-only log that MAY-T11-6 permits; the
+      appearing in this text.  Some of those cases need POSIX file modes
+      or symbolic links and assert only there; on Windows they return
+      early.  That leaves the symbolic-link protections and the undo
+      after a failed write unexercised by a passing suite on Windows,
+      while the protection report and the refusal to settle without a
+      durable record are checked on both.  An independent runner
+      reported the distinction back from a Linux run after this text
 
 
 
@@ -2634,10 +2634,13 @@ Dogru                     Expires 1 March 2027                 [Page 47]
 Internet-Draft                   Cedulon                     August 2026
 
 
-      implementation has not been run against a deployed Transparency
-      Service, and it treats a receipt as a signature over a statement,
-      not as a proof of log membership.  The escrow role, reversal,
-      refund, and partial settlement are not implemented.
+      first claimed otherwise, and this is the second correction to the
+      same sentence.  The witness used in the suite is the in-process
+      append-only log that MAY-T11-6 permits; the implementation has not
+      been run against a deployed Transparency Service, and it treats a
+      receipt as a signature over a statement, not as a proof of log
+      membership.  The escrow role, reversal, refund, and partial
+      settlement are not implemented.
 
    Licensing:  Apache-2.0.
 
@@ -2672,16 +2675,13 @@ Internet-Draft                   Cedulon                     August 2026
    a reader found the discrepancy, and this document does not repeat it.
    Versions 0.2.x and earlier predate everything in this revision.
 
-
-
-
-
-
-
-
-
-
-
+   0.3.0 carried the same requirements and three defects that only
+   appear away from the platform it was written on, which an independent
+   runner found by taking up a standing invitation to break it.  A
+   directory that could not be written refused the lock before the
+   record and left the refusal as an uncaught exception rather than the
+   reason this document requires; the case for a symbolic link on the
+   path used a call that does not exist in the module system the package
 
 
 
@@ -2690,13 +2690,6 @@ Dogru                     Expires 1 March 2027                 [Page 48]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   0.3.0 carried the same requirements and three defects that only
-   appear away from the platform it was written on, which an independent
-   runner found by taking up a standing invitation to break it.  A
-   directory that could not be written refused the lock before the
-   record and left the refusal as an uncaught exception rather than the
-   reason this document requires; the case for a symbolic link on the
-   path used a call that does not exist in the module system the package
    declares, so it never reached its assertion; and repairing that
    revealed a fourth defect, that the state fingerprint was read before
    the path was checked, so a replaced path was reported as a
@@ -2738,6 +2731,13 @@ Internet-Draft                   Cedulon                     August 2026
    The second is that an expectation which only fires when the evidence
    is present can be cancelled by deleting the evidence.  A pinned payee
    key with no countersignature to check was silence, so removing a
+   countersignature removed the question with it.  MUST-T4-14 closes
+   that, and MUST-T11-17 closes the same shape in the witness: an
+   inclusion receipt with its body stripped off can no longer bury a
+   withholding, while still not being allowed to accuse anyone.
+
+
+
 
 
 
@@ -2745,11 +2745,6 @@ Dogru                     Expires 1 March 2027                 [Page 49]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   countersignature removed the question with it.  MUST-T4-14 closes
-   that, and MUST-T11-17 closes the same shape in the witness: an
-   inclusion receipt with its body stripped off can no longer bury a
-   withholding, while still not being allowed to accuse anyone.
 
    T12 is new and is not about an adversary.  An issuer that settles,
    appends the receipt in memory and then writes its state will, when
@@ -2790,18 +2785,6 @@ Internet-Draft                   Cedulon                     August 2026
    were never asked.  An audit presented with neither is unaffected, for
    the reason given in Section 9.1.
 
-
-
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 50]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
 17.2.  Changes from -01
 
    This revision has one subject: the checkpoint, which carries the T11
@@ -2811,6 +2794,14 @@ Internet-Draft                   Cedulon                     August 2026
    A reader of -01 set out the gap and a second reader confirmed it
    independently.  Four things were wrong at once, and they were the
    same thing seen from four sides.  The SCITT anchoring section
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 50]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    profiled the Spend Receipt and not the checkpoint, so SHOULD-T11-5
    asked for checkpoints to be registered without saying in what form
    (MUST-T11-14 now says).  None of the steps of the verification
@@ -2851,13 +2842,6 @@ Internet-Draft                   Cedulon                     August 2026
       not is a finding, what the chain holds and the witness does not is
       a warning.
 
-
-
-Dogru                     Expires 1 March 2027                 [Page 51]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    One change is not a repair of -01 but of the first attempt at this
    revision, and it is recorded because the failure is instructive.
    Signed totals were first made redactable through a field carried
@@ -2866,6 +2850,14 @@ Internet-Draft                   Cedulon                     August 2026
    object, which here is the party under audit, so a checkpoint whose
    signed totals disagreed with its receipts could be re-presented as
    redacted and the mismatch went unreported.  Redaction is now inside
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 51]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    the signature and a redaction asserted anywhere else MUST be ignored
    (MUST-T11-12, MUST-T11-13).  This was the same shape as the bypass
    -01 was written to close: a check that a party under audit could
@@ -2904,6 +2896,14 @@ Internet-Draft                   Cedulon                     August 2026
    change the matching rules in this document, and it did not arrive in
    this revision either.
 
+18.3.  Generalization
+
+   Payment is the special case that this -02 implements.  The same
+   completeness calculus (an authenticated extract of consumed units
+   reconciled to signed receipts) can apply to other consumable
+   resources such as compute, data, or energy.  This document does not
+   specify those profiles.
+
 
 
 
@@ -2913,14 +2913,6 @@ Dogru                     Expires 1 March 2027                 [Page 52]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-18.3.  Generalization
-
-   Payment is the special case that this -02 implements.  The same
-   completeness calculus (an authenticated extract of consumed units
-   reconciled to signed receipts) can apply to other consumable
-   resources such as compute, data, or energy.  This document does not
-   specify those profiles.
 
 19.  Informative Notes on Adjacent Protocols
 
@@ -2962,14 +2954,6 @@ Internet-Draft                   Cedulon                     August 2026
               RFC 6838, DOI 10.17487/RFC6838, January 2013,
               <https://www.rfc-editor.org/rfc/rfc6838>.
 
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 53]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    [RFC8032]  Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
               Signature Algorithm (EdDSA)", RFC 8032,
               DOI 10.17487/RFC8032, January 2017,
@@ -2978,6 +2962,13 @@ Internet-Draft                   Cedulon                     August 2026
    [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
               May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 53]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    [RFC8392]  Jones, M., Wahlstroem, E., Erdtman, S., and H. Tschofenig,
               "CBOR Web Token (CWT)", RFC 8392, DOI 10.17487/RFC8392,
@@ -3016,6 +3007,15 @@ Internet-Draft                   Cedulon                     August 2026
 
 20.2.  Informative References
 
+   [ACTA]     Farley, T., "Signed Decision Receipts for Machine-to-
+              Machine Access Control", June 2026,
+              <https://datatracker.ietf.org/doc/draft-farley-acta-
+              signed-receipts/>.
+
+   [AP2]      Google Agentic Commerce, "Agent Payments Protocol (AP2)",
+              September 2025,
+              <https://ap2-protocol.org/ap2/specification/>.
+
 
 
 
@@ -3025,15 +3025,6 @@ Dogru                     Expires 1 March 2027                 [Page 54]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   [ACTA]     Farley, T., "Signed Decision Receipts for Machine-to-
-              Machine Access Control", June 2026,
-              <https://datatracker.ietf.org/doc/draft-farley-acta-
-              signed-receipts/>.
-
-   [AP2]      Google Agentic Commerce, "Agent Payments Protocol (AP2)",
-              September 2025,
-              <https://ap2-protocol.org/ap2/specification/>.
 
    [BATES-ATP]
               Bates, D., "Agent Transaction Protocol (ATP)", May 2026,
@@ -3075,13 +3066,6 @@ Internet-Draft                   Cedulon                     August 2026
               Message Signatures", RFC 9421, DOI 10.17487/RFC9421,
               February 2024, <https://www.rfc-editor.org/rfc/rfc9421>.
 
-
-
-Dogru                     Expires 1 March 2027                 [Page 55]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    [SCHROCK]  Schrock, I., "Outcome Binding for Authorized Actions and
               Independently Observed Effects", July 2026,
               <https://datatracker.ietf.org/doc/draft-schrock-ep-
@@ -3090,6 +3074,14 @@ Internet-Draft                   Cedulon                     August 2026
    [STREAMING]
               Dogru, E. C., "Cedulon Streaming Reconciliation:
               Continuous Completeness for Agent Spend", August 2026,
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 55]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
               <https://github.com/dogrucanemek-
               alt/cedulon/blob/e681e24d1b29912d8c190259c2ea9f4f9538c29d/
               spec/draft-dogru-cedulon-streaming-00.md>.
@@ -3130,6 +3122,14 @@ Acknowledgments
    Cedulon; that separation is his and is recorded here as he stated it.
    Pablo Play found that a repeated reference hid the unaccounted
    amount, filed a written reproduction, and re-ran that reproduction
+   against the pinned commit to confirm the figures quoted from it.  He
+   later took up a standing invitation to break the implementation and
+   ran the suite on a platform its author had not, which is how the
+   three defects behind 0.3.1 were found and how a fourth came to light
+   while they were being repaired.
+
+
+
 
 
 
@@ -3137,12 +3137,6 @@ Dogru                     Expires 1 March 2027                 [Page 56]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   against the pinned commit to confirm the figures quoted from it.  He
-   later took up a standing invitation to break the implementation and
-   ran the suite on a platform its author had not, which is how the
-   three defects behind 0.3.1 were found and how a fourth came to light
-   while they were being repaired.
 
    Nicholas Templeman ran the suite from a clean clone and reported his
    figures.  He also corrected two claims in a row written about that
@@ -3187,18 +3181,18 @@ Appendix A.  Test Vectors
    0422533e28ac620ad439f5e7bd8ed1fa5ded90d4421a2de34f94d1d78d
    38a65812cb5315ee7f1cf403
 
+   Manifest COSE_Sign1:
+
+   Body: description=fixture-goods, amount=1, currency=USD,
+   acceptanceCriteriaHash=00, cancelCondition=none,
+   expiresAtMs=1700000000000, ap2MandateHash=null.
+
 
 
 Dogru                     Expires 1 March 2027                 [Page 57]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   Manifest COSE_Sign1:
-
-   Body: description=fixture-goods, amount=1, currency=USD,
-   acceptanceCriteriaHash=00, cancelCondition=none,
-   expiresAtMs=1700000000000, ap2MandateHash=null.
 
    COSE_Sign1 hex (whitespace ignored; identical to the locked test):
 
@@ -3215,6 +3209,12 @@ Author's Address
    Emek Can Dogru
    VERAX TEKNOLOJI LIMITED SIRKETI
    Email: e.dogru@cedulon.com
+
+
+
+
+
+
 
 
 

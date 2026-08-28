@@ -14,7 +14,12 @@ a fourth found while repairing those.
 - A directory that cannot be written refuses the lock before it refuses the
   record. Only `EEXIST` was recognised there, so the refusal arrived as an
   uncaught exception instead of `{ ok: false, reason: "state-io" }`. If you
-  wrapped `spend()` in a try/catch to survive this, you no longer need to.
+  wrapped `spend()` in a try/catch to survive that, the throw it caught is gone
+  and the refusal now comes back as a value. **Keep the catch.** `spend()` still
+  throws `cedulon-state-symlink` when the state path, or any directory above it,
+  has been replaced by a link. That one is deliberate: it is a refusal to write
+  to a destination the caller did not choose, and it must not be mistaken for a
+  payment that merely failed.
 - The state path is checked for symbolic links **before** the fingerprint is
   read, not after. A replaced path used to produce a fingerprint mismatch and be
   reported as `state-conflict`, which reads as another writer rather than as a

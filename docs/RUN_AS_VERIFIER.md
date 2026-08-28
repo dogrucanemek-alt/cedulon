@@ -8,6 +8,15 @@ Sections 1 to 6 touch no network at all and every key is a fixture. Section 7
 is optional and reads a live chain, but only reads it: Cedulon holds no wallet
 and signs no transaction anywhere in this document.
 
+Run as an ordinary user, not as root. Several cases make a directory
+unwritable and then expect a payment to be refused, and root writes to an
+unwritable directory regardless of its mode, so those cases report the payment
+as having succeeded instead. In a container that means `--user` or a `su` to a
+normal account; the author lost a run to this. Cases that need POSIX modes or
+symbolic links return early on Windows rather than failing, so a green suite
+there is a smaller claim than a green suite on Linux, and the report says which
+platform it came from.
+
 ## 1. Clone and install
 
 ```bash
