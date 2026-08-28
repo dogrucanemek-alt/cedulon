@@ -602,13 +602,13 @@ computed over evidence that answers to nobody.
 A verifier MUST obtain the issuer's public key out of band and MUST
 verify Spend Receipt and epoch checkpoint signatures against that key
 rather than against a key the object carries (`MUST-T4-9`). A
-verifier that holds no such key and is presented with any issued
-object MUST treat the completeness guarantee as conditional and SHOULD
-report the condition; the identifier `unauthenticated-issuer` is used
-for it in this implementation.
+verifier that holds no such key and is presented with any Spend
+Receipt or epoch checkpoint MUST treat the completeness guarantee as
+conditional and SHOULD report the condition; the identifier
+`unauthenticated-issuer` is used for it in this implementation.
 
-The condition is on being presented with an issued object because an
-audit given no receipts and no checkpoints rests on the extract alone.
+The condition names those two objects because an audit given no
+receipts and no checkpoints rests on the extract alone.
 There the absent issuer root withholds nothing, and warning about a
 root the audit never consulted would spend the warning where it
 carries no information.
@@ -885,8 +885,9 @@ identifiers are not an interoperability surface.
    is excluded from the reconciliation that follows, so the settlement
    it names is still reported as uncovered in step 8
    (`MUST-T4-9`, `MUST-T4-10`). With no issuer key pinned the verifier
-   makes no such distinction, reports that it did not, and the
-   guarantee is conditional. Where a countersignature is present,
+   makes no such distinction and reports that it did not; where any
+   receipt or checkpoint was presented, the guarantee is conditional
+   on the terms in {{issuer-root}}. Where a countersignature is present,
    {{payee-root}} governs what it establishes (`MUST-T4-13`,
    `MUST-T4-14`).
 5. Scope the receipts. When an extract is supplied, only receipts whose
@@ -1039,7 +1040,7 @@ warning. Warnings MUST still appear in operator-facing output
 | issuer-key-mismatch | audit fails | An object is signed by a key other than the pinned issuer key, so it is not coverage for anything it names |
 | countersign-key-mismatch | audit fails | A countersignature is by a key other than the one pinned for that payee |
 | countersign-missing | conditional | A payee key is pinned and a settled receipt for that payee carries no countersignature |
-| unauthenticated-issuer | conditional | No verifier-supplied issuer key; objects were checked against the keys they carry |
+| unauthenticated-issuer | conditional | No verifier-supplied issuer key and at least one receipt or checkpoint presented; those objects were checked against the keys they carry |
 | unauthenticated-witness | conditional | No verifier-supplied transparency key; inclusion receipts were left out of the comparison |
 | unauthenticated-countersigner | conditional | No verifier-supplied payee key; a countersignature is present but proves no approval |
 | witness-entry-unattributable | conditional | The witness holds a statement this chain does not present, carrying no body to say whose it is |
@@ -1059,7 +1060,8 @@ guarantee, not merely fail the audit.
 
 An unconditional guarantee therefore requires all of: an extract, a
 pinned rail key the extract's signature verifies against, a stated
-period the extract covers, no finding that puts the extract in
+period the extract covers, an issuer root for whatever receipts and
+checkpoints are presented, no finding that puts the extract in
 doubt, and no warning that withholds part of the comparison. A
 checkpoint whose totals were signed as withheld
 (`checkpoint-totals-redacted`) removes a comparison the guarantee
@@ -1240,7 +1242,7 @@ requirement text those citations refer to.
 | MAY-T4-6 | Parties MAY register the signed receipt as a SCITT statement to obtain a COSE receipt. |
 | MUST-T4-7 | A Spend Receipt MUST include `outcome` (`settled` or `aborted`). A settled receipt MUST have a non-null rail ref. Aborted receipts MUST NOT enter checkpoint totals. |
 | MUST-T4-8 | COSE_Sign1 protected headers MUST use alg -19 (Ed25519), a mandatory `kid`, and a payload-specific content type. Verifiers MUST reject a `kid` that does not match the configured issuer key. |
-| MUST-T4-9 | A verifier MUST obtain the issuer public key out of band and MUST verify Spend Receipt and epoch checkpoint signatures against that key, not against a key the object carries. A verifier without such a key that is presented with any issued object MUST report the completeness guarantee as conditional. An audit presented with none rests on the extract alone and is not made conditional by this requirement. |
+| MUST-T4-9 | A verifier MUST obtain the issuer public key out of band and MUST verify Spend Receipt and epoch checkpoint signatures against that key, not against a key the object carries. A verifier without such a key that is presented with any Spend Receipt or epoch checkpoint MUST report the completeness guarantee as conditional. An audit presented with neither rests on the extract alone and is not made conditional by this requirement. |
 | MUST-T4-10 | A receipt that does not verify against the pinned issuer key MUST NOT count as coverage for the settlement it names, and that settlement MUST still be reported as uncovered. Reporting the mismatch is not sufficient on its own. |
 | MUST-T4-11 | Pinned issuer keys MUST be compared by SubjectPublicKeyInfo DER encoding. A pinned key that cannot be decoded MUST be reported as a verifier configuration fault rather than as a mismatch, and where no pinned key decodes, the verifier MUST NOT fall back to the keys the objects carry. |
 | MUST-T4-12 | A verifier MUST accept an issuer root comprising more than one key, so that a key rotation inside the audited window does not require it to abandon pinning. |
@@ -1510,10 +1512,12 @@ Coverage:
   the withheld and not-anchored conditions, and signed totals
   redaction. Every requirement added in this revision is implemented
   and covered by a red-then-green case before appearing in this text.
-  Two of those cases, for a symbolic link on the path to a stored key
-  and for a write interrupted part way, assert only on POSIX; on
-  Windows they return early, so a passing suite on that platform does
-  not exercise them.
+  The cases behind `MUST-T7-5`, `MUST-T7-6`, `MUST-T12-1` and
+  `MUST-T12-2` need POSIX file modes or symbolic links and assert only
+  there; on Windows they return early, so a passing suite on that
+  platform does not exercise them. An independent runner reported that
+  distinction back from a Linux run after this text first claimed
+  otherwise.
   The witness used in the suite is the in-process append-only log that
   `MAY-T11-6` permits; the implementation has not been run against a
   deployed Transparency Service, and it treats a receipt as a signature
@@ -1541,10 +1545,11 @@ Experience:
   question `MUST-T10-8` had already answered for the rail extract and
   for nothing else, and following it into the implementation found the
   same omission for the Spend Receipt, the epoch checkpoint and the
-  Decision Token. T12 came from neither reader nor adversary: five
-  rounds of trying to break the implementation found it producing,
-  against itself, the one condition this document exists to make
-  detectable.
+  Decision Token. T12 came from neither reader nor adversary, and not
+  from the rounds of trying to break the implementation either: it was
+  found while writing the task for one of them, in the ordering the
+  implementation itself used, which produced against the issuer the one
+  condition this document exists to make detectable.
 
 Note on distribution: the requirements added in this revision are in
 the published `@cedulon` packages at version 0.3.0, not only in the
@@ -1772,10 +1777,10 @@ window coverage. Iman Schrock confirmed the finding independently and
 drew its boundary, keeping it separate from the extract-binding work
 already closed in -01.
 
-Iman Schrock raised the defect this revision repairs, against the
-posted -02: whether the profile should accept a pinned witness key and
-report an absent or mismatched pin explicitly. It should, and the same
-question turned out to be unanswered for three further objects.
+Iman Schrock raised the first of this revision's two subjects, against
+the posted -02: whether the profile should accept a pinned witness key
+and report an absent or mismatched pin explicitly. It should, and the
+same question turned out to be unanswered for three further objects.
 
 Iman Schrock and Pablo Play ran the -00 implementation against the
 pinned commit and reported the defects that produced -01. Iman Schrock
@@ -1790,9 +1795,11 @@ amount, filed a written reproduction, and re-ran that reproduction
 against the pinned commit to confirm the figures quoted from it.
 
 Nicholas Templeman ran the suite from a clean clone and reported his
-figures. He also corrected a row written about that run: his platform
-was the same operating system family as the earlier ones, so the run
-corroborates the numbers and adds no cross-environment evidence. He
+figures. He also corrected two claims in a row written about that run:
+the install it named was not the strict from-lockfile form, and his
+platform was the same operating system family as the earlier ones, so
+the run corroborates the numbers and adds no cross-environment
+evidence. He
 classified his own run honestly as a repetition of the author's checks
 rather than an independent implementation. Walter Hawkins did not run it; he read the
 reported figures and pressed for the run to be stated precisely enough
