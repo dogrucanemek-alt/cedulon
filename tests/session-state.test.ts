@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -64,5 +64,36 @@ describe("session state file", () => {
     // than read as an empty ledger.
     writeFileSync(statePath, full.slice(0, Math.floor(full.length / 2)));
     assert.throws(() => new CedulonSession({ statePath }), /state/i);
+  });
+
+  it("42 RED then GREEN: a temp directory reached through a symlink is not an attacker path", () => {
+    // macOS /var → /private/var, and a TMPDIR that is itself a link, put every
+    // mkdtemp path behind a symlink the operator did not place. Walking every
+    // ancestor then throws cedulon-state-symlink and the suite falls over.
+    // A leaf that is a symlink is still refused (case 70). A directory the
+    // caller linked themselves is still refused (case 76).
+    const real = mkdtempSync(join(tmpdir(), "cedulon-real-"));
+    const link = `${real}-link`;
+    try {
+      symlinkSync(real, link, "dir");
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "EACCES") {
+        return; // this host cannot create directory symlinks; measured on POSIX
+      }
+      throw err;
+    }
+    const prev = process.env.TMPDIR;
+    process.env.TMPDIR = link;
+    try {
+      const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-state-")), "nested", "state.json");
+      const session = new CedulonSession({ statePath });
+      assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
+    } finally {
+      if (prev === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = prev;
+      rmSync(link, { recursive: true, force: true });
+      rmSync(real, { recursive: true, force: true });
+    }
   });
 });

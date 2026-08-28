@@ -1,7 +1,8 @@
-import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
-import { basename, dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import {
   audit,
   type Finding,
@@ -168,6 +169,32 @@ export function policyFromEnv(): Policy {
   };
 }
 
+/**
+ * macOS /var and a TMPDIR that is itself a link put every mkdtemp path behind
+ * a symlink the operator did not place. Walking every ancestor then refuses
+ * an honest temp directory. Only the temp-root prefix is rewritten; a symlink
+ * the caller put under that root (case 76) is still on the path and still
+ * refused.
+ */
+function resolveTmpdirPrefix(input: string): string {
+  let tmp: string;
+  let resolved: string;
+  try {
+    tmp = tmpdir();
+    resolved = realpathSync(tmp);
+  } catch {
+    return input;
+  }
+  if (tmp === resolved) {
+    return input;
+  }
+  const rel = relative(tmp, input);
+  if (rel === "" || (rel !== input && !rel.startsWith("..") && !isAbsolute(rel))) {
+    return join(resolved, rel);
+  }
+  return input;
+}
+
 export class CedulonSession {
   readonly engine: PolicyEngine;
   readonly ledger = new RailLedger();
@@ -182,7 +209,8 @@ export class CedulonSession {
 
   constructor(opts?: { policy?: Policy; keys?: AdapterKeys; statePath?: string | null; payer?: string }) {
     this.payer = opts?.payer ?? envOr("CEDULON_PAYER", "payer-1");
-    this.statePath = opts?.statePath !== undefined ? opts.statePath : process.env.CEDULON_STATE_PATH || null;
+    const rawPath = opts?.statePath !== undefined ? opts.statePath : process.env.CEDULON_STATE_PATH || null;
+    this.statePath = rawPath ? resolveTmpdirPrefix(rawPath) : null;
     this.engine = new PolicyEngine(opts?.policy ?? policyFromEnv());
     const generated = generateReceiptKeys();
     this.keys = opts?.keys ?? {
