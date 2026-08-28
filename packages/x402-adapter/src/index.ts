@@ -40,6 +40,13 @@ export type PayInput = {
   payer: string;
   manifest?: SignedManifest;
   paymentHeader?: string;
+  /**
+   * The key the caller holds for whoever was entitled to publish this manifest.
+   * Without it the manifest is checked against the key it carries, so a payer
+   * can present terms they minted and the receipt records their hash as if the
+   * named party had authorised them.
+   */
+  manifestTrust?: string;
 };
 
 export type PayResult =
@@ -123,7 +130,7 @@ export function gatedSettle(
   }
 
   if (input.manifest) {
-    if (!verifyManifest(input.manifest)) {
+    if (!verifyManifest(input.manifest, input.manifestTrust)) {
       return deny402(input.req, "manifest-bad-sig");
     }
     if (isManifestExpired(input.manifest, nowMs)) {

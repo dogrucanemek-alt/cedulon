@@ -39,11 +39,20 @@ export type AuditArgs = {
   extraSettlements?: RailSettlement[];
 };
 
+/**
+ * Whether the file holding this server's signing key is protected by the OS.
+ * `owner-only` is a mode this platform enforces; `unprotected-on-this-platform`
+ * is Windows, where the same call succeeds and protects nothing because the
+ * access control there is the directory ACL, which this server does not set.
+ */
+export type StateProtection = "in-memory" | "owner-only" | "unprotected-on-this-platform";
+
 export type StatusReport = {
   version: string;
   policy: Record<string, unknown>;
   receiptCount: number;
   chainHead: string | null;
+  stateProtection: StateProtection;
 };
 
 export type PanelReceipt = {
@@ -204,7 +213,20 @@ export class CedulonSession {
       policy: policyDocument(this.engine.policy),
       receiptCount: this.receipts.length,
       chainHead: this.receipts.length === 0 ? null : receiptHash(this.receipts[this.receipts.length - 1]),
+      stateProtection: this.stateProtection(),
     };
+  }
+
+  /**
+   * Said out loud rather than left to be inferred from the absence of an error:
+   * a server that writes a private key to disk has to report which protection it
+   * actually got.
+   */
+  stateProtection(): StateProtection {
+    if (!this.statePath) {
+      return "in-memory";
+    }
+    return process.platform === "win32" ? "unprotected-on-this-platform" : "owner-only";
   }
 
   exportLedger(): LedgerExport {

@@ -63,11 +63,19 @@ export function runDispute(nowMs = 1_700_000_000_000): {
   if (paid.status !== 200) {
     throw new Error(paid.reason);
   }
-  if (!verifyReceipt(paid.receipt)) {
+  // The demo holds the issuer key it just used, so it checks against that rather
+  // than against the key the receipt carries - the same discipline the docs ask a
+  // verifier for.
+  if (!verifyReceipt(paid.receipt, rkeys.publicKeyPem)) {
     throw new Error("receipt");
   }
   const payeeKeys = generateReceiptKeys();
-  const countersigned = counterSign(paid.receipt, payeeKeys.privateKeyPem, payeeKeys.publicKeyPem);
+  const countersigned = counterSign(
+    paid.receipt,
+    payeeKeys.privateKeyPem,
+    payeeKeys.publicKeyPem,
+    rkeys.publicKeyPem,
+  );
   if (!verifyCounterSignature(countersigned)) {
     throw new Error("countersign");
   }
@@ -80,6 +88,8 @@ export function runDispute(nowMs = 1_700_000_000_000): {
   return {
     matchesAcceptance: bundle.matchesAcceptance,
     bundleOk: verifyDisputeBundle(bundle) && bundle.matchesAcceptance === false,
-    countersignOk: verifyCounterSignature(countersigned) && verifyReceipt(countersigned),
+    countersignOk:
+      verifyCounterSignature(countersigned, payeeKeys.publicKeyPem) &&
+      verifyReceipt(countersigned, rkeys.publicKeyPem),
   };
 }

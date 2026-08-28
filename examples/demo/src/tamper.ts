@@ -44,8 +44,10 @@ const tamperedReceipt = {
   claims: { ...receipt.claims, amount: "999" },
 };
 
-const manifestOk = verifyManifest(tamperedManifest);
-const receiptOk = verifyReceipt(tamperedReceipt);
+// Checked against the keys this script signed with. Against the keys the
+// tampered objects carry, the question would be one they answer themselves.
+const manifestOk = verifyManifest(tamperedManifest, mk.publicKeyPem);
+const receiptOk = verifyReceipt(tamperedReceipt, rk.publicKeyPem);
 if (manifestOk || receiptOk) {
   console.error("tamper not detected");
   process.exit(0);

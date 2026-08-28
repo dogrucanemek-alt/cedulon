@@ -192,9 +192,12 @@ export function checkpointHash(signed: SignedCheckpoint): string {
 
 export type ChainBreak = { index: number; reason: string };
 
-export function findCheckpointChainBreak(chain: SignedCheckpoint[]): ChainBreak | null {
+export function findCheckpointChainBreak(
+  chain: SignedCheckpoint[],
+  expectedIssuerKeyPem?: string,
+): ChainBreak | null {
   for (let i = 0; i < chain.length; i += 1) {
-    if (!verifyCheckpoint(chain[i])) {
+    if (!verifyCheckpoint(chain[i], expectedIssuerKeyPem)) {
       return { index: i, reason: "bad-signature" };
     }
     const expectedPrev = i === 0 ? null : checkpointHash(chain[i - 1]);
@@ -207,10 +210,18 @@ export function findCheckpointChainBreak(chain: SignedCheckpoint[]): ChainBreak 
 
 export type Equivocation = { epoch: number; hashes: string[] };
 
-export function findEquivocation(checkpoints: SignedCheckpoint[]): Equivocation | null {
+/**
+ * `expectedIssuerKeyPem` names whose epochs these are. Two issuers signing one
+ * epoch number is not one issuer equivocating, and without the key this cannot
+ * tell those apart.
+ */
+export function findEquivocation(
+  checkpoints: SignedCheckpoint[],
+  expectedIssuerKeyPem?: string,
+): Equivocation | null {
   const byEpoch = new Map<number, Set<string>>();
   for (const cp of checkpoints) {
-    if (!verifyCheckpoint(cp)) {
+    if (!verifyCheckpoint(cp, expectedIssuerKeyPem)) {
       continue;
     }
     const h = checkpointHash(cp);

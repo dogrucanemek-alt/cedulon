@@ -20,6 +20,8 @@ export function runRunaway(nowMs = 1_700_000_000_000): {
   allowed: number;
   blocked: number;
   receipts: SignedReceipt[];
+  /** The key this run signed with, so the caller can check against it. */
+  issuerPublicKeyPem: string;
 } {
   const engine = new PolicyEngine(RUNAWAY_POLICY);
   const keys: AdapterKeys = (() => {
@@ -57,14 +59,15 @@ export function runRunaway(nowMs = 1_700_000_000_000): {
       blocked += 1;
     }
   }
-  return { allowed, blocked, receipts };
+  return { allowed, blocked, receipts, issuerPublicKeyPem: keys.receiptPublicPem };
 }
 
 export function assertRunaway(result: ReturnType<typeof runRunaway>): void {
   if (result.allowed !== 3 || result.blocked !== 97) {
     throw new Error(`unexpected counts ${result.allowed}/${result.blocked}`);
   }
-  if (!result.receipts.every((r) => verifyReceipt(r))) {
+  // Against the key the caller holds, not the one each receipt carries.
+  if (!result.receipts.every((r) => verifyReceipt(r, result.issuerPublicKeyPem))) {
     throw new Error("receipt verify failed");
   }
 }

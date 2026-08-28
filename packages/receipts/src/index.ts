@@ -280,12 +280,18 @@ function issuerCoseBytes(signed: SignedReceipt): Uint8Array {
   return new Uint8Array(Buffer.from(signed.coseHex, "hex"));
 }
 
+/**
+ * `expectedIssuerKeyPem` is the issuer key the payee holds. Without it this
+ * checks the receipt against the key it travels with, which is not the question
+ * a payee answers by putting their name on it.
+ */
 export function counterSign(
   signed: SignedReceipt,
   payeePrivateKeyPem: string,
   payeePublicKeyPem: string,
+  expectedIssuerKeyPem?: string,
 ): SignedReceipt {
-  if (!verifyReceipt(signed)) {
+  if (!verifyReceipt(signed, expectedIssuerKeyPem)) {
     throw new Error("countersign-unsigned-receipt");
   }
   const payload = encodeCbor(cborMap([[COUNTERSIGN_CLAIM.receiptCose, issuerCoseBytes(signed)]]));

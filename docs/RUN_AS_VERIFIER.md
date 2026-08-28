@@ -228,7 +228,21 @@ authorised to make and the naked row goes quiet. With `issuerTrust`, a receipt
 from any other key is `issuer-key-mismatch` and is not counted as coverage, so
 the settlement it named stays reported; an issuer key you supply but that cannot
 be read is `trust-key-unreadable` on `id: "issuer"`, which is a broken setting
-rather than evidence against the receipts. The same three functions take the key
+rather than evidence against the receipts. Every verify in the project takes the key
 directly for callers outside `audit()`: `verifyReceipt(signed, issuerKey)`,
-`verifyCheckpoint(signed, issuerKey)` and
-`verifyDecisionToken(signed, nowMs, issuerKey)`.
+`verifyCheckpoint(signed, issuerKey)`, `verifyDecisionToken(signed, nowMs,
+issuerKey)`, `verifyInclusionReceipt(signed, witnessKey)`,
+`verifyManifest(signed, issuerKey)`, `verifyCounterSignature(signed, payeeKey)`,
+`counterSign(receipt, payeePriv, payeePub, issuerKey)`, and the two checkpoint
+helpers `findCheckpointChainBreak` and `findEquivocation`. `gatedSettle` takes
+`manifestTrust` on its input. Omitting the key is always allowed and always
+means the weaker question was asked.
+
+The MCP server exposes the same choice: `cedulon_verify_receipt` takes
+`expectIssuerKeyPem` and `expectPayeeKeyPem`, and reports
+`checkedAgainstSuppliedKey` so a caller cannot mistake the weaker answer for the
+stronger one. `cedulon_status` reports `stateProtection`: `owner-only` where the
+OS enforces the file mode, `unprotected-on-this-platform` on Windows, where the
+same call succeeds and protects nothing because the access control there is the
+directory ACL and this server does not set it, and `in-memory` when no state
+path is configured.
