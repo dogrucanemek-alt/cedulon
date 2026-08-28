@@ -1,5 +1,7 @@
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
 import { mcpbManifest } from "../scripts/mcpb-manifest.ts";
@@ -24,6 +26,40 @@ describe("release manifest", () => {
       server.name,
       "mcpName in package.json must equal name in server.json, or the registry refuses the entry",
     );
+  });
+
+  // Every @cedulon dependency asked for ^0.3.0 while the packages moved to
+  // 0.4.0. A caret range does not cross a minor, so a clean clone resolved the
+  // workspace packages from the registry instead and built against a published
+  // signature that had since changed. tsc --noEmit did not see it, because the
+  // tsconfig paths resolve types from source while the build resolves from
+  // dist, and nothing but a from-nothing build runs that path.
+  it("internal dependency ranges admit the version the workspace builds", () => {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "packages");
+    let checked = 0;
+    for (const name of readdirSync(dir)) {
+      const manifestPath = join(dir, name, "package.json");
+      if (!existsSync(manifestPath)) continue;
+      const pkg = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+        name: string;
+        dependencies?: Record<string, string>;
+      };
+      for (const [dep, range] of Object.entries(pkg.dependencies ?? {})) {
+        if (!dep.startsWith("@cedulon/")) continue;
+        const depPath = join(dir, dep.slice("@cedulon/".length), "package.json");
+        if (!existsSync(depPath)) continue;
+        const depVersion = (JSON.parse(readFileSync(depPath, "utf8")) as { version: string })
+          .version;
+        assert.equal(
+          range,
+          `^${depVersion}`,
+          `${pkg.name} asks for ${dep}@${range}, but the workspace builds ${depVersion}; ` +
+            "a clean clone would resolve that dependency from the registry instead",
+        );
+        checked += 1;
+      }
+    }
+    assert.ok(checked > 0, "no internal dependencies were checked");
   });
 
   it("the registry entry points at the version that exists", () => {
