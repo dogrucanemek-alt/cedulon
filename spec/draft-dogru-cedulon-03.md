@@ -1591,7 +1591,7 @@ Experience:
 
 : The defect behind this revision was reported against the posted -02.
   A reader asked whether the profile should accept a pinned witness key
-  and report an absent or mismatched pin explicitly. -02 §6.2 already
+  and report an absent or mismatched pin explicitly. -02 Section 6.2 already
   required a verifier to obtain the public key from an authenticated
   channel and to reject a `kid` that does not match that key. What it
   did not carry was the verification algorithm, the separate root
@@ -1635,7 +1635,7 @@ algorithm without a counterpart for every object the rule applied to.
 The second is T12, which no reader reported and which is not about an
 adversary at all.
 
--02 §6.2 already required a verifier to obtain the public key from an
+-02 Section 6.2 already required a verifier to obtain the public key from an
 authenticated channel (a preconfigured issuer set, a directory, or a
 transparency statement) and to reject a message whose `kid` does not
 match that key (`MUST-T4-8`). That rule was general. What -02 did not

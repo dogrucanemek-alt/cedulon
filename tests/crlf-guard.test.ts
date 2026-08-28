@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -53,6 +53,32 @@ describe("crlf-guard", () => {
       { cwd: root, encoding: "utf8" },
     );
     assert.match(stdout, /crlf-guard: no CR in tracked text blobs/);
+  });
+
+  // The .xml is left out on purpose: author-tools writes a non-breaking space
+  // into the BCP 14 boilerplate itself, and -02's published XML carries the
+  // same bytes. The source and the text that goes to the datatracker are ours.
+  //
+  // -01 acquired two em-dashes and -03 acquired a section sign, each from an
+  // editing pass that had no reason to think about encoding. idnits reports
+  // non-ASCII as a nit and the drafts before them were plain ASCII, so the
+  // cheapest place to notice is here, before a rebuild rather than after a
+  // submission.
+  it("draft sources stay ASCII", () => {
+    const specDir = join(root, "spec");
+    const drafts = readdirSync(specDir).filter((n) => /^draft-.*\.(md|txt)$/.test(n));
+    assert.ok(drafts.length > 0, "no draft sources found to check");
+    for (const name of drafts) {
+      const bytes = readFileSync(join(specDir, name));
+      const offenders: string[] = [];
+      for (let i = 0; i < bytes.length; i += 1) {
+        if (bytes[i] > 126) {
+          offenders.push(`${name}:byte ${i} (0x${bytes[i].toString(16)})`);
+          if (offenders.length > 3) break;
+        }
+      }
+      assert.deepEqual(offenders, [], `non-ASCII in ${name}: ${offenders.join(", ")}`);
+    }
   });
 
   it(".gitattributes does not attach a rule to spec/", () => {
