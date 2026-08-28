@@ -64,6 +64,14 @@ const TOOLS = [
           type: "object",
           description: "Payee keys you hold out of band, keyed by payee: { \"payee-1\": publicKeyPem }",
         },
+        manifest: {
+          type: "object",
+          description: "A Trade Manifest you were presented with. Omit for a no-manifest deployment. Present without manifestTrust is unauthenticated-manifest.",
+        },
+        manifestTrust: {
+          type: "object",
+          description: "Manifest publisher key(s) you hold out of band: { publicKeyPem: string | string[] }",
+        },
         extraSettlements: {
           type: "array",
           description: "Optional extra extract rows, used to inject a bypass settlement in tests",
@@ -184,6 +192,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           issuerTrust: args.issuerTrust as never,
           witnessTrust: args.witnessTrust as never,
           payeeTrust: args.payeeTrust as never,
+          manifest: args.manifest as never,
+          manifestTrust: args.manifestTrust as never,
         });
         return textResult({
           ok: report.ok,

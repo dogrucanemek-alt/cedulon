@@ -4,6 +4,30 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.3.2: not a breaking change
+
+The manifest root is **not** a breaking change. `audit()` grew two optional
+fields, `manifest` and `manifestTrust`. Callers that present no Trade Manifest
+see the same report they saw on 0.3.1. A no-manifest deployment is still
+silent. What 0.3.1 did in silence, and what 0.3.2 names, is the other case: a
+manifest is presented and the verifier has no pin, or a pin it cannot read, or
+a pin the manifest does not answer to.
+
+- Presented, no pin: warning `unauthenticated-manifest`, guarantee
+  `conditional`. The audit does not fail.
+- Presented, pin unreadable: finding `trust-key-unreadable` on `id:
+  "manifest"`. The audit fails.
+- Presented, pin does not match: finding `manifest-key-mismatch`. The audit
+  fails.
+
+`verifyManifest` still takes an optional pin, the same way `verifyReceipt`
+does. `true` without a pin means internally consistent, not authentic.
+`verifyRailExtract` now takes the same optional pin (`MUST-T10-8` at the
+function, not only later in `audit()`). Omitting it keeps the old self-check.
+
+`cedulon_audit` accepts `manifest` and `manifestTrust` beside the other
+roots it already took.
+
 ## 0.3.1: no new breakage, four repairs
 
 Nothing in this section changes in 0.3.1. It repairs defects that only appear

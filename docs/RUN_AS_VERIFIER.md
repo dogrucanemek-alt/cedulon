@@ -326,7 +326,15 @@ A conflict used to be permanent. `reload()` takes the file as it now stands and
 returns the nonces this session was holding that the file does not have, so a
 recovery cannot lose a receipt quietly.
 
-`cedulon_audit` takes `trust`, `issuerTrust`, `witnessTrust` and `payeeTrust`.
+A fifth, when a Trade Manifest is presented: `manifestTrust` is the publisher
+key you hold out of band. Without a presented manifest there is nothing to
+pin, and a no-manifest deployment is silent. With a presented manifest and no
+pin the report warns `unauthenticated-manifest` and the guarantee is
+conditional; with a pin the manifest does not answer to, `manifest-key-mismatch`
+fails the audit.
+
+`cedulon_audit` takes `trust`, `issuerTrust`, `witnessTrust`, `payeeTrust` and
+`manifestTrust`.
 Without them the tool was auditing this server's records against this server's
 own key, so every answer it could give was conditional and no caller could change
 that.

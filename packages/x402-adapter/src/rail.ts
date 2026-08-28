@@ -1,4 +1,5 @@
 import { generateKeyPairSync, sign, verify } from "node:crypto";
+import { sameSpkiKey } from "@cedulon/cose";
 import { canonical } from "@cedulon/core";
 
 export type RailSettlement = {
@@ -40,7 +41,15 @@ export function signRailExtract(
   return { body, signature, publicKeyPem };
 }
 
-export function verifyRailExtract(signed: SignedRailExtract): boolean {
+/**
+ * `expectedRailKeyPem` is the rail key the verifier holds out of band
+ * (`MUST-T10-8`). Omitted, this only proves the extract is internally
+ * consistent: any key can sign any body, including its own.
+ */
+export function verifyRailExtract(signed: SignedRailExtract, expectedRailKeyPem?: string): boolean {
+  if (expectedRailKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedRailKeyPem)) {
+    return false;
+  }
   const payload = Buffer.from(canonical(signed.body), "utf8");
   try {
     return verify(null, payload, signed.publicKeyPem, Buffer.from(signed.signature, "base64"));

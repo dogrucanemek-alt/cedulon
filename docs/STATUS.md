@@ -18,12 +18,15 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-Eight packages are published on npm at `0.3.1`, so the server runs without a
+Eight packages are published on npm at `0.3.2`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.3.0 was the breaking release and
 `docs/UPGRADING.md` says what breaks and why; the short version is that a
 verifier which kept the old behaviour would keep reporting a clean audit over a
 forged receipt. 0.3.1 breaks nothing further: it repairs three defects an
 independent runner found on Linux, and a fourth found while repairing them.
+0.3.2 also breaks nothing: it adds a fifth trust root for a presented Trade
+Manifest and names the external-rail bound on T12. The tarball is not on the
+registry until it is published.
 
 Checked from npm rather than from this tree: a clean install of
 `@cedulon/mcp-server@0.3.1` answers `initialize` reporting `0.3.1`, the

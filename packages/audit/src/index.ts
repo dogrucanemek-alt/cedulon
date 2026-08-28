@@ -9,6 +9,7 @@ import {
   type InclusionReceipt,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
+import { verifyManifest, type SignedManifest } from "@cedulon/manifest";
 import { receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import {
   verifyRailExtract,
@@ -31,11 +32,13 @@ export const FINDING_CODES = [
   "unauthenticated-issuer",
   "unauthenticated-witness",
   "unauthenticated-countersigner",
+  "unauthenticated-manifest",
   "countersign-missing",
   "witness-entry-unattributable",
   "issuer-key-mismatch",
   "countersign-key-mismatch",
   "extract-key-mismatch",
+  "manifest-key-mismatch",
   "extract-scope-mismatch",
   "extract-settlement-mismatch",
   "trust-key-unreadable",
@@ -664,6 +667,14 @@ export type AuditInput = {
   witnessTrust?: IssuerTrustPin;
   /** Payee keys the verifier holds, keyed by payee. Same argument again. */
   payeeTrust?: PayeeTrustPins;
+  /**
+   * A Trade Manifest the caller was presented with. Absent is a no-manifest
+   * deployment, not a gap. Present without a pin, or with a pin that cannot be
+   * read or does not match, is the thing that must not pass in silence.
+   */
+  manifest?: SignedManifest;
+  /** Publisher key the verifier holds out of band. Same shape as issuerTrust. */
+  manifestTrust?: IssuerTrustPin;
   /** Checkpoint inclusion receipts. Absent ⇒ today's behaviour. Present ⇒ T11 witness is configured. */
   inclusionReceipts?: InclusionReceipt[];
 };
@@ -685,7 +696,9 @@ export function audit(input: AuditInput): AuditReport {
       });
     }
 
-    const signatureVerifies = verifyRailExtract(input.extract);
+    const signatureVerifies = input.trust
+      ? verifyRailExtract(input.extract, input.trust.publicKeyPem)
+      : verifyRailExtract(input.extract);
 
     // An extract that declares one window and carries rows from outside it has
     // not reported on the period it claims to cover. This holds whether or not
@@ -795,6 +808,47 @@ export function audit(input: AuditInput): AuditReport {
         : "rail extract is unsigned; completeness guarantee is conditional",
       severity: "warn",
     });
+  }
+
+  // A presented manifest is a fifth signed object. No-manifest is a deployment
+  // choice and is silent here. Presented-but-unauthenticated is the bypass.
+  if (input.manifest) {
+    if (!input.manifestTrust) {
+      warnings.push({
+        code: "unauthenticated-manifest",
+        id: "manifest",
+        detail:
+          "no verifier-supplied manifest key; the signature proves internal consistency, not that the named party published the terms, so the completeness guarantee is conditional",
+        severity: "warn",
+      });
+    } else {
+      const { usable: manifestDers, unreadable } = pinnedKeys(input.manifestTrust.publicKeyPem);
+      if (unreadable > 0 || manifestDers.length === 0) {
+        findings.push({
+          code: "trust-key-unreadable",
+          id: "manifest",
+          detail:
+            manifestDers.length === 0
+              ? "no pinned manifest key could be read as a public key; supply PEM or base64 SPKI"
+              : `${unreadable} of the pinned manifest keys could not be read as a public key; the rest are still in use`,
+        });
+      }
+      if (manifestDers.length > 0) {
+        const pems =
+          typeof input.manifestTrust.publicKeyPem === "string"
+            ? [input.manifestTrust.publicKeyPem]
+            : input.manifestTrust.publicKeyPem;
+        const answers = pems.some((pem) => toSpkiDer(pem) !== null && verifyManifest(input.manifest!, pem));
+        if (!answers) {
+          findings.push({
+            code: "manifest-key-mismatch",
+            id: "manifest",
+            detail:
+              "the presented Trade Manifest is signed by a key other than the pinned manifest key, or does not verify against it",
+          });
+        }
+      }
+    }
   }
 
   // The rail pin answers who reported the settlements. It says nothing about who
@@ -1011,7 +1065,8 @@ export function audit(input: AuditInput): AuditReport {
       f.code === "extract-scope-mismatch" ||
       f.code === "extract-settlement-mismatch" ||
       f.code === "issuer-key-mismatch" ||
-      f.code === "countersign-key-mismatch",
+      f.code === "countersign-key-mismatch" ||
+      f.code === "manifest-key-mismatch",
   );
   return {
     ok: hard.length === 0,

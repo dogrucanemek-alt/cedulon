@@ -16,6 +16,7 @@ import {
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
 import { PolicyEngine, policyDocument, type Policy } from "@cedulon/core";
+import type { SignedManifest } from "@cedulon/manifest";
 import { claimsFromCbor, generateReceiptKeys, receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import { decodeCoseSign1 } from "@cedulon/cose";
 import {
@@ -53,6 +54,8 @@ export type AuditArgs = {
   issuerTrust?: IssuerTrustPin;
   witnessTrust?: IssuerTrustPin;
   payeeTrust?: PayeeTrustPins;
+  manifest?: SignedManifest;
+  manifestTrust?: IssuerTrustPin;
 };
 
 /**
@@ -328,6 +331,8 @@ export class CedulonSession {
       issuerTrust: args.issuerTrust,
       witnessTrust: args.witnessTrust,
       payeeTrust: args.payeeTrust,
+      manifest: args.manifest,
+      manifestTrust: args.manifestTrust,
     });
   }
 

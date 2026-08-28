@@ -105,5 +105,26 @@ describe("claims that describe something outside their own file", () => {
           "Trust roots section that provides it",
       );
     }
+
+    // The empty-set exception for a presented manifest: five writings, same
+    // trap that left the issuer exception in two of five places.
+    const writings = [
+      ["heading", /## The manifest root \{#manifest-root\}/],
+      ["requirement", /MUST-T4-15/],
+      ["algorithm", /Where a Trade Manifest is presented/],
+      ["finding-row", /unauthenticated-manifest \| conditional/],
+      [
+        "unconditional-list",
+        /manifest root for whatever Trade Manifest\s+is presented/,
+      ],
+    ] as const;
+    for (const [name, re] of writings) {
+      assert.match(draft, re, `unauthenticated-manifest empty-set exception missing its ${name} writing`);
+    }
+    assert.match(
+      draft,
+      /An audit presented with no Trade Manifest is not made conditional by this requirement/,
+      "the no-manifest exception must be said in the requirement, not only nearby",
+    );
   });
 });

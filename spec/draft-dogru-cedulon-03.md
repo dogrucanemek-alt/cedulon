@@ -584,10 +584,13 @@ conditional (`MUST-T10-15`), whatever else verifies.
 {{rail-extract}} states the rule for one object: a signature proves
 internal consistency, not origin, so the verifier obtains the rail key
 out of band and checks the extract against that key rather than
-against any key the extract carries (`MUST-T10-8`). -02 stated it
-there and nowhere else, and every other signed object in this profile
-was left to be checked against the key travelling inside it. This
-section states the same rule for the rest of them.
+against any key the extract carries (`MUST-T10-8`). -02 already
+required a verifier to obtain the public key from an authenticated
+channel and to reject a `kid` that does not match that key
+(`MUST-T4-8`). What -02 did not carry was the verification algorithm,
+the separate root inputs, and the error semantics that name a missing
+or mismatched pin. This section states those for every signed object
+in the profile.
 
 The gap is not theoretical. A verifier that checks a Spend Receipt
 against the key the receipt carries accepts a receipt signed by any
@@ -694,6 +697,32 @@ signs with and has no reason to ask the token which key to check it
 against. A consumer MUST verify a Decision Token against its own
 issuing key and MUST NOT accept one it cannot check that way
 (`MUST-T6-6`).
+
+## The manifest root {#manifest-root}
+
+A Trade Manifest is optional. A deployment that presents none is not
+missing a root, and this requirement does not make such an audit
+conditional. The forbidden case is the other one: a manifest is
+presented, and the verifier accepts it because the key travelling
+inside it verifies against itself.
+
+A verifier that is presented with a Trade Manifest MUST obtain the
+publisher's public key out of band and MUST verify the manifest
+signature against that key, not against a key the manifest carries
+(`MUST-T4-15`). A verifier without such a key that is presented with
+a Trade Manifest MUST report the completeness guarantee as
+conditional and SHOULD report the condition; the identifier
+`unauthenticated-manifest` is used for it in this implementation.
+An audit presented with no Trade Manifest is not made conditional by
+this requirement.
+
+A pinned manifest key the verifier cannot decode is a fault in its
+own configuration and MUST be reported as `trust-key-unreadable`
+rather than as a mismatch, on the same terms as `MUST-T4-11`. A
+manifest that does not verify against a readable pin MUST be
+reported as `manifest-key-mismatch` and MUST fail the audit. Falling
+back to the key the manifest carries is how a presented document
+becomes a bypass.
 
 ## What the roots do not cover
 
@@ -887,9 +916,15 @@ identifiers are not an interoperability surface.
    (`MUST-T4-9`, `MUST-T4-10`). With no issuer key pinned the verifier
    makes no such distinction and reports that it did not; where any
    receipt or checkpoint was presented, the guarantee is conditional
-   on the terms in {{issuer-root}}. Where a countersignature is present,
+   on the terms in {{issuer-root}}.    Where a countersignature is present,
    {{payee-root}} governs what it establishes (`MUST-T4-13`,
-   `MUST-T4-14`).
+   `MUST-T4-14`). Where a Trade Manifest is presented, {{manifest-root}}
+   governs it (`MUST-T4-15`): with no publisher key pinned the verifier
+   reports `unauthenticated-manifest` and the guarantee is conditional;
+   with a pin that cannot be read, `trust-key-unreadable`; with a pin
+   the manifest does not answer to, `manifest-key-mismatch`. An audit
+   presented with no Trade Manifest is not made conditional by this
+   step.
 5. Scope the receipts. When an extract is supplied, only receipts whose
    `timestampMs` falls in the extract's declared window are reconciled
    against it (`MUST-T10-16`). A receipt outside that window is not a
@@ -1043,6 +1078,8 @@ warning. Warnings MUST still appear in operator-facing output
 | unauthenticated-issuer | conditional | No verifier-supplied issuer key and at least one receipt or checkpoint presented; those objects were checked against the keys they carry |
 | unauthenticated-witness | conditional | No verifier-supplied transparency key; inclusion receipts were left out of the comparison |
 | unauthenticated-countersigner | conditional | No verifier-supplied payee key; a countersignature is present but proves no approval |
+| unauthenticated-manifest | conditional | No verifier-supplied manifest key and a Trade Manifest was presented; it was checked against the key it carries. An audit presented with no Trade Manifest is not this condition |
+| manifest-key-mismatch | audit fails | A presented Trade Manifest is signed by a key other than the pinned publisher key, or does not verify against it |
 | witness-entry-unattributable | conditional | The witness holds a statement this chain does not present, carrying no body to say whose it is |
 | extract-scope-mismatch | audit fails | A record falls outside the declared window, or the extract does not cover the expected account, rail, or window |
 | extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract; the extract is authoritative |
@@ -1056,12 +1093,15 @@ warning. Warnings MUST still appear in operator-facing output
 A finding that puts the extract itself in doubt (`extract-key-mismatch`,
 `trust-key-unreadable`, `extract-scope-mismatch`, or
 `extract-settlement-mismatch`) MUST also prevent an unconditional
-guarantee, not merely fail the audit.
+guarantee, not merely fail the audit. A finding that puts a presented
+Trade Manifest in doubt (`manifest-key-mismatch`, or
+`trust-key-unreadable` on the manifest pin) does the same.
 
 An unconditional guarantee therefore requires all of: an extract, a
 pinned rail key the extract's signature verifies against, a stated
 period the extract covers, an issuer root for whatever receipts and
-checkpoints are presented, no finding that puts the extract in
+checkpoints are presented, a manifest root for whatever Trade Manifest
+is presented, no finding that puts the extract in
 doubt, and no warning that withholds part of the comparison. A
 checkpoint whose totals were signed as withheld
 (`checkpoint-totals-redacted`) removes a comparison the guarantee
@@ -1248,6 +1288,7 @@ requirement text those citations refer to.
 | MUST-T4-12 | A verifier MUST accept an issuer root comprising more than one key, so that a key rotation inside the audited window does not require it to abandon pinning. |
 | MUST-T4-13 | A payee countersignature MUST NOT be treated as evidence of payee approval unless it verifies against a payee key the verifier obtained out of band. |
 | MUST-T4-14 | Where a verifier has pinned a key for a payee, a settled receipt naming that payee and carrying no countersignature MUST be reported, so that deleting the evidence does not delete the question. |
+| MUST-T4-15 | A verifier that is presented with a Trade Manifest MUST obtain the publisher public key out of band and MUST verify the manifest signature against that key, not against a key the manifest carries. A verifier without such a key that is presented with a Trade Manifest MUST report the completeness guarantee as conditional. An audit presented with no Trade Manifest is not made conditional by this requirement. |
 
 ## T5: Policy bypass via direct rail access
 
@@ -1417,16 +1458,23 @@ can tell those apart.
 | ID | Requirement |
 |---|---|
 | MUST-T12-1 | An issuer MUST NOT complete a settlement whose receipt it cannot record durably. The ability to record MUST be established before value moves, not after. |
-| MUST-T12-2 | Where a settlement has been made and its record cannot be completed, the issuer MUST undo the settlement in every place it reached: in memory, on the rail ledger it controls, and in any later write. A refused payment MUST NOT consume the nonce or the payment allowance it never used. |
+| MUST-T12-2 | Where a settlement has been made and its record cannot be completed, the issuer MUST undo the settlement in every place it still controls: in memory, on the rail ledger it controls, and in any later write it has not yet issued. A refused payment MUST NOT consume the nonce or the payment allowance it never used. |
 | MUST-T12-3 | Two issuers MUST NOT share one durable state. An implementation that permits it MUST fail loudly rather than let one writer overwrite the other's receipt, and the failure MUST name what an operator can act on. |
+| MUST-T12-4 | Where a settlement has entered a rail the issuer does not control, and the local record cannot be completed, the outcome is indeterminate. The issuer MUST NOT treat the payment as reversed, and MUST NOT return the authority to spend, unless it holds authenticated evidence that the rail did not complete the settlement or that a reversing entry completed. |
 
 Ordering:
 : Settle-then-record is the natural order to write and the wrong one
   to ship. The record is what makes the settlement accountable, so the
   record is what has to be secured first (`MUST-T12-1`), and a
-  settlement that cannot be recorded has to be undone everywhere it
-  reached, including the nonce and the allowance it never used
-  (`MUST-T12-2`).
+  settlement that cannot be recorded has to be undone everywhere the
+  issuer still controls, including the nonce and the allowance it
+  never used (`MUST-T12-2`). That undo is what the in-process
+  `RailLedger` and the session tests measure. Once value has entered a
+  rail the issuer does not control, a local snapshot cannot retract it.
+  Persistence failing after that point leaves the outcome
+  indeterminate; authority is not returned without authenticated
+  evidence that the rail did not complete the settlement or that a
+  reversing entry did (`MUST-T12-4`).
 
 Recovery:
 : A durable-state conflict is not necessarily fatal, but it MUST NOT
@@ -1543,18 +1591,21 @@ Experience:
 
 : The defect behind this revision was reported against the posted -02.
   A reader asked whether the profile should accept a pinned witness key
-  and report an absent or mismatched pin explicitly. That is the
-  question `MUST-T10-8` had already answered for the rail extract and
-  for nothing else, and following it into the implementation found the
-  same omission for the Spend Receipt, the epoch checkpoint and the
-  Decision Token. T12 came from neither reader nor adversary, and not
-  from the rounds of trying to break the implementation either: it was
-  found while writing the task for one of them, in the ordering the
-  implementation itself used, which produced against the issuer the one
-  condition this document exists to make detectable.
+  and report an absent or mismatched pin explicitly. -02 §6.2 already
+  required a verifier to obtain the public key from an authenticated
+  channel and to reject a `kid` that does not match that key. What it
+  did not carry was the verification algorithm, the separate root
+  inputs, and the error semantics. Following the same question into
+  the implementation found the omission for the Spend Receipt, the
+  epoch checkpoint and the Decision Token. T12 came from neither
+  reader nor adversary, and not from the rounds of trying to break the
+  implementation either: it was found while writing the task for one
+  of them, in the ordering the implementation itself used, which
+  produced against the issuer the one condition this document exists
+  to make detectable.
 
 Note on distribution: the requirements added in this revision are in
-the published `@cedulon` packages at version 0.3.1, not only in the
+the published `@cedulon` packages at version 0.3.2, not only in the
 repository. A reader can check a claim against an installed package
 rather than against a working tree. That order is deliberate: -00
 described requirements that its published package did not yet carry,
@@ -1571,28 +1622,34 @@ does not exist in the module system the package declares, so it never
 reached its assertion; and repairing that revealed a fourth defect,
 that the state fingerprint was read before the path was checked, so a
 replaced path was reported as a conflicting writer rather than as a
-hijacked destination. 0.3.1 closes all four.
+hijacked destination. 0.3.1 closes all four. 0.3.2 adds the manifest
+root (`MUST-T4-15`) and the external-rail bound on T12 (`MUST-T12-4`).
+It is prepared in this tree and is not a published npm release until
+the author says so.
 
 ## Changes from -02 {#changes-02}
 
-This revision has two subjects. The first is that -02 stated a rule in
-one place and left it unstated everywhere the same rule applied. The
-second is T12, which no reader reported and which is not about an
+This revision has two subjects. The first is that -02 stated a rule
+for signed objects and left the implementation and the verification
+algorithm without a counterpart for every object the rule applied to.
+The second is T12, which no reader reported and which is not about an
 adversary at all.
 
-`MUST-T10-8` requires a rail extract to be verified against a key the
-verifier obtained out of band, "not against a key the extract
-carries". That sentence was written for the extract and nothing
-carried it to the other signed objects in the profile. A Spend
-Receipt, an epoch checkpoint, a Decision Token and a transparency
-inclusion receipt were each left to be checked against the key
-travelling inside them, which is a question that answers itself. A
-verifier following -02 to the letter therefore accepts a receipt
-signed by any key at all, and a receipt like that silences the
-`settlement-without-receipt` finding for the settlement it names. The
-completeness property is then computed over evidence that answers to
-nobody. {{trust-roots}} states the rule for the rest of them, and the
-verification algorithm now applies it.
+-02 §6.2 already required a verifier to obtain the public key from an
+authenticated channel (a preconfigured issuer set, a directory, or a
+transparency statement) and to reject a message whose `kid` does not
+match that key (`MUST-T4-8`). That rule was general. What -02 did not
+carry was the verification algorithm that applies it to each signed
+object, the separate root inputs a verifier supplies out of band, and
+the error semantics that name a missing, unreadable, or mismatched
+pin. A companion implementation that followed the algorithm it had,
+rather than that prose, still checked a Spend Receipt, an epoch
+checkpoint, a Decision Token and a transparency inclusion receipt
+against the key travelling inside them. A receipt like that silences
+the `settlement-without-receipt` finding for the settlement it names.
+The completeness property is then computed over evidence that answers
+to nobody. {{trust-roots}} states the missing algorithm and the
+error semantics, and the verification algorithm now applies them.
 
 A reader raised the inclusion-receipt half of this against the posted
 -02 after checking the archived text against the implementation
@@ -1630,9 +1687,9 @@ verifier must accept one that does, so a rotation inside the audited
 window does not force it to choose between findings against honest
 receipts and abandoning the pin (`MUST-T4-12`). The same out-of-band rule reaches the payee
 countersignature (`MUST-T4-13`), the transparency witness
-(`MUST-T11-15` and `MUST-T11-16`), and the Decision Token, whose
+(`MUST-T11-15` and `MUST-T11-16`), the Decision Token, whose
 consumer issued it and therefore already holds the key to check it
-with (`MUST-T6-6`).
+with (`MUST-T6-6`), and a presented Trade Manifest (`MUST-T4-15`).
 
 Two requirements belong to neither subject. `MUST-T7-5` and
 `MUST-T7-6` come from measuring the protection a stored signing key
