@@ -123,7 +123,12 @@ describe("trust roots, third pass", () => {
         NOW,
       );
 
-    assert.equal(call().status, 200, "unpinned, today's behaviour is unchanged");
+    // Unpinned used to settle: the manifest verified against the key it carried
+    // and the receipt went out holding those terms. The payment path refuses it
+    // now, because a settlement is not the place to discover the doubt.
+    const unpinned = call();
+    assert.equal(unpinned.status, 402);
+    assert.equal(unpinned.reason, "manifest-unauthenticated");
     const pinned = call(merchant.publicKeyPem);
     assert.equal(pinned.status, 402);
     assert.equal(pinned.reason, "manifest-bad-sig");

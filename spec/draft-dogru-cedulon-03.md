@@ -724,6 +724,15 @@ reported as `manifest-key-mismatch` and MUST fail the audit. Falling
 back to the key the manifest carries is how a presented document
 becomes a bypass.
 
+The gate answers differently from the audit, and the difference is
+deliberate. A policy decision point presented with a Trade Manifest
+it cannot attribute MUST refuse the payment rather than settle and
+record the doubt (`MUST-T4-16`). An audit describes what it found
+and may say the result is conditional; a gate decides whether money
+moves, and a settled payment carrying the hash of terms nobody
+authorised cannot be withdrawn by reporting it afterwards. The
+receipt would record those terms as agreed.
+
 ## What the roots do not cover
 
 A verifier that supplies none of these roots is not making an error,
@@ -1288,6 +1297,7 @@ requirement text those citations refer to.
 | MUST-T4-12 | A verifier MUST accept an issuer root comprising more than one key, so that a key rotation inside the audited window does not require it to abandon pinning. |
 | MUST-T4-13 | A payee countersignature MUST NOT be treated as evidence of payee approval unless it verifies against a payee key the verifier obtained out of band. |
 | MUST-T4-14 | Where a verifier has pinned a key for a payee, a settled receipt naming that payee and carrying no countersignature MUST be reported, so that deleting the evidence does not delete the question. |
+| MUST-T4-16 | A policy decision point presented with a Trade Manifest it cannot verify against a key supplied out of band MUST refuse the payment. Settling and reporting the doubt afterwards is not available to it: the receipt carries the manifest hash as terms the named party agreed to. |
 | MUST-T4-15 | A verifier that is presented with a Trade Manifest MUST obtain the publisher public key out of band and MUST verify the manifest signature against that key, not against a key the manifest carries. A verifier without such a key that is presented with a Trade Manifest MUST report the completeness guarantee as conditional. An audit presented with no Trade Manifest is not made conditional by this requirement. |
 
 ## T5: Policy bypass via direct rail access
@@ -1605,7 +1615,7 @@ Experience:
   to make detectable.
 
 Note on distribution: the requirements added in this revision are in
-the published `@cedulon` packages at version 0.3.2, not only in the
+the published `@cedulon` packages at version 0.4.0, not only in the
 repository. A reader can check a claim against an installed package
 rather than against a working tree. That order is deliberate: -00
 described requirements that its published package did not yet carry,

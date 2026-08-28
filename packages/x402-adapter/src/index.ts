@@ -130,6 +130,15 @@ export function gatedSettle(
   }
 
   if (input.manifest) {
+    // A manifest verifies against the key it carries unless the caller supplies
+    // the one they hold for the party they believe they are dealing with, so
+    // without that key the check answers itself and the receipt goes on to
+    // carry the hash of terms nobody authorised. The audit path was given a
+    // manifest root for this; the payment path is where the money moves, so it
+    // refuses rather than settling and reporting the doubt afterwards.
+    if (input.manifestTrust === undefined) {
+      return deny402(input.req, "manifest-unauthenticated");
+    }
     if (!verifyManifest(input.manifest, input.manifestTrust)) {
       return deny402(input.req, "manifest-bad-sig");
     }

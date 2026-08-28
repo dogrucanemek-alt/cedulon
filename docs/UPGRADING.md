@@ -4,12 +4,30 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
-## 0.3.2: not a breaking change
+## 0.4.0: the payment path refuses an unattributable manifest
 
-The manifest root is **not** a breaking change. `audit()` grew two optional
+This one breaks. `gatedSettle` used to accept a presented Trade Manifest with no
+`manifestTrust`, verify it against the key the manifest itself carried, settle, and write
+that manifest's hash into the receipt. A payer could be handed terms signed by anyone and
+the receipt would record them as if the named party had agreed. It now answers `402` with
+`manifest-unauthenticated` when a manifest is presented and no key is supplied for it.
+
+**What to change:** if you pass `manifest` to `gatedSettle`, pass `manifestTrust` with it -
+the key you hold out of band for the party you believe you are dealing with. If you have no
+such key, do not present the manifest; a request with no manifest is unaffected and
+`unguardedSettle` is unchanged, being the demonstration hole it has always been.
+
+The audit path was given the same root one release earlier and reports the doubt rather
+than refusing, which is the right split: an audit describes what it found, a payment
+decides whether money moves. Reporting doubt after settling is not a report, it is a
+regret.
+
+## The manifest root in the audit path: not a breaking change
+
+The manifest root is **not** a breaking change in `audit()`. `audit()` grew two optional
 fields, `manifest` and `manifestTrust`. Callers that present no Trade Manifest
 see the same report they saw on 0.3.1. A no-manifest deployment is still
-silent. What 0.3.1 did in silence, and what 0.3.2 names, is the other case: a
+silent. What 0.3.1 did in silence, and what this names, is the other case: a
 manifest is presented and the verifier has no pin, or a pin it cannot read, or
 a pin the manifest does not answer to.
 

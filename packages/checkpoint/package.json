@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/checkpoint",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Epoch checkpoints and an in-process transparency log for Cedulon.",
   "license": "Apache-2.0",
   "type": "module",

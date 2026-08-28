@@ -55,6 +55,9 @@ export function runDispute(nowMs = 1_700_000_000_000): {
       },
       payer: "buyer",
       manifest,
+      // The buyer holds the seller's manifest key out of band; without it the
+      // gate refuses rather than settling against terms it cannot attribute.
+      manifestTrust: mkeys.publicKeyPem,
       paymentHeader: "mock",
     },
     { receiptPrivatePem: rkeys.privateKeyPem, receiptPublicPem: rkeys.publicKeyPem },

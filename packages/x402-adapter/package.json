@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/x402-adapter",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "HTTP 402 adapter and mock rail extract for Cedulon.",
   "license": "Apache-2.0",
   "type": "module",
