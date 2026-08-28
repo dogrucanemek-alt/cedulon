@@ -42,6 +42,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/x402-adapter": "^0.3.0"
+    "@cedulon/x402-adapter": "^0.4.0"
   }
 }

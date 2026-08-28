@@ -41,6 +41,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/cose": "^0.3.0"
+    "@cedulon/cose": "^0.4.0"
   }
 }
