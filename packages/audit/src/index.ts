@@ -482,15 +482,20 @@ function findTransparencyWitness(
 ): { findings: Finding[]; warnings: Finding[] } {
   const findings: Finding[] = [];
   const warnings: Finding[] = [];
-  // A log holds statements from everyone who uses it. Another issuer's epoch
-  // sitting in a shared log is not this issuer withholding one, so the same
-  // filter the equivocation pool applies has to apply here.
-  const valid = inclusionReceipts.filter(
-    (r) =>
-      inclusionFromPinnedLog(r, witnessKeyPem) &&
-      (!attestsIssuer || !r.checkpoint || attestsIssuer(r.checkpoint.publicKeyPem)),
-  );
-  const witnessHashes = new Set(valid.map((r) => r.statementHash));
+  // Two different questions, so two different sets.
+  //
+  // Anchoring only needs the hash: an entry that binds this checkpoint proves it
+  // was logged, whoever else can read the body.
+  const anchoring = inclusionReceipts.filter((r) => inclusionFromPinnedLog(r, witnessKeyPem));
+  const witnessHashes = new Set(anchoring.map((r) => r.statementHash));
+
+  // Accusing an issuer of withholding an epoch needs to know whose epoch it is.
+  // A log holds statements from everyone who uses it, and an entry with no body
+  // names nobody - stripping the body off a genuine entry is free, and it used
+  // to be enough to report an honest issuer for hiding something never theirs.
+  const accusing = attestsIssuer
+    ? anchoring.filter((r) => r.checkpoint && attestsIssuer(r.checkpoint.publicKeyPem))
+    : anchoring;
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
 
   for (const cp of checkpoints) {
@@ -505,7 +510,7 @@ function findTransparencyWitness(
     }
   }
 
-  for (const rec of valid) {
+  for (const rec of accusing) {
     if (!presentedHashes.has(rec.statementHash)) {
       findings.push({
         code: "checkpoint-withheld",

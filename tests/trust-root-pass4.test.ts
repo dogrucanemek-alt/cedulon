@@ -199,6 +199,46 @@ describe("trust roots, fourth pass", () => {
     );
   });
 
+  it("64 RED then GREEN: an inclusion receipt with no body cannot accuse anyone of withholding", () => {
+    // The issuer filter reached for `r.checkpoint`, and passed anything that did
+    // not carry one. Stripping the body off a genuine log entry is free, and the
+    // honest issuer was reported for hiding an epoch that was never theirs. A
+    // receipt that cannot say whose statement it binds cannot make that charge.
+    const honest = generateReceiptKeys();
+    const stranger = generateReceiptKeys();
+    const witness = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const good = receiptFor(honest, "ref-ok", "1", 0);
+    const extract = railWith(rail, [{ ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW }]);
+    const mine = checkpointFor(honest, [good], 1);
+    const theirs = checkpointFor(stranger, [good], 5);
+
+    const log = new MemoryTransparencyService(witness);
+    const mineInclusion = anchorCheckpoint(log, mine);
+    const { checkpoint: _stripped, ...bodyless } = anchorCheckpoint(log, theirs);
+
+    const report = audit({
+      receipts: [good],
+      checkpoints: [mine],
+      extract,
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      witnessTrust: { publicKeyPem: witness.publicKeyPem },
+      inclusionReceipts: [mineInclusion, bodyless],
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      "a body-less entry names no issuer, so it accuses no issuer",
+    );
+    // The anchoring evidence it does carry still counts: this checkpoint is
+    // anchored, and saying otherwise would be its own false report.
+    assert.equal(
+      report.warnings.some((w) => w.code === "checkpoint-not-anchored"),
+      false,
+    );
+  });
+
   it("60 RED then GREEN: state protection is measured on the file, not guessed from the platform", () => {
     // The claim was derived from process.platform, so on a mount that ignores
     // POSIX modes - a Windows drive seen from WSL - the server reported
