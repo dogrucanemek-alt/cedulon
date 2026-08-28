@@ -69,7 +69,7 @@ receipts=2
 findings=0
 guarantee=conditional
 warn	unauthenticated-extract	rail extract is unsigned; completeness guarantee is conditional
-warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them, so the completeness guarantee is conditional
+warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional
 ```
 
 The warnings are the point: a balance without a pinned extract and a pinned

@@ -54,7 +54,7 @@ receipts=2
 findings=0
 guarantee=conditional
 warn	unauthenticated-extract	rail extract is unsigned; completeness guarantee is conditional
-warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them, so the completeness guarantee is conditional
+warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional
 ```
 
 Read the warnings before you trust the first line. This demo passes no rail
@@ -228,13 +228,20 @@ falling back to accepting whatever the objects carry.
 Everything the pins reject is then left out of every inference that depends on
 who signed: totals, checkpoint head, receipt chain, window coverage, the
 countersignature questions, and redaction notices all read the attested set.
-What the receipts say about themselves is a separate question - a settled receipt
-naming no rail ref, or two receipts claiming one ref - and it is asked of the
-receipts this verifier accepts. Ask it of everything submitted and an attacker
-mints a receipt claiming a ref the honest issuer already used, and the duplicate
-lands on the honest set. Where there is no accepted set, because no issuer key
-was given or none of the ones given could be read, the submitted set is the only
-thing there is to be consistent about and its clashes are reported.
+What the receipts say about themselves splits into two questions with two
+different subjects. A defect keyed by the offending receipt - a settled receipt
+naming no rail ref - accuses nobody else, so it is reported whoever signed it,
+including a receipt the pins already rejected. A clash between two receipts is
+keyed by the rail ref they share, and that ref may be one the honest issuer
+legitimately used, so it is asked only of the receipts this verifier accepts.
+Ask it of everything submitted and an attacker mints a receipt claiming a ref the
+honest issuer already used, and the duplicate lands on the honest set.
+
+With no issuer key at all there is no accepted set: nothing distinguishes a
+receipt from the named issuer from any other, so every receipt submitted is
+weighed together and an added one does reach these checks. That is what
+`unauthenticated-issuer` means, and it is the reason the guarantee is
+conditional - not a gap that pinning cannot close.
 Otherwise one receipt from a key you already rejected writes "the checkpoint
 lied" against an honest issuer, which is an argument for switching the pin off.
 The same filter applies inside the witness: a shared transparency log holds
@@ -288,5 +295,19 @@ the findings for the result, and `guarantee` for how much the evidence carried.
 
 Two servers must not share one state path. Atomic writes stop a torn file, not a
 lost one: both would load the same state, both append, and the later rename wins
-while the other receipt disappears. A save over a state this session did not
-produce throws `cedulon-state-conflict` instead.
+while the other receipt disappears. Comparing the file against what this session
+last saw is not enough either, because two writers that both read before either
+wrote each see an unchanged file - measured over ten concurrent pairs, six lost a
+receipt with both sides reporting success. The compare and the write happen under
+an exclusive lock now: a second writer gets `cedulon-state-locked`, a stale lock
+whose holder is gone is taken over, and a state this session did not produce is
+still `cedulon-state-conflict`.
+
+`stateProtection` walks every directory on the path, not just the last one: a
+grandparent anyone can write lets the parent be renamed away with the key inside
+it. A directory that is open to others but sticky - a shared `/tmp` - is fine,
+which is exactly the case sticky exists for. Anything symlinked on that path is
+refused, at startup and again at every save, since a path checked once is a path
+that can be replaced afterwards. `absent` can appear beside a non-zero
+`receiptCount`: the ledger is in memory and the file is gone, which is worth
+telling apart from a file with no protection.

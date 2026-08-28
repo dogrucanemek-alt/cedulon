@@ -140,6 +140,24 @@ receipt claiming a rail ref the honest issuer already used, and the duplicate wa
 reported against the honest set. It is asked of the accepted receipts now, and of
 everything only when there is no accepted set to speak of.
 
+A fifth pass found the swing had moved rather than stopped. Scoping the
+self-consistency question to the accepted set silenced what a rejected receipt
+says about itself, so those two questions are now separated by what they accuse:
+a defect keyed by the offending receipt is always reported, a clash keyed by a
+shared rail ref only among receipts the verifier accepts. Requiring a body before
+a log entry may accuse anyone had silenced a real withholding as soon as the body
+was stripped, so an entry nobody can attribute is now a warning rather than
+nothing. And an unreadable issuer pin was cancelling the payee expectation it had
+nothing to do with.
+
+The state file got the rest of that pass. Comparing the file against what the
+session last saw does not survive two writers that both read first: ten
+concurrent pairs lost six receipts with both sides reporting success. The compare
+and the write are under an exclusive lock now. `stateProtection` walks the whole
+path rather than the immediate parent, since a grandparent anyone can write lets
+the parent be renamed away with the key in it, and symlinks are refused at every
+save rather than only at startup.
+
 Two platform facts are recorded rather than papered over. The state file mode is
 0600 where the filesystem honours it and has no effect on Windows or on mounts
 that ignore POSIX modes, so `stateProtection` is now read back off the file

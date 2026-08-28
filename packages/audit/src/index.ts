@@ -32,6 +32,7 @@ export const FINDING_CODES = [
   "unauthenticated-witness",
   "unauthenticated-countersigner",
   "countersign-missing",
+  "witness-entry-unattributable",
   "issuer-key-mismatch",
   "countersign-key-mismatch",
   "extract-key-mismatch",
@@ -183,10 +184,17 @@ function pushDuplicateRefs(
  * pin used to take both down with it, quietly simplifying the picture.
  */
 export function findReceiptSelfConsistency(receipts: SignedReceipt[]): Finding[] {
-  const findings: Finding[] = [];
-  const settled = receipts.filter(isSettled);
+  return [...findReceiptDefects(receipts), ...findReceiptRefClashes(receipts)];
+}
 
-  for (const r of settled) {
+/**
+ * Defects keyed by the offending receipt's own nonce. These accuse nobody else,
+ * so they are reported for every receipt submitted - a receipt the verifier
+ * rejected can still be malformed, and saying so costs the honest side nothing.
+ */
+export function findReceiptDefects(receipts: SignedReceipt[]): Finding[] {
+  const findings: Finding[] = [];
+  for (const r of receipts.filter(isSettled)) {
     if (receiptRef(r) === null) {
       findings.push({
         code: "settled-without-ref",
@@ -195,8 +203,18 @@ export function findReceiptSelfConsistency(receipts: SignedReceipt[]): Finding[]
       });
     }
   }
+  return findings;
+}
 
-  const withRef = settled
+/**
+ * A clash between two receipts, keyed by the rail ref they share. That ref may
+ * be one the honest issuer legitimately used, so this question is asked only of
+ * the receipts the verifier accepts.
+ */
+export function findReceiptRefClashes(receipts: SignedReceipt[]): Finding[] {
+  const findings: Finding[] = [];
+  const withRef = receipts
+    .filter(isSettled)
     .map((r) => ({ ref: receiptRef(r), id: r.claims.nonce, side: "receipt" as const }))
     .filter((x): x is typeof x & { ref: string } => x.ref !== null);
   pushDuplicateRefs(withRef, findings);
@@ -220,8 +238,8 @@ export function findSettlementMatches(
     settlement: s,
   }));
 
-  // Reported by findReceiptSelfConsistency, which runs over everything submitted;
-  // here the set is only needed to know which refs the aggregate walk covers.
+  // Reported by findReceiptRefClashes over the accepted set; here the set is
+  // only needed to know which refs the aggregate walk covers.
   const dupeReceipt = pushDuplicateRefs(receiptItems, []);
   const dupeSettlement = pushDuplicateRefs(settlementItems, findings);
   const skip = new Set<string>([...dupeReceipt, ...dupeSettlement]);
@@ -530,6 +548,20 @@ function findTransparencyWitness(
     }
   }
 
+  for (const rec of anchoring) {
+    if (rec.checkpoint || presentedHashes.has(rec.statementHash)) {
+      continue;
+    }
+    // Cannot name who logged it, so it is not an accusation - but a real
+    // withholding goes silent if stripping the body is enough to bury it.
+    warnings.push({
+      code: "witness-entry-unattributable",
+      id: rec.statementHash,
+      detail: `the witness holds statement ${rec.statementHash}, which this chain does not present and which carries no body to say whose it is`,
+      severity: "warn",
+    });
+  }
+
   for (const rec of accusing) {
     if (!presentedHashes.has(rec.statementHash)) {
       findings.push({
@@ -782,7 +814,7 @@ export function audit(input: AuditInput): AuditReport {
         code: "unauthenticated-issuer",
         id: "issuer",
         detail:
-          "no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them, so the completeness guarantee is conditional",
+          "no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional",
         severity: "warn",
       });
     }
@@ -861,7 +893,12 @@ export function audit(input: AuditInput): AuditReport {
   // set. Where there is no accepted set - no issuer key, or one nothing could be
   // read from - the submitted set is the only thing there is to be consistent
   // about, and its clashes are worth saying out loud.
-  findings.push(...findReceiptSelfConsistency(issuerPinUsable ? attested : input.receipts));
+  // Two questions with two different subjects. What a receipt says about itself
+  // is asked of everything submitted; what two receipts say about each other is
+  // asked of the set this verifier accepts, or of everything when there is no
+  // accepted set to speak of.
+  findings.push(...findReceiptDefects(input.receipts));
+  findings.push(...findReceiptRefClashes(issuerPinUsable ? attested : input.receipts));
   findings.push(...findSettlementMatches(inScope, reconciled));
   // Every check below reasons about what the issuer published. Walking the whole
   // submitted list instead means one receipt from a key the verifier already
@@ -871,7 +908,10 @@ export function audit(input: AuditInput): AuditReport {
     ? input.checkpoints.filter((cp) => attestsIssuer!(cp.publicKeyPem))
     : input.checkpoints;
   warnings.push(
-    ...findCountersignFindings({ receipts: attested, payeeTrust: input.payeeTrust }, findings),
+    ...findCountersignFindings(
+      { receipts: issuerPinUsable ? attested : input.receipts, payeeTrust: input.payeeTrust },
+      findings,
+    ),
   );
   const chain = findReceiptChainBreak(attested);
   if (chain) findings.push(chain);

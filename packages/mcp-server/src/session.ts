@@ -174,15 +174,7 @@ export class CedulonSession {
       // Read through on load, a symlink at this path lets whoever placed it
       // decide what this server starts up believing. Refusing the path is the
       // only answer that does not depend on write ordering.
-      try {
-        if (lstatSync(this.statePath).isSymbolicLink()) {
-          throw new Error("cedulon-state-symlink");
-        }
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
-          throw err;
-        }
-      }
+      this.assertNoSymlink();
       this.load();
       this.lastSeenState = this.readStateFingerprint();
     }
@@ -262,14 +254,113 @@ export class CedulonSession {
     if ((file.mode & 0o777) !== 0o600) {
       return "unprotected-on-this-platform";
     }
+    // Mode 0600 says who can open the file, and the parent says who can replace
+    // it - but a grandparent anyone can write lets the parent itself be renamed
+    // away, key and all, with a decoy left in its place. So walk up: every
+    // directory on the path has to be closed to others, or sticky, which is what
+    // makes a shared /tmp safe against exactly that rename.
+    let dir = dirname(this.statePath);
+    for (;;) {
+      let entry;
+      try {
+        entry = statSync(dir);
+      } catch {
+        return "unprotected-on-this-platform";
+      }
+      const openToOthers = (entry.mode & 0o022) !== 0;
+      const sticky = (entry.mode & 0o1000) !== 0;
+      if (openToOthers && !sticky) {
+        return "unprotected-on-this-platform";
+      }
+      const parent = dirname(dir);
+      if (parent === dir) {
+        return "owner-only";
+      }
+      dir = parent;
+    }
+  }
+
+  /**
+   * A path checked once at startup is a path an attacker can replace afterwards,
+   * and the directories were never checked at all. Anything symlinked on the way
+   * lets whoever placed the link choose where the private key lands.
+   */
+  private assertNoSymlink(): void {
+    if (!this.statePath) {
+      return;
+    }
+    const seen: string[] = [];
+    let node = this.statePath;
+    for (;;) {
+      seen.push(node);
+      const parent = dirname(node);
+      if (parent === node) {
+        break;
+      }
+      node = parent;
+    }
+    for (const path of seen) {
+      try {
+        if (lstatSync(path).isSymbolicLink()) {
+          throw new Error("cedulon-state-symlink");
+        }
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * Reading the fingerprint and then writing leaves a window: two servers that
+   * both read before either wrote each saw an unchanged file, and one receipt
+   * disappeared with both sides reporting success. An exclusive create is the
+   * cheapest thing that actually closes it. A lock whose holder is gone is taken
+   * over rather than obeyed forever.
+   */
+  private withStateLock<T>(run: () => T): T {
+    if (!this.statePath) {
+      return run();
+    }
+    const lockPath = `${this.statePath}.lock`;
+    const claim = () => writeFileSync(lockPath, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 0o600 });
     try {
-      // Mode 0600 says who can open the file. A directory anyone can write says
-      // who can replace it, which reaches the same private key by another route.
-      return (statSync(dirname(this.statePath)).mode & 0o077) === 0
-        ? "owner-only"
-        : "unprotected-on-this-platform";
+      claim();
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code !== "EEXIST") {
+        throw err;
+      }
+      if (!this.lockHolderIsGone(lockPath)) {
+        throw new Error("cedulon-state-locked");
+      }
+      rmSync(lockPath, { force: true });
+      claim();
+    }
+    try {
+      return run();
+    } finally {
+      rmSync(lockPath, { force: true });
+    }
+  }
+
+  private lockHolderIsGone(lockPath: string): boolean {
+    let pid: unknown;
+    try {
+      pid = JSON.parse(readFileSync(lockPath, "utf8")).pid;
     } catch {
-      return "unprotected-on-this-platform";
+      // A lock we cannot read says nothing about who holds it.
+      return true;
+    }
+    if (typeof pid !== "number" || pid === process.pid) {
+      return true;
+    }
+    try {
+      process.kill(pid, 0);
+      return false;
+    } catch (err) {
+      return (err as NodeJS.ErrnoException)?.code !== "EPERM";
     }
   }
 
@@ -430,15 +521,32 @@ export class CedulonSession {
     // temporary name in the same directory, then rename: on POSIX and on NTFS
     // the swap is atomic, so a reader sees the old file or the new one.
     const dir = dirname(this.statePath);
-    // Atomic writes stop a torn file; they do not stop a lost one. Two servers
-    // sharing a state path both load it, both append, and the later rename wins
-    // - the other one's receipt is simply gone. Refusing to write over a state
-    // this session did not produce turns a silent loss into a loud stop.
-    const current = this.readStateFingerprint();
-    if (current !== this.lastSeenState) {
-      throw new Error("cedulon-state-conflict");
-    }
     mkdirSync(dir, { recursive: true, mode: 0o700 });
+    this.assertNoSymlink();
+    this.writeLocked(dir, payload);
+  }
+
+  private writeLocked(dir: string, payload: Persisted): void {
+    if (!this.statePath) {
+      return;
+    }
+    this.withStateLock(() => {
+      // Atomic writes stop a torn file; they do not stop a lost one. Two servers
+      // sharing a state path both load it, both append, and the later rename
+      // wins - the other one's receipt is simply gone. Comparing under the lock
+      // turns that into a loud stop.
+      const current = this.readStateFingerprint();
+      if (current !== this.lastSeenState) {
+        throw new Error("cedulon-state-conflict");
+      }
+      this.writeState(dir, payload);
+    });
+  }
+
+  private writeState(dir: string, payload: Persisted): void {
+    if (!this.statePath) {
+      return;
+    }
     const tmp = join(dir, `.${basename(this.statePath)}.${process.pid}.tmp`);
     writeFileSync(tmp, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
     try {
