@@ -18,6 +18,12 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+This repository is at `0.3.0`, which is not published yet. It is a breaking
+release and `docs/UPGRADING.md` says what breaks and why; the short version is
+that a verifier which kept the old behaviour would keep reporting a clean audit
+over a forged receipt. Everything below describes what is on npm today, which is
+still the 0.2 line.
+
 Eight packages are published on npm, so the server runs without a clone:
 `npx -y @cedulon/mcp-server`. Seven are at `0.2.0`; `@cedulon/mcp-server` is at
 `0.2.4`. Those versions carry the requirements added in `-01`, including the
