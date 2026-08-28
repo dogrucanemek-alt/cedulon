@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { basename, dirname, join } from "node:path";
 import { audit, type Finding } from "@cedulon/audit";
@@ -153,6 +154,8 @@ export class CedulonSession {
   checkpoints: SignedCheckpoint[] = [];
   readonly payer: string;
   private readonly statePath: string | null;
+  /** Fingerprint of the state file as this session last saw it. */
+  private lastSeenState: string | null = null;
 
   constructor(opts?: { policy?: Policy; keys?: AdapterKeys; statePath?: string | null; payer?: string }) {
     this.payer = opts?.payer ?? envOr("CEDULON_PAYER", "payer-1");
@@ -165,6 +168,7 @@ export class CedulonSession {
     };
     if (this.statePath) {
       this.load();
+      this.lastSeenState = this.readStateFingerprint();
     }
   }
 
@@ -226,7 +230,17 @@ export class CedulonSession {
     if (!this.statePath) {
       return "in-memory";
     }
-    return process.platform === "win32" ? "unprotected-on-this-platform" : "owner-only";
+    try {
+      // Read back off the file rather than inferred from process.platform. A
+      // mount that ignores POSIX modes - a Windows drive seen from WSL, some
+      // network shares - accepts the call and leaves the file world-readable,
+      // and the claim would have been wrong in exactly the case that matters.
+      return (statSync(this.statePath).mode & 0o777) === 0o600
+        ? "owner-only"
+        : "unprotected-on-this-platform";
+    } catch {
+      return "unprotected-on-this-platform";
+    }
   }
 
   exportLedger(): LedgerExport {
@@ -274,20 +288,30 @@ export class CedulonSession {
     ok: boolean;
     receipt: boolean;
     countersignature: boolean | null;
-    checkedAgainstSuppliedKey: boolean;
+    issuerCheckedAgainstSuppliedKey: boolean;
+    payeeCheckedAgainstSuppliedKey: boolean | null;
   } {
     const signed = receiptFromArgs(args);
     const receiptOk = verifyReceipt(signed, args.expectIssuerKeyPem);
-    const checkedAgainstSuppliedKey = args.expectIssuerKeyPem !== undefined;
+    // Two questions, so two answers. One flag read as "nothing was checked"
+    // whenever either key was missing, including when the issuer had been.
+    const issuerCheckedAgainstSuppliedKey = args.expectIssuerKeyPem !== undefined;
     if (!signed.counterCoseHex) {
-      return { ok: receiptOk, receipt: receiptOk, countersignature: null, checkedAgainstSuppliedKey };
+      return {
+        ok: receiptOk,
+        receipt: receiptOk,
+        countersignature: null,
+        issuerCheckedAgainstSuppliedKey,
+        payeeCheckedAgainstSuppliedKey: null,
+      };
     }
     const counterOk = verifyCounterSignature(signed, args.expectPayeeKeyPem);
     return {
       ok: receiptOk && counterOk,
       receipt: receiptOk,
       countersignature: counterOk,
-      checkedAgainstSuppliedKey: checkedAgainstSuppliedKey && args.expectPayeeKeyPem !== undefined,
+      issuerCheckedAgainstSuppliedKey,
+      payeeCheckedAgainstSuppliedKey: args.expectPayeeKeyPem !== undefined,
     };
   }
 
@@ -376,6 +400,14 @@ export class CedulonSession {
     // temporary name in the same directory, then rename: on POSIX and on NTFS
     // the swap is atomic, so a reader sees the old file or the new one.
     const dir = dirname(this.statePath);
+    // Atomic writes stop a torn file; they do not stop a lost one. Two servers
+    // sharing a state path both load it, both append, and the later rename wins
+    // - the other one's receipt is simply gone. Refusing to write over a state
+    // this session did not produce turns a silent loss into a loud stop.
+    const current = this.readStateFingerprint();
+    if (current !== this.lastSeenState) {
+      throw new Error("cedulon-state-conflict");
+    }
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     const tmp = join(dir, `.${basename(this.statePath)}.${process.pid}.tmp`);
     writeFileSync(tmp, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
@@ -384,6 +416,19 @@ export class CedulonSession {
     } catch (err) {
       rmSync(tmp, { force: true });
       throw err;
+    }
+    this.lastSeenState = this.readStateFingerprint();
+  }
+
+  /** What the state file looked like the last time this session agreed with it. */
+  private readStateFingerprint(): string | null {
+    if (!this.statePath) {
+      return null;
+    }
+    try {
+      return createHash("sha256").update(readFileSync(this.statePath)).digest("hex");
+    } catch {
+      return null;
     }
   }
 }

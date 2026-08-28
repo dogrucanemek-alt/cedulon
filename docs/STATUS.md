@@ -116,9 +116,22 @@ list of keys so an honest rotation does not read as a wall of findings; and the
 policy engine now checks a decision token against the key it signs with rather
 than the key the token carries.
 
-One platform note, recorded rather than papered over: the state file mode is
-0600 on POSIX and has no effect on Windows, where the same call leaves 0666.
-On Windows the protection is the directory ACL, which this project does not set.
+A third pass, again from the same reader, found the same shape once more, and
+one of them inside the fix itself. An issuer pin nothing could be read from left
+every submitted receipt attested, so a forged receipt counted as coverage again
+and the report closed on "the pin is broken" while the naked settlement went
+unmentioned - a broken setting granting trust instead of withholding it. One
+mistyped key in a rotation list no longer discards the others. The
+countersignature and redaction checks, and the witness's withheld check, now read
+the attested set like everything else.
+
+Two platform facts are recorded rather than papered over. The state file mode is
+0600 where the filesystem honours it and has no effect on Windows or on mounts
+that ignore POSIX modes, so `stateProtection` is now read back off the file
+instead of inferred from `process.platform` - it said `owner-only` over a
+world-readable file on a Windows drive mounted in WSL. And two servers sharing a
+state path used to lose a receipt to whichever renamed last; a save over a state
+the session did not produce now fails loudly.
 
 The spec side of this is still open: `MUST-T10-8` has no counterpart for
 receipts, checkpoints, decision tokens or inclusion receipts. That belongs in a

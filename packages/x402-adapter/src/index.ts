@@ -197,6 +197,14 @@ function issue(
   if (!isValidNonce(input.req.nonce)) {
     return deny402(input.req, "nonce-too-short");
   }
+  // Recording a manifest hash is a claim that these terms were published by the
+  // party the receipt names. The gated path checks that; the unguarded path
+  // reached here directly and wrote the hash of terms nobody had looked at, into
+  // a receipt that is otherwise perfectly real. Being unguarded is about the
+  // policy gate, not about signatures.
+  if (input.manifest && !verifyManifest(input.manifest, input.manifestTrust)) {
+    return deny402(input.req, "manifest-bad-sig");
+  }
   const policyHash = engine
     ? sha256Hex(canonical(policyDocument(engine.policy)))
     : sha256Hex("no-policy");

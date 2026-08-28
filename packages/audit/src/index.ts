@@ -81,15 +81,24 @@ export type IssuerTrustPin = {
 export type PayeeTrustPins = Readonly<Record<string, string>>;
 
 /**
- * Reads a pin as SPKI DER. Returns null when nothing in it could be read as a
- * public key, which a caller has to tell apart from a key that simply differs.
+ * Reads a pin as SPKI DER, keeping the keys it could read and counting the ones
+ * it could not. One mistyped key in a rotation set must not throw away the
+ * others, and a set nothing could be read from must withhold trust rather than
+ * fall back to accepting everything.
  */
-function pinnedKeys(pin: string | readonly string[]): Buffer[] | null {
+function pinnedKeys(pin: string | readonly string[]): { usable: Buffer[]; unreadable: number } {
   const pems = typeof pin === "string" ? [pin] : pin;
-  const ders = pems.map(toSpkiDer);
-  return ders.some((der) => der === null) || ders.length === 0
-    ? null
-    : (ders as Buffer[]);
+  const usable: Buffer[] = [];
+  let unreadable = 0;
+  for (const pem of pems) {
+    const der = toSpkiDer(pem);
+    if (der === null) {
+      unreadable += 1;
+    } else {
+      usable.push(der);
+    }
+  }
+  return { usable, unreadable };
 }
 
 export type Finding = {
@@ -469,10 +478,18 @@ function findTransparencyWitness(
   checkpoints: SignedCheckpoint[],
   inclusionReceipts: InclusionReceipt[],
   witnessKeyPem?: string | readonly string[],
+  attestsIssuer?: ((pem: string) => boolean) | null,
 ): { findings: Finding[]; warnings: Finding[] } {
   const findings: Finding[] = [];
   const warnings: Finding[] = [];
-  const valid = inclusionReceipts.filter((r) => inclusionFromPinnedLog(r, witnessKeyPem));
+  // A log holds statements from everyone who uses it. Another issuer's epoch
+  // sitting in a shared log is not this issuer withholding one, so the same
+  // filter the equivocation pool applies has to apply here.
+  const valid = inclusionReceipts.filter(
+    (r) =>
+      inclusionFromPinnedLog(r, witnessKeyPem) &&
+      (!attestsIssuer || !r.checkpoint || attestsIssuer(r.checkpoint.publicKeyPem)),
+  );
   const witnessHashes = new Set(valid.map((r) => r.statementHash));
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
 
@@ -728,25 +745,40 @@ export function audit(input: AuditInput): AuditReport {
       });
     }
   } else {
-    const issuerDers = pinnedKeys(input.issuerTrust.publicKeyPem);
-    if (issuerDers === null) {
+    const { usable: issuerDers, unreadable } = pinnedKeys(input.issuerTrust.publicKeyPem);
+    if (unreadable > 0 || issuerDers.length === 0) {
       // The verifier's own configuration is broken. Calling this a mismatch would
       // blame the receipts for a key we could not read.
       findings.push({
         code: "trust-key-unreadable",
         id: "issuer",
-        detail: "the pinned issuer key could not be read as a public key; supply PEM or base64 SPKI",
+        detail:
+          issuerDers.length === 0
+            ? "no pinned issuer key could be read as a public key, so nothing is attested; supply PEM or base64 SPKI"
+            : `${unreadable} of the pinned issuer keys could not be read as a public key; the rest are still in use`,
       });
-    } else {
+    }
+    {
       const attests = (pem: string): boolean => {
+        if (issuerDers.length === 0) {
+          // Withholding trust, not handing it out: a pin nobody could read is
+          // the one case where falling back to "accept everything" turns a
+          // broken setting into a bypass.
+          return false;
+        }
         const der = toSpkiDer(pem);
         return der !== null && issuerDers.some((pinned) => pinned.equals(der));
       };
       attestsIssuer = attests;
+      // Naming a mismatch when the pin itself could not be read would blame the
+      // receipts for the verifier's own broken setting - and every receipt at
+      // once. `trust-key-unreadable` above already says what went wrong; nothing
+      // is attested, so the settlements come back uncovered on their own.
+      const namesMismatches = issuerDers.length > 0;
       // Reported and then set aside: a receipt from another key is evidence about
       // that key, not coverage of the settlement it names. Leaving it in the
       // reconciliation is exactly how a forged receipt silences a naked row.
-      for (const r of input.receipts) {
+      for (const r of namesMismatches ? input.receipts : []) {
         if (!attests(r.publicKeyPem)) {
           findings.push({
             code: "issuer-key-mismatch",
@@ -755,7 +787,7 @@ export function audit(input: AuditInput): AuditReport {
           });
         }
       }
-      for (const cp of input.checkpoints) {
+      for (const cp of namesMismatches ? input.checkpoints : []) {
         if (!attests(cp.publicKeyPem)) {
           findings.push({
             code: "issuer-key-mismatch",
@@ -781,7 +813,6 @@ export function audit(input: AuditInput): AuditReport {
     : attested;
 
   findings.push(...findSettlementMatches(inScope, reconciled));
-  warnings.push(...findCountersignFindings(input, findings));
   // Every check below reasons about what the issuer published. Walking the whole
   // submitted list instead means one receipt from a key the verifier already
   // rejected writes "the checkpoint lied" and "the chain is broken" against an
@@ -789,6 +820,9 @@ export function audit(input: AuditInput): AuditReport {
   const attestedCheckpoints = attestsIssuer
     ? input.checkpoints.filter((cp) => attestsIssuer!(cp.publicKeyPem))
     : input.checkpoints;
+  warnings.push(
+    ...findCountersignFindings({ receipts: attested, payeeTrust: input.payeeTrust }, findings),
+  );
   const chain = findReceiptChainBreak(attested);
   if (chain) findings.push(chain);
   findings.push(...findCheckpointTotalMismatches(attested, attestedCheckpoints));
@@ -815,6 +849,7 @@ export function audit(input: AuditInput): AuditReport {
         attestedCheckpoints,
         input.inclusionReceipts,
         (input.witnessTrust as IssuerTrustPin).publicKeyPem,
+        attestsIssuer,
       );
       findings.push(...witness.findings);
       warnings.push(...witness.warnings);
@@ -832,7 +867,7 @@ export function audit(input: AuditInput): AuditReport {
   // A signed redaction is honest but unverifiable: say so, and drop the claim to
   // conditional. Only a checkpoint that verifies gets to make this claim — an
   // unverifiable one has already been reported above.
-  for (const cp of input.checkpoints) {
+  for (const cp of attestedCheckpoints) {
     if (cp.claims.totals === null && verifyCheckpoint(cp)) {
       warnings.push({
         code: "checkpoint-totals-redacted",

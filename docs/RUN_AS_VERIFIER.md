@@ -219,7 +219,20 @@ that reads as payee approval; the report warns with
 `issuerTrust.publicKeyPem` takes a list as well as a single key. An issuer that
 rotated its key mid-window otherwise produces a wall of findings against honest
 receipts, and the way out an operator reaches for is to stop pinning - so state
-the keys you accept instead.
+the keys you accept instead. One unreadable key in that list does not discard
+the rest: it is reported as `trust-key-unreadable` while the readable keys stay
+in use. A list nothing can be read from attests nothing at all, so every
+settlement comes back uncovered - a broken setting withholds trust rather than
+falling back to accepting whatever the objects carry.
+
+Everything the pins reject is then left out of every inference, not just the
+matching: totals, checkpoint head, receipt chain, window coverage, the
+countersignature questions, and redaction notices all read the attested set.
+Otherwise one receipt from a key you already rejected writes "the checkpoint
+lied" against an honest issuer, which is an argument for switching the pin off.
+The same filter applies inside the witness: a shared transparency log holds
+statements from everyone using it, and another issuer's epoch sitting there is
+not yours being withheld.
 
 The same argument applies to the receipts. Without `issuerTrust` every receipt
 and checkpoint is checked against the key it carries, so an attacker who mints
@@ -241,8 +254,14 @@ means the weaker question was asked.
 The MCP server exposes the same choice: `cedulon_verify_receipt` takes
 `expectIssuerKeyPem` and `expectPayeeKeyPem`, and reports
 `checkedAgainstSuppliedKey` so a caller cannot mistake the weaker answer for the
-stronger one. `cedulon_status` reports `stateProtection`: `owner-only` where the
-OS enforces the file mode, `unprotected-on-this-platform` on Windows, where the
-same call succeeds and protects nothing because the access control there is the
-directory ACL and this server does not set it, and `in-memory` when no state
-path is configured.
+stronger one. `cedulon_status` reports `stateProtection`, read back off the file rather than
+inferred from the platform: `owner-only` when the file really carries mode 0600,
+`unprotected-on-this-platform` otherwise - Windows, where the call succeeds and
+the access control is the directory ACL this server does not set, and any mount
+that ignores POSIX modes, such as a Windows drive seen from WSL - and
+`in-memory` when no state path is configured.
+
+Two servers must not share one state path. Atomic writes stop a torn file, not a
+lost one: both would load the same state, both append, and the later rename wins
+while the other receipt disappears. A save over a state this session did not
+produce throws `cedulon-state-conflict` instead.
