@@ -121,6 +121,42 @@ describe("trust roots, fifth pass", () => {
     }
   });
 
+  it("71 RED then GREEN: a foreign receipt cannot write the honest set's own defects", () => {
+    // Running the self-consistency checks over everything submitted fixed one
+    // hole and reopened another: an attacker mints a receipt claiming a rail ref
+    // the honest issuer already used, and `duplicate-ref` lands on the honest
+    // set. Self-consistency is a question about the receipts the verifier
+    // accepts - when there is no notion of acceptance, it is about all of them.
+    const honest = generateReceiptKeys();
+    const attacker = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const good = receiptFor(honest, "ref-ok", "1", 0);
+    const shadow = receiptFor(attacker, "ref-ok", "1", 7);
+    const extract = railWith(rail, [{ ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW }]);
+    const base = {
+      checkpoints: [checkpointFor(honest, [good])],
+      extract,
+      trust: railPin(rail),
+    };
+
+    const pinned = audit({
+      ...base,
+      receipts: [good, shadow],
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.ok(pinned.findings.some((f) => f.code === "issuer-key-mismatch"));
+    assert.equal(
+      pinned.findings.some((f) => f.code === "duplicate-ref"),
+      false,
+      "a receipt the verifier rejected is not one of the honest issuer's duplicates",
+    );
+
+    // With no issuer key there is no accepted set, so the submitted one is the
+    // only thing to be consistent about, and the clash is worth reporting.
+    const unpinned = audit({ ...base, receipts: [good, shadow] });
+    assert.ok(unpinned.findings.some((f) => f.code === "duplicate-ref"));
+  });
+
   it("66 RED then GREEN: without an issuer key a witness proves anchoring but accuses nobody", () => {
     // The accusing filter only ran when an issuer key was configured. With a
     // pinned log and no issuer pin, an entry copied out of an honest log with

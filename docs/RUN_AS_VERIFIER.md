@@ -228,9 +228,13 @@ falling back to accepting whatever the objects carry.
 Everything the pins reject is then left out of every inference that depends on
 who signed: totals, checkpoint head, receipt chain, window coverage, the
 countersignature questions, and redaction notices all read the attested set.
-What the receipts say about themselves is separate and always reported - a
-settled receipt naming no rail ref, or two receipts claiming one ref, are facts
-about the submitted set, so an unreadable pin does not take them down with it.
+What the receipts say about themselves is a separate question - a settled receipt
+naming no rail ref, or two receipts claiming one ref - and it is asked of the
+receipts this verifier accepts. Ask it of everything submitted and an attacker
+mints a receipt claiming a ref the honest issuer already used, and the duplicate
+lands on the honest set. Where there is no accepted set, because no issuer key
+was given or none of the ones given could be read, the submitted set is the only
+thing there is to be consistent about and its clashes are reported.
 Otherwise one receipt from a key you already rejected writes "the checkpoint
 lied" against an honest issuer, which is an argument for switching the pin off.
 The same filter applies inside the witness: a shared transparency log holds

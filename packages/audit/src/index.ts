@@ -771,6 +771,8 @@ export function audit(input: AuditInput): AuditReport {
   // Null while no issuer key was stated: there is no attested/unattested split
   // to make, and every check falls back to the whole submitted list.
   let attestsIssuer: ((pem: string) => boolean) | null = null;
+  // True only when a pin was supplied and at least one key in it could be read.
+  let issuerPinUsable = false;
   if (!input.issuerTrust) {
     // Only worth saying when the audit actually leans on an issued object. An
     // audit with no receipts and no checkpoints rests on the extract alone, and
@@ -810,6 +812,7 @@ export function audit(input: AuditInput): AuditReport {
         return der !== null && issuerDers.some((pinned) => pinned.equals(der));
       };
       attestsIssuer = attests;
+      issuerPinUsable = issuerDers.length > 0;
       // Naming a mismatch when the pin itself could not be read would blame the
       // receipts for the verifier's own broken setting - and every receipt at
       // once. `trust-key-unreadable` above already says what went wrong; nothing
@@ -852,7 +855,13 @@ export function audit(input: AuditInput): AuditReport {
       )
     : attested;
 
-  findings.push(...findReceiptSelfConsistency(input.receipts));
+  // Self-consistency is a question about the receipts this verifier accepts. Run
+  // it over everything submitted and an attacker mints a receipt claiming a rail
+  // ref the honest issuer already used, and the duplicate lands on the honest
+  // set. Where there is no accepted set - no issuer key, or one nothing could be
+  // read from - the submitted set is the only thing there is to be consistent
+  // about, and its clashes are worth saying out loud.
+  findings.push(...findReceiptSelfConsistency(issuerPinUsable ? attested : input.receipts));
   findings.push(...findSettlementMatches(inScope, reconciled));
   // Every check below reasons about what the issuer published. Walking the whole
   // submitted list instead means one receipt from a key the verifier already

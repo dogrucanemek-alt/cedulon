@@ -134,6 +134,12 @@ And naming a payee key created an expectation that deleting the countersignature
 silently cancelled, so an attacker could remove their own failed forgery and the
 report went back to unconditional.
 
+That fix in turn re-opened the door it had just closed, one layer down: asking
+the self-consistency question of everything submitted let an attacker mint a
+receipt claiming a rail ref the honest issuer already used, and the duplicate was
+reported against the honest set. It is asked of the accepted receipts now, and of
+everything only when there is no accepted set to speak of.
+
 Two platform facts are recorded rather than papered over. The state file mode is
 0600 where the filesystem honours it and has no effect on Windows or on mounts
 that ignore POSIX modes, so `stateProtection` is now read back off the file
