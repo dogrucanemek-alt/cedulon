@@ -26,26 +26,26 @@ Abstract
    extract.  That result is unconditional only when the verifier pins
    the rail key out of band and states the period under audit; otherwise
    the document requires it to be reported as conditional.  Checkpoints
-   carry the suppression guarantee, so this revision profiles the
+   carry the suppression guarantee, so the document profiles the
    checkpoint as a Signed Statement, gives the verification algorithm a
    step that consumes the transparency receipts returned for
    checkpoints, names what a witness holding a checkpoint the presented
    chain omits reports, brings equivocation within reach by comparing
    recorded copies against the presented chain, and states how
    checkpoint totals may be withheld without withholding the fact that
-   they were.  It also defines a Dispute Evidence Bundle (evidence, not
-   an award) and optional SCITT anchoring.  Cedulon is not a competitor
-   to x402 or AP2; it sits above them.
+   they were.  This revision states the trust roots the earlier ones
+   left implicit: no signed object may be verified against a key it
+   carries itself, and a presented Trade Manifest must be bound both to
+   the receipts that name it and to the terms those receipts claim.  It
+   also names a threat no adversary causes, a settlement recorded on a
+   rail with no receipt behind it.  It also defines a Dispute Evidence
+   Bundle (evidence, not an award) and optional SCITT anchoring.
+   Cedulon is not a competitor to x402 or AP2; it sits above them.
 
 Status of This Memo
 
    This Internet-Draft is submitted in full conformance with the
    provisions of BCP 78 and BCP 79.
-
-   Internet-Drafts are working documents of the Internet Engineering
-   Task Force (IETF).  Note that other groups may also distribute
-   working documents as Internet-Drafts.  The list of current Internet-
-   Drafts is at https://datatracker.ietf.org/drafts/current/.
 
 
 
@@ -57,6 +57,11 @@ Dogru                     Expires 1 March 2027                  [Page 1]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
 
    Internet-Drafts are draft documents valid for a maximum of six months
    and may be updated, replaced, or obsoleted by other documents at any
@@ -78,7 +83,7 @@ Copyright Notice
 
 Table of Contents
 
-   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   4
    2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   4
    3.  Architecture  . . . . . . . . . . . . . . . . . . . . . . . .   5
      3.1.  Policy Decision Point . . . . . . . . . . . . . . . . . .   6
@@ -101,11 +106,6 @@ Table of Contents
      9.2.  The payee root  . . . . . . . . . . . . . . . . . . . . .  16
      9.3.  The witness root  . . . . . . . . . . . . . . . . . . . .  17
      9.4.  The decision root . . . . . . . . . . . . . . . . . . . .  17
-     9.5.  The manifest root . . . . . . . . . . . . . . . . . . . .  17
-     9.6.  What the roots do not cover . . . . . . . . . . . . . . .  19
-   10. Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  19
-     10.1.  Checkpoint claims  . . . . . . . . . . . . . . . . . . .  19
-     10.2.  Genesis and continuity . . . . . . . . . . . . . . . . .  20
 
 
 
@@ -114,6 +114,11 @@ Dogru                     Expires 1 March 2027                  [Page 2]
 Internet-Draft                   Cedulon                     August 2026
 
 
+     9.5.  The manifest root . . . . . . . . . . . . . . . . . . . .  17
+     9.6.  What the roots do not cover . . . . . . . . . . . . . . .  19
+   10. Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  19
+     10.1.  Checkpoint claims  . . . . . . . . . . . . . . . . . . .  19
+     10.2.  Genesis and continuity . . . . . . . . . . . . . . . . .  20
      10.3.  The transparency witness . . . . . . . . . . . . . . . .  21
      10.4.  Verification algorithm . . . . . . . . . . . . . . . . .  22
      10.5.  Finding codes  . . . . . . . . . . . . . . . . . . . . .  26
@@ -152,12 +157,7 @@ Internet-Draft                   Cedulon                     August 2026
    Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  62
    Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  62
 
-1.  Introduction
 
-   _Note to Readers:_ This document is submitted as Informational.  The
-   author's eventual intended track, if the work is taken up, is a
-   Standards Track profile of COSE [RFC9052] and CWT [RFC8392] for
-   agent-spend receipts.  This -03 does not claim IETF consensus.
 
 
 
@@ -169,6 +169,13 @@ Dogru                     Expires 1 March 2027                  [Page 3]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+1.  Introduction
+
+   _Note to Readers:_ This document is submitted as Informational.  The
+   author's eventual intended track, if the work is taken up, is a
+   Standards Track profile of COSE [RFC9052] and CWT [RFC8392] for
+   agent-spend receipts.  This -03 does not claim IETF consensus.
 
    Agents can now pay.  Open HTTP 402 protocols [X402] attach stablecoin
    settlement to ordinary requests.  Card networks and processors issue
@@ -212,19 +219,19 @@ Internet-Draft                   Cedulon                     August 2026
    BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
    capitals, as shown here.
 
-   The following terms are used:
-
-   Trade Manifest:  A signed statement produced *before* payment.  It
-      binds a description of goods or service, price, currency,
-      acceptance-criteria hash, cancel condition, expiry, and an
-      optional AP2 mandate reference.
-
 
 
 Dogru                     Expires 1 March 2027                  [Page 4]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   The following terms are used:
+
+   Trade Manifest:  A signed statement produced *before* payment.  It
+      binds a description of goods or service, price, currency,
+      acceptance-criteria hash, cancel condition, expiry, and an
+      optional AP2 mandate reference.
 
    Policy Decision Point (PDP):  The function that evaluates a
       structured spend request against stored policy.  The default is
@@ -266,13 +273,6 @@ Internet-Draft                   Cedulon                     August 2026
 
    The payer agent never talks to the rail except through an adapter
    that calls the PDP first (MUST-T5-1).
-
-
-
-
-
-
-
 
 
 

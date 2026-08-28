@@ -142,14 +142,19 @@ shows that no settlement on the extract lacks a receipt and no settled
 receipt is absent from the extract. That result is unconditional only
 when the verifier pins the rail key out of band and states the period
 under audit; otherwise the document requires it to be reported as
-conditional. Checkpoints carry the suppression guarantee, so this
-revision profiles the checkpoint as a Signed Statement, gives the
+conditional. Checkpoints carry the suppression guarantee, so the
+document profiles the checkpoint as a Signed Statement, gives the
 verification algorithm a step that consumes the transparency receipts
 returned for checkpoints, names what a witness holding a checkpoint the
 presented chain omits reports, brings equivocation within reach by
 comparing recorded copies against the presented chain, and states how
 checkpoint totals may be withheld without withholding the fact that
-they were. It also defines a Dispute Evidence Bundle (evidence, not an
+they were. This revision states the trust roots the earlier ones left
+implicit: no signed object may be verified against a key it carries
+itself, and a presented Trade Manifest must be bound both to the
+receipts that name it and to the terms those receipts claim. It also
+names a threat no adversary causes, a settlement recorded on a rail
+with no receipt behind it. It also defines a Dispute Evidence Bundle (evidence, not an
 award) and optional SCITT anchoring. Cedulon is not a competitor to
 x402 or AP2; it sits above them.
 
