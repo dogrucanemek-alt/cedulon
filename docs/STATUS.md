@@ -18,20 +18,20 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-This repository is at `0.3.0`, which is not published yet. It is a breaking
-release and `docs/UPGRADING.md` says what breaks and why; the short version is
-that a verifier which kept the old behaviour would keep reporting a clean audit
-over a forged receipt. Everything below describes what is on npm today, which is
-still the 0.2 line.
+Eight packages are published on npm at `0.3.0`, so the server runs without a
+clone: `npx -y @cedulon/mcp-server`. It is a breaking release and
+`docs/UPGRADING.md` says what breaks and why; the short version is that a
+verifier which kept the old behaviour would keep reporting a clean audit over a
+forged receipt.
 
-Eight packages are published on npm, so the server runs without a clone:
-`npx -y @cedulon/mcp-server`. Seven are at `0.2.0`; `@cedulon/mcp-server` is at
-`0.2.4`. Those versions carry the requirements added in `-01`, including the
-pinned-key comparison and the window checks; `0.1.0` predates them. The
-requirements `-02` adds — the transparency witness, the withheld and
-not-anchored conditions, and signed totals redaction — are in this repository
-but not yet in any published package, so check a claim against the repository
-rather than an installed version.
+Checked from npm rather than from this tree: a clean install of
+`@cedulon/mcp-server@0.3.0` answers `initialize` reporting `0.3.0`, and the
+installed `@cedulon/audit` carries the finding codes this round added -
+`issuer-key-mismatch`, `countersign-key-mismatch`, `countersign-missing`,
+`witness-entry-unattributable` and the three `unauthenticated-*` warnings.
+`padNonce` is gone from the installed `@cedulon/receipts`, and `verifyReceipt`
+and `verifyInclusionReceipt` take the key to check against. `0.2.x` predates all
+of it and `0.1.0` predates `-01` as well.
 
 Every tool the server exposes carries a title and the hint that applies to it:
 four read-only, and `cedulon_spend`, which appends a receipt and is therefore
@@ -47,9 +47,8 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.2.4 bundle was built and unpacked, and the server inside
-it answered `initialize`, reported `0.2.4`, and listed five tools with their
-annotations intact. The builder installs the published version rather than the
+desktop install. The 0.3.0 bundle was built and unpacked: its manifest states
+`0.3.0` and the server inside it installs `@cedulon/mcp-server@^0.3.0`. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
