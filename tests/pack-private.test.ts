@@ -24,12 +24,15 @@ function packFiles(name: string): string[] {
     encoding: "utf8",
     shell: process.platform === "win32",
   });
-  const start = raw.indexOf("{");
-  const parsed = JSON.parse(raw.slice(start)) as Record<
-    string,
-    { files?: Array<{ path: string }> }
-  >;
-  const entry = parsed[`@cedulon/${name}`] ?? Object.values(parsed)[0];
+  // npm 10.9 returns an array here where earlier versions returned an object
+  // keyed by package name. Reading only one shape made the check depend on the
+  // npm that happened to be installed.
+  type PackEntry = { name?: string; files?: Array<{ path: string }> };
+  const start = raw.search(/[[{]/);
+  const parsed = JSON.parse(raw.slice(start)) as PackEntry[] | Record<string, PackEntry>;
+  const entry = Array.isArray(parsed)
+    ? (parsed.find((p) => p.name === `@cedulon/${name}`) ?? parsed[0])
+    : (parsed[`@cedulon/${name}`] ?? Object.values(parsed)[0]);
   return (entry?.files ?? []).map((f) => f.path.replace(/\\/g, "/"));
 }
 

@@ -205,8 +205,17 @@ export class CedulonSession {
     let locked: SpendOutcome | null = null;
     try {
       locked = this.withStateLock(() => {
-        if (this.statePath && this.readStateFingerprint() !== this.lastSeenState) {
-          return { ok: false, reason: "state-conflict" };
+        if (this.statePath) {
+          // The path is checked before the fingerprint, not after. A fingerprint
+          // taken through a replaced path answers a question about the
+          // attacker's file, and the mismatch it produces is reported as
+          // state-conflict - which an operator reads as another writer rather
+          // than as a stolen destination. Checking the path first means a
+          // hijacked one is named as what it is.
+          this.assertNoSymlink();
+          if (this.readStateFingerprint() !== this.lastSeenState) {
+            return { ok: false, reason: "state-conflict" };
+          }
         }
         // Everything from here is undone together if the record cannot be
         // written. A settlement the caller was told failed must not survive in
@@ -227,6 +236,9 @@ export class CedulonSession {
       const message = (err as Error)?.message ?? "";
       if (message.startsWith("cedulon-state-locked")) {
         return { ok: false, reason: `state-locked:${message.split(":")[1] ?? "unknown"}` };
+      }
+      if (message === "cedulon-state-lock-io") {
+        return { ok: false, reason: "state-io" };
       }
       throw err;
     }
@@ -452,7 +464,12 @@ export class CedulonSession {
       claim();
     } catch (err) {
       if ((err as NodeJS.ErrnoException)?.code !== "EEXIST") {
-        throw err;
+        // The lock sits beside the state file, so a directory that cannot be
+        // written refuses the lock before it ever refuses the record. That is
+        // the same failure as a write that cannot complete, and the caller has
+        // to hear it as a refused payment rather than as a crash: the mapping
+        // to state-io lives inside the lock and is unreachable from here.
+        throw new Error("cedulon-state-lock-io", { cause: err });
       }
       if (!this.lockHolderIsGone(lockPath)) {
         throw new Error(`cedulon-state-locked:${this.lockHolderPid(lockPath) ?? "unknown"}`);

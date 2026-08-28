@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -239,8 +239,7 @@ describe("trust roots, sixth pass", () => {
     // The attacker replaces the file with a link after the session started.
     const elsewhere = join(plain, "elsewhere.json");
     writeFileSync(elsewhere, "{}\n", { mode: 0o600 });
-    const fs = require("node:fs") as typeof import("node:fs");
-    fs.rmSync(statePath);
+    rmSync(statePath);
     symlinkSync(elsewhere, statePath);
     assert.throws(
       () => session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n1".padEnd(16, "-") }, 2),
