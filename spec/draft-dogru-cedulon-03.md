@@ -630,8 +630,9 @@ nothing is attested and the verifier MUST NOT fall back to accepting
 the keys the objects carry (`MUST-T4-11`). Falling back is how a
 mistyped configuration becomes a bypass.
 
-An issuer root MAY be a set of keys rather than a single key
-(`MUST-T4-12`). An issuer that rotates its key mid-window otherwise
+A verifier MUST accept an issuer root that is a set of keys rather
+than a single key (`MUST-T4-12`). An issuer that rotates its key
+mid-window otherwise
 produces a finding against every honest receipt signed by the
 retired key, and the reachable way out of that is to stop pinning,
 which is the opposite of what the pin is for.
@@ -1242,7 +1243,7 @@ requirement text those citations refer to.
 | MUST-T4-9 | A verifier MUST obtain the issuer public key out of band and MUST verify Spend Receipt and epoch checkpoint signatures against that key, not against a key the object carries. A verifier without such a key that is presented with any issued object MUST report the completeness guarantee as conditional. An audit presented with none rests on the extract alone and is not made conditional by this requirement. |
 | MUST-T4-10 | A receipt that does not verify against the pinned issuer key MUST NOT count as coverage for the settlement it names, and that settlement MUST still be reported as uncovered. Reporting the mismatch is not sufficient on its own. |
 | MUST-T4-11 | Pinned issuer keys MUST be compared by SubjectPublicKeyInfo DER encoding. A pinned key that cannot be decoded MUST be reported as a verifier configuration fault rather than as a mismatch, and where no pinned key decodes, the verifier MUST NOT fall back to the keys the objects carry. |
-| MUST-T4-12 | An issuer root MAY be a set of keys, so that a key rotation inside the audited window does not require the verifier to abandon pinning. |
+| MUST-T4-12 | A verifier MUST accept an issuer root comprising more than one key, so that a key rotation inside the audited window does not require it to abandon pinning. |
 | MUST-T4-13 | A payee countersignature MUST NOT be treated as evidence of payee approval unless it verifies against a payee key the verifier obtained out of band. |
 | MUST-T4-14 | Where a verifier has pinned a key for a payee, a settled receipt naming that payee and carrying no countersignature MUST be reported, so that deleting the evidence does not delete the question. |
 
@@ -1605,10 +1606,10 @@ otherwise.
 The same first subject carries five requirements this section has not
 named so far, all of them stated in {{trust-roots}}. A pinned key that
 cannot be decoded MUST NOT fall back to the keys the objects carry
-(`MUST-T4-11`). An issuer root MAY be a set of keys, so a rotation
-inside the audited window does not force the verifier to choose between
-findings against honest receipts and abandoning the pin
-(`MUST-T4-12`). The same out-of-band rule reaches the payee
+(`MUST-T4-11`). An issuer root may comprise more than one key, and a
+verifier must accept one that does, so a rotation inside the audited
+window does not force it to choose between findings against honest
+receipts and abandoning the pin (`MUST-T4-12`). The same out-of-band rule reaches the payee
 countersignature (`MUST-T4-13`), the transparency witness
 (`MUST-T11-15` and `MUST-T11-16`), and the Decision Token, whose
 consumer issued it and therefore already holds the key to check it
@@ -1625,11 +1626,13 @@ reported protection it did not have.
 Two things are stated here that -02 got right and this revision keeps
 unchanged: the extract rule itself, and the treatment of a pinned key
 the verifier cannot decode. What changed is their reach, and the
-change is not backward compatible. An audit that -02 would have
-reported as unconditional, where the verifier pinned the rail key and
-supplied no issuer key, is reported as conditional under this
-revision. Nothing about the evidence changed; what changed is that the
-guarantee now says which questions were never asked.
+change is not backward compatible. Where a verifier pinned the rail
+key, supplied no issuer key, and was presented with receipts or
+checkpoints, -02 reported the guarantee as unconditional and this
+revision reports it as conditional. Nothing about the evidence
+changed; what changed is that the guarantee now says which questions
+were never asked. An audit presented with neither is unaffected, for
+the reason given in {{issuer-root}}.
 
 ## Changes from -01 {#changes}
 

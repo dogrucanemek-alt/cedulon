@@ -140,12 +140,12 @@ Internet-Draft                   Cedulon                     August 2026
      17.1.  Changes from -02 . . . . . . . . . . . . . . . . . . . .  48
      17.2.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  50
    18. Evolution and Future Work (Informative) . . . . . . . . . . .  51
-     18.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  52
+     18.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  51
      18.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  52
      18.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  52
    19. Informative Notes on Adjacent Protocols . . . . . . . . . . .  52
-   20. References  . . . . . . . . . . . . . . . . . . . . . . . . .  53
-     20.1.  Normative References . . . . . . . . . . . . . . . . . .  53
+   20. References  . . . . . . . . . . . . . . . . . . . . . . . . .  52
+     20.1.  Normative References . . . . . . . . . . . . . . . . . .  52
      20.2.  Informative References . . . . . . . . . . . . . . . . .  54
    Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  55
    Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  56
@@ -859,11 +859,11 @@ Internet-Draft                   Cedulon                     August 2026
    the objects carry (MUST-T4-11).  Falling back is how a mistyped
    configuration becomes a bypass.
 
-   An issuer root MAY be a set of keys rather than a single key (MUST-
-   T4-12).  An issuer that rotates its key mid-window otherwise produces
-   a finding against every honest receipt signed by the retired key, and
-   the reachable way out of that is to stop pinning, which is the
-   opposite of what the pin is for.
+   A verifier MUST accept an issuer root that is a set of keys rather
+   than a single key (MUST-T4-12).  An issuer that rotates its key mid-
+   window otherwise produces a finding against every honest receipt
+   signed by the retired key, and the reachable way out of that is to
+   stop pinning, which is the opposite of what the pin is for.
 
 9.2.  The payee root
 
@@ -1892,12 +1892,12 @@ Internet-Draft                   Cedulon                     August 2026
     |             | verifier MUST NOT fall back to the keys the      |
     |             | objects carry.                                   |
     +-------------+--------------------------------------------------+
-    | MUST-T4-12  | An issuer root MAY be a set of keys, so that a   |
-    |             | key rotation inside the audited window does not  |
-    |             | require the verifier to abandon pinning.         |
+    | MUST-T4-12  | A verifier MUST accept an issuer root comprising |
+    |             | more than one key, so that a key rotation inside |
+    |             | the audited window does not require it to        |
+    |             | abandon pinning.                                 |
     +-------------+--------------------------------------------------+
     | MUST-T4-13  | A payee countersignature MUST NOT be treated as  |
-    |             | evidence of payee approval unless it verifies    |
 
 
 
@@ -1906,6 +1906,7 @@ Dogru                     Expires 1 March 2027                 [Page 34]
 Internet-Draft                   Cedulon                     August 2026
 
 
+    |             | evidence of payee approval unless it verifies    |
     |             | against a payee key the verifier obtained out of |
     |             | band.                                            |
     +-------------+--------------------------------------------------+
@@ -1953,7 +1954,6 @@ Internet-Draft                   Cedulon                     August 2026
    +-------------+-----------------------------------------------------+
    | MUST-T6-2   | An allow decision MUST be consumed on the           |
    |             | first settlement attempt, success or fail-          |
-   |             | closed abort, and MUST NOT authorize a              |
 
 
 
@@ -1962,6 +1962,7 @@ Dogru                     Expires 1 March 2027                 [Page 35]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   |             | closed abort, and MUST NOT authorize a              |
    |             | later different request.                            |
    +-------------+-----------------------------------------------------+
    | SHOULD-T6-3 | Implementations SHOULD treat a decision             |
@@ -2009,7 +2010,6 @@ Internet-Draft                   Cedulon                     August 2026
       | MUST-T7-5   | An implementation that stores a signing key   |
       |             | in the clear MUST report the protection it    |
       |             | actually obtained, measured from the stored   |
-      |             | object rather than derived from the platform. |
 
 
 
@@ -2018,6 +2018,7 @@ Dogru                     Expires 1 March 2027                 [Page 36]
 Internet-Draft                   Cedulon                     August 2026
 
 
+      |             | object rather than derived from the platform. |
       |             | A mount that ignores filesystem permissions   |
       |             | accepts the call and protects nothing.        |
       +-------------+-----------------------------------------------+
@@ -2065,7 +2066,6 @@ Internet-Draft                   Cedulon                     August 2026
     |                 | a third-party role interface; this project   |
     |                 | MUST NOT implement custody.                  |
     +-----------------+----------------------------------------------+
-    | MUST-T8-custody | Implementations of this specification MUST   |
 
 
 
@@ -2074,6 +2074,7 @@ Dogru                     Expires 1 March 2027                 [Page 37]
 Internet-Draft                   Cedulon                     August 2026
 
 
+    | MUST-T8-custody | Implementations of this specification MUST   |
     |                 | NOT take custody of funds or operate escrow. |
     +-----------------+----------------------------------------------+
     | MUST-T8-8       | If a payee countersignature is present, a    |
@@ -2098,7 +2099,6 @@ Internet-Draft                   Cedulon                     August 2026
 15.10.  T9: PII leakage into the transparency log
 
    See also Section 14.
-
 
 
 
@@ -2715,13 +2715,14 @@ Internet-Draft                   Cedulon                     August 2026
    The same first subject carries five requirements this section has not
    named so far, all of them stated in Section 9.  A pinned key that
    cannot be decoded MUST NOT fall back to the keys the objects carry
-   (MUST-T4-11).  An issuer root MAY be a set of keys, so a rotation
-   inside the audited window does not force the verifier to choose
-   between findings against honest receipts and abandoning the pin
-   (MUST-T4-12).  The same out-of-band rule reaches the payee
-   countersignature (MUST-T4-13), the transparency witness (MUST-T11-15
-   and MUST-T11-16), and the Decision Token, whose consumer issued it
-   and therefore already holds the key to check it with (MUST-T6-6).
+   (MUST-T4-11).  An issuer root may comprise more than one key, and a
+   verifier must accept one that does, so a rotation inside the audited
+   window does not force it to choose between findings against honest
+   receipts and abandoning the pin (MUST-T4-12).  The same out-of-band
+   rule reaches the payee countersignature (MUST-T4-13), the
+   transparency witness (MUST-T11-15 and MUST-T11-16), and the Decision
+   Token, whose consumer issued it and therefore already holds the key
+   to check it with (MUST-T6-6).
 
    Two requirements belong to neither subject.  MUST-T7-5 and MUST-T7-6
    come from measuring the protection a stored signing key actually has
@@ -2731,13 +2732,12 @@ Internet-Draft                   Cedulon                     August 2026
    file permission moot.  They are stated because the implementation
    reported protection it did not have.
 
-
-
-
-
-
-
-
+   Two things are stated here that -02 got right and this revision keeps
+   unchanged: the extract rule itself, and the treatment of a pinned key
+   the verifier cannot decode.  What changed is their reach, and the
+   change is not backward compatible.  Where a verifier pinned the rail
+   key, supplied no issuer key, and was presented with receipts or
+   checkpoints, -02 reported the guarantee as unconditional and this
 
 
 
@@ -2746,14 +2746,10 @@ Dogru                     Expires 1 March 2027                 [Page 49]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   Two things are stated here that -02 got right and this revision keeps
-   unchanged: the extract rule itself, and the treatment of a pinned key
-   the verifier cannot decode.  What changed is their reach, and the
-   change is not backward compatible.  An audit that -02 would have
-   reported as unconditional, where the verifier pinned the rail key and
-   supplied no issuer key, is reported as conditional under this
-   revision.  Nothing about the evidence changed; what changed is that
-   the guarantee now says which questions were never asked.
+   revision reports it as conditional.  Nothing about the evidence
+   changed; what changed is that the guarantee now says which questions
+   were never asked.  An audit presented with neither is unaffected, for
+   the reason given in Section 9.1.
 
 17.2.  Changes from -01
 
@@ -2787,10 +2783,14 @@ Internet-Draft                   Cedulon                     August 2026
    Two decisions inside those repairs are worth stating on their own,
    because a reader might reasonably have expected the other choice.
 
-
-
-
-
+   *  A recorded checkpoint the presented chain omits gets its own
+      identifier, checkpoint-withheld, rather than being folded into
+      window-coverage (MUST-T11-11).  The reporter asked which way it
+      should go.  Coverage says the record shown is incomplete; a
+      withheld checkpoint says the party under audit is holding a record
+      it did not show.  An operator who sees one identifier for both
+      cannot tell an incomplete record from a concealed one, which is
+      the distinction the whole threat is about.
 
 
 
@@ -2801,15 +2801,6 @@ Dogru                     Expires 1 March 2027                 [Page 50]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   *  A recorded checkpoint the presented chain omits gets its own
-      identifier, checkpoint-withheld, rather than being folded into
-      window-coverage (MUST-T11-11).  The reporter asked which way it
-      should go.  Coverage says the record shown is incomplete; a
-      withheld checkpoint says the party under audit is holding a record
-      it did not show.  An operator who sees one identifier for both
-      cannot tell an incomplete record from a concealed one, which is
-      the distinction the whole threat is about.
 
    *  A checkpoint with no receipt in a supplied witness is a warning
       rather than a failure.  A witness may be configured after
@@ -2845,7 +2836,16 @@ Internet-Draft                   Cedulon                     August 2026
    threat-model MUST lines for them belong in later revisions (-03 or
    later), written with the same discipline as this -02.
 
+18.1.  Re-attestation profile
 
+   Algorithms retire.  A Spend Receipt or checkpoint signed under
+   Ed25519 today may need a later verifier that no longer accepts -19.
+   A companion seed [REATTEST] sketches re-attestation: register the
+   original COSE bytes as a SCITT Signed Statement and have a current
+   algorithm countersign or receipt them.  The principle is that
+   structures outlive ciphers.  The first concrete example is the
+   profile's own move from generic EdDSA (-8) to Ed25519 (-19) in
+   [RFC9864].
 
 
 
@@ -2857,17 +2857,6 @@ Dogru                     Expires 1 March 2027                 [Page 51]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-18.1.  Re-attestation profile
-
-   Algorithms retire.  A Spend Receipt or checkpoint signed under
-   Ed25519 today may need a later verifier that no longer accepts -19.
-   A companion seed [REATTEST] sketches re-attestation: register the
-   original COSE bytes as a SCITT Signed Statement and have a current
-   algorithm countersign or receipt them.  The principle is that
-   structures outlive ciphers.  The first concrete example is the
-   profile's own move from generic EdDSA (-8) to Ed25519 (-19) in
-   [RFC9864].
 
 18.2.  Streaming reconciliation
 
@@ -2907,13 +2896,6 @@ Internet-Draft                   Cedulon                     August 2026
    time compliance decision; it does not define rail-extract
    completeness.
 
-
-
-Dogru                     Expires 1 March 2027                 [Page 52]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
 20.  References
 
 20.1.  Normative References
@@ -2922,6 +2904,15 @@ Internet-Draft                   Cedulon                     August 2026
               Requirement Levels", BCP 14, RFC 2119,
               DOI 10.17487/RFC2119, March 1997,
               <https://www.rfc-editor.org/rfc/rfc2119>.
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 52]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
               (SHA and SHA-based HMAC and HKDF)", RFC 6234,
@@ -2960,16 +2951,6 @@ Internet-Draft                   Cedulon                     August 2026
               Initial Algorithms", RFC 9053, DOI 10.17487/RFC9053,
               August 2022, <https://www.rfc-editor.org/rfc/rfc9053>.
 
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 53]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
               JSON Object Signing and Encryption (JOSE) and CBOR Object
               Signing and Encryption (COSE)", RFC 9864,
@@ -2980,6 +2961,14 @@ Internet-Draft                   Cedulon                     August 2026
               Fournet, "CBOR Object Signing and Encryption (COSE)
               Receipts", RFC 9942, DOI 10.17487/RFC9942, June 2026,
               <https://www.rfc-editor.org/rfc/rfc9942>.
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 53]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    [RFC9943]  Birkholz, H., Delignat-Lavaud, A., Fournet, C., Deshpande,
               Y., and S. Lasker, "An Architecture for Trustworthy and
@@ -3018,14 +3007,6 @@ Internet-Draft                   Cedulon                     August 2026
    [PACIOLI]  Pacioli, L., "Summa de arithmetica, geometria, proportioni
               et proportionalita", 1494.
 
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 54]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    [REATTEST] Dogru, E. C., "Cedulon Re-Attestation: Carrying Spend
               Evidence Across Algorithm Retirement", August 2026,
               <https://github.com/dogrucanemek-
@@ -3036,6 +3017,14 @@ Internet-Draft                   Cedulon                     August 2026
               Code: The Implementation Status Section", BCP 205,
               RFC 7942, DOI 10.17487/RFC7942, July 2016,
               <https://www.rfc-editor.org/rfc/rfc7942>.
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 54]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    [RFC9110]  Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
               Ed., "HTTP Semantics", STD 97, RFC 9110,
@@ -3074,14 +3063,6 @@ Acknowledgments
    decided the shape of that repair, namely whether a recorded
    checkpoint absent from the chain deserves its own identifier or
    belongs under window coverage.  Iman Schrock confirmed the finding
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 55]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    independently and drew its boundary, keeping it separate from the
    extract-binding work already closed in -01.
 
@@ -3090,6 +3071,16 @@ Internet-Draft                   Cedulon                     August 2026
    and report an absent or mismatched pin explicitly.  It should, and
    the same question turned out to be unanswered for three further
    objects.
+
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 55]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    Iman Schrock and Pablo Play ran the -00 implementation against the
    pinned commit and reported the defects that produced -01.  Iman
@@ -3128,6 +3119,15 @@ Appendix A.  Test Vectors
 
    Receipt COSE_Sign1:
 
+   Claims: payer=payer-1, payee=payee-1, amount=1, currency=USD,
+   policyHash=aa, manifestHash=null, noManifest=true,
+   x402PaymentRef=null, timestampMs=1700000000000,
+   nonce=n100000000000000, prevReceiptHash=null, outcome=aborted.
+
+   COSE_Sign1 hex (whitespace ignored; identical to the locked test):
+
+
+
 
 
 
@@ -3137,13 +3137,6 @@ Dogru                     Expires 1 March 2027                 [Page 56]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   Claims: payer=payer-1, payee=payee-1, amount=1, currency=USD,
-   policyHash=aa, manifestHash=null, noManifest=true,
-   x402PaymentRef=null, timestampMs=1700000000000,
-   nonce=n100000000000000, prevReceiptHash=null, outcome=aborted.
-
-   COSE_Sign1 hex (whitespace ignored; identical to the locked test):
 
    845830a301320378206170706c69636174696f6e2f636564756c6f6e2d
    726563656970742b63626f72044806e3fd8fda29bb60a0587cac3a0001
@@ -3176,6 +3169,13 @@ Author's Address
    Emek Can Dogru
    VERAX TEKNOLOJI LIMITED SIRKETI
    Email: e.dogru@cedulon.com
+
+
+
+
+
+
+
 
 
 
