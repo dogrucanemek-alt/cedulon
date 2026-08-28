@@ -855,8 +855,21 @@ export function audit(input: AuditInput): AuditReport {
       // Reported and then set aside: a receipt from another key is evidence about
       // that key, not coverage of the settlement it names. Leaving it in the
       // reconciliation is exactly how a forged receipt silences a naked row.
-      for (const r of namesMismatches ? input.receipts : []) {
-        if (!attests(r.publicKeyPem)) {
+      // Receipts are free to mint, so a report that lists one finding per rejected
+      // receipt can be buried under volume by anyone. Named individually while
+      // there are few enough to act on, counted once past that.
+      const rejected = namesMismatches
+        ? input.receipts.filter((r) => !attests(r.publicKeyPem))
+        : [];
+      const NAMED_LIMIT = 10;
+      if (rejected.length > NAMED_LIMIT) {
+        findings.push({
+          code: "issuer-key-mismatch",
+          id: "receipts",
+          detail: `${rejected.length} receipts are signed by a key other than the pinned issuer key, so none of them is coverage for any settlement; first is nonce=${rejected[0].claims.nonce}`,
+        });
+      } else {
+        for (const r of rejected) {
           findings.push({
             code: "issuer-key-mismatch",
             id: r.claims.nonce,
@@ -900,7 +913,17 @@ export function audit(input: AuditInput): AuditReport {
   // asked of the set this verifier accepts, or of everything when there is no
   // accepted set to speak of.
   findings.push(...findReceiptDefects(input.receipts));
-  findings.push(...findReceiptRefClashes(issuerPinUsable ? attested : input.receipts));
+  // With an issuer key a clash is between receipts the verifier accepts, so it
+  // is a failure. Without one nothing distinguishes a submitted receipt from any
+  // other, so the same clash cannot be pinned on anyone - said out loud, but not
+  // as a verdict against a set the verifier cannot vouch for.
+  for (const clash of findReceiptRefClashes(issuerPinUsable ? attested : input.receipts)) {
+    if (issuerPinUsable) {
+      findings.push(clash);
+    } else {
+      warnings.push({ ...clash, severity: "warn" });
+    }
+  }
   findings.push(...findSettlementMatches(inScope, reconciled));
   // Every check below reasons about what the issuer published. Walking the whole
   // submitted list instead means one receipt from a key the verifier already

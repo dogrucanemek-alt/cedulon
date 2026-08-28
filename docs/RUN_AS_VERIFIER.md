@@ -303,6 +303,25 @@ an exclusive lock now: a second writer gets `cedulon-state-locked`, a stale lock
 whose holder is gone is taken over, and a state this session did not produce is
 still `cedulon-state-conflict`.
 
+The settle and the save happen under one lock, and the whole of it is undone
+together if the record cannot be written: no receipt kept in memory, no row left
+on the rail ledger, and nothing carried out to disk by the next payment that
+succeeds. The nonce and the payment slot are given back too, so a payer is not
+charged a slot for a payment that never happened. A spend that cannot be recorded
+is refused - `state-io` when the write failed, `state-conflict` when another
+writer moved the file, `state-locked:<pid>` when someone else holds the lock, and
+the pid is there because an operator cannot act on a lock without knowing whose
+it is.
+
+A conflict used to be permanent. `reload()` takes the file as it now stands and
+returns the nonces this session was holding that the file does not have, so a
+recovery cannot lose a receipt quietly.
+
+`cedulon_audit` takes `trust`, `issuerTrust`, `witnessTrust` and `payeeTrust`.
+Without them the tool was auditing this server's records against this server's
+own key, so every answer it could give was conditional and no caller could change
+that.
+
 The settle and the save happen under one lock, and the write is proven possible
 before any money moves. The other order - settle, append, save - leaves the rail
 holding a settlement whose receipt exists only in memory when the save fails;

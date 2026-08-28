@@ -22,3 +22,8 @@ spec/.refcache/
 
 # kramdown-rfc HTML render (not the submitted artifact)
 spec/*.html
+
+# Throwaway probes from adversarial review rounds. They measure one thing and
+# are deleted once the finding becomes a real test; twice now they have been
+# swept into a commit by `git add tests`.
+tests/_probe_*

@@ -72,6 +72,18 @@ export class RailLedger {
     return this.rows.map((r) => ({ ...r }));
   }
 
+  /**
+   * Put the ledger back to a set of rows. A caller that has to undo a settlement
+   * it could not record needs this: a row left behind is a settlement with no
+   * receipt, which is the condition the whole protocol exists to rule out.
+   */
+  restore(rows: RailSettlement[]): void {
+    this.rows.length = 0;
+    for (const row of rows) {
+      this.rows.push({ ...row });
+    }
+  }
+
   signedExtract(
     privateKeyPem: string,
     publicKeyPem: string,

@@ -48,6 +48,22 @@ const TOOLS = [
       type: "object",
       additionalProperties: false,
       properties: {
+        trust: {
+          type: "object",
+          description: "Rail key you hold out of band: { publicKeyPem, accountId?, railId?, windowStartMs?, windowEndMs? }",
+        },
+        issuerTrust: {
+          type: "object",
+          description: "Issuer key(s) you hold out of band: { publicKeyPem: string | string[] }. Without it the audit checks this server's records against this server's own key.",
+        },
+        witnessTrust: {
+          type: "object",
+          description: "Transparency log key you hold out of band: { publicKeyPem: string | string[] }",
+        },
+        payeeTrust: {
+          type: "object",
+          description: "Payee keys you hold out of band, keyed by payee: { \"payee-1\": publicKeyPem }",
+        },
         extraSettlements: {
           type: "array",
           description: "Optional extra extract rows, used to inject a bypass settlement in tests",
@@ -162,7 +178,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return textResult(outcome, !outcome.ok);
       }
       case "cedulon_audit": {
-        const report = session.audit({ extraSettlements: asExtraSettlements(args.extraSettlements) });
+        const report = session.audit({
+          extraSettlements: asExtraSettlements(args.extraSettlements),
+          trust: args.trust as never,
+          issuerTrust: args.issuerTrust as never,
+          witnessTrust: args.witnessTrust as never,
+          payeeTrust: args.payeeTrust as never,
+        });
         return textResult({
           ok: report.ok,
           summary: report.summary,

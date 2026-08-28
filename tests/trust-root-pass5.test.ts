@@ -113,12 +113,16 @@ describe("trust roots, fifth pass", () => {
 
     const broken = audit({ ...base, issuerTrust: { publicKeyPem: "not-a-key" } });
     assert.ok(broken.findings.some((f) => f.code === "trust-key-unreadable"));
-    for (const code of ["duplicate-ref", "settled-without-ref"] as const) {
-      assert.ok(
-        broken.findings.some((f) => f.code === code),
-        `${code} is about the submitted set, not about who signed it`,
-      );
-    }
+    assert.ok(
+      broken.findings.some((f) => f.code === "settled-without-ref"),
+      "a defect keyed by the offending receipt is still a failure",
+    );
+    // A clash is between two receipts, and with nothing readable to tell them
+    // apart it cannot be pinned on either - said out loud, not as a verdict.
+    assert.ok(
+      broken.warnings.some((w) => w.code === "duplicate-ref"),
+      "the clash is reported as a warning instead",
+    );
   });
 
   it("71 RED then GREEN: a foreign receipt cannot write the honest set's own defects", () => {
@@ -154,7 +158,10 @@ describe("trust roots, fifth pass", () => {
     // With no issuer key there is no accepted set, so the submitted one is the
     // only thing to be consistent about, and the clash is worth reporting.
     const unpinned = audit({ ...base, receipts: [good, shadow] });
-    assert.ok(unpinned.findings.some((f) => f.code === "duplicate-ref"));
+    assert.ok(
+      unpinned.warnings.some((w) => w.code === "duplicate-ref"),
+      "reported, but not as a verdict against a set the verifier cannot vouch for",
+    );
   });
 
   it("66 RED then GREEN: without an issuer key a witness proves anchoring but accuses nobody", () => {

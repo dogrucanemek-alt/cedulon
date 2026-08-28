@@ -166,6 +166,14 @@ this project exists to make impossible, produced by the server itself. Settling
 and saving now happen under one lock, and a spend whose record cannot be written
 is refused before any money moves.
 
+Holding the settle and the save under one lock was not enough on its own: an I/O
+failure still left the payment complete in memory with the disk unchanged, and
+the next successful save wrote out a payment the caller had been told failed. The
+operation is now undone as a unit - receipt, ledger row, nonce and payment slot -
+and refused with a reason the operator can act on. `reload()` ends the
+wedged-after-conflict state. `cedulon_audit` takes the trust roots, without which
+it was checking this server's records against this server's own key.
+
 Two platform facts are recorded rather than papered over. The state file mode is
 0600 where the filesystem honours it and has no effect on Windows or on mounts
 that ignore POSIX modes, so `stateProtection` is now read back off the file

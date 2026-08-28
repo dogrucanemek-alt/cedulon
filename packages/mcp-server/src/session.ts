@@ -1,8 +1,14 @@
-import { lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { basename, dirname, join } from "node:path";
-import { audit, type Finding } from "@cedulon/audit";
+import {
+  audit,
+  type Finding,
+  type IssuerTrustPin,
+  type PayeeTrustPins,
+  type RailTrustPin,
+} from "@cedulon/audit";
 import {
   buildCheckpointClaims,
   checkpointHash,
@@ -38,6 +44,15 @@ export type SpendOutcome = SpendOk | SpendDeny;
 
 export type AuditArgs = {
   extraSettlements?: RailSettlement[];
+  /**
+   * Trust roots the caller holds out of band. Without them the audit is checking
+   * this server's records against this server's own key, which is a question
+   * that answers itself - so every answer it could give was conditional.
+   */
+  trust?: RailTrustPin;
+  issuerTrust?: IssuerTrustPin;
+  witnessTrust?: IssuerTrustPin;
+  payeeTrust?: PayeeTrustPins;
 };
 
 /**
@@ -187,12 +202,78 @@ export class CedulonSession {
     // settlement with no receipt - the one condition this project exists to make
     // impossible. So the whole thing happens under the lock, and the write is
     // proven possible before any money moves.
-    return this.withStateLock(() => {
-      if (this.statePath && this.readStateFingerprint() !== this.lastSeenState) {
-        return { ok: false, reason: "state-conflict" };
+    let locked: SpendOutcome | null = null;
+    try {
+      locked = this.withStateLock(() => {
+        if (this.statePath && this.readStateFingerprint() !== this.lastSeenState) {
+          return { ok: false, reason: "state-conflict" };
+        }
+        // Everything from here is undone together if the record cannot be
+        // written. A settlement the caller was told failed must not survive in
+        // memory, must not reach the ledger, and must not be carried out to disk
+        // by the next payment that succeeds.
+        const undo = this.snapshot();
+        try {
+          return this.settleAndRecord(args, nowMs);
+        } catch (err) {
+          this.restore(undo);
+          if ((err as Error)?.message === "cedulon-state-symlink") {
+            throw err;
+          }
+          return { ok: false, reason: "state-io" };
+        }
+      });
+    } catch (err) {
+      const message = (err as Error)?.message ?? "";
+      if (message.startsWith("cedulon-state-locked")) {
+        return { ok: false, reason: `state-locked:${message.split(":")[1] ?? "unknown"}` };
       }
-      return this.settleAndRecord(args, nowMs);
-    });
+      throw err;
+    }
+    return locked;
+  }
+
+  /**
+   * Discard what this session was holding and take the file as it now stands.
+   * A conflict is otherwise permanent - the session keeps a view the disk no
+   * longer matches and refuses every write, with no way back short of restarting
+   * the process. Returns the nonces this session was holding that the file does
+   * not have, so nothing disappears silently.
+   */
+  reload(): { dropped: string[] } {
+    const held = this.receipts.map((r) => r.claims.nonce);
+    this.receipts.length = 0;
+    this.checkpoints = [];
+    this.ledger.restore([]);
+    this.engine.store.reset();
+    this.load();
+    this.lastSeenState = this.readStateFingerprint();
+    const now = new Set(this.receipts.map((r) => r.claims.nonce));
+    return { dropped: held.filter((nonce) => !now.has(nonce)) };
+  }
+
+  private snapshot() {
+    return {
+      receipts: [...this.receipts],
+      settlements: this.ledger.extract(),
+      checkpoints: this.checkpoints,
+      usedNonces: new Set(this.engine.store.usedNonces),
+      consumedDecisions: new Set(this.engine.store.consumedDecisions),
+      counters: { ...this.engine.store.counters },
+      nextDecision: (this.engine as unknown as { nextDecision: number }).nextDecision,
+    };
+  }
+
+  private restore(snap: ReturnType<CedulonSession["snapshot"]>): void {
+    this.receipts.splice(0, this.receipts.length, ...snap.receipts);
+    this.ledger.restore(snap.settlements);
+    this.checkpoints = snap.checkpoints;
+    this.engine.store.usedNonces.clear();
+    for (const n of snap.usedNonces) this.engine.store.usedNonces.add(n);
+    this.engine.store.consumedDecisions.clear();
+    for (const d of snap.consumedDecisions) this.engine.store.consumedDecisions.add(d);
+    this.engine.store.counters = { ...snap.counters };
+    (this.engine as unknown as { nextDecision: number }).nextDecision = snap.nextDecision;
   }
 
   private settleAndRecord(args: SpendArgs, nowMs: number): SpendOutcome {
@@ -231,6 +312,10 @@ export class CedulonSession {
       receipts: this.receipts,
       checkpoints: this.checkpoints,
       settlements,
+      trust: args.trust,
+      issuerTrust: args.issuerTrust,
+      witnessTrust: args.witnessTrust,
+      payeeTrust: args.payeeTrust,
     });
   }
 
@@ -350,6 +435,18 @@ export class CedulonSession {
     // state file has ever been written, so its directory has to exist first.
     mkdirSync(dirname(this.statePath), { recursive: true, mode: 0o700 });
     const lockPath = `${this.statePath}.lock`;
+    // The lock path decides where a file gets created just as the state path
+    // does, so it is guarded the same way.
+    try {
+      if (lstatSync(lockPath).isSymbolicLink()) {
+        throw new Error("cedulon-state-symlink");
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+        throw err;
+      }
+    }
+    this.sweepStaleTemp();
     const claim = () => writeFileSync(lockPath, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 0o600 });
     try {
       claim();
@@ -358,7 +455,7 @@ export class CedulonSession {
         throw err;
       }
       if (!this.lockHolderIsGone(lockPath)) {
-        throw new Error("cedulon-state-locked");
+        throw new Error(`cedulon-state-locked:${this.lockHolderPid(lockPath) ?? "unknown"}`);
       }
       rmSync(lockPath, { force: true });
       claim();
@@ -369,6 +466,53 @@ export class CedulonSession {
     } finally {
       this.lockDepth -= 1;
       rmSync(lockPath, { force: true });
+    }
+  }
+
+  private lockHolderPid(lockPath: string): number | null {
+    try {
+      const pid = JSON.parse(readFileSync(lockPath, "utf8")).pid;
+      return typeof pid === "number" ? pid : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A temp file from a write that never finished still holds the signing key in
+   * the clear. The writer that left it is gone; nothing else is going to clean
+   * it up.
+   */
+  private sweepStaleTemp(): void {
+    if (!this.statePath) {
+      return;
+    }
+    const dir = dirname(this.statePath);
+    const prefix = `.${basename(this.statePath)}.`;
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.startsWith(prefix) || !entry.endsWith(".tmp")) {
+        continue;
+      }
+      const pid = Number(entry.slice(prefix.length, -".tmp".length));
+      if (Number.isFinite(pid) && pid !== process.pid && !this.pidIsGone(pid)) {
+        continue;
+      }
+      rmSync(join(dir, entry), { force: true });
+    }
+  }
+
+  private pidIsGone(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return false;
+    } catch (err) {
+      return (err as NodeJS.ErrnoException)?.code !== "EPERM";
     }
   }
 

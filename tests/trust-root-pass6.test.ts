@@ -264,11 +264,13 @@ describe("trust roots, sixth pass", () => {
     // real, live pid that is not ours - a lock left by this very process is
     // treated as our own leftover and taken back, which is a different case.
     writeFileSync(`${statePath}.lock`, JSON.stringify({ pid: process.ppid }), { flag: "wx" });
-    assert.throws(
-      () => session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n1".padEnd(16, "-") }, 2),
-      /cedulon-state-locked/,
-      "writing under another holder's lock is how the receipt went missing",
+    // Refused rather than thrown, and it names the holder - see case 84.
+    const refused = session.spend(
+      { amount: "1", currency: "USD", payee: "payee-1", nonce: "n1".padEnd(16, "-") },
+      2,
     );
+    assert.equal(refused.ok, false, "writing under another holder's lock is how the receipt went missing");
+    assert.match(refused.ok === false ? refused.reason : "", /^state-locked:/);
 
     // A lock left behind by a process that is gone must not wedge the server.
     writeFileSync(`${statePath}.lock`, JSON.stringify({ pid: 0x7ffffffe }), { flag: "w" });
