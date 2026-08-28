@@ -43,47 +43,61 @@ function casesSkippedOnWindows(): string[] {
 
 describe("claims that describe something outside their own file", () => {
   it("the draft and the status page point at the version the packages carry", () => {
-    const version = (JSON.parse(read("packages/mcp-server/package.json")) as { version: string })
+    const workspace = (JSON.parse(read("packages/mcp-server/package.json")) as { version: string })
       .version;
+    const status = read("docs/STATUS.md");
 
     const inDraft = read(DRAFT).match(/packages at version (\d+\.\d+\.\d+)/);
     assert.ok(inDraft, `${DRAFT} no longer names a published version`);
+    const inStatus = status.match(/published on npm at `(\d+\.\d+\.\d+)`/);
+    assert.ok(inStatus, "docs/STATUS.md no longer names the published version");
     assert.equal(
       inDraft[1],
-      version,
-      "the draft points a reader at a package version the repository does not build",
+      inStatus[1],
+      "the frozen draft and STATUS disagree on what a reader can install from npm",
     );
+    const published = inStatus[1];
 
-    const inStatus = read("docs/STATUS.md").match(/published on npm at `(\d+\.\d+\.\d+)`/);
-    assert.ok(inStatus, "docs/STATUS.md no longer names the published version");
-    assert.equal(inStatus[1], version, "docs/STATUS.md names a different version than the draft");
+    // A prepared bump leaves the workspace ahead of npm. The sentences below
+    // describe installed artifacts, not this tree. They stay on the published
+    // number until that number moves. Painting them with the workspace version
+    // is how -00 claimed a package it had not shipped.
+    if (workspace !== published) {
+      assert.match(
+        status,
+        new RegExp(`\`?${workspace.replaceAll(".", "\\.")}\`? is prepared in this tree`),
+        `workspace is ${workspace} and npm is ${published}; STATUS must say the workspace version is prepared, not published`,
+      );
+      assert.match(
+        status,
+        /not a published npm release/,
+        "a prepared bump without this phrase reads as already shipped",
+      );
+      assert.doesNotMatch(
+        status,
+        new RegExp(`published on npm at \`${workspace.replaceAll(".", "\\.")}\``),
+        `STATUS must not claim ${workspace} is on npm`,
+      );
+    }
 
-    // The first regex above is the sentence that was kept current. Three others
-    // name a published artifact and were left on an older number: a clean
-    // install's initialize reply, the desktop bundle, and the registry
-    // isLatest read-back. They escaped because the guard compared one sentence
-    // to package.json and treated the rest as narrative. Each is derived from
-    // the same version, so a bump that updates only the first sentence fails
-    // here before a reader has to notice.
-    const status = read("docs/STATUS.md");
     const initialize = status.match(
       /clean install of\s+`@cedulon\/mcp-server@(\d+\.\d+\.\d+)` answers `initialize` reporting `(\d+\.\d+\.\d+)`/,
     );
     assert.ok(initialize, "docs/STATUS.md no longer describes a clean-install initialize");
-    assert.equal(initialize[1], version, "STATUS clean-install pin is not the package version");
-    assert.equal(initialize[2], version, "STATUS initialize reply is not the package version");
+    assert.equal(initialize[1], published, "STATUS clean-install pin is not the published version");
+    assert.equal(initialize[2], published, "STATUS initialize reply is not the published version");
 
     const bundle = status.match(
       /The (\d+\.\d+\.\d+) bundle was built and unpacked: its manifest states\s+`(\d+\.\d+\.\d+)` and the server inside it installs `@cedulon\/mcp-server@\^(\d+\.\d+\.\d+)`/,
     );
     assert.ok(bundle, "docs/STATUS.md no longer describes the desktop bundle");
-    assert.equal(bundle[1], version, "STATUS bundle heading is not the package version");
-    assert.equal(bundle[2], version, "STATUS bundle manifest version is not the package version");
-    assert.equal(bundle[3], version, "STATUS bundle install range is not the package version");
+    assert.equal(bundle[1], published, "STATUS bundle heading is not the published version");
+    assert.equal(bundle[2], published, "STATUS bundle manifest version is not the published version");
+    assert.equal(bundle[3], published, "STATUS bundle install range is not the published version");
 
     const registry = status.match(/where `(\d+\.\d+\.\d+)` is the current version \(`isLatest`\)/);
     assert.ok(registry, "docs/STATUS.md no longer names the registry isLatest version");
-    assert.equal(registry[1], version, "STATUS registry isLatest is not the package version");
+    assert.equal(registry[1], published, "STATUS registry isLatest is not the published version");
   });
 
   it("the set of cases that skip on Windows is the one three documents describe", () => {

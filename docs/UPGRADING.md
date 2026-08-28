@@ -4,6 +4,24 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.5.0 (prepared, not published): a bound receipt that breaks its terms fails the audit
+
+This one breaks, and it is prepared in this tree, not a published npm
+release. `audit()` used to report `guarantee=unconditional` over a
+receipt whose `manifestHash` matched a presented Trade Manifest while
+the receipt amount, currency, or settlement time departed from those
+terms (`amount=99` against a manifest of `1`). `MUST-T8-2` and
+`MUST-T3-3` already refused that spend at the gate; the verifier had
+no counterpart, so a settled record that the gate would have denied
+still looked clean. It now reports `manifest-terms-mismatch` and
+`ok: false`. `MUST-T4-17` (a presented manifest that no receipt
+names) is in the same release.
+
+**What to change:** if you treat `ok: true` and `guarantee=unconditional`
+as "the window was spent under these terms", read the new finding. A
+receipt that does not name the manifest is not judged against it. A
+no-manifest audit is unchanged.
+
 ## 0.4.0: the payment path refuses an unattributable manifest
 
 This one breaks. `gatedSettle` used to accept a presented Trade Manifest with no

@@ -44,7 +44,7 @@ const PUBLISHED_AS = /were published as (\d+\.\d+\.\d+)/;
 
 export function publishedClaims(md: string): PublishedClaim[] {
   const claims: PublishedClaim[] = [];
-  const blocks = md.split(/\n\n+/);
+  const blocks = md.split(/\r?\n(?:\r?\n)+/);
   for (const paragraph of blocks) {
     const ver = PUBLISHED_AS.exec(paragraph);
     if (!ver) continue;

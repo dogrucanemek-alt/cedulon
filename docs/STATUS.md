@@ -19,7 +19,10 @@ carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
 Eight packages are published on npm at `0.4.0`, so the server runs without a
-clone: `npx -y @cedulon/mcp-server`. 0.3.0 was the breaking release and
+clone: `npx -y @cedulon/mcp-server`. `0.5.0` is prepared in this tree
+and is not a published npm release: it carries `MUST-T4-17` and
+`MUST-T8-9`, which a clean install of 0.4.0 does not. Publishing is a
+separate step. 0.3.0 was the breaking release and
 `docs/UPGRADING.md` says what breaks and why; the short version is that a
 verifier which kept the old behaviour would keep reporting a clean audit over a
 forged receipt. 0.3.1 breaks nothing further: it repairs three defects an
@@ -207,17 +210,21 @@ the server refuses a state path that is a symlink.
 The spec side of this is closed in `-03`, written after the code it describes,
 which is the order that was got wrong once already. `MUST-T10-8` now has its
 counterpart for receipts and checkpoints (`MUST-T4-9`), for decision tokens
-(`MUST-T6-6`) and for inclusion receipts (`MUST-T11-15`). That draft is written
-and not submitted.
+(`MUST-T6-6`) and for inclusion receipts (`MUST-T11-15`). That draft is posted
+on the IETF datatracker.
 
-Measured on this Windows host, 28 August 2026: `stateProtection` on a
+Measured on this Windows host, 28–29 August 2026: `stateProtection` on a
 fresh state file is `unprotected-on-this-platform` (cases 56 / 60 / 68). The
-mode call succeeds and the bits are not the access control. Not measured, and
-why: SMB and UNC state paths — this machine has no share to point
-`CEDULON_STATE_PATH` at. A second Windows user reading the state file — only
-one interactive account is available. PID reuse on a stale lock — the lock
-stores a pid and treats a live pid as a holder; forcing Windows to recycle that
-number onto an unrelated process is not something this session can arrange.
-`demo:unguarded` remains the intentional hole.
+mode call succeeds and the bits are not the access control. A spend whose
+`CEDULON_STATE_PATH` was `\\localhost\C$\…` (the administrative share that
+already exists on this machine) also succeeded and also reported
+`unprotected-on-this-platform` — same user, same volume, UNC spelling. That
+is not a second principal and not a foreign SMB share. Not measured, and
+why it will not be measured on this host: a second Windows user reading the
+file — `ACER` and `Guest` exist, this session has no password and will not
+create one. PID reuse on a stale lock — the lock stores a pid and treats a
+live pid as a holder; Windows will not be forced to recycle that number onto
+an unrelated process from this session. `demo:unguarded` remains the
+intentional hole.
 
 To reproduce any of the above, see `docs/RUN_AS_VERIFIER.md`.
