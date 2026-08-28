@@ -225,9 +225,12 @@ in use. A list nothing can be read from attests nothing at all, so every
 settlement comes back uncovered - a broken setting withholds trust rather than
 falling back to accepting whatever the objects carry.
 
-Everything the pins reject is then left out of every inference, not just the
-matching: totals, checkpoint head, receipt chain, window coverage, the
+Everything the pins reject is then left out of every inference that depends on
+who signed: totals, checkpoint head, receipt chain, window coverage, the
 countersignature questions, and redaction notices all read the attested set.
+What the receipts say about themselves is separate and always reported - a
+settled receipt naming no rail ref, or two receipts claiming one ref, are facts
+about the submitted set, so an unreadable pin does not take them down with it.
 Otherwise one receipt from a key you already rejected writes "the checkpoint
 lied" against an honest issuer, which is an argument for switching the pin off.
 The same filter applies inside the witness: a shared transparency log holds
@@ -259,7 +262,25 @@ inferred from the platform: `owner-only` when the file really carries mode 0600,
 `unprotected-on-this-platform` otherwise - Windows, where the call succeeds and
 the access control is the directory ACL this server does not set, and any mount
 that ignores POSIX modes, such as a Windows drive seen from WSL - and
-`in-memory` when no state path is configured.
+`in-memory` when no state path is configured, and `absent` when the path holds
+no file yet, which is a different fact from a file with no protection. The
+directory counts too: mode 0600 says who can open the file, and a directory
+anyone can write says who can replace it. A state path that is a symlink is
+refused outright, since whoever placed the link would otherwise decide what this
+server starts up believing.
+
+`payeeTrust` is an expectation as well as a check: name a payee key and a settled
+receipt for that payee with no countersignature is reported as
+`countersign-missing`. Otherwise deleting the countersignature - or a forgery
+that failed - would delete the question with it.
+
+A note on what `guarantee` means, because it is easy to read as a verdict. It is
+a statement about the evidence, not about the books: `conditional` means some
+part of the audit rested on something the verifier could not authenticate. A
+report can be `ok: false` and `unconditional` at once, and that combination says
+the shortfall is certain rather than contingent. The draft defines it this way -
+"the guarantee is conditional on the extract being authentic" - so read `ok` and
+the findings for the result, and `guarantee` for how much the evidence carried.
 
 Two servers must not share one state path. Atomic writes stop a torn file, not a
 lost one: both would load the same state, both append, and the later rename wins

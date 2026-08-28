@@ -163,6 +163,12 @@ describe("trust roots, third pass", () => {
 
     const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-prot-")), "state.json");
     const onDisk = new CedulonSession({ statePath });
+    // Nothing has been written yet, and "there is no file" is its own answer.
+    assert.equal(onDisk.status().stateProtection, "absent");
+    assert.equal(
+      onDisk.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-") }, 1).ok,
+      true,
+    );
     assert.equal(
       onDisk.status().stateProtection,
       process.platform === "win32" ? "unprotected-on-this-platform" : "owner-only",

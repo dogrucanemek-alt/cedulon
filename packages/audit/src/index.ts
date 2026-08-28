@@ -31,6 +31,7 @@ export const FINDING_CODES = [
   "unauthenticated-issuer",
   "unauthenticated-witness",
   "unauthenticated-countersigner",
+  "countersign-missing",
   "issuer-key-mismatch",
   "countersign-key-mismatch",
   "extract-key-mismatch",
@@ -175,10 +176,13 @@ function pushDuplicateRefs(
   return dupes;
 }
 
-export function findSettlementMatches(
-  receipts: SignedReceipt[],
-  settlements: RailSettlement[],
-): Finding[] {
+/**
+ * Defects the submitted receipts have on their own terms: a settled receipt that
+ * names no rail ref, and two receipts claiming the same one. Neither is a claim
+ * about who signed them, so neither depends on a trust root - and an unreadable
+ * pin used to take both down with it, quietly simplifying the picture.
+ */
+export function findReceiptSelfConsistency(receipts: SignedReceipt[]): Finding[] {
   const findings: Finding[] = [];
   const settled = receipts.filter(isSettled);
 
@@ -192,6 +196,20 @@ export function findSettlementMatches(
     }
   }
 
+  const withRef = settled
+    .map((r) => ({ ref: receiptRef(r), id: r.claims.nonce, side: "receipt" as const }))
+    .filter((x): x is typeof x & { ref: string } => x.ref !== null);
+  pushDuplicateRefs(withRef, findings);
+  return findings;
+}
+
+export function findSettlementMatches(
+  receipts: SignedReceipt[],
+  settlements: RailSettlement[],
+): Finding[] {
+  const findings: Finding[] = [];
+  const settled = receipts.filter(isSettled);
+
   const receiptItems = settled
     .map((r) => ({ ref: receiptRef(r), id: r.claims.nonce, side: "receipt" as const, receipt: r }))
     .filter((x): x is typeof x & { ref: string } => x.ref !== null);
@@ -202,7 +220,9 @@ export function findSettlementMatches(
     settlement: s,
   }));
 
-  const dupeReceipt = pushDuplicateRefs(receiptItems, findings);
+  // Reported by findReceiptSelfConsistency, which runs over everything submitted;
+  // here the set is only needed to know which refs the aggregate walk covers.
+  const dupeReceipt = pushDuplicateRefs(receiptItems, []);
   const dupeSettlement = pushDuplicateRefs(settlementItems, findings);
   const skip = new Set<string>([...dupeReceipt, ...dupeSettlement]);
 
@@ -493,9 +513,9 @@ function findTransparencyWitness(
   // A log holds statements from everyone who uses it, and an entry with no body
   // names nobody - stripping the body off a genuine entry is free, and it used
   // to be enough to report an honest issuer for hiding something never theirs.
-  const accusing = attestsIssuer
-    ? anchoring.filter((r) => r.checkpoint && attestsIssuer(r.checkpoint.publicKeyPem))
-    : anchoring;
+  const accusing = anchoring.filter(
+    (r) => r.checkpoint && (!attestsIssuer || attestsIssuer(r.checkpoint.publicKeyPem)),
+  );
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
 
   for (const cp of checkpoints) {
@@ -536,9 +556,6 @@ function findCountersignFindings(
 ): Finding[] {
   const warnings: Finding[] = [];
   const countersigned = input.receipts.filter((r) => r.counterCoseHex);
-  if (countersigned.length === 0) {
-    return warnings;
-  }
   for (const r of countersigned) {
     const pinned = input.payeeTrust?.[r.claims.payee];
     if (!verifyCounterSignature(r)) {
@@ -558,6 +575,24 @@ function findCountersignFindings(
         code: "countersign-key-mismatch",
         id: r.claims.nonce,
         detail: `the countersignature on nonce=${r.claims.nonce} is by a key other than the one pinned for payee ${r.claims.payee}, so it is not that payee approving the payment`,
+      });
+    }
+  }
+  // Naming a payee key is the verifier saying it expects that payee's word on
+  // these payments. Dropping the countersignature would otherwise drop the
+  // question with it, so deleting the evidence - or a failed forgery - would
+  // read as nothing to answer.
+  for (const r of input.receipts) {
+    if (
+      isSettled(r) &&
+      !r.counterCoseHex &&
+      input.payeeTrust?.[r.claims.payee] !== undefined
+    ) {
+      warnings.push({
+        code: "countersign-missing",
+        id: r.claims.nonce,
+        detail: `a payee key is pinned for ${r.claims.payee} but receipt nonce=${r.claims.nonce} carries no countersignature from them`,
+        severity: "warn",
       });
     }
   }
@@ -817,6 +852,7 @@ export function audit(input: AuditInput): AuditReport {
       )
     : attested;
 
+  findings.push(...findReceiptSelfConsistency(input.receipts));
   findings.push(...findSettlementMatches(inScope, reconciled));
   // Every check below reasons about what the issuer published. Walking the whole
   // submitted list instead means one receipt from a key the verifier already

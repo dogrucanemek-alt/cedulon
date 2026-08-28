@@ -329,7 +329,12 @@ describe("trust roots, fourth pass", () => {
     assert.equal(pinned.reason, "manifest-bad-sig");
 
     // A manifest whose own signature does not verify never reaches a receipt.
-    const broken = { ...forged, coseHex: `${forged.coseHex.slice(0, -2)}00` };
+    // Flip the last byte rather than setting it: writing "00" over a byte that
+    // was already zero leaves the signature intact, which made this test pass or
+    // fail depending on the key it happened to generate.
+    const rawManifest = Buffer.from(forged.coseHex, "hex");
+    rawManifest[rawManifest.length - 1] ^= 0x01;
+    const broken = { ...forged, coseHex: rawManifest.toString("hex") };
     const result = unguardedSettle({ ...input, manifest: broken }, keys, NOW);
     assert.equal(result.status, 402);
     assert.equal(result.reason, "manifest-bad-sig");

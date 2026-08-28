@@ -125,13 +125,24 @@ mistyped key in a rotation list no longer discards the others. The
 countersignature and redaction checks, and the witness's withheld check, now read
 the attested set like everything else.
 
+A fourth pass answered the same question again. An unreadable pin correctly
+attests nothing, but it was also taking the receipts' own defects down with it -
+a duplicate rail ref and a settled receipt with no ref are facts about the
+submitted set, not claims about who signed it. A transparency entry with its
+body removed accused whoever was under audit whenever no issuer key was pinned.
+And naming a payee key created an expectation that deleting the countersignature
+silently cancelled, so an attacker could remove their own failed forgery and the
+report went back to unconditional.
+
 Two platform facts are recorded rather than papered over. The state file mode is
 0600 where the filesystem honours it and has no effect on Windows or on mounts
 that ignore POSIX modes, so `stateProtection` is now read back off the file
 instead of inferred from `process.platform` - it said `owner-only` over a
 world-readable file on a Windows drive mounted in WSL. And two servers sharing a
 state path used to lose a receipt to whichever renamed last; a save over a state
-the session did not produce now fails loudly.
+the session did not produce now fails loudly. `stateProtection` also reads the
+containing directory, distinguishes an absent file from an unprotected one, and
+the server refuses a state path that is a symlink.
 
 The spec side of this is still open: `MUST-T10-8` has no counterpart for
 receipts, checkpoints, decision tokens or inclusion receipts. That belongs in a

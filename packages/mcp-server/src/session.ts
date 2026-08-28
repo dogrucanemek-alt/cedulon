@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { basename, dirname, join } from "node:path";
@@ -46,7 +46,11 @@ export type AuditArgs = {
  * is Windows, where the same call succeeds and protects nothing because the
  * access control there is the directory ACL, which this server does not set.
  */
-export type StateProtection = "in-memory" | "owner-only" | "unprotected-on-this-platform";
+export type StateProtection =
+  | "in-memory"
+  | "absent"
+  | "owner-only"
+  | "unprotected-on-this-platform";
 
 export type StatusReport = {
   version: string;
@@ -167,6 +171,18 @@ export class CedulonSession {
       receiptPublicPem: generated.publicKeyPem,
     };
     if (this.statePath) {
+      // Read through on load, a symlink at this path lets whoever placed it
+      // decide what this server starts up believing. Refusing the path is the
+      // only answer that does not depend on write ordering.
+      try {
+        if (lstatSync(this.statePath).isSymbolicLink()) {
+          throw new Error("cedulon-state-symlink");
+        }
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+          throw err;
+        }
+      }
       this.load();
       this.lastSeenState = this.readStateFingerprint();
     }
@@ -230,12 +246,26 @@ export class CedulonSession {
     if (!this.statePath) {
       return "in-memory";
     }
+    let file;
     try {
       // Read back off the file rather than inferred from process.platform. A
       // mount that ignores POSIX modes - a Windows drive seen from WSL, some
       // network shares - accepts the call and leaves the file world-readable,
       // and the claim would have been wrong in exactly the case that matters.
-      return (statSync(this.statePath).mode & 0o777) === 0o600
+      file = statSync(this.statePath);
+    } catch {
+      // "There is no file" is a different fact from "the file has no
+      // protection", and an operator acting on the second would be chasing a
+      // permission problem that does not exist.
+      return "absent";
+    }
+    if ((file.mode & 0o777) !== 0o600) {
+      return "unprotected-on-this-platform";
+    }
+    try {
+      // Mode 0600 says who can open the file. A directory anyone can write says
+      // who can replace it, which reaches the same private key by another route.
+      return (statSync(dirname(this.statePath)).mode & 0o077) === 0
         ? "owner-only"
         : "unprotected-on-this-platform";
     } catch {
