@@ -27,11 +27,15 @@ independent runner found on Linux, and a fourth found while repairing them.
 0.4.0 does break: the payment path refuses a presented Trade Manifest that no
 supplied key attributes, where it used to settle against the key the manifest
 carried. The same release adds that fifth trust root to the audit path, which
-reports rather than refuses, and names the external-rail bound on T12. Nothing
-is on the registry until it is published, and it is not published yet.
+reports rather than refuses, and names the external-rail bound on T12 in the
+draft. `MUST-T12-4` is specified, not executed: the suite and the published
+server only drive the in-process `RailLedger`. There is no authenticated
+external-rail path in this tree, so the indeterminate outcome and the
+"do not return authority without evidence" rule have no red-then-green case.
+That is a gap, not a pass.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.3.1` answers `initialize` reporting `0.3.1`, the
+`@cedulon/mcp-server@0.4.0` answers `initialize` reporting `0.4.0`, the
 installed `dist/session.js` refuses a lock it cannot take with a reason rather
 than an exception and checks the state path before reading its fingerprint, and
 the
@@ -56,8 +60,8 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.3.0 bundle was built and unpacked: its manifest states
-`0.3.0` and the server inside it installs `@cedulon/mcp-server@^0.3.0`. The builder installs the published version rather than the
+desktop install. The 0.4.0 bundle was built and unpacked: its manifest states
+`0.4.0` and the server inside it installs `@cedulon/mcp-server@^0.4.0`. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -76,7 +80,7 @@ is active. That number moves when Glama is actually updated, not when npm is. Th
 `initialize`, listed five tools, and returned a signed receipt.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.3.0` is the current version (`isLatest`), read back from the registry
+where `0.4.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output. `server.json` is the entry
 it was published from. Earlier listings: `0.2.1` announced itself as `0.2.0`
 over `initialize`, because the version was written out a second time in the
@@ -205,5 +209,15 @@ which is the order that was got wrong once already. `MUST-T10-8` now has its
 counterpart for receipts and checkpoints (`MUST-T4-9`), for decision tokens
 (`MUST-T6-6`) and for inclusion receipts (`MUST-T11-15`). That draft is written
 and not submitted.
+
+Measured on this Windows host, 28 August 2026: `stateProtection` on a
+fresh state file is `unprotected-on-this-platform` (cases 56 / 60 / 68). The
+mode call succeeds and the bits are not the access control. Not measured, and
+why: SMB and UNC state paths — this machine has no share to point
+`CEDULON_STATE_PATH` at. A second Windows user reading the state file — only
+one interactive account is available. PID reuse on a stale lock — the lock
+stores a pid and treats a live pid as a holder; forcing Windows to recycle that
+number onto an unrelated process is not something this session can arrange.
+`demo:unguarded` remains the intentional hole.
 
 To reproduce any of the above, see `docs/RUN_AS_VERIFIER.md`.

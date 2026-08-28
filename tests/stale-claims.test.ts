@@ -57,6 +57,33 @@ describe("claims that describe something outside their own file", () => {
     const inStatus = read("docs/STATUS.md").match(/published on npm at `(\d+\.\d+\.\d+)`/);
     assert.ok(inStatus, "docs/STATUS.md no longer names the published version");
     assert.equal(inStatus[1], version, "docs/STATUS.md names a different version than the draft");
+
+    // The first regex above is the sentence that was kept current. Three others
+    // name a published artifact and were left on an older number: a clean
+    // install's initialize reply, the desktop bundle, and the registry
+    // isLatest read-back. They escaped because the guard compared one sentence
+    // to package.json and treated the rest as narrative. Each is derived from
+    // the same version, so a bump that updates only the first sentence fails
+    // here before a reader has to notice.
+    const status = read("docs/STATUS.md");
+    const initialize = status.match(
+      /clean install of\s+`@cedulon\/mcp-server@(\d+\.\d+\.\d+)` answers `initialize` reporting `(\d+\.\d+\.\d+)`/,
+    );
+    assert.ok(initialize, "docs/STATUS.md no longer describes a clean-install initialize");
+    assert.equal(initialize[1], version, "STATUS clean-install pin is not the package version");
+    assert.equal(initialize[2], version, "STATUS initialize reply is not the package version");
+
+    const bundle = status.match(
+      /The (\d+\.\d+\.\d+) bundle was built and unpacked: its manifest states\s+`(\d+\.\d+\.\d+)` and the server inside it installs `@cedulon\/mcp-server@\^(\d+\.\d+\.\d+)`/,
+    );
+    assert.ok(bundle, "docs/STATUS.md no longer describes the desktop bundle");
+    assert.equal(bundle[1], version, "STATUS bundle heading is not the package version");
+    assert.equal(bundle[2], version, "STATUS bundle manifest version is not the package version");
+    assert.equal(bundle[3], version, "STATUS bundle install range is not the package version");
+
+    const registry = status.match(/where `(\d+\.\d+\.\d+)` is the current version \(`isLatest`\)/);
+    assert.ok(registry, "docs/STATUS.md no longer names the registry isLatest version");
+    assert.equal(registry[1], version, "STATUS registry isLatest is not the package version");
   });
 
   it("the set of cases that skip on Windows is the one three documents describe", () => {
@@ -74,6 +101,22 @@ describe("claims that describe something outside their own file", () => {
         `Coverage paragraph in ${DRAFT}, the note near the top of docs/RUN_AS_VERIFIER.md, ` +
         "and the open-on-purpose list in docs/UPGRADING.md. Read all three, then update " +
         "this list.",
+    );
+  });
+
+  it("the README names the newest draft in the repository, not the one it was written against", () => {
+    // Corrected by hand once per revision until an external runner found -02
+    // still called current at -03. A sentence restated in two places drifts;
+    // this compares the two instead of restating them.
+    const revs = readdirSync(join(root, "spec"))
+      .map((f) => /^draft-dogru-cedulon-(\d+)\.md$/.exec(f))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map((m) => m[1]);
+    assert.ok(revs.length > 0, "no core drafts found in spec/");
+    const newest = revs.sort().at(-1)!;
+    assert.ok(
+      read("README.md").includes(`draft-dogru-cedulon-${newest}`),
+      `README does not name draft-dogru-cedulon-${newest}, the newest revision in spec/`,
     );
   });
 

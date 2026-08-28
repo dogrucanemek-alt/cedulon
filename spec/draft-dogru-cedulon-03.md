@@ -160,7 +160,7 @@ x402 or AP2; it sits above them.
 *Note to Readers:* This document is submitted as Informational. The
 author's eventual intended track, if the work is taken up, is a
 Standards Track profile of COSE {{RFC9052}} and CWT {{RFC8392}} for
-agent-spend receipts. This -02 does not claim IETF consensus.
+agent-spend receipts. This -03 does not claim IETF consensus.
 
 Agents can now pay. Open HTTP 402 protocols {{X402}} attach
 stablecoin settlement to ordinary requests. Card networks and
@@ -638,7 +638,10 @@ than a single key (`MUST-T4-12`). An issuer that rotates its key
 mid-window otherwise
 produces a finding against every honest receipt signed by the
 retired key, and the reachable way out of that is to stop pinning,
-which is the opposite of what the pin is for.
+which is the opposite of what the pin is for. The same acceptance
+applies to a publisher pin, a witness pin, and a rail pin: a
+verifier MUST accept each of those roots as a set of keys, so a
+rotation inside the window does not force it off the pin.
 
 ## The payee root {#payee-root}
 
@@ -724,6 +727,47 @@ reported as `manifest-key-mismatch` and MUST fail the audit. Falling
 back to the key the manifest carries is how a presented document
 becomes a bypass.
 
+Attribution is one question and coverage is another, and a root that
+answers only the first leaves the document doing work it was never
+spent under. A verifier presented with a Trade Manifest MUST compare
+the manifest hash to the `manifestHash` of the receipts presented to
+the audit and MUST report a manifest that no presented receipt
+references (`MUST-T4-17`); the identifier `manifest-covers-no-receipt`
+is used for it in this implementation, and the completeness guarantee
+is conditional. The comparison runs against those presented receipts,
+including aborted ones, and is made before any extract window is
+applied; a hash on an aborted receipt or on a receipt outside the
+extract window still counts as a reference. This requirement asks
+whether any receipt names the terms, not whether a settlement in the
+window was made under them. A correctly attributed manifest
+travelling beside a set of receipts marked `noManifest` states terms
+nothing presented was spent under, and a report that stays silent
+about it reads as terms-backed when it is not. This requirement does
+not reach the audit presented with no Trade Manifest, which remains a
+deployment choice under `MUST-T1-2`.
+
+Naming a manifest is not obeying one, and that is the third place this
+document has had to say the same thing twice. A verifier presented with
+a Trade Manifest MUST compare the amount, the currency and the
+settlement time of every presented receipt that names it against the
+manifest's amount, currency and expiry, and MUST report a receipt that
+departs from them (`MUST-T8-9`); the identifier
+`manifest-terms-mismatch` is used for it in this implementation and the
+audit fails. Only receipts that name the manifest are measured against
+it: reading the terms onto a receipt that never claimed them would
+invent a violation the payer did not commit.
+
+The rules being enforced here are not new. A gate already refuses a
+bound spend whose amount or currency differs from the manifest
+(`MUST-T8-2`) and one made against an expired manifest
+(`MUST-T3-3`). Both were written for the point where money moves, and
+an audit reads the record after that point, where the gate is no longer
+present to be asked. Without a counterpart a receipt can carry the hash
+of terms it breaks and the report still calls the books balanced. This
+is a finding rather than a condition on the guarantee: a verifier that
+reports it held every root it needed, and the statement it is making is
+unconditional.
+
 The gate answers differently from the audit, and the difference is
 deliberate. A policy decision point presented with a Trade Manifest
 it cannot attribute MUST refuse the payment rather than settle and
@@ -807,7 +851,7 @@ witness, T11 guarantees about suppression are **conditional**.
 
 -01 stated that dependency and stopped there: nothing in its
 verification algorithm read a transparency receipt, so the witness
-had no way to speak. This revision gives it one. A verifier that
+had no way to speak. -02 gave it one. A verifier that
 holds transparency receipts for the period under audit compares what
 the witness recorded against what the chain presented, and reports
 the difference under its own name ({{witness}}). A witness that holds
@@ -931,7 +975,12 @@ identifiers are not an interoperability surface.
    governs it (`MUST-T4-15`): with no publisher key pinned the verifier
    reports `unauthenticated-manifest` and the guarantee is conditional;
    with a pin that cannot be read, `trust-key-unreadable`; with a pin
-   the manifest does not answer to, `manifest-key-mismatch`. An audit
+   the manifest does not answer to, `manifest-key-mismatch`; and with
+   a manifest that no presented receipt references,
+   `manifest-covers-no-receipt` (`MUST-T4-17`). A receipt that names
+   the manifest but departs from its amount, currency or expiry is
+   reported as `manifest-terms-mismatch` and fails the audit
+   (`MUST-T8-9`). An audit
    presented with no Trade Manifest is not made conditional by this
    step.
 5. Scope the receipts. When an extract is supplied, only receipts whose
@@ -1089,6 +1138,8 @@ warning. Warnings MUST still appear in operator-facing output
 | unauthenticated-countersigner | conditional | No verifier-supplied payee key; a countersignature is present but proves no approval |
 | unauthenticated-manifest | conditional | No verifier-supplied manifest key and a Trade Manifest was presented; it was checked against the key it carries. An audit presented with no Trade Manifest is not this condition |
 | manifest-key-mismatch | audit fails | A presented Trade Manifest is signed by a key other than the pinned publisher key, or does not verify against it |
+| manifest-covers-no-receipt | conditional | A presented Trade Manifest is referenced by no presented receipt, including aborted ones and those outside the extract window; the terms were attributed but no receipt names them |
+| manifest-terms-mismatch | audit fails | A presented receipt names this Trade Manifest but its amount, currency or settlement time departs from the manifest; a gate applying `MUST-T8-2` and `MUST-T3-3` would have refused the payment |
 | witness-entry-unattributable | conditional | The witness holds a statement this chain does not present, carrying no body to say whose it is |
 | extract-scope-mismatch | audit fails | A record falls outside the declared window, or the extract does not cover the expected account, rail, or window |
 | extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract; the extract is authoritative |
@@ -1294,11 +1345,12 @@ requirement text those citations refer to.
 | MUST-T4-9 | A verifier MUST obtain the issuer public key out of band and MUST verify Spend Receipt and epoch checkpoint signatures against that key, not against a key the object carries. A verifier without such a key that is presented with any Spend Receipt or epoch checkpoint MUST report the completeness guarantee as conditional. An audit presented with neither rests on the extract alone and is not made conditional by this requirement. |
 | MUST-T4-10 | A receipt that does not verify against the pinned issuer key MUST NOT count as coverage for the settlement it names, and that settlement MUST still be reported as uncovered. Reporting the mismatch is not sufficient on its own. |
 | MUST-T4-11 | Pinned issuer keys MUST be compared by SubjectPublicKeyInfo DER encoding. A pinned key that cannot be decoded MUST be reported as a verifier configuration fault rather than as a mismatch, and where no pinned key decodes, the verifier MUST NOT fall back to the keys the objects carry. |
-| MUST-T4-12 | A verifier MUST accept an issuer root comprising more than one key, so that a key rotation inside the audited window does not require it to abandon pinning. |
+| MUST-T4-12 | A verifier MUST accept an issuer, publisher, witness, or rail root comprising more than one key, so that a key rotation inside the audited window does not require it to abandon pinning. |
 | MUST-T4-13 | A payee countersignature MUST NOT be treated as evidence of payee approval unless it verifies against a payee key the verifier obtained out of band. |
 | MUST-T4-14 | Where a verifier has pinned a key for a payee, a settled receipt naming that payee and carrying no countersignature MUST be reported, so that deleting the evidence does not delete the question. |
+| MUST-T4-15 | A verifier that is presented with a Trade Manifest MUST obtain the publisher public key out of band and MUST verify the manifest signature against that key, not against a key the manifest carries. A pin that cannot be read MUST be reported as `trust-key-unreadable`; a readable pin the manifest does not answer to MUST be reported as `manifest-key-mismatch` and MUST fail the audit. A verifier without such a key that is presented with a Trade Manifest MUST report the completeness guarantee as conditional. An audit presented with no Trade Manifest is not made conditional by this requirement. |
 | MUST-T4-16 | A policy decision point presented with a Trade Manifest it cannot verify against a key supplied out of band MUST refuse the payment. Settling and reporting the doubt afterwards is not available to it: the receipt carries the manifest hash as terms the named party agreed to. |
-| MUST-T4-15 | A verifier that is presented with a Trade Manifest MUST obtain the publisher public key out of band and MUST verify the manifest signature against that key, not against a key the manifest carries. A verifier without such a key that is presented with a Trade Manifest MUST report the completeness guarantee as conditional. An audit presented with no Trade Manifest is not made conditional by this requirement. |
+| MUST-T4-17 | A verifier presented with a Trade Manifest MUST compare the manifest hash against the `manifestHash` of the receipts presented to the audit, including aborted ones and before any extract window is applied, and MUST report a presented manifest that no presented receipt references. Verifying who published the terms does not establish that any receipt names them. An audit presented with no Trade Manifest is not made conditional by this requirement. |
 
 ## T5: Policy bypass via direct rail access
 
@@ -1344,6 +1396,7 @@ requirement text those citations refer to.
 | MAY-T8-6 | Parties MAY add an optional escrow actor as a third-party role interface; this project MUST NOT implement custody. |
 | MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
 | MUST-T8-8 | If a payee countersignature is present, a verifier MUST reject it when the signature fails, when `kid` or content type does not match the configured payee key, or when the payload is not the issuer COSE_Sign1 bytes. |
+| MUST-T8-9 | A verifier presented with a Trade Manifest MUST compare the amount, currency and settlement time of every presented receipt that names it against the manifest amount, currency and expiry, and MUST report a receipt that departs from them. `MUST-T8-2` and `MUST-T3-3` bind the gate; an audit reads the record after the gate is gone, so without this the receipt can carry the hash of terms it breaks. Receipts that do not name the manifest are not measured against it. |
 | MAY-T8-9 | A payee MAY attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. |
 
 ## MUST-T8-custody
@@ -1420,7 +1473,7 @@ Issuer self-attestation:
   signature.
 
 Key rotation and revocation:
-: `kid` identifies the verification key. This -02 does not specify
+: `kid` identifies the verification key. This -03 does not specify
   a revocation list. Verifiers MUST pin the issuer keys they
   accept and MUST stop accepting a `kid` after an authenticated
   revocation signal.
@@ -1428,8 +1481,8 @@ Key rotation and revocation:
 Timestamp trust:
 : `timestampMs` is issuer-asserted. Window assignment uses that
   field. A lying issuer can slide a receipt between windows.
-  External timestamping of receipts is out of scope for -02; the
-  checkpoint witness added here covers checkpoints, not receipt
+  External timestamping of receipts is out of scope for this revision; the
+  checkpoint witness covers checkpoints, not receipt
   timestamps.
 
 Collusion:
@@ -1568,8 +1621,12 @@ Coverage:
 : The receipt, checkpoint, extract, reconciliation, and verification
   algorithm are implemented, including the transparency witness input,
   the withheld and not-anchored conditions, and signed totals
-  redaction. Every requirement added in this revision is implemented
-  and covered by a red-then-green case before appearing in this text.
+  redaction. Requirements added in this revision are implemented
+  and covered by a red-then-green case before appearing in this text,
+  except `MUST-T12-4`, which is specified and not executed, and
+  `MUST-T4-17` and `MUST-T8-9`, which are implemented in this tree and
+  not in the published 0.4.0 packages (see the note on distribution
+  below).
   Some of those cases need POSIX file modes or symbolic links and
   assert only there; on Windows they return early. That leaves the
   symbolic-link protections and the undo after a failed write
@@ -1614,15 +1671,16 @@ Experience:
   produced against the issuer the one condition this document exists
   to make detectable.
 
-Note on distribution: the requirements added in this revision are in
-the published `@cedulon` packages at version 0.4.0, not only in the
-repository. A reader can check a claim against an installed package
+Note on distribution: the requirements this revision adds that are in
+a published package are in the published `@cedulon` packages at version 0.4.0, not only in the
+repository, with the exceptions named below. A reader can check a claim against an installed package
 rather than against a working tree. That order is deliberate: -00
 described requirements that its published package did not yet carry,
 a reader found the discrepancy, and this document does not repeat it.
 Versions 0.2.x and earlier predate everything in this revision.
 
-0.3.0 carried the same requirements and three defects that only appear
+0.3.0 predated the manifest root and the T12 bound. It carried three
+defects that only appear
 away from the platform it was written on, which an independent runner
 found by taking up a standing invitation to break it. A directory that
 could not be written refused the lock before the record and left the
@@ -1632,14 +1690,34 @@ does not exist in the module system the package declares, so it never
 reached its assertion; and repairing that revealed a fourth defect,
 that the state fingerprint was read before the path was checked, so a
 replaced path was reported as a conflicting writer rather than as a
-hijacked destination. 0.3.1 closes all four. 0.3.2 adds the manifest
-root (`MUST-T4-15`) and the external-rail bound on T12 (`MUST-T12-4`).
-It is prepared in this tree and is not a published npm release until
-the author says so.
+hijacked destination. 0.3.1 closes all four. The manifest root
+(`MUST-T4-15`) and the gate's refusal to settle against a manifest it
+cannot attribute (`MUST-T4-16`) were published as 0.4.0 rather than as a patch: the
+gate had been answering 200 to an unattributable manifest and writing
+that manifest's hash into the receipt, and refusing it is a change in
+behaviour that a version number ought to announce.
+
+`MUST-T4-17`, `MUST-T8-9` and `MUST-T12-4` are the exceptions in this
+revision. The same independent
+runner who took up the invitation against 0.4.0 reported that
+attributing a manifest was not the same as establishing that anything
+in the window was spent under it, which is the distinction that
+`MUST-T4-17` now draws. A reader of this document then observed that
+the distinction survives one step further out: a receipt can name the
+manifest and still depart from its amount, currency or expiry, which
+is what `MUST-T8-9` closes. Both are implemented and tested in this
+tree and are not a published npm release until the author says so; a
+reader checking either against an installed 0.4.0 will not find it.
+`MUST-T12-4` is specified, not executed: the suite and the published
+server only drive the in-process `RailLedger`. There is no
+authenticated external-rail path in this tree, so the indeterminate
+outcome and the rule that forbids returning authority without
+evidence have no red-then-green case. A reader checking
+`MUST-T12-4` against an installed 0.4.0 will not find it.
 
 ## Changes from -02 {#changes-02}
 
-This revision has two subjects. The first is that -02 stated a rule
+This -03 has two subjects. The first is that -02 stated a rule
 for signed objects and left the implementation and the verification
 algorithm without a counterpart for every object the rule applied to.
 The second is T12, which no reader reported and which is not about an
@@ -1695,7 +1773,8 @@ cannot be decoded MUST NOT fall back to the keys the objects carry
 (`MUST-T4-11`). An issuer root may comprise more than one key, and a
 verifier must accept one that does, so a rotation inside the audited
 window does not force it to choose between findings against honest
-receipts and abandoning the pin (`MUST-T4-12`). The same out-of-band rule reaches the payee
+receipts and abandoning the pin (`MUST-T4-12`); the same set-of-keys
+acceptance applies to a publisher, witness, or rail pin. The same out-of-band rule reaches the payee
 countersignature (`MUST-T4-13`), the transparency witness
 (`MUST-T11-15` and `MUST-T11-16`), the Decision Token, whose
 consumer issued it and therefore already holds the key to check it
@@ -1722,7 +1801,7 @@ the reason given in {{issuer-root}}.
 
 ## Changes from -01 {#changes}
 
-This revision has one subject: the checkpoint, which carries the T11
+-02 had one subject: the checkpoint, which carries the T11
 guarantee against suppression and rollback, was not wired into
 anything that could discharge it.
 
@@ -1790,8 +1869,8 @@ The reporters are named in the Acknowledgments.
 
 This section is a direction, not a commitment. The structures below
 are reserved in name only. Normative wire formats, tests, and
-threat-model MUST lines for them belong in later revisions (-03 or
-later), written with the same discipline as this -02.
+threat-model MUST lines for them belong in later revisions (-04 or
+later), written with the same discipline as this -03.
 
 ## Re-attestation profile
 
@@ -1815,7 +1894,7 @@ did not arrive in this revision either.
 
 ## Generalization
 
-Payment is the special case that this -02 implements. The same
+Payment is the special case that this -03 implements. The same
 completeness calculus (an authenticated extract of consumed units
 reconciled to signed receipts) can apply to other consumable
 resources such as compute, data, or energy. This document does
