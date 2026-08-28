@@ -4,7 +4,13 @@ import { describe, it } from "node:test";
 import { audit, type AuditInput } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint, verifyCheckpoint } from "@cedulon/checkpoint";
 import { signDecisionToken, verifyDecisionToken } from "@cedulon/core";
-import { generateManifestKeys, signManifest, verifyManifest, type SignedManifest } from "@cedulon/manifest";
+import {
+  generateManifestKeys,
+  manifestHash,
+  signManifest,
+  verifyManifest,
+  type SignedManifest,
+} from "@cedulon/manifest";
 import {
   generateReceiptKeys,
   makeDisputeBundle,
@@ -25,7 +31,7 @@ const WINDOW_END = NOW + 3_600_000;
 
 type Keys = { privateKeyPem: string; publicKeyPem: string };
 
-function receiptFor(keys: Keys, ref: string, i: number): SignedReceipt {
+function receiptFor(keys: Keys, ref: string, i: number, boundTo: string | null = null): SignedReceipt {
   return signReceipt(
     {
       payer: "payer",
@@ -33,8 +39,8 @@ function receiptFor(keys: Keys, ref: string, i: number): SignedReceipt {
       amount: "1",
       currency: "USD",
       policyHash: "policy-hash",
-      manifestHash: null,
-      noManifest: true,
+      manifestHash: boundTo,
+      noManifest: boundTo === null,
       x402PaymentRef: ref,
       timestampMs: NOW + i,
       nonce: `n${i}`.padEnd(16, "-"),
@@ -91,6 +97,21 @@ function manifestBody() {
 
 function balanced(honest: Keys, rail: Keys): AuditInput {
   const good = receiptFor(honest, "ref-ok", 0);
+  return {
+    receipts: [good],
+    checkpoints: [checkpointFor(honest, [good])],
+    extract: railWith(rail),
+    trust: railPin(rail),
+    issuerTrust: { publicKeyPem: honest.publicKeyPem },
+  };
+}
+
+// balanced() spends under no manifest, which is the right fixture for asking
+// who signed one. It is the wrong fixture for asking whether the audit stays
+// quiet on an honest one: a manifest no receipt references is a finding of its
+// own (pass9, case 93). This window is actually spent under the terms.
+function balancedUnder(honest: Keys, rail: Keys, manifest: SignedManifest): AuditInput {
+  const good = receiptFor(honest, "ref-ok", 0, manifestHash(manifest));
   return {
     receipts: [good],
     checkpoints: [checkpointFor(honest, [good])],
@@ -165,7 +186,7 @@ describe("the manifest root", () => {
     const rail = generateExtractKeys();
     const merchant = generateManifestKeys();
     const signed = signManifest(manifestBody(), merchant.privateKeyPem, merchant.publicKeyPem);
-    const report = audit(withManifest(balanced(honest, rail), signed, merchant.publicKeyPem));
+    const report = audit(withManifest(balancedUnder(honest, rail, signed), signed, merchant.publicKeyPem));
     assert.equal(report.findings.length, 0, report.findings.map((f) => f.code).join(","));
     assert.equal(
       report.warnings.some((w) => w.code === "unauthenticated-manifest" || w.code === "trust-key-unreadable"),

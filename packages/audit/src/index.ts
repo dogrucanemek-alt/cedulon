@@ -9,7 +9,7 @@ import {
   type InclusionReceipt,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
-import { verifyManifest, type SignedManifest } from "@cedulon/manifest";
+import { manifestHash, verifyManifest, type SignedManifest } from "@cedulon/manifest";
 import { receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import {
   verifyRailExtract,
@@ -39,6 +39,8 @@ export const FINDING_CODES = [
   "countersign-key-mismatch",
   "extract-key-mismatch",
   "manifest-key-mismatch",
+  "manifest-covers-no-receipt",
+  "manifest-terms-mismatch",
   "extract-scope-mismatch",
   "extract-settlement-mismatch",
   "trust-key-unreadable",
@@ -847,6 +849,53 @@ export function audit(input: AuditInput): AuditReport {
               "the presented Trade Manifest is signed by a key other than the pinned manifest key, or does not verify against it",
           });
         }
+      }
+    }
+
+    // Attribution answers who published the terms. It does not answer which
+    // spends were made under them, and those are two different questions. A
+    // manifest whose hash appears on no receipt in the window describes some
+    // other window; presenting it beside a set of noManifest receipts would
+    // otherwise leave a report that reads as terms-backed and is not.
+    const presentedHash = manifestHash(input.manifest);
+    const covered = input.receipts.some((r) => r.claims.manifestHash === presentedHash);
+    if (!covered) {
+      warnings.push({
+        code: "manifest-covers-no-receipt",
+        id: "manifest",
+        detail:
+          "the presented Trade Manifest is referenced by no receipt in the window; it states terms nothing here was spent under, so the completeness guarantee is conditional",
+        severity: "warn",
+      });
+    }
+
+    // Naming a manifest is not obeying one. MUST-T8-2 denies a bound spend
+    // whose amount or currency differs from the manifest, and MUST-T3-3 denies
+    // a spend against an expired one, but both are written for the gate. An
+    // audit reads the settled record, where the gate is no longer present, so
+    // without a counterpart here a receipt can carry the hash of terms it
+    // breaks and the report still calls the books balanced. Only receipts that
+    // named this manifest are measured against it; reading it onto the rest
+    // would invent a violation the payer never claimed.
+    const terms = input.manifest.body;
+    for (const r of input.receipts) {
+      if (r.claims.manifestHash !== presentedHash) continue;
+      const broken: string[] = [];
+      if (r.claims.amount !== terms.amount) {
+        broken.push(`amount ${r.claims.amount} against manifest ${terms.amount}`);
+      }
+      if (r.claims.currency !== terms.currency) {
+        broken.push(`currency ${r.claims.currency} against manifest ${terms.currency}`);
+      }
+      if (r.claims.timestampMs > terms.expiresAtMs) {
+        broken.push(`settled at ${r.claims.timestampMs} after the manifest expired at ${terms.expiresAtMs}`);
+      }
+      if (broken.length > 0) {
+        findings.push({
+          code: "manifest-terms-mismatch",
+          id: r.claims.x402PaymentRef ?? r.claims.nonce,
+          detail: `the receipt carries the hash of this Trade Manifest but departs from it: ${broken.join("; ")}. A gate applying MUST-T8-2 and MUST-T3-3 would have refused this payment`,
+        });
       }
     }
   }
