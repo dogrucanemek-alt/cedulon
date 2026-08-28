@@ -201,9 +201,25 @@ disagrees with the extract is `extract-settlement-mismatch` — the extract wins
 A third root appears once you configure a transparency witness: pass
 `witnessTrust: { publicKeyPem: logKeyYouAlreadyHold }` alongside
 `inclusionReceipts`. An inclusion receipt checked against the key it carries
-proves that some log is internally consistent, and an anchoring nobody can
-check is enough to silence `checkpoint-not-anchored`. Without the pin the report
-warns with `unauthenticated-witness`.
+says only that some log exists, and a log anyone can invent can assert an
+anchoring, or hold a rival body for an epoch and have the honest issuer reported
+for equivocating. So without the pin the inclusion receipts are left out of the
+comparison entirely and the report warns with `unauthenticated-witness`; with
+it, the body a pinned log holds still has to answer to `issuerTrust` before it
+counts as something the issuer published.
+
+A fourth, when receipts carry payee countersignatures: `payeeTrust` maps each
+payee to the key you hold for them. `counterCoseHex` and `payeePublicKeyPem`
+travel beside the issuer signature without being covered by it, so anyone
+holding an honest receipt can append a countersignature of their own. Unpinned,
+that reads as payee approval; the report warns with
+`unauthenticated-countersigner`, and a pinned payee whose key does not match is
+`countersign-key-mismatch`.
+
+`issuerTrust.publicKeyPem` takes a list as well as a single key. An issuer that
+rotated its key mid-window otherwise produces a wall of findings against honest
+receipts, and the way out an operator reaches for is to stop pinning - so state
+the keys you accept instead.
 
 The same argument applies to the receipts. Without `issuerTrust` every receipt
 and checkpoint is checked against the key it carries, so an attacker who mints

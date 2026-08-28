@@ -85,6 +85,10 @@ export type LedgerExport = {
 };
 
 export type VerifyArgs = {
+  /** Issuer key the caller holds out of band; without it the check is self-referential. */
+  expectIssuerKeyPem?: string;
+  /** Payee key the caller holds out of band, for the countersignature. */
+  expectPayeeKeyPem?: string;
   receipt?: SignedReceipt;
   coseHex?: string;
   publicKeyPem?: string;
@@ -238,14 +242,31 @@ export class CedulonSession {
     };
   }
 
-  verify(args: VerifyArgs): { ok: boolean; receipt: boolean; countersignature: boolean | null } {
+  /**
+   * `expectIssuerKeyPem` / `expectPayeeKeyPem` are the keys the caller already
+   * holds. Without them this answers whether the receipt is internally
+   * consistent, which any minted key satisfies - so the answer says which
+   * question it answered rather than letting the caller assume the stronger one.
+   */
+  verify(args: VerifyArgs): {
+    ok: boolean;
+    receipt: boolean;
+    countersignature: boolean | null;
+    checkedAgainstSuppliedKey: boolean;
+  } {
     const signed = receiptFromArgs(args);
-    const receiptOk = verifyReceipt(signed);
+    const receiptOk = verifyReceipt(signed, args.expectIssuerKeyPem);
+    const checkedAgainstSuppliedKey = args.expectIssuerKeyPem !== undefined;
     if (!signed.counterCoseHex) {
-      return { ok: receiptOk, receipt: receiptOk, countersignature: null };
+      return { ok: receiptOk, receipt: receiptOk, countersignature: null, checkedAgainstSuppliedKey };
     }
-    const counterOk = verifyCounterSignature(signed);
-    return { ok: receiptOk && counterOk, receipt: receiptOk, countersignature: counterOk };
+    const counterOk = verifyCounterSignature(signed, args.expectPayeeKeyPem);
+    return {
+      ok: receiptOk && counterOk,
+      receipt: receiptOk,
+      countersignature: counterOk,
+      checkedAgainstSuppliedKey: checkedAgainstSuppliedKey && args.expectPayeeKeyPem !== undefined,
+    };
   }
 
   private rebuildCheckpoint(nowMs: number): void {

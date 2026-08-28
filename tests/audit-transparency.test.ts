@@ -125,6 +125,7 @@ describe("A — transparency witness on the audit path", () => {
       checkpoints: [presented],
       settlements: settlementsOf(receipts),
       inclusionReceipts: [presentedReceipt, withheldReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
     });
     assert.equal(report.ok, false);
     assert.equal(
@@ -143,7 +144,10 @@ describe("A — transparency witness on the audit path", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
     const cp = oneCheckpoint(k, receipts);
-    const report = trustedExtract(receipts, [cp], { inclusionReceipts: [] });
+    const report = trustedExtract(receipts, [cp], {
+      inclusionReceipts: [],
+      witnessTrust: { publicKeyPem: fixtureEd25519Pems().publicKeyPem },
+    });
     assert.equal(report.ok, true);
     assert.equal(report.guarantee, "conditional");
     assert.equal(
@@ -242,6 +246,7 @@ describe("B — equivocation via the witness", () => {
       checkpoints: [presented],
       settlements: settlementsOf(a),
       inclusionReceipts: [presentedReceipt, otherReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
     });
     assert.equal(report.ok, false);
     assert.equal(

@@ -43,12 +43,19 @@ describe("env example", () => {
         const patterns = [
           // `env` here is either `process.env` or a parameter holding it.
           /env\.(CEDULON_[A-Z_]+)/g,
-          /env\["(CEDULON_[A-Z_]+)"\]/g,
+          /env\[["'](CEDULON_[A-Z_]+)["']\]/g,
           /(?:envOr|optionalList)\(\s*"(CEDULON_[A-Z_]+)"/g,
         ];
         for (const pattern of patterns) {
           for (const match of text.matchAll(pattern)) {
             used.add(match[1]);
+          }
+        }
+        // Destructuring names the variables without `env` beside each one, and a
+        // single capture group would only ever see the first of them.
+        for (const block of text.matchAll(/\{([^{}]*)\}\s*=\s*(?:process\.)?env\b/g)) {
+          for (const name of block[1].matchAll(/CEDULON_[A-Z_]+/g)) {
+            used.add(name[0]);
           }
         }
       }

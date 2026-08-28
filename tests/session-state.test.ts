@@ -29,8 +29,10 @@ describe("session state file", () => {
     assert.ok(saved.keys.receiptPrivatePem.includes("PRIVATE KEY"), "the key really is in there");
 
     if (process.platform === "win32") {
-      // POSIX mode bits are not the access control on Windows; asserting them
-      // here would be a green light that measured nothing.
+      // Measured, not assumed: on Windows the same call leaves 0666 and the mode
+      // bits are not the access control - the directory ACL is, and this project
+      // does not set it. Asserting 0600 here would be a green light for a
+      // protection that is not present on this platform.
       return;
     }
     assert.equal(statSync(statePath).mode & 0o777, 0o600, "state file is owner-only");

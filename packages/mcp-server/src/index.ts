@@ -68,7 +68,7 @@ const TOOLS = [
   {
     name: "cedulon_verify_receipt",
     description:
-      "Verify a spend receipt COSE_Sign1 (and payee countersignature when present).",
+      "Verify a spend receipt COSE_Sign1 (and payee countersignature when present). Supply expectIssuerKeyPem to check it against a key you already hold; without one the receipt is only checked against the key it carries, which any key satisfies.",
     annotations: {
       title: "Verify a spend receipt",
       readOnlyHint: true,
@@ -83,6 +83,14 @@ const TOOLS = [
         publicKeyPem: { type: "string" },
         counterCoseHex: { type: "string" },
         payeePublicKeyPem: { type: "string" },
+        expectIssuerKeyPem: {
+          type: "string",
+          description: "Issuer key you hold out of band. Omit and the check is self-referential.",
+        },
+        expectPayeeKeyPem: {
+          type: "string",
+          description: "Payee key you hold out of band, for the countersignature.",
+        },
       },
     },
   },

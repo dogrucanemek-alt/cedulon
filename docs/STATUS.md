@@ -102,6 +102,24 @@ bound, an `allowedTools` list a caller could skip by omitting the field, a nonce
 padding that made two different requests share one receipt nonce, and a state
 file that stored the signing key with no mode and no atomic write.
 
+A second pass over the same round, prompted by an independent reader, found that
+half a fix is its own failure mode. Setting a forged receipt aside for matching
+was not enough while the totals, the head and the chain still walked the whole
+submitted list: one receipt from a key the verifier had already rejected wrote
+"the checkpoint lied" and "the chain is broken" against an honest issuer, and
+noise like that argues for switching the pin off. The same shape appeared in the
+witness: an unpinned inclusion receipt could carry a rival body for an epoch and
+have the honest issuer reported for equivocating. Both now reason only over what
+the pinned roots attest. `payeeTrust` closes the countersignature, which travels
+beside the issuer signature without being covered by it; `issuerTrust` accepts a
+list of keys so an honest rotation does not read as a wall of findings; and the
+policy engine now checks a decision token against the key it signs with rather
+than the key the token carries.
+
+One platform note, recorded rather than papered over: the state file mode is
+0600 on POSIX and has no effect on Windows, where the same call leaves 0666.
+On Windows the protection is the directory ACL, which this project does not set.
+
 The spec side of this is still open: `MUST-T10-8` has no counterpart for
 receipts, checkpoints, decision tokens or inclusion receipts. That belongs in a
 later revision, written after the code it describes - which is the order that

@@ -113,7 +113,13 @@ export class PolicyEngine {
   }
 
   consumeDecisionToken(token: SignedDecisionToken, req: SpendRequest, nowMs: number): Decision {
-    if (!verifyDecisionToken(token, nowMs)) {
+    // This engine holds the key it signs decisions with, so there is no reason to
+    // ask the token which key to check it against. A token minted by anyone else
+    // is not this engine's decision, whatever it says inside.
+    if (!this.issuerKeys) {
+      return { allow: false, reason: "decision-bad-sig" };
+    }
+    if (!verifyDecisionToken(token, nowMs, this.issuerKeys.publicKeyPem)) {
       if (token.claims.expiryMs < nowMs) {
         return { allow: false, reason: "decision-expired" };
       }
@@ -123,6 +129,11 @@ export class PolicyEngine {
   }
 
   consumeDecision(decisionId: string, requestHash: string, req: SpendRequest): Decision {
+    // evaluate() refuses these, but it is not the only door into a decision: a
+    // caller holding a token reaches this one directly.
+    if (req.amount <= 0n) {
+      return { allow: false, reason: "amount-not-positive" };
+    }
     if (this.store.consumedDecisions.has(decisionId)) {
       return { allow: false, reason: "decision-replay" };
     }

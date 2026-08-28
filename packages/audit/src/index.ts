@@ -1,4 +1,4 @@
-import { toSpkiDer } from "@cedulon/cose";
+import { sameSpkiKey, toSpkiDer } from "@cedulon/cose";
 import {
   findCheckpointChainBreak,
   findEquivocation,
@@ -30,7 +30,9 @@ export const FINDING_CODES = [
   "unauthenticated-extract",
   "unauthenticated-issuer",
   "unauthenticated-witness",
+  "unauthenticated-countersigner",
   "issuer-key-mismatch",
+  "countersign-key-mismatch",
   "extract-key-mismatch",
   "extract-scope-mismatch",
   "extract-settlement-mismatch",
@@ -67,8 +69,28 @@ export type RailTrustPin = {
  * they were never authorised to make, and the row stops looking uncovered.
  */
 export type IssuerTrustPin = {
-  publicKeyPem: string;
+  /**
+   * One key, or every key the verifier accepts. A single pin turns an honest key
+   * rotation into a wall of findings, and the way out an operator reaches for is
+   * to stop pinning at all - so the set is stated rather than assumed to be one.
+   */
+  publicKeyPem: string | readonly string[];
 };
+
+/** Payee keys the verifier holds, keyed by the payee named in the receipt. */
+export type PayeeTrustPins = Readonly<Record<string, string>>;
+
+/**
+ * Reads a pin as SPKI DER. Returns null when nothing in it could be read as a
+ * public key, which a caller has to tell apart from a key that simply differs.
+ */
+function pinnedKeys(pin: string | readonly string[]): Buffer[] | null {
+  const pems = typeof pin === "string" ? [pin] : pin;
+  const ders = pems.map(toSpkiDer);
+  return ders.some((der) => der === null) || ders.length === 0
+    ? null
+    : (ders as Buffer[]);
+}
 
 export type Finding = {
   code: FindingCode;
@@ -401,13 +423,35 @@ export function findEquivocationFinding(checkpoints: SignedCheckpoint[]): Findin
   };
 }
 
+/** A log may publish under more than one key, the same way an issuer may. */
+function inclusionFromPinnedLog(
+  rec: InclusionReceipt,
+  witnessKeyPem?: string | readonly string[],
+): boolean {
+  if (witnessKeyPem === undefined) {
+    return verifyInclusionReceipt(rec);
+  }
+  const pems = typeof witnessKeyPem === "string" ? [witnessKeyPem] : witnessKeyPem;
+  return pems.some((pem) => verifyInclusionReceipt(rec, pem));
+}
+
+/**
+ * `attestsIssuer` is the second question: the witness pin says which log spoke,
+ * and this says whether the statement that log holds was signed by the issuer
+ * under audit. Without it a pinned log can carry a body anyone minted into the
+ * epoch pool.
+ */
 function verifiedWitnessCheckpoints(
   receipts: InclusionReceipt[],
-  witnessKeyPem?: string,
+  witnessKeyPem?: string | readonly string[],
+  attestsIssuer?: ((pem: string) => boolean) | null,
 ): SignedCheckpoint[] {
   const out: SignedCheckpoint[] = [];
   for (const rec of receipts) {
-    if (!verifyInclusionReceipt(rec, witnessKeyPem) || !rec.checkpoint) {
+    if (!inclusionFromPinnedLog(rec, witnessKeyPem) || !rec.checkpoint) {
+      continue;
+    }
+    if (attestsIssuer && !attestsIssuer(rec.checkpoint.publicKeyPem)) {
       continue;
     }
     if (statementHashOfCheckpoint(rec.checkpoint) !== rec.statementHash) {
@@ -424,11 +468,11 @@ function verifiedWitnessCheckpoints(
 function findTransparencyWitness(
   checkpoints: SignedCheckpoint[],
   inclusionReceipts: InclusionReceipt[],
-  witnessKeyPem?: string,
+  witnessKeyPem?: string | readonly string[],
 ): { findings: Finding[]; warnings: Finding[] } {
   const findings: Finding[] = [];
   const warnings: Finding[] = [];
-  const valid = inclusionReceipts.filter((r) => verifyInclusionReceipt(r, witnessKeyPem));
+  const valid = inclusionReceipts.filter((r) => inclusionFromPinnedLog(r, witnessKeyPem));
   const witnessHashes = new Set(valid.map((r) => r.statementHash));
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
 
@@ -457,6 +501,56 @@ function findTransparencyWitness(
   return { findings, warnings };
 }
 
+/**
+ * A countersignature travels beside the issuer signature without being covered
+ * by it, so anyone holding an honest receipt can append one of their own and it
+ * reads as the payee having approved the payment. Checking it against the key it
+ * carries answers a question that answers itself; the payee key has to come from
+ * the verifier. Findings go into `findings`; the return value is the warnings.
+ */
+function findCountersignFindings(
+  input: { receipts: SignedReceipt[]; payeeTrust?: PayeeTrustPins },
+  findings: Finding[],
+): Finding[] {
+  const warnings: Finding[] = [];
+  const countersigned = input.receipts.filter((r) => r.counterCoseHex);
+  if (countersigned.length === 0) {
+    return warnings;
+  }
+  for (const r of countersigned) {
+    const pinned = input.payeeTrust?.[r.claims.payee];
+    if (!verifyCounterSignature(r)) {
+      findings.push({
+        code: "countersign-bad",
+        id: r.claims.nonce,
+        detail: `payee countersignature on nonce=${r.claims.nonce} failed verify`,
+      });
+      continue;
+    }
+    if (pinned === undefined) {
+      continue;
+    }
+    const carried = r.payeePublicKeyPem;
+    if (carried === undefined || !sameSpkiKey(carried, pinned)) {
+      findings.push({
+        code: "countersign-key-mismatch",
+        id: r.claims.nonce,
+        detail: `the countersignature on nonce=${r.claims.nonce} is by a key other than the one pinned for payee ${r.claims.payee}, so it is not that payee approving the payment`,
+      });
+    }
+  }
+  const unpinned = countersigned.filter((r) => input.payeeTrust?.[r.claims.payee] === undefined);
+  if (unpinned.length > 0) {
+    warnings.push({
+      code: "unauthenticated-countersigner",
+      id: "countersigner",
+      detail: `${unpinned.length} receipt(s) carry a countersignature checked only against the key travelling with them; without a verifier-supplied payee key that is not evidence the payee approved anything`,
+      severity: "warn",
+    });
+  }
+  return warnings;
+}
+
 function settlementKey(s: RailSettlement): string {
   return [s.ref, s.amount, s.currency, s.timestampMs].join("\u0000");
 }
@@ -477,6 +571,8 @@ export type AuditInput = {
   issuerTrust?: IssuerTrustPin;
   /** The transparency log's key, held out of band. Same argument as the two above. */
   witnessTrust?: IssuerTrustPin;
+  /** Payee keys the verifier holds, keyed by payee. Same argument again. */
+  payeeTrust?: PayeeTrustPins;
   /** Checkpoint inclusion receipts. Absent ⇒ today's behaviour. Present ⇒ T11 witness is configured. */
   inclusionReceipts?: InclusionReceipt[];
 };
@@ -615,6 +711,9 @@ export function audit(input: AuditInput): AuditReport {
   // key it carries only proves it is internally consistent. So the receipts that
   // count as coverage are the ones answering to a second root, stated out of band.
   let attested = input.receipts;
+  // Null while no issuer key was stated: there is no attested/unattested split
+  // to make, and every check falls back to the whole submitted list.
+  let attestsIssuer: ((pem: string) => boolean) | null = null;
   if (!input.issuerTrust) {
     // Only worth saying when the audit actually leans on an issued object. An
     // audit with no receipts and no checkpoints rests on the extract alone, and
@@ -629,8 +728,8 @@ export function audit(input: AuditInput): AuditReport {
       });
     }
   } else {
-    const issuerDer = toSpkiDer(input.issuerTrust.publicKeyPem);
-    if (issuerDer === null) {
+    const issuerDers = pinnedKeys(input.issuerTrust.publicKeyPem);
+    if (issuerDers === null) {
       // The verifier's own configuration is broken. Calling this a mismatch would
       // blame the receipts for a key we could not read.
       findings.push({
@@ -641,8 +740,9 @@ export function audit(input: AuditInput): AuditReport {
     } else {
       const attests = (pem: string): boolean => {
         const der = toSpkiDer(pem);
-        return der !== null && der.equals(issuerDer);
+        return der !== null && issuerDers.some((pinned) => pinned.equals(der));
       };
+      attestsIssuer = attests;
       // Reported and then set aside: a receipt from another key is evidence about
       // that key, not coverage of the settlement it names. Leaving it in the
       // reconciliation is exactly how a forged receipt silences a naked row.
@@ -681,47 +781,49 @@ export function audit(input: AuditInput): AuditReport {
     : attested;
 
   findings.push(...findSettlementMatches(inScope, reconciled));
-  for (const r of input.receipts) {
-    if (!r.counterCoseHex) {
-      continue;
-    }
-    if (!verifyCounterSignature(r)) {
-      findings.push({
-        code: "countersign-bad",
-        id: r.claims.nonce,
-        detail: `payee countersignature on nonce=${r.claims.nonce} failed verify`,
-      });
-    }
-  }
-  const chain = findReceiptChainBreak(input.receipts);
-  if (chain) findings.push(chain);
-  findings.push(...findCheckpointTotalMismatches(input.receipts, input.checkpoints));
-  findings.push(...findWindowCoverage(input.receipts, input.checkpoints));
-  const equivPool = input.inclusionReceipts
-    ? [
-        ...input.checkpoints,
-        ...verifiedWitnessCheckpoints(input.inclusionReceipts, input.witnessTrust?.publicKeyPem),
-      ]
+  warnings.push(...findCountersignFindings(input, findings));
+  // Every check below reasons about what the issuer published. Walking the whole
+  // submitted list instead means one receipt from a key the verifier already
+  // rejected writes "the checkpoint lied" and "the chain is broken" against an
+  // honest issuer - noise that argues for switching the pin off.
+  const attestedCheckpoints = attestsIssuer
+    ? input.checkpoints.filter((cp) => attestsIssuer!(cp.publicKeyPem))
     : input.checkpoints;
-  const equiv = findEquivocationFinding(equivPool);
+  const chain = findReceiptChainBreak(attested);
+  if (chain) findings.push(chain);
+  findings.push(...findCheckpointTotalMismatches(attested, attestedCheckpoints));
+  findings.push(...findWindowCoverage(attested, attestedCheckpoints));
+
+  // A witness only adds evidence once the verifier has named the log. Until then
+  // its inclusion receipts are a log anyone could have invented, and letting them
+  // reach the epoch pool lets an attacker report the honest issuer for publishing
+  // two checkpoints of one epoch. The warning says why they were left out.
+  const witnessConfigured = Boolean(input.inclusionReceipts && input.witnessTrust);
+  const witnessCheckpoints = witnessConfigured
+    ? verifiedWitnessCheckpoints(
+        input.inclusionReceipts!,
+        (input.witnessTrust as IssuerTrustPin).publicKeyPem,
+        attestsIssuer,
+      )
+    : [];
+  const equiv = findEquivocationFinding([...attestedCheckpoints, ...witnessCheckpoints]);
   if (equiv) findings.push(equiv);
 
   if (input.inclusionReceipts) {
-    const witness = findTransparencyWitness(
-      input.checkpoints,
-      input.inclusionReceipts,
-      input.witnessTrust?.publicKeyPem,
-    );
-    findings.push(...witness.findings);
-    warnings.push(...witness.warnings);
-    if (!input.witnessTrust) {
-      // An inclusion receipt that answers to no named log can silence
-      // `checkpoint-not-anchored` by asserting an anchoring nobody can check.
+    if (witnessConfigured) {
+      const witness = findTransparencyWitness(
+        attestedCheckpoints,
+        input.inclusionReceipts,
+        (input.witnessTrust as IssuerTrustPin).publicKeyPem,
+      );
+      findings.push(...witness.findings);
+      warnings.push(...witness.warnings);
+    } else {
       warnings.push({
         code: "unauthenticated-witness",
         id: "witness",
         detail:
-          "no verifier-supplied witness key; an inclusion receipt is checked against the key it carries, so it proves the log's own consistency rather than that the named log anchored the checkpoint",
+          "no verifier-supplied witness key; an inclusion receipt is checked against the key it carries, so it says a log exists rather than that the named log anchored anything, and it was left out of the comparison",
         severity: "warn",
       });
     }
@@ -758,7 +860,8 @@ export function audit(input: AuditInput): AuditReport {
       f.code === "trust-key-unreadable" ||
       f.code === "extract-scope-mismatch" ||
       f.code === "extract-settlement-mismatch" ||
-      f.code === "issuer-key-mismatch",
+      f.code === "issuer-key-mismatch" ||
+      f.code === "countersign-key-mismatch",
   );
   return {
     ok: hard.length === 0,

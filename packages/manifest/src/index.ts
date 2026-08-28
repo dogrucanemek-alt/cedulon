@@ -7,6 +7,7 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
+  sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
@@ -110,7 +111,15 @@ export function signManifest(
   };
 }
 
-export function verifyManifest(signed: SignedManifest): boolean {
+/**
+ * `expectedIssuerKeyPem` is the key the caller holds for whoever was entitled to
+ * publish this manifest. Omitted, the manifest is checked against the key it
+ * carries, which any minted key satisfies.
+ */
+export function verifyManifest(signed: SignedManifest, expectedIssuerKeyPem?: string): boolean {
+  if (expectedIssuerKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedIssuerKeyPem)) {
+    return false;
+  }
   if (!signed.coseHex) {
     return false;
   }
