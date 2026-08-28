@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/manifest",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Signed trade manifests issued before a Cedulon spend.",
   "license": "Apache-2.0",
   "type": "module",

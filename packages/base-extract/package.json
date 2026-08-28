@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/base-extract",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Read-only Base Sepolia USDC Transfer logs as a Cedulon rail extract.",
   "license": "Apache-2.0",

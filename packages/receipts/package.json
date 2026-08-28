@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/receipts",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Signed spend receipts (COSE_Sign1, Ed25519) for Cedulon.",
   "license": "Apache-2.0",
   "type": "module",
