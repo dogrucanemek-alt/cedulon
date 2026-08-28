@@ -177,12 +177,12 @@ describe("trust roots, sixth pass", () => {
       false,
       "still no accusation: the entry names no issuer",
     );
+    const unattributable = report.warnings.find((w) => w.code === "witness-entry-unattributable");
     assert.ok(
-      report.warnings.some(
-        (w) => w.code === "witness-entry-unattributable" && w.id === strippedHidden.statementHash,
-      ),
+      unattributable,
       "but the operator is told the log holds something this chain does not present",
     );
+    assert.match(unattributable.detail, new RegExp(strippedHidden.statementHash));
     assert.equal(report.guarantee, "conditional");
   });
 
@@ -277,5 +277,70 @@ describe("trust roots, sixth pass", () => {
       true,
       "a stale lock is taken over rather than obeyed forever",
     );
+  });
+});
+
+describe("trust roots, seventh pass", () => {
+  it("78 RED then GREEN: a payment is not made when its receipt cannot be recorded", () => {
+    // The order was settle, then append, then save. A save that failed left the
+    // rail ledger holding a settlement whose receipt existed only in memory -
+    // restart the server and it is a settlement with no receipt, which is the
+    // single condition this whole project exists to make impossible.
+    const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-order-")), "state.json");
+    const first = new CedulonSession({ statePath });
+    assert.equal(
+      first.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "s0".padEnd(16, "-") }, 1).ok,
+      true,
+    );
+
+    // A second server writes, so `first` is now holding a stale view.
+    const second = new CedulonSession({ statePath });
+    assert.equal(
+      second.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "s1".padEnd(16, "-") }, 2).ok,
+      true,
+    );
+
+    const ledgerBefore = first.ledger.extract().length;
+    const receiptsBefore = first.receipts.length;
+    const denied = first.spend(
+      { amount: "1", currency: "USD", payee: "payee-1", nonce: "s2".padEnd(16, "-") },
+      3,
+    );
+    assert.equal(denied.ok, false, "the payment is refused rather than half-made");
+    assert.equal(denied.ok === false && denied.reason, "state-conflict");
+    assert.equal(first.ledger.extract().length, ledgerBefore, "nothing settled on the rail");
+    assert.equal(first.receipts.length, receiptsBefore, "and no receipt was appended");
+  });
+
+  it("79 RED then GREEN: a flood of unattributable log entries is one warning, not thousands", () => {
+    // Entries with no body are free to produce. One warning each let an attacker
+    // bury the real findings and drag an honest audit to conditional by volume.
+    const honest = generateReceiptKeys();
+    const witness = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const good = receiptFor(honest, "ref-ok", 0);
+    const extract = railWith(rail, [{ ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW }]);
+    const presented = checkpointFor(honest, [good], 1);
+
+    const log = new MemoryTransparencyService(witness);
+    const inclusions = [anchorCheckpoint(log, presented)];
+    for (let i = 0; i < 50; i += 1) {
+      const other = checkpointFor(honest, [good], 100 + i);
+      const { checkpoint: _body, ...bodyless } = anchorCheckpoint(log, other);
+      inclusions.push(bodyless);
+    }
+
+    const report = audit({
+      receipts: [good],
+      checkpoints: [presented],
+      extract,
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      witnessTrust: { publicKeyPem: witness.publicKeyPem },
+      inclusionReceipts: inclusions,
+    });
+    const unattributable = report.warnings.filter((w) => w.code === "witness-entry-unattributable");
+    assert.equal(unattributable.length, 1, "one warning that counts them, not one per entry");
+    assert.match(unattributable[0].detail, /50/, "and it says how many");
   });
 });

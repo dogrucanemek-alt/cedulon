@@ -158,6 +158,14 @@ path rather than the immediate parent, since a grandparent anyone can write lets
 the parent be renamed away with the key in it, and symlinks are refused at every
 save rather than only at startup.
 
+The sharpest finding of the whole round came from that lock rather than from the
+audit engine. The server settled, appended the receipt, and saved - so a save
+that failed left the rail ledger holding a settlement whose receipt existed only
+in memory. Restart, and it is a settlement with no receipt: the exact condition
+this project exists to make impossible, produced by the server itself. Settling
+and saving now happen under one lock, and a spend whose record cannot be written
+is refused before any money moves.
+
 Two platform facts are recorded rather than papered over. The state file mode is
 0600 where the filesystem honours it and has no effect on Windows or on mounts
 that ignore POSIX modes, so `stateProtection` is now read back off the file

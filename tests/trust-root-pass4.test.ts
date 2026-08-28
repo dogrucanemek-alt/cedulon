@@ -277,12 +277,15 @@ describe("trust roots, fourth pass", () => {
       true,
     );
 
-    // `first` is now holding a view of the state that is no longer on disk.
-    assert.throws(
-      () => first.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "one".padEnd(16, "-") }, 3),
-      /cedulon-state-conflict/,
-      "writing over a state this session did not produce would drop the other writer's receipt",
+    // `first` is now holding a view of the state that is no longer on disk. The
+    // payment is refused before anything settles, rather than settled and then
+    // failing to record - see case 78.
+    const denied = first.spend(
+      { amount: "1", currency: "USD", payee: "payee-1", nonce: "one".padEnd(16, "-") },
+      3,
     );
+    assert.equal(denied.ok, false);
+    assert.equal(denied.ok === false && denied.reason, "state-conflict");
     const onDisk = JSON.parse(readFileSync(statePath, "utf8"));
     assert.deepEqual(
       onDisk.receipts.map((r: SignedReceipt) => r.claims.nonce),

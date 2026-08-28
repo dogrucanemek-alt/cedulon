@@ -160,6 +160,7 @@ export class CedulonSession {
   private readonly statePath: string | null;
   /** Fingerprint of the state file as this session last saw it. */
   private lastSeenState: string | null = null;
+  private lockDepth = 0;
 
   constructor(opts?: { policy?: Policy; keys?: AdapterKeys; statePath?: string | null; payer?: string }) {
     this.payer = opts?.payer ?? envOr("CEDULON_PAYER", "payer-1");
@@ -181,6 +182,20 @@ export class CedulonSession {
   }
 
   spend(args: SpendArgs, nowMs = Date.now()): SpendOutcome {
+    // Settle first and save afterwards and a failed save leaves the rail holding
+    // a settlement whose receipt exists only in memory. Restart, and it is a
+    // settlement with no receipt - the one condition this project exists to make
+    // impossible. So the whole thing happens under the lock, and the write is
+    // proven possible before any money moves.
+    return this.withStateLock(() => {
+      if (this.statePath && this.readStateFingerprint() !== this.lastSeenState) {
+        return { ok: false, reason: "state-conflict" };
+      }
+      return this.settleAndRecord(args, nowMs);
+    });
+  }
+
+  private settleAndRecord(args: SpendArgs, nowMs: number): SpendOutcome {
     const prev = this.receipts.length === 0 ? null : receiptHash(this.receipts[this.receipts.length - 1]);
     const result = gatedSettleWithLedger(
       this.engine,
@@ -321,9 +336,19 @@ export class CedulonSession {
    * over rather than obeyed forever.
    */
   private withStateLock<T>(run: () => T): T {
-    if (!this.statePath) {
-      return run();
+    if (!this.statePath || this.lockDepth > 0) {
+      // Already held by an outer call - settling and saving happen under one
+      // lock, so the payment and the record it needs cannot be separated.
+      this.lockDepth += 1;
+      try {
+        return run();
+      } finally {
+        this.lockDepth -= 1;
+      }
     }
+    // The lock now guards the whole settle-and-save, which can run before the
+    // state file has ever been written, so its directory has to exist first.
+    mkdirSync(dirname(this.statePath), { recursive: true, mode: 0o700 });
     const lockPath = `${this.statePath}.lock`;
     const claim = () => writeFileSync(lockPath, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 0o600 });
     try {
@@ -338,9 +363,11 @@ export class CedulonSession {
       rmSync(lockPath, { force: true });
       claim();
     }
+    this.lockDepth += 1;
     try {
       return run();
     } finally {
+      this.lockDepth -= 1;
       rmSync(lockPath, { force: true });
     }
   }

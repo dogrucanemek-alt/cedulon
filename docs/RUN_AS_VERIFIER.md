@@ -303,6 +303,13 @@ an exclusive lock now: a second writer gets `cedulon-state-locked`, a stale lock
 whose holder is gone is taken over, and a state this session did not produce is
 still `cedulon-state-conflict`.
 
+The settle and the save happen under one lock, and the write is proven possible
+before any money moves. The other order - settle, append, save - leaves the rail
+holding a settlement whose receipt exists only in memory when the save fails;
+restart the server and that is a settlement with no receipt, which is the single
+condition this project exists to make impossible. A spend that cannot be
+recorded is refused with `state-conflict` instead.
+
 `stateProtection` walks every directory on the path, not just the last one: a
 grandparent anyone can write lets the parent be renamed away with the key inside
 it. A directory that is open to others but sticky - a shared `/tmp` - is fine,

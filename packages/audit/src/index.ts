@@ -548,16 +548,18 @@ function findTransparencyWitness(
     }
   }
 
-  for (const rec of anchoring) {
-    if (rec.checkpoint || presentedHashes.has(rec.statementHash)) {
-      continue;
-    }
-    // Cannot name who logged it, so it is not an accusation - but a real
-    // withholding goes silent if stripping the body is enough to bury it.
+  // Cannot name who logged these, so they are not accusations - but a real
+  // withholding goes silent if stripping the body is enough to bury it. Counted
+  // rather than listed: entries with no body are free to produce, and one
+  // warning each would let an attacker bury the findings under volume.
+  const unattributable = anchoring.filter(
+    (rec) => !rec.checkpoint && !presentedHashes.has(rec.statementHash),
+  );
+  if (unattributable.length > 0) {
     warnings.push({
       code: "witness-entry-unattributable",
-      id: rec.statementHash,
-      detail: `the witness holds statement ${rec.statementHash}, which this chain does not present and which carries no body to say whose it is`,
+      id: "witness",
+      detail: `the witness holds ${unattributable.length} statement(s) this chain does not present and which carry no body to say whose they are; first is ${unattributable[0].statementHash}`,
       severity: "warn",
     });
   }
