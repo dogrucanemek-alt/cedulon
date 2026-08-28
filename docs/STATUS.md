@@ -61,12 +61,14 @@ submitted to that directory yet. Smithery takes an HTTPS endpoint or a bundle;
 neither has been submitted there either.
 
 The server is listed on Glama at `dogrucanemek-alt/cedulon`. License and
-quality both grade A; the release is 0.2.3 and Install Server is active. The
+quality both grade A; the release listed there is still 0.2.3 and Install Server
+is active. That number moves when Glama is actually updated, not when npm is. The
 `Dockerfile` here is the image that was built and whose server answered
 `initialize`, listed five tools, and returned a signed receipt.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.2.3` is the current version (`isLatest`). `server.json` is the entry
+where `0.3.0` is the current version (`isLatest`), read back from the registry
+API rather than from the publish command's own output. `server.json` is the entry
 it was published from. Earlier listings: `0.2.1` announced itself as `0.2.0`
 over `initialize`, because the version was written out a second time in the
 source; `0.2.2` replaced that. `tests/release-manifest.test.ts` and the version
