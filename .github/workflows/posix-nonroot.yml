@@ -1,0 +1,34 @@
+# chmod 0500 is a no-op for uid 0, so cases 80 and 81 pass as a lie there.
+# ubuntu-latest is already a non-root runner; this job refuses to continue if not.
+name: posix-nonroot
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/mcp-server/**"
+      - "tests/trust-root-pass6.test.ts"
+      - "tests/trust-root-pass7.test.ts"
+      - ".github/workflows/posix-nonroot.yml"
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: refuse root
+        run: |
+          test "$(id -u)" != "0"
+          echo "uid=$(id -u) user=$(id -un)"
+      - run: npm ci --ignore-scripts
+      - run: npm run build:packages
+      - name: lock and io cases as a non-root user
+        run: |
+          node --experimental-strip-types --test --test-name-pattern "76|80|81" \
+            tests/trust-root-pass6.test.ts \
+            tests/trust-root-pass7.test.ts
