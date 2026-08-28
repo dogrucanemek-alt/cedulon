@@ -602,9 +602,16 @@ computed over evidence that answers to nobody.
 A verifier MUST obtain the issuer's public key out of band and MUST
 verify Spend Receipt and epoch checkpoint signatures against that key
 rather than against a key the object carries (`MUST-T4-9`). A
-verifier that holds no such key MUST treat the completeness guarantee
-as conditional and SHOULD report the condition; the identifier
-`unauthenticated-issuer` is used for it in this implementation.
+verifier that holds no such key and is presented with any issued
+object MUST treat the completeness guarantee as conditional and SHOULD
+report the condition; the identifier `unauthenticated-issuer` is used
+for it in this implementation.
+
+The condition is on being presented with an issued object because an
+audit given no receipts and no checkpoints rests on the extract alone.
+There the absent issuer root withholds nothing, and warning about a
+root the audit never consulted would spend the warning where it
+carries no information.
 
 Reporting a mismatch is not sufficient on its own. A receipt that
 does not answer to the pinned issuer key MUST NOT count as coverage
@@ -1232,7 +1239,7 @@ requirement text those citations refer to.
 | MAY-T4-6 | Parties MAY register the signed receipt as a SCITT statement to obtain a COSE receipt. |
 | MUST-T4-7 | A Spend Receipt MUST include `outcome` (`settled` or `aborted`). A settled receipt MUST have a non-null rail ref. Aborted receipts MUST NOT enter checkpoint totals. |
 | MUST-T4-8 | COSE_Sign1 protected headers MUST use alg -19 (Ed25519), a mandatory `kid`, and a payload-specific content type. Verifiers MUST reject a `kid` that does not match the configured issuer key. |
-| MUST-T4-9 | A verifier MUST obtain the issuer public key out of band and MUST verify Spend Receipt and epoch checkpoint signatures against that key, not against a key the object carries. Without such a key the completeness guarantee is conditional. |
+| MUST-T4-9 | A verifier MUST obtain the issuer public key out of band and MUST verify Spend Receipt and epoch checkpoint signatures against that key, not against a key the object carries. A verifier without such a key that is presented with any issued object MUST report the completeness guarantee as conditional. An audit presented with none rests on the extract alone and is not made conditional by this requirement. |
 | MUST-T4-10 | A receipt that does not verify against the pinned issuer key MUST NOT count as coverage for the settlement it names, and that settlement MUST still be reported as uncovered. Reporting the mismatch is not sufficient on its own. |
 | MUST-T4-11 | Pinned issuer keys MUST be compared by SubjectPublicKeyInfo DER encoding. A pinned key that cannot be decoded MUST be reported as a verifier configuration fault rather than as a mismatch, and where no pinned key decodes, the verifier MUST NOT fall back to the keys the objects carry. |
 | MUST-T4-12 | An issuer root MAY be a set of keys, so that a key rotation inside the audited window does not require the verifier to abandon pinning. |
@@ -1412,14 +1419,31 @@ can tell those apart.
 
 Ordering:
 : Settle-then-record is the natural order to write and the wrong one
-  to ship. The record is what makes the settlement accountable, so
-  the record is what has to be secured first.
+  to ship. The record is what makes the settlement accountable, so the
+  record is what has to be secured first (`MUST-T12-1`), and a
+  settlement that cannot be recorded has to be undone everywhere it
+  reached, including the nonce and the allowance it never used
+  (`MUST-T12-2`).
 
 Recovery:
 : A durable-state conflict is not necessarily fatal, but it MUST NOT
   be silent, and an implementation that refuses every subsequent
   write without offering a way back has turned a recoverable
-  condition into an outage.
+  condition into an outage. The reason reported has to separate the
+  cases an operator would act on differently (`MUST-T12-3`): a write
+  that conflicted with another writer, a write that failed, and a
+  state another process is holding. A single opaque failure leaves the
+  operator to guess which of those happened.
+
+Observability:
+: A violation of this threat is not visible in the evidence a verifier
+  receives. The audit sees a settlement with no receipt and reports
+  `settlement-without-receipt`, which is the same finding an adversary
+  would produce, and nothing in the extract or the receipt set
+  distinguishes an issuer that lost the evidence from one that hid it.
+  That is why the requirements here fall on the issuer rather than on
+  the verifier, and why an operator-facing reason is required rather
+  than optional.
 
 # IANA Considerations {#iana}
 
@@ -1485,6 +1509,10 @@ Coverage:
   the withheld and not-anchored conditions, and signed totals
   redaction. Every requirement added in this revision is implemented
   and covered by a red-then-green case before appearing in this text.
+  Two of those cases, for a symbolic link on the path to a stored key
+  and for a write interrupted part way, assert only on POSIX; on
+  Windows they return early, so a passing suite on that platform does
+  not exercise them.
   The witness used in the suite is the in-process append-only log that
   `MAY-T11-6` permits; the implementation has not been run against a
   deployed Transparency Service, and it treats a receipt as a signature
@@ -1498,19 +1526,24 @@ Contact:
 : The author of this document.
 
 Experience:
-: Readers of -00 and -01 have reported defects in both, and each
+: Readers of -00, -01 and -02 have reported defects in each, and every
   revision has been driven by what they found rather than by a plan.
   -01 fixed a bypass of the completeness claim and a gap about which
-  key an extract is checked against. The defect behind this revision
-  was reported against -01 by a reader who then had it independently
-  confirmed by a second: the object carrying the T11 guarantee was not
-  profiled for registration and was never read during verification.
-  Repairing it turned up one more, found while checking the repair
-  rather than reported: the first attempt asserted the totals
-  redaction in a field outside the signature, which let a checkpoint
-  with wrong signed totals be re-presented as redacted and silence the
-  mismatch. That is the defect `MUST-T11-13` now forbids, and it was
-  the same shape as the bypass -01 was written to fix.
+  key an extract is checked against. -02 repaired a defect reported
+  against -01 and independently confirmed by a second reader: the
+  object carrying the T11 guarantee was neither profiled for
+  registration nor read during verification.
+
+: The defect behind this revision was reported against the posted -02.
+  A reader asked whether the profile should accept a pinned witness key
+  and report an absent or mismatched pin explicitly. That is the
+  question `MUST-T10-8` had already answered for the rail extract and
+  for nothing else, and following it into the implementation found the
+  same omission for the Spend Receipt, the epoch checkpoint and the
+  Decision Token. T12 came from neither reader nor adversary: five
+  rounds of trying to break the implementation found it producing,
+  against itself, the one condition this document exists to make
+  detectable.
 
 Note on distribution: the requirements added in this revision are in
 the published `@cedulon` packages at version 0.3.0, not only in the
@@ -1522,8 +1555,10 @@ Versions 0.2.x and earlier predate everything in this revision.
 
 ## Changes from -02 {#changes-02}
 
-This revision has one subject: -02 stated a rule in one place and left
-it unstated everywhere the same rule applied.
+This revision has two subjects. The first is that -02 stated a rule in
+one place and left it unstated everywhere the same rule applied. The
+second is T12, which no reader reported and which is not about an
+adversary at all.
 
 `MUST-T10-8` requires a rail extract to be verified against a key the
 verifier obtained out of band, "not against a key the extract
@@ -1567,9 +1602,34 @@ document exists to make detectable was reachable through the
 implementation's own ordering, and no requirement in -02 said
 otherwise.
 
+The same first subject carries five requirements this section has not
+named so far, all of them stated in {{trust-roots}}. A pinned key that
+cannot be decoded MUST NOT fall back to the keys the objects carry
+(`MUST-T4-11`). An issuer root MAY be a set of keys, so a rotation
+inside the audited window does not force the verifier to choose between
+findings against honest receipts and abandoning the pin
+(`MUST-T4-12`). The same out-of-band rule reaches the payee
+countersignature (`MUST-T4-13`), the transparency witness
+(`MUST-T11-15` and `MUST-T11-16`), and the Decision Token, whose
+consumer issued it and therefore already holds the key to check it
+with (`MUST-T6-6`).
+
+Two requirements belong to neither subject. `MUST-T7-5` and
+`MUST-T7-6` come from measuring the protection a stored signing key
+actually has instead of deriving it from the platform. A mount that
+ignores filesystem permissions accepts the call and protects nothing,
+and a writable directory or a symbolic link anywhere on the path makes
+the file permission moot. They are stated because the implementation
+reported protection it did not have.
+
 Two things are stated here that -02 got right and this revision keeps
 unchanged: the extract rule itself, and the treatment of a pinned key
-the verifier cannot decode. What changed is their reach.
+the verifier cannot decode. What changed is their reach, and the
+change is not backward compatible. An audit that -02 would have
+reported as unconditional, where the verifier pinned the rail key and
+supplied no issuer key, is reported as conditional under this
+revision. Nothing about the evidence changed; what changed is that the
+guarantee now says which questions were never asked.
 
 ## Changes from -01 {#changes}
 
@@ -1699,15 +1759,20 @@ completeness.
 # Acknowledgments
 {:numbered="false"}
 
-Vernon Wharff set out the defect this revision repairs: that the
-object carrying the T11 guarantee was neither profiled for
-registration nor read during verification, and that the equivocation
-requirement could not fire against a presented chain. He also asked
-the question that decided the shape of the repair, namely whether a
-recorded checkpoint absent from the chain deserves its own identifier
-or belongs under window coverage. Iman Schrock confirmed the finding
-independently and drew its boundary, keeping it separate from the
-extract-binding work already closed in -01.
+Vernon Wharff set out the defect -02 repairs: that the object
+carrying the T11 guarantee was neither profiled for registration nor
+read during verification, and that the equivocation requirement could
+not fire against a presented chain. He also asked the question that
+decided the shape of that repair, namely whether a recorded checkpoint
+absent from the chain deserves its own identifier or belongs under
+window coverage. Iman Schrock confirmed the finding independently and
+drew its boundary, keeping it separate from the extract-binding work
+already closed in -01.
+
+Iman Schrock raised the defect this revision repairs, against the
+posted -02: whether the profile should accept a pinned witness key and
+report an absent or mismatched pin explicitly. It should, and the same
+question turned out to be unanswered for three further objects.
 
 Iman Schrock and Pablo Play ran the -00 implementation against the
 pinned commit and reported the defects that produced -01. Iman Schrock
@@ -1721,10 +1786,12 @@ that separation is his and is recorded here as he stated it. Pablo Play found th
 amount, filed a written reproduction, and re-ran that reproduction
 against the pinned commit to confirm the figures quoted from it.
 
-Nicholas Templeman ran the suite from a clean clone on a different
-operating system and reported his figures, and classified his own run
-honestly as a repetition of the author's checks rather than an
-independent implementation. Walter Hawkins did not run it; he read the
+Nicholas Templeman ran the suite from a clean clone and reported his
+figures. He also corrected a row written about that run: his platform
+was the same operating system family as the earlier ones, so the run
+corroborates the numbers and adds no cross-environment evidence. He
+classified his own run honestly as a repetition of the author's checks
+rather than an independent implementation. Walter Hawkins did not run it; he read the
 reported figures and pressed for the run to be stated precisely enough
 to be repeatable, which is why the conditions and not only the totals
 appear in {{impl-status}}.

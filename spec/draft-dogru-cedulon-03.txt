@@ -99,12 +99,12 @@ Table of Contents
    9.  Trust roots . . . . . . . . . . . . . . . . . . . . . . . . .  15
      9.1.  The issuer root . . . . . . . . . . . . . . . . . . . . .  15
      9.2.  The payee root  . . . . . . . . . . . . . . . . . . . . .  16
-     9.3.  The witness root  . . . . . . . . . . . . . . . . . . . .  16
+     9.3.  The witness root  . . . . . . . . . . . . . . . . . . . .  17
      9.4.  The decision root . . . . . . . . . . . . . . . . . . . .  17
      9.5.  What the roots do not cover . . . . . . . . . . . . . . .  17
-   10. Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  17
+   10. Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  18
      10.1.  Checkpoint claims  . . . . . . . . . . . . . . . . . . .  18
-     10.2.  Genesis and continuity . . . . . . . . . . . . . . . . .  18
+     10.2.  Genesis and continuity . . . . . . . . . . . . . . . . .  19
      10.3.  The transparency witness . . . . . . . . . . . . . . . .  19
 
 
@@ -117,13 +117,13 @@ Internet-Draft                   Cedulon                     August 2026
      10.4.  Verification algorithm . . . . . . . . . . . . . . . . .  20
      10.5.  Finding codes  . . . . . . . . . . . . . . . . . . . . .  24
    11. Lifecycle . . . . . . . . . . . . . . . . . . . . . . . . . .  29
-   12. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  29
+   12. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  30
    13. SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  30
-   14. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  30
+   14. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  31
    15. Security Considerations . . . . . . . . . . . . . . . . . . .  31
-     15.1.  T1: Prompt injection leads to unauthorized spend . . . .  31
+     15.1.  T1: Prompt injection leads to unauthorized spend . . . .  32
      15.2.  T2: Runaway agent (loop spend) . . . . . . . . . . . . .  32
-     15.3.  T3: Replay of payment authority  . . . . . . . . . . . .  32
+     15.3.  T3: Replay of payment authority  . . . . . . . . . . . .  33
      15.4.  T4: Receipt forgery or repudiation . . . . . . . . . . .  33
      15.5.  T5: Policy bypass via direct rail access . . . . . . . .  35
      15.6.  T6: TOCTOU between policy check and payment  . . . . . .  35
@@ -131,25 +131,25 @@ Internet-Draft                   Cedulon                     August 2026
      15.8.  T8: Counterparty price gouging or defective delivery . .  37
      15.9.  MUST-T8-custody  . . . . . . . . . . . . . . . . . . . .  38
      15.10. T9: PII leakage into the transparency log  . . . . . . .  38
-     15.11. T10: Secret spend via rail bypass  . . . . . . . . . . .  38
+     15.11. T10: Secret spend via rail bypass  . . . . . . . . . . .  39
      15.12. T11: Checkpoint suppression or rollback  . . . . . . . .  41
-     15.13. Optional escrow role . . . . . . . . . . . . . . . . . .  43
+     15.13. Optional escrow role . . . . . . . . . . . . . . . . . .  44
      15.14. T12: Settlement without a recorded receipt . . . . . . .  44
-   16. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  45
-   17. Implementation Status . . . . . . . . . . . . . . . . . . . .  45
-     17.1.  Changes from -02 . . . . . . . . . . . . . . . . . . . .  47
-     17.2.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  48
-   18. Evolution and Future Work (Informative) . . . . . . . . . . .  49
-     18.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  50
-     18.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  50
-     18.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  50
-   19. Informative Notes on Adjacent Protocols . . . . . . . . . . .  50
-   20. References  . . . . . . . . . . . . . . . . . . . . . . . . .  51
-     20.1.  Normative References . . . . . . . . . . . . . . . . . .  51
-     20.2.  Informative References . . . . . . . . . . . . . . . . .  52
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  53
-   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  54
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  55
+   16. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  46
+   17. Implementation Status . . . . . . . . . . . . . . . . . . . .  46
+     17.1.  Changes from -02 . . . . . . . . . . . . . . . . . . . .  48
+     17.2.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  50
+   18. Evolution and Future Work (Informative) . . . . . . . . . . .  51
+     18.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  52
+     18.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  52
+     18.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  52
+   19. Informative Notes on Adjacent Protocols . . . . . . . . . . .  52
+   20. References  . . . . . . . . . . . . . . . . . . . . . . . . .  53
+     20.1.  Normative References . . . . . . . . . . . . . . . . . .  53
+     20.2.  Informative References . . . . . . . . . . . . . . . . .  54
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  55
+   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  56
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  57
 
 1.  Introduction
 
@@ -821,17 +821,17 @@ Internet-Draft                   Cedulon                     August 2026
    A verifier MUST obtain the issuer's public key out of band and MUST
    verify Spend Receipt and epoch checkpoint signatures against that key
    rather than against a key the object carries (MUST-T4-9).  A verifier
-   that holds no such key MUST treat the completeness guarantee as
-   conditional and SHOULD report the condition; the identifier
-   unauthenticated-issuer is used for it in this implementation.
+   that holds no such key and is presented with any issued object MUST
+   treat the completeness guarantee as conditional and SHOULD report the
+   condition; the identifier unauthenticated-issuer is used for it in
+   this implementation.
 
-   Reporting a mismatch is not sufficient on its own.  A receipt that
-   does not answer to the pinned issuer key MUST NOT count as coverage
-   for the settlement it names, and the settlement MUST still be
-   reported as uncovered (MUST-T4-10).  A verifier that reports the
-   mismatch and then lets the receipt match the settlement anyway has
-   described the attack in its output while still concluding that the
-   books balance.
+   The condition is on being presented with an issued object because an
+   audit given no receipts and no checkpoints rests on the extract
+   alone.  There the absent issuer root withholds nothing, and warning
+   about a root the audit never consulted would spend the warning where
+   it carries no information.
+
 
 
 
@@ -841,6 +841,14 @@ Dogru                     Expires 1 March 2027                 [Page 15]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   Reporting a mismatch is not sufficient on its own.  A receipt that
+   does not answer to the pinned issuer key MUST NOT count as coverage
+   for the settlement it names, and the settlement MUST still be
+   reported as uncovered (MUST-T4-10).  A verifier that reports the
+   mismatch and then lets the receipt match the settlement anyway has
+   described the attack in its output while still concluding that the
+   books balance.
 
    Keys are compared as bytes, by their SubjectPublicKeyInfo DER
    encoding, on the same terms as MUST-T10-9.  A pinned issuer key the
@@ -878,6 +886,18 @@ Internet-Draft                   Cedulon                     August 2026
    MUST be reported (MUST-T4-14).  Otherwise an attacker removes their
    own failed forgery and the report returns to unconditional.
 
+
+
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 16]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
 9.3.  The witness root
 
    Section 10.3 describes what a transparency witness adds.  An
@@ -890,13 +910,6 @@ Internet-Draft                   Cedulon                     August 2026
    as evidence, in either direction: they cannot establish that a
    checkpoint was anchored, and they cannot establish that one was
    withheld.  A verifier SHOULD report that it left them out.
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 16]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    A log holds statements from everyone who uses it.  A statement held
    by a pinned log MUST additionally answer to the issuer root before it
@@ -933,6 +946,14 @@ Internet-Draft                   Cedulon                     August 2026
    anyone and are reported as conditions of the submission rather than
    as failures of a party.
 
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 17]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
 10.  Reconciliation and Epoch Checkpoints
 
    Completeness is the property that, given an authenticated rail
@@ -942,17 +963,6 @@ Internet-Draft                   Cedulon                     August 2026
    *settled* receipts in the checkpoint window.  If a spend occurred
    without a receipt, the missing receipt is itself the evidence (MUST-
    T10-2).
-
-
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 17]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    A checkpoint published with its totals withheld (Section 10.1) cannot
    contribute the last of those to the property.  It is not a violation
@@ -992,16 +1002,6 @@ Internet-Draft                   Cedulon                     August 2026
    missing any of them does not decode, and a verifier MUST treat it as
    a failed checkpoint rather than as a redacted one.
 
-10.2.  Genesis and continuity
-
-   The first checkpoint in a presented chain is the genesis checkpoint
-   of that chain.  Its prevCheckpointHash MUST be null.  Epoch numbers
-   MUST be consecutive integers.  Adjacent windows MUST satisfy
-   next.startMs = prev.endMs (MUST-T11-8).
-
-
-
-
 
 
 
@@ -1009,6 +1009,13 @@ Dogru                     Expires 1 March 2027                 [Page 18]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+10.2.  Genesis and continuity
+
+   The first checkpoint in a presented chain is the genesis checkpoint
+   of that chain.  Its prevCheckpointHash MUST be null.  Epoch numbers
+   MUST be consecutive integers.  Adjacent windows MUST satisfy
+   next.startMs = prev.endMs (MUST-T11-8).
 
    A later checkpoint that omits a prefix of earlier epochs (prefix
    deletion) is detectable only if an external witness (transparency
@@ -1050,13 +1057,6 @@ Internet-Draft                   Cedulon                     August 2026
    levels of checking follow from that, and they are not the same (MUST-
    T11-10).
 
-   Every receipt MUST have its signature verified before it counts for
-   anything.  That is what establishes the hash as one the service
-   signed for, and it is all that comparing recorded hashes against
-   presented ones requires: the verifier computes the statement hash of
-   each presented checkpoint itself.
-
-
 
 
 
@@ -1065,6 +1065,12 @@ Dogru                     Expires 1 March 2027                 [Page 19]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   Every receipt MUST have its signature verified before it counts for
+   anything.  That is what establishes the hash as one the service
+   signed for, and it is all that comparing recorded hashes against
+   presented ones requires: the verifier computes the statement hash of
+   each presented checkpoint itself.
 
    A receipt accompanied by the statement body carries more, and MUST be
    checked further before that body is relied on.  The body's statement
@@ -1108,12 +1114,6 @@ Internet-Draft                   Cedulon                     August 2026
    1.   Establish the subject of the audit.  When an extract is
         supplied, the settlement records it carries are the ones
         reconciled; a settlement list from any other source MUST NOT be
-        substituted for them (MUST-T10-12).  If the caller supplies both
-        and they differ, the verifier MUST report that the caller-
-        supplied list disagrees with the extract, and MUST still
-        reconcile the extract.  The identifier extract-settlement-
-        mismatch SHOULD be used for this condition in diagnostic output.
-
 
 
 
@@ -1121,6 +1121,12 @@ Dogru                     Expires 1 March 2027                 [Page 20]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+        substituted for them (MUST-T10-12).  If the caller supplies both
+        and they differ, the verifier MUST report that the caller-
+        supplied list disagrees with the extract, and MUST still
+        reconcile the extract.  The identifier extract-settlement-
+        mismatch SHOULD be used for this condition in diagnostic output.
 
    2.   Verify the extract signature against the out-of-band rail key
         (MUST-T10-8, MUST-T10-9).  If no key is pinned, the verifier
@@ -1164,12 +1170,6 @@ Internet-Draft                   Cedulon                     August 2026
    5.   Scope the receipts.  When an extract is supplied, only receipts
         whose timestampMs falls in the extract's declared window are
         reconciled against it (MUST-T10-16).  A receipt outside that
-        window is not a completeness failure against this extract;
-        auditing a longer period requires extracts that cover it.
-        Receipts remain subject to every other check regardless of
-        window.
-
-
 
 
 
@@ -1177,6 +1177,11 @@ Dogru                     Expires 1 March 2027                 [Page 21]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+        window is not a completeness failure against this extract;
+        auditing a longer period requires extracts that cover it.
+        Receipts remain subject to every other check regardless of
+        window.
 
    6.   Walk receipts in issuer order.  The first prevReceiptHash MUST
         be null.  Each later prevReceiptHash MUST equal receiptHash of
@@ -1220,12 +1225,7 @@ Internet-Draft                   Cedulon                     August 2026
         amount SHOULD be used for this condition.  A verifier MUST still
         report findings for the remaining records.
 
-   10.  Aborted receipts are not matched to extract rows and are not
-        added to totals.
 
-   11.  Decode each checkpoint.  Reject a failed signature, and reject a
-        kid that does not match the key obtained for the checkpoint
-        issuer, on the same terms as a receipt (MUST-T4-8).  Require
 
 
 
@@ -1234,6 +1234,12 @@ Dogru                     Expires 1 March 2027                 [Page 22]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   10.  Aborted receipts are not matched to extract rows and are not
+        added to totals.
+
+   11.  Decode each checkpoint.  Reject a failed signature, and reject a
+        kid that does not match the key obtained for the checkpoint
+        issuer, on the same terms as a receipt (MUST-T4-8).  Require
         receiptCount, chainHeadHash, and totals to match the receipts in
         [startMs, endMs) as defined above (MUST-T11-2).  The identifier
         checkpoint-total-mismatch SHOULD be used for a failed signature,
@@ -1276,12 +1282,6 @@ Internet-Draft                   Cedulon                     August 2026
         be checked that way are not evidence in either direction and the
         verifier reports that it left them out (MUST-T11-15).  Discard
         any whose signature fails (MUST-T11-10).  A surviving receipt
-        whose statement body verifies against the issuer root is a
-        statement that issuer published; one that does not is another
-        party's, and is not this issuer equivocating (MUST-T11-16).  The
-        survivors are the recorded statement hashes used in step 16.
-        Where a receipt also carries the statement body, discard that
-        body unless its statement hash equals the one the receipt binds
 
 
 
@@ -1290,6 +1290,12 @@ Dogru                     Expires 1 March 2027                 [Page 23]
 Internet-Draft                   Cedulon                     August 2026
 
 
+        whose statement body verifies against the issuer root is a
+        statement that issuer published; one that does not is another
+        party's, and is not this issuer equivocating (MUST-T11-16).  The
+        survivors are the recorded statement hashes used in step 16.
+        Where a receipt also carries the statement body, discard that
+        body unless its statement hash equals the one the receipt binds
         and it verifies as a checkpoint; the surviving bodies are what
         step 14 compares.  Discarding a body does not discard its
         receipt.
@@ -1331,13 +1337,7 @@ Internet-Draft                   Cedulon                     August 2026
    only makes the completeness guarantee conditional is a warning.
    Warnings MUST still appear in operator-facing output (MUST-T10-14).
 
-   +===============================+=============+=====================+
-   | Code                          | Effect      | Meaning             |
-   +===============================+=============+=====================+
-   | settlement-without-receipt    | audit fails | Extract row has no  |
-   |                               |             | matching settled    |
-   |                               |             | receipt, or a       |
-   |                               |             | repeating ref       |
+
 
 
 
@@ -1346,6 +1346,13 @@ Dogru                     Expires 1 March 2027                 [Page 24]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   +===============================+=============+=====================+
+   | Code                          | Effect      | Meaning             |
+   +===============================+=============+=====================+
+   | settlement-without-receipt    | audit fails | Extract row has no  |
+   |                               |             | matching settled    |
+   |                               |             | receipt, or a       |
+   |                               |             | repeating ref       |
    |                               |             | settled more than   |
    |                               |             | it receipted        |
    +-------------------------------+-------------+---------------------+
@@ -1387,13 +1394,6 @@ Internet-Draft                   Cedulon                     August 2026
    |                               |             | epoch               |
    +-------------------------------+-------------+---------------------+
    | window-coverage               | audit fails | Gap, overlap, or    |
-   |                               |             | non-adjacent /      |
-   |                               |             | non-consecutive     |
-   |                               |             | windows             |
-   +-------------------------------+-------------+---------------------+
-   | unauthenticated-extract       | guarantee   | No pinned rail      |
-   |                               | conditional | key, or the         |
-   |                               |             | extract has no      |
 
 
 
@@ -1402,6 +1402,13 @@ Dogru                     Expires 1 March 2027                 [Page 25]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   |                               |             | non-adjacent /      |
+   |                               |             | non-consecutive     |
+   |                               |             | windows             |
+   +-------------------------------+-------------+---------------------+
+   | unauthenticated-extract       | guarantee   | No pinned rail      |
+   |                               | conditional | key, or the         |
+   |                               |             | extract has no      |
    |                               |             | verifiable          |
    |                               |             | signature           |
    +-------------------------------+-------------+---------------------+
@@ -1443,13 +1450,6 @@ Internet-Draft                   Cedulon                     August 2026
    | unauthenticated-issuer        | conditional | No verifier-        |
    |                               |             | supplied issuer     |
    |                               |             | key; objects were   |
-   |                               |             | checked against     |
-   |                               |             | the keys they       |
-   |                               |             | carry               |
-   +-------------------------------+-------------+---------------------+
-   | unauthenticated-witness       | conditional | No verifier-        |
-   |                               |             | supplied            |
-   |                               |             | transparency key;   |
 
 
 
@@ -1458,6 +1458,13 @@ Dogru                     Expires 1 March 2027                 [Page 26]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   |                               |             | checked against     |
+   |                               |             | the keys they       |
+   |                               |             | carry               |
+   +-------------------------------+-------------+---------------------+
+   | unauthenticated-witness       | conditional | No verifier-        |
+   |                               |             | supplied            |
+   |                               |             | transparency key;   |
    |                               |             | inclusion receipts  |
    |                               |             | were left out of    |
    |                               |             | the comparison      |
@@ -1499,13 +1506,6 @@ Internet-Draft                   Cedulon                     August 2026
    |                               |             | integer             |
    +-------------------------------+-------------+---------------------+
    | unstated-audit-window         | guarantee   | The verifier        |
-   |                               | conditional | stated no period,   |
-   |                               |             | so the extract      |
-   |                               |             | defined its own     |
-   +-------------------------------+-------------+---------------------+
-   | countersign-bad               | audit fails | Present payee       |
-   |                               |             | countersignature    |
-   |                               |             | failed verify       |
 
 
 
@@ -1514,6 +1514,13 @@ Dogru                     Expires 1 March 2027                 [Page 27]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   |                               | conditional | stated no period,   |
+   |                               |             | so the extract      |
+   |                               |             | defined its own     |
+   +-------------------------------+-------------+---------------------+
+   | countersign-bad               | audit fails | Present payee       |
+   |                               |             | countersignature    |
+   |                               |             | failed verify       |
    +-------------------------------+-------------+---------------------+
    | checkpoint-withheld           | audit fails | A verified          |
    |                               |             | transparency        |
@@ -1553,13 +1560,6 @@ Internet-Draft                   Cedulon                     August 2026
    conditional.  Anything less than the whole list is conditional, and
    the report MUST say so.
 
-   An implementation MUST make the guarantee and any warnings visible in
-   whatever human-readable audit report it produces under this document,
-   not only in a returned structure (MUST-T10-14).  A report that says
-   the books balance while withholding that the balance is conditional
-   invites the reader to take a conditional result for an unconditional
-   one.
-
 
 
 
@@ -1569,6 +1569,13 @@ Dogru                     Expires 1 March 2027                 [Page 28]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   An implementation MUST make the guarantee and any warnings visible in
+   whatever human-readable audit report it produces under this document,
+   not only in a returned structure (MUST-T10-14).  A report that says
+   the books balance while withholding that the balance is conditional
+   invites the reader to take a conditional result for an unconditional
+   one.
 
    Checkpoints SHOULD be registered with a Transparency Service (SHOULD-
    T11-5).  A test deployment MAY use an in-process append-only log as
@@ -1609,13 +1616,6 @@ Internet-Draft                   Cedulon                     August 2026
        bundle MUST NOT be described as an arbitral award or escrow
        release (MUST-T8-4).
 
-12.  Policy Semantics
-
-   Policy is default deny.  The engine understands three families of
-   rule:
-
-   *  *Limit:* maximum amount per payment; maximum cumulative amount per
-      window (MUST-T2-2).
 
 
 
@@ -1625,6 +1625,14 @@ Dogru                     Expires 1 March 2027                 [Page 29]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+12.  Policy Semantics
+
+   Policy is default deny.  The engine understands three families of
+   rule:
+
+   *  *Limit:* maximum amount per payment; maximum cumulative amount per
+      window (MUST-T2-2).
 
    *  *Velocity:* maximum number of allowed payments per window (MUST-
       T2-1).
@@ -1662,6 +1670,18 @@ Internet-Draft                   Cedulon                     August 2026
    stated form to be registered in.  Two implementations could follow
    -01 to the letter and register incomparable things.
 
+
+
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 30]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
 14.  Privacy Considerations
 
    A public transparency encoding MUST support omitting or hashing payer
@@ -1672,15 +1692,6 @@ Internet-Draft                   Cedulon                     August 2026
    policyHash, manifestHash, receiptHash, and timestampMs rather than
    full claims (SHOULD-T9-3).  A private auditor MAY receive an
    unredacted receipt out of band (MAY-T9-4).
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 30]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    The paragraph above counts receipt fields.  A checkpoint publishes
    something a receipt does not: a per-currency total for a whole
@@ -1716,6 +1727,17 @@ Internet-Draft                   Cedulon                     August 2026
    custody prohibition under T8.  The tables below define the
    requirement text those citations refer to.
 
+
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 31]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
 15.1.  T1: Prompt injection leads to unauthorized spend
 
        +=============+=============================================+
@@ -1730,14 +1752,6 @@ Internet-Draft                   Cedulon                     August 2026
        |             | the Spend Receipt and MUST still be subject |
        |             | to limit, velocity, and scope policy.       |
        +-------------+---------------------------------------------+
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 31]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
        | SHOULD-T1-3 | Hosts SHOULD require a human confirmation   |
        |             | channel for first-use payees.               |
        +-------------+---------------------------------------------+
@@ -1771,6 +1785,15 @@ Internet-Draft                   Cedulon                     August 2026
 
                                  Table 10
 
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 32]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
 15.3.  T3: Replay of payment authority
 
          +=============+=========================================+
@@ -1786,14 +1809,6 @@ Internet-Draft                   Cedulon                     August 2026
          | MUST-T3-3   | A Trade Manifest MUST carry an expiry;  |
          |             | a spend against an expired manifest     |
          |             | MUST be denied.                         |
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 32]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
          +-------------+-----------------------------------------+
          | MUST-T3-4   | A PDP allow decision MUST be bound to a |
          |             | hash of the request fields it evaluated |
@@ -1808,40 +1823,25 @@ Internet-Draft                   Cedulon                     August 2026
 
 15.4.  T4: Receipt forgery or repudiation
 
-       +=============+============================================+
-       | ID          | Requirement                                |
-       +=============+============================================+
-       | MUST-T4-1   | A Spend Receipt MUST be signed by the      |
-       |             | Receipt Issuer over a canonical encoding   |
-       |             | of its claims.                             |
-       +-------------+--------------------------------------------+
-       | MUST-T4-2   | Verifiers MUST reject a receipt whose      |
-       |             | signature does not validate or whose       |
-       |             | canonical bytes do not match the signed    |
-       |             | payload.                                   |
-       +-------------+--------------------------------------------+
-       | MUST-T4-3   | A Spend Receipt MUST include payer, payee, |
-       |             | amount, currency, policyHash, timestampMs, |
-       |             | and nonce.                                 |
-       +-------------+--------------------------------------------+
-       | MUST-T4-4   | A Spend Receipt MUST include manifestHash  |
-       |             | or an explicit noManifest flag, never an   |
-       |             | ambiguous empty hash.  Empty optional      |
-       |             | values are CBOR null; labels are never     |
-       |             | absent.                                    |
-       +-------------+--------------------------------------------+
-       | SHOULD-T4-5 | Receipts SHOULD form a hash chain          |
-       |             | (prevReceiptHash) so omission is           |
-       |             | detectable within one issuer stream.       |
-       +-------------+--------------------------------------------+
-       | MAY-T4-6    | Parties MAY register the signed receipt as |
-       |             | a SCITT statement to obtain a COSE         |
-       |             | receipt.                                   |
-       +-------------+--------------------------------------------+
-       | MUST-T4-7   | A Spend Receipt MUST include outcome       |
-       |             | (settled or aborted).  A settled receipt   |
-       |             | MUST have a non-null rail ref.  Aborted    |
-       |             | receipts MUST NOT enter checkpoint totals. |
+    +=============+==================================================+
+    | ID          | Requirement                                      |
+    +=============+==================================================+
+    | MUST-T4-1   | A Spend Receipt MUST be signed by the Receipt    |
+    |             | Issuer over a canonical encoding of its claims.  |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-2   | Verifiers MUST reject a receipt whose signature  |
+    |             | does not validate or whose canonical bytes do    |
+    |             | not match the signed payload.                    |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-3   | A Spend Receipt MUST include payer, payee,       |
+    |             | amount, currency, policyHash, timestampMs, and   |
+    |             | nonce.                                           |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-4   | A Spend Receipt MUST include manifestHash or an  |
+    |             | explicit noManifest flag, never an ambiguous     |
+    |             | empty hash.  Empty optional values are CBOR      |
+    |             | null; labels are never absent.                   |
+    +-------------+--------------------------------------------------+
 
 
 
@@ -1850,54 +1850,54 @@ Dogru                     Expires 1 March 2027                 [Page 33]
 Internet-Draft                   Cedulon                     August 2026
 
 
-       +-------------+--------------------------------------------+
-       | MUST-T4-8   | COSE_Sign1 protected headers MUST use alg  |
-       |             | -19 (Ed25519), a mandatory kid, and a      |
-       |             | payload-specific content type.  Verifiers  |
-       |             | MUST reject a kid that does not match the  |
-       |             | configured issuer key.                     |
-       +-------------+--------------------------------------------+
-       | MUST-T4-9   | A verifier MUST obtain the issuer public   |
-       |             | key out of band and MUST verify Spend      |
-       |             | Receipt and epoch checkpoint signatures    |
-       |             | against that key, not against a key the    |
-       |             | object carries.  Without such a key the    |
-       |             | completeness guarantee is conditional.     |
-       +-------------+--------------------------------------------+
-       | MUST-T4-10  | A receipt that does not verify against the |
-       |             | pinned issuer key MUST NOT count as        |
-       |             | coverage for the settlement it names, and  |
-       |             | that settlement MUST still be reported as  |
-       |             | uncovered.  Reporting the mismatch is not  |
-       |             | sufficient on its own.                     |
-       +-------------+--------------------------------------------+
-       | MUST-T4-11  | Pinned issuer keys MUST be compared by     |
-       |             | SubjectPublicKeyInfo DER encoding.  A      |
-       |             | pinned key that cannot be decoded MUST be  |
-       |             | reported as a verifier configuration fault |
-       |             | rather than as a mismatch, and where no    |
-       |             | pinned key decodes, the verifier MUST NOT  |
-       |             | fall back to the keys the objects carry.   |
-       +-------------+--------------------------------------------+
-       | MUST-T4-12  | An issuer root MAY be a set of keys, so    |
-       |             | that a key rotation inside the audited     |
-       |             | window does not require the verifier to    |
-       |             | abandon pinning.                           |
-       +-------------+--------------------------------------------+
-       | MUST-T4-13  | A payee countersignature MUST NOT be       |
-       |             | treated as evidence of payee approval      |
-       |             | unless it verifies against a payee key the |
-       |             | verifier obtained out of band.             |
-       +-------------+--------------------------------------------+
-       | MUST-T4-14  | Where a verifier has pinned a key for a    |
-       |             | payee, a settled receipt naming that payee |
-       |             | and carrying no countersignature MUST be   |
-       |             | reported, so that deleting the evidence    |
-       |             | does not delete the question.              |
-       +-------------+--------------------------------------------+
-
-                                 Table 12
-
+    | SHOULD-T4-5 | Receipts SHOULD form a hash chain                |
+    |             | (prevReceiptHash) so omission is detectable      |
+    |             | within one issuer stream.                        |
+    +-------------+--------------------------------------------------+
+    | MAY-T4-6    | Parties MAY register the signed receipt as a     |
+    |             | SCITT statement to obtain a COSE receipt.        |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-7   | A Spend Receipt MUST include outcome (settled or |
+    |             | aborted).  A settled receipt MUST have a non-    |
+    |             | null rail ref.  Aborted receipts MUST NOT enter  |
+    |             | checkpoint totals.                               |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-8   | COSE_Sign1 protected headers MUST use alg -19    |
+    |             | (Ed25519), a mandatory kid, and a payload-       |
+    |             | specific content type.  Verifiers MUST reject a  |
+    |             | kid that does not match the configured issuer    |
+    |             | key.                                             |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-9   | A verifier MUST obtain the issuer public key out |
+    |             | of band and MUST verify Spend Receipt and epoch  |
+    |             | checkpoint signatures against that key, not      |
+    |             | against a key the object carries.  A verifier    |
+    |             | without such a key that is presented with any    |
+    |             | issued object MUST report the completeness       |
+    |             | guarantee as conditional.  An audit presented    |
+    |             | with none rests on the extract alone and is not  |
+    |             | made conditional by this requirement.            |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-10  | A receipt that does not verify against the       |
+    |             | pinned issuer key MUST NOT count as coverage for |
+    |             | the settlement it names, and that settlement     |
+    |             | MUST still be reported as uncovered.  Reporting  |
+    |             | the mismatch is not sufficient on its own.       |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-11  | Pinned issuer keys MUST be compared by           |
+    |             | SubjectPublicKeyInfo DER encoding.  A pinned key |
+    |             | that cannot be decoded MUST be reported as a     |
+    |             | verifier configuration fault rather than as a    |
+    |             | mismatch, and where no pinned key decodes, the   |
+    |             | verifier MUST NOT fall back to the keys the      |
+    |             | objects carry.                                   |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-12  | An issuer root MAY be a set of keys, so that a   |
+    |             | key rotation inside the audited window does not  |
+    |             | require the verifier to abandon pinning.         |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-13  | A payee countersignature MUST NOT be treated as  |
+    |             | evidence of payee approval unless it verifies    |
 
 
 
@@ -1905,6 +1905,18 @@ Dogru                     Expires 1 March 2027                 [Page 34]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+    |             | against a payee key the verifier obtained out of |
+    |             | band.                                            |
+    +-------------+--------------------------------------------------+
+    | MUST-T4-14  | Where a verifier has pinned a key for a payee, a |
+    |             | settled receipt naming that payee and carrying   |
+    |             | no countersignature MUST be reported, so that    |
+    |             | deleting the evidence does not delete the        |
+    |             | question.                                        |
+    +-------------+--------------------------------------------------+
+
+                                 Table 12
 
 15.5.  T5: Policy bypass via direct rail access
 
@@ -1942,6 +1954,14 @@ Internet-Draft                   Cedulon                     August 2026
    | MUST-T6-2   | An allow decision MUST be consumed on the           |
    |             | first settlement attempt, success or fail-          |
    |             | closed abort, and MUST NOT authorize a              |
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 35]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    |             | later different request.                            |
    +-------------+-----------------------------------------------------+
    | SHOULD-T6-3 | Implementations SHOULD treat a decision             |
@@ -1954,14 +1974,6 @@ Internet-Draft                   Cedulon                     August 2026
    |             | cedulon-decision+cbor.                              |
    +-------------+-----------------------------------------------------+
    | MUST-T6-5   | A party that accepts a Decision Token MUST          |
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 35]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    |             | reject a failed signature, a kid or                 |
    |             | content-type mismatch, a claim-map                  |
    |             | mismatch, or an expired expiryMs.                   |
@@ -1998,6 +2010,14 @@ Internet-Draft                   Cedulon                     August 2026
       |             | in the clear MUST report the protection it    |
       |             | actually obtained, measured from the stored   |
       |             | object rather than derived from the platform. |
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 36]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
       |             | A mount that ignores filesystem permissions   |
       |             | accepts the call and protects nothing.        |
       +-------------+-----------------------------------------------+
@@ -2010,13 +2030,6 @@ Internet-Draft                   Cedulon                     August 2026
       +-------------+-----------------------------------------------+
 
                                   Table 15
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 36]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
 15.8.  T8: Counterparty price gouging or defective delivery
 
@@ -2053,6 +2066,14 @@ Internet-Draft                   Cedulon                     August 2026
     |                 | MUST NOT implement custody.                  |
     +-----------------+----------------------------------------------+
     | MUST-T8-custody | Implementations of this specification MUST   |
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 37]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
     |                 | NOT take custody of funds or operate escrow. |
     +-----------------+----------------------------------------------+
     | MUST-T8-8       | If a payee countersignature is present, a    |
@@ -2067,13 +2088,6 @@ Internet-Draft                   Cedulon                     August 2026
     |                 | issuer receipt.                              |
     +-----------------+----------------------------------------------+
 
-
-
-Dogru                     Expires 1 March 2027                 [Page 37]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
                                  Table 16
 
 15.9.  MUST-T8-custody
@@ -2084,6 +2098,37 @@ Internet-Draft                   Cedulon                     August 2026
 15.10.  T9: PII leakage into the transparency log
 
    See also Section 14.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 38]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
     +=============+===================================================+
     | ID          | Requirement                                       |
@@ -2122,14 +2167,6 @@ Internet-Draft                   Cedulon                     August 2026
      | MUST-T10-1   | A verifier MUST match each extract settlement |
      |              | to a settled receipt on ref AND amount AND    |
      |              | currency.                                     |
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 38]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
      +--------------+-----------------------------------------------+
      | MUST-T10-2   | A settlement with no matching receipt MUST be |
      |              | reported as a completeness failure identified |
@@ -2141,6 +2178,14 @@ Internet-Draft                   Cedulon                     August 2026
      +--------------+-----------------------------------------------+
      | MUST-T10-4   | An audit that has any fail-severity           |
      |              | completeness finding MUST fail (non-zero      |
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 39]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
      |              | status in the companion tool).                |
      +--------------+-----------------------------------------------+
      | SHOULD-T10-5 | Hosts SHOULD still apply T5 (no ungated rail  |
@@ -2178,14 +2223,6 @@ Internet-Draft                   Cedulon                     August 2026
      |              | MUST run whether or not a key is pinned.      |
      +--------------+-----------------------------------------------+
      | MUST-T10-11  | When the verifier states an expected account, |
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 39]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
      |              | rail, or window, an extract that does not     |
      |              | cover it MUST fail closed as extract-scope-   |
      |              | mismatch.                                     |
@@ -2197,6 +2234,14 @@ Internet-Draft                   Cedulon                     August 2026
      |              | reported as extract-settlement-mismatch.      |
      +--------------+-----------------------------------------------+
      | MUST-T10-13  | A ref reported as duplicate-ref MUST still be |
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 40]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
      |              | reconciled by aggregate amount per currency,  |
      |              | and a shortfall MUST state the unaccounted    |
      |              | amount.  An unparseable amount MUST be        |
@@ -2228,20 +2273,6 @@ Internet-Draft                   Cedulon                     August 2026
    The verification algorithm states that distinction by behaviour
    (Section 10).
 
-
-
-
-
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 40]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
 15.12.  T11: Checkpoint suppression or rollback
 
     +==============+=================================================+
@@ -2259,6 +2290,14 @@ Internet-Draft                   Cedulon                     August 2026
     |              | is not the last in-window receipt hash.  Where  |
     |              | the signed totals are null, MUST-T11-12 governs |
     |              | instead: there is no total to disagree with,    |
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 41]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
     |              | the comparison is reported as skipped, and the  |
     |              | count and chain-head checks still apply.        |
     +--------------+-------------------------------------------------+
@@ -2290,14 +2329,6 @@ Internet-Draft                   Cedulon                     August 2026
     +--------------+-------------------------------------------------+
     | MUST-T11-9   | Prefix-deletion and suppression claims that go  |
     |              | beyond the presented chain are conditional on   |
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 41]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
     |              | an external transparency witness.  A report     |
     |              | MUST NOT present a completeness guarantee as    |
     |              | settling suppression when no witness was        |
@@ -2315,6 +2346,14 @@ Internet-Draft                   Cedulon                     August 2026
     +--------------+-------------------------------------------------+
     | MUST-T11-11  | A verified receipt binding a checkpoint absent  |
     |              | from the presented chain MUST be reported as a  |
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 42]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
     |              | withheld checkpoint, and MUST NOT be reported   |
     |              | as a window coverage failure.  A presented      |
     |              | checkpoint with no verified receipt, where a    |
@@ -2346,14 +2385,6 @@ Internet-Draft                   Cedulon                     August 2026
     |              | SHOULD report that they were left out.          |
     +--------------+-------------------------------------------------+
     | MUST-T11-16  | A statement held by a pinned log MUST           |
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 42]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
     |              | additionally verify against the issuer root     |
     |              | before it counts as something that issuer       |
     |              | published, so that another user's epoch in a    |
@@ -2371,6 +2402,14 @@ Internet-Draft                   Cedulon                     August 2026
                                  Table 19
 
    Issuer self-attestation:  A Receipt Issuer that also produces the
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 43]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
       only copy of the extract can omit settlements.  Completeness holds
       only against an extract the verifier obtained from the rail or
       from a rail signature.
@@ -2401,15 +2440,6 @@ Internet-Draft                   Cedulon                     August 2026
    Implementations of this specification MUST NOT take custody or
    operate escrow (MUST-T8-custody).
 
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 43]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
 15.14.  T12: Settlement without a recorded receipt
 
    The threats above are about a counterparty, a rail or an attacker.
@@ -2426,6 +2456,15 @@ Internet-Draft                   Cedulon                     August 2026
    policy asked.  The evidence is missing because the issuer lost it,
    not because anyone hid it, and nothing in the report can tell those
    apart.
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 44]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
      +============+==================================================+
      | ID         | Requirement                                      |
@@ -2453,22 +2492,35 @@ Internet-Draft                   Cedulon                     August 2026
 
    Ordering:  Settle-then-record is the natural order to write and the
       wrong one to ship.  The record is what makes the settlement
-      accountable, so the record is what has to be secured first.
+      accountable, so the record is what has to be secured first (MUST-
+      T12-1), and a settlement that cannot be recorded has to be undone
+      everywhere it reached, including the nonce and the allowance it
+      never used (MUST-T12-2).
 
    Recovery:  A durable-state conflict is not necessarily fatal, but it
+      MUST NOT be silent, and an implementation that refuses every
+      subsequent write without offering a way back has turned a
+      recoverable condition into an outage.  The reason reported has to
+      separate the cases an operator would act on differently (MUST-
+      T12-3): a write that conflicted with another writer, a write that
+      failed, and a state another process is holding.  A single opaque
+      failure leaves the operator to guess which of those happened.
+
+   Observability:  A violation of this threat is not visible in the
+      evidence a verifier receives.  The audit sees a settlement with no
+      receipt and reports settlement-without-receipt, which is the same
+      finding an adversary would produce, and nothing in the extract or
+      the receipt set distinguishes an issuer that lost the evidence
+      from one that hid it.  That is why the requirements here fall on
+      the issuer rather than on the verifier, and why an operator-facing
+      reason is required rather than optional.
 
 
 
-
-
-Dogru                     Expires 1 March 2027                 [Page 44]
+Dogru                     Expires 1 March 2027                 [Page 45]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-      MUST NOT be silent, and an implementation that refuses every
-      subsequent write without offering a way back has turned a
-      recoverable condition into an outage.
 
 16.  IANA Considerations
 
@@ -2512,22 +2564,20 @@ Internet-Draft                   Cedulon                     August 2026
    RFC 7942 [RFC7942] note.
 
    Implementation:  A companion implementation with a runnable
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 45]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
       verification suite at https://github.com/dogrucanemek-alt/cedulon
       (https://github.com/dogrucanemek-alt/cedulon).  The code is a
       profile of this document, not a second specification.  This -03 is
       not an IETF working-group item.
 
    Maturity:  Research code by a single implementer.  Three readers have
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 46]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
       run the code on their own machines against a pinned commit and
       reported figures matching the author's: two from a clean clone of
       the whole suite, one re-running the published reproduction.  That
@@ -2552,39 +2602,47 @@ Internet-Draft                   Cedulon                     August 2026
       witness input, the withheld and not-anchored conditions, and
       signed totals redaction.  Every requirement added in this revision
       is implemented and covered by a red-then-green case before
-      appearing in this text.  The witness used in the suite is the in-
-      process append-only log that MAY-T11-6 permits; the implementation
-      has not been run against a deployed Transparency Service, and it
-      treats a receipt as a signature over a statement, not as a proof
-      of log membership.  The escrow role, reversal, refund, and partial
-      settlement are not implemented.
+      appearing in this text.  Two of those cases, for a symbolic link
+      on the path to a stored key and for a write interrupted part way,
+      assert only on POSIX; on Windows they return early, so a passing
+      suite on that platform does not exercise them.  The witness used
+      in the suite is the in-process append-only log that MAY-T11-6
+      permits; the implementation has not been run against a deployed
+      Transparency Service, and it treats a receipt as a signature over
+      a statement, not as a proof of log membership.  The escrow role,
+      reversal, refund, and partial settlement are not implemented.
 
    Licensing:  Apache-2.0.
 
    Contact:  The author of this document.
 
-   Experience:  Readers of -00 and -01 have reported defects in both,
-      and each revision has been driven by what they found rather than
-      by a plan. -01 fixed a bypass of the completeness claim and a gap
-      about which key an extract is checked against.  The defect behind
-      this revision was reported against -01 by a reader who then had it
-      independently confirmed by a second: the object carrying the T11
-      guarantee was not profiled for registration and was never read
+   Experience:  Readers of -00, -01 and -02 have reported defects in
+      each, and every revision has been driven by what they found rather
+      than by a plan. -01 fixed a bypass of the completeness claim and a
+      gap about which key an extract is checked against. -02 repaired a
+      defect reported against -01 and independently confirmed by a
+      second reader: the object carrying the T11 guarantee was neither
+      profiled for registration nor read during verification.
+
+      The defect behind this revision was reported against the posted
 
 
 
-Dogru                     Expires 1 March 2027                 [Page 46]
+
+Dogru                     Expires 1 March 2027                 [Page 47]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
-      during verification.  Repairing it turned up one more, found while
-      checking the repair rather than reported: the first attempt
-      asserted the totals redaction in a field outside the signature,
-      which let a checkpoint with wrong signed totals be re-presented as
-      redacted and silence the mismatch.  That is the defect MUST-T11-13
-      now forbids, and it was the same shape as the bypass -01 was
-      written to fix.
+      -02.  A reader asked whether the profile should accept a pinned
+      witness key and report an absent or mismatched pin explicitly.
+      That is the question MUST-T10-8 had already answered for the rail
+      extract and for nothing else, and following it into the
+      implementation found the same omission for the Spend Receipt, the
+      epoch checkpoint and the Decision Token.  T12 came from neither
+      reader nor adversary: five rounds of trying to break the
+      implementation found it producing, against itself, the one
+      condition this document exists to make detectable.
 
    Note on distribution: the requirements added in this revision are in
    the published @cedulon packages at version 0.3.0, not only in the
@@ -2596,8 +2654,10 @@ Internet-Draft                   Cedulon                     August 2026
 
 17.1.  Changes from -02
 
-   This revision has one subject: -02 stated a rule in one place and
-   left it unstated everywhere the same rule applied.
+   This revision has two subjects.  The first is that -02 stated a rule
+   in one place and left it unstated everywhere the same rule applied.
+   The second is T12, which no reader reported and which is not about an
+   adversary at all.
 
    MUST-T10-8 requires a rail extract to be verified against a key the
    verifier obtained out of band, "not against a key the extract
@@ -2618,21 +2678,23 @@ Internet-Draft                   Cedulon                     August 2026
    commit.  Following it into the code turned up the other three, along
    with two conditions that were not about keys at all.
 
+
+
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 48]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    The first is that reporting a mismatch is not enough.  An
    implementation that names a foreign key and then still lets the
    receipt match its settlement has described the attack in its output
    while concluding that the books balance.  MUST-T4-10 now requires the
    settlement to stay reported.
-
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 47]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    The second is that an expectation which only fires when the evidence
    is present can be cancelled by deleting the evidence.  A pinned payee
@@ -2650,9 +2712,48 @@ Internet-Draft                   Cedulon                     August 2026
    detectable was reachable through the implementation's own ordering,
    and no requirement in -02 said otherwise.
 
+   The same first subject carries five requirements this section has not
+   named so far, all of them stated in Section 9.  A pinned key that
+   cannot be decoded MUST NOT fall back to the keys the objects carry
+   (MUST-T4-11).  An issuer root MAY be a set of keys, so a rotation
+   inside the audited window does not force the verifier to choose
+   between findings against honest receipts and abandoning the pin
+   (MUST-T4-12).  The same out-of-band rule reaches the payee
+   countersignature (MUST-T4-13), the transparency witness (MUST-T11-15
+   and MUST-T11-16), and the Decision Token, whose consumer issued it
+   and therefore already holds the key to check it with (MUST-T6-6).
+
+   Two requirements belong to neither subject.  MUST-T7-5 and MUST-T7-6
+   come from measuring the protection a stored signing key actually has
+   instead of deriving it from the platform.  A mount that ignores
+   filesystem permissions accepts the call and protects nothing, and a
+   writable directory or a symbolic link anywhere on the path makes the
+   file permission moot.  They are stated because the implementation
+   reported protection it did not have.
+
+
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 49]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    Two things are stated here that -02 got right and this revision keeps
    unchanged: the extract rule itself, and the treatment of a pinned key
-   the verifier cannot decode.  What changed is their reach.
+   the verifier cannot decode.  What changed is their reach, and the
+   change is not backward compatible.  An audit that -02 would have
+   reported as unconditional, where the verifier pinned the rail key and
+   supplied no issuer key, is reported as conditional under this
+   revision.  Nothing about the evidence changed; what changed is that
+   the guarantee now says which questions were never asked.
 
 17.2.  Changes from -01
 
@@ -2683,15 +2784,23 @@ Internet-Draft                   Cedulon                     August 2026
    the witness is to add a claim that could not be made before, not to
    withdraw one that could.
 
+   Two decisions inside those repairs are worth stating on their own,
+   because a reader might reasonably have expected the other choice.
 
 
-Dogru                     Expires 1 March 2027                 [Page 48]
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 50]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   Two decisions inside those repairs are worth stating on their own,
-   because a reader might reasonably have expected the other choice.
 
    *  A recorded checkpoint the presented chain omits gets its own
       identifier, checkpoint-withheld, rather than being folded into
@@ -2741,7 +2850,10 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 1 March 2027                 [Page 49]
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 51]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2797,7 +2909,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 1 March 2027                 [Page 50]
+Dogru                     Expires 1 March 2027                 [Page 52]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2853,7 +2965,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 1 March 2027                 [Page 51]
+Dogru                     Expires 1 March 2027                 [Page 53]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2909,7 +3021,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 1 March 2027                 [Page 52]
+Dogru                     Expires 1 March 2027                 [Page 54]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2955,23 +3067,29 @@ Internet-Draft                   Cedulon                     August 2026
 
 Acknowledgments
 
-   Vernon Wharff set out the defect this revision repairs: that the
-   object carrying the T11 guarantee was neither profiled for
-   registration nor read during verification, and that the equivocation
-   requirement could not fire against a presented chain.  He also asked
-   the question that decided the shape of the repair, namely whether a
-   recorded checkpoint absent from the chain deserves its own identifier
-   or belongs under window coverage.  Iman Schrock confirmed the finding
+   Vernon Wharff set out the defect -02 repairs: that the object
+   carrying the T11 guarantee was neither profiled for registration nor
+   read during verification, and that the equivocation requirement could
+   not fire against a presented chain.  He also asked the question that
+   decided the shape of that repair, namely whether a recorded
+   checkpoint absent from the chain deserves its own identifier or
+   belongs under window coverage.  Iman Schrock confirmed the finding
 
 
 
-Dogru                     Expires 1 March 2027                 [Page 53]
+Dogru                     Expires 1 March 2027                 [Page 55]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
    independently and drew its boundary, keeping it separate from the
    extract-binding work already closed in -01.
+
+   Iman Schrock raised the defect this revision repairs, against the
+   posted -02: whether the profile should accept a pinned witness key
+   and report an absent or mismatched pin explicitly.  It should, and
+   the same question turned out to be unanswered for three further
+   objects.
 
    Iman Schrock and Pablo Play ran the -00 implementation against the
    pinned commit and reported the defects that produced -01.  Iman
@@ -2986,13 +3104,15 @@ Internet-Draft                   Cedulon                     August 2026
    amount, filed a written reproduction, and re-ran that reproduction
    against the pinned commit to confirm the figures quoted from it.
 
-   Nicholas Templeman ran the suite from a clean clone on a different
-   operating system and reported his figures, and classified his own run
-   honestly as a repetition of the author's checks rather than an
-   independent implementation.  Walter Hawkins did not run it; he read
-   the reported figures and pressed for the run to be stated precisely
-   enough to be repeatable, which is why the conditions and not only the
-   totals appear in Section 17.
+   Nicholas Templeman ran the suite from a clean clone and reported his
+   figures.  He also corrected a row written about that run: his
+   platform was the same operating system family as the earlier ones, so
+   the run corroborates the numbers and adds no cross-environment
+   evidence.  He classified his own run honestly as a repetition of the
+   author's checks rather than an independent implementation.  Walter
+   Hawkins did not run it; he read the reported figures and pressed for
+   the run to be stated precisely enough to be repeatable, which is why
+   the conditions and not only the totals appear in Section 17.
 
    None of them reviewed this text, and any error in it is the author's.
 
@@ -3008,23 +3128,22 @@ Appendix A.  Test Vectors
 
    Receipt COSE_Sign1:
 
+
+
+
+
+
+Dogru                     Expires 1 March 2027                 [Page 56]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    Claims: payer=payer-1, payee=payee-1, amount=1, currency=USD,
    policyHash=aa, manifestHash=null, noManifest=true,
    x402PaymentRef=null, timestampMs=1700000000000,
    nonce=n100000000000000, prevReceiptHash=null, outcome=aborted.
 
    COSE_Sign1 hex (whitespace ignored; identical to the locked test):
-
-
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 54]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    845830a301320378206170706c69636174696f6e2f636564756c6f6e2d
    726563656970742b63626f72044806e3fd8fda29bb60a0587cac3a0001
@@ -3070,11 +3189,4 @@ Author's Address
 
 
 
-
-
-
-
-
-
-
-Dogru                     Expires 1 March 2027                 [Page 55]
+Dogru                     Expires 1 March 2027                 [Page 57]
