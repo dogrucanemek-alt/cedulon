@@ -22,7 +22,10 @@ official MCP SDK.
 the CBOR refuse codes (`cbor-eof`, `cbor-too-deep`, `cbor-too-large`,
 `cbor-unsupported`, `cbor-duplicate-key`) and the audit input bound
 (`audit-too-large`) that used to surface as a `RangeError` or an
-unbounded walk. The eight packages on npm remain `0.5.0`.
+unbounded walk. It also narrows `manifest-terms-mismatch`: with a
+usable issuer pin the walk is the attested set and the charge is a
+finding; without a pin the same departure is a warning and does not by
+itself fail the audit. The eight packages on npm remain `0.5.0`.
 
 Eight packages are published on npm at `0.5.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and

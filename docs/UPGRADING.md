@@ -4,7 +4,7 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
-## 0.6.0 (prepared, not published): named refuse codes and input bounds
+## 0.6.0 (prepared, not published): named refuse codes, input bounds, and a narrower terms charge
 
 This one breaks, and it is prepared in this tree, not a published npm
 release. Inputs that used to throw `RangeError` (a truncated CBOR length
@@ -15,9 +15,31 @@ or inclusion list exceeds the bound in `docs/LIMITS.md` is refused with
 `audit-too-large`. A third-party decoder that does not apply the same
 bounds is answering a different question.
 
+It also narrows `manifest-terms-mismatch`. 0.5.0 reported that finding
+and set `ok: false` whenever a presented receipt named the manifest and
+departed from its terms, pinned or not. This tree does not. With a
+usable issuer pin the walk is the attested set and the charge is a
+finding: a receipt that does not verify under the pinned key cannot
+invent a terms violation. Without a pin the same departure is reported
+as a warning (`severity: "warn"`) and does not by itself fail the
+audit. `manifest-covers-no-receipt` is unchanged — it is still a
+warning over the presented list, because asking whether a hash was
+named is not the same as charging a party with breaking the terms they
+signed.
+
+The published draft `-03` (MUST-T8-9) says an unpinned departure is
+reported as `manifest-terms-mismatch` and fails the audit. This tree
+does not fail the audit on that path. The difference will be closed in
+`-04`, with the reason. A reader who implements `-03` and runs 0.6.0
+should take the split from this section, not discover it in production.
+
 **What to change:** catch the named codes instead of `RangeError`. Do
-not treat a missing catch as "the input was accepted". The published
-packages on npm remain `0.5.0` until this version is released.
+not treat a missing catch as "the input was accepted". If you treated
+`ok: false` as the signal that a receipt broke its terms, stop: that
+signal is now only a terms finding, and a terms finding is raised only
+when a usable pin attests the receipt. A warning on the same code is
+not a fail. The published packages on npm remain `0.5.0` until this
+version is released.
 
 ## 0.5.0: a bound receipt that breaks its terms fails the audit
 
