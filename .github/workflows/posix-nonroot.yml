@@ -4,6 +4,9 @@ name: posix-nonroot
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
   pull_request:
     paths:
       - "packages/mcp-server/**"

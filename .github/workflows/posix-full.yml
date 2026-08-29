@@ -11,6 +11,9 @@ name: posix-full
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
   pull_request:
 
 jobs:
