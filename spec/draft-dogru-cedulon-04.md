@@ -305,9 +305,19 @@ A Trade Manifest MUST bind all of the following (`MUST-T8-1`):
   `0|[1-9][0-9]*`)
 - currency (ISO 4217 alphabetic or a documented token identifier)
 - acceptance-criteria hash (SHA-256 {{RFC6234}} of the exact delivery
-  bytes or of a declared schema instance)
+  bytes, lowercase hexadecimal)
 - cancel condition (opaque string agreed by the parties)
 - expiry (POSIX milliseconds, `expiresAtMs`)
+
+The previous revision allowed this hash to be taken over "the exact
+delivery bytes or a declared schema instance" and gave a verifier no
+way to tell which one an issuer had used. Two implementations reading
+the same manifest would then compute different digests over the same
+delivery and neither would be wrong. This revision defines the first
+reading only. Hashing a schema instance instead would need a marker in
+the manifest saying so, this document defines no such marker, and until
+one is defined that use is out of scope rather than an alternative a
+verifier is expected to guess at.
 
 It MAY include `ap2MandateHash`. The corresponding CBOR label is
 always present; a missing mandate is encoded as CBOR null.
@@ -406,6 +416,17 @@ key (`MUST-T4-18`). The encoding rules already forbid producing one, so
 a decoder that accepts it accepts a document no conforming encoder can
 produce, and two decoders may disagree on which of the two values
 wins, which is a disagreement about what was signed.
+
+A decoder MUST also impose a bound on what it will attempt: on encoded
+size, on nesting depth, and on the number of elements it will decode
+from an audit input. It MUST refuse an input that exceeds a bound with
+a named refusal rather than by exhausting memory or the stack, and it
+SHOULD document the bounds it applies (`MUST-T4-19`). This document
+fixes no numbers. A bound that is right for a desktop verifier is wrong
+for a service, and a number written here would be wrong for one of them
+within a year. What a reader is entitled to is that the refusal is a
+refusal, named and reported, rather than a crash that an operator has
+to interpret.
 
 ## Claim labels {#receipt-labels}
 
@@ -1010,13 +1031,21 @@ for reference, not to require an evaluation order: no step
 short-circuits another, and an implementation may evaluate them in any
 order that produces the same set of findings.
 
-One data dependency is worth naming, because "any order" read naively
-would break it. Step 15 decides which transparency receipts, and which
-statement bodies, survive checking. Steps 14 and 16 consume what
-survives. An implementation that ran step 14 against unchecked bodies,
-or step 16 against unchecked receipts, would not produce the same set
-of findings, so that order is not among the permitted ones. Nothing
-else in this list feeds another step.
+Two data dependencies are worth naming, because "any order" read
+naively would break them. Step 15 decides which transparency receipts,
+and which statement bodies, survive checking. Steps 14 and 16 consume
+what survives. An implementation that ran step 14 against unchecked
+bodies, or step 16 against unchecked receipts, would not produce the
+same set of findings, so that order is not among the permitted ones.
+
+The second is `MUST-T8-9`. Its input is the set of receipts that verify
+under the pinned issuer key when one is usable, so the step that
+resolves the issuer pin runs before it. `MUST-T4-17` has no such
+dependency and MUST NOT acquire one: its input is the presented set,
+whatever any key says about it. The two requirements sit next to each
+other and take different inputs on purpose, and an implementation that
+gave them the same input would be wrong about one of them whichever it
+picked. Nothing else in this list feeds another step.
 
 When a step names an identifier in backticks, that identifier
 SHOULD be used for the condition in diagnostic output. The
@@ -1449,6 +1478,7 @@ requirement text those citations refer to.
 | MUST-T4-16 | A policy decision point presented with a Trade Manifest it cannot verify against a key supplied out of band MUST refuse the payment. Settling and reporting the doubt afterwards is not available to it: the receipt carries the manifest hash as terms the named party agreed to. |
 | MUST-T4-17 | A verifier presented with a Trade Manifest MUST compare the manifest hash against the `manifestHash` of the receipts presented to the audit, including aborted ones, before any extract window is applied and before any issuer key is applied, and MUST report a presented manifest that no presented receipt references. Verifying who published the terms does not establish that any receipt names them, and whether a hash appears is a question a verifier can answer from a document nobody vouches for. An audit presented with no Trade Manifest is not made conditional by this requirement. |
 | MUST-T4-18 | A decoder MUST refuse a CBOR map that carries a duplicate encoded key. The encoding rules forbid producing one; accepting one accepts a document no conforming encoder can produce, and leaves two decoders free to disagree about which value was signed. |
+| MUST-T4-19 | A decoder MUST impose a bound on encoded size, nesting depth, and the number of elements it will decode from an audit input, and MUST refuse an input that exceeds a bound with a named refusal rather than by exhausting memory or the stack. It SHOULD document the bounds it applies. This document fixes no numbers: the bound is deployment policy, the named refusal is not. |
 
 ## T5: Policy bypass via direct rail access
 
@@ -1520,7 +1550,7 @@ See {{reconciliation}}.
 
 | ID | Requirement |
 |---|---|
-| MUST-T10-1 | A verifier MUST match each extract settlement to a settled receipt on `ref` AND `amount` AND `currency`. |
+| MUST-T10-1 | A verifier MUST match each extract settlement to a settled receipt on `ref` AND `amount` AND `currency`. An audit presented with no extract, no receipts and no checkpoints reports no completeness finding: there is nothing to be complete about. It is not thereby unconditional, and the warnings for the roots it was not given still apply. |
 | MUST-T10-2 | A settlement with no matching receipt MUST be reported as a completeness failure identified by that settlement `ref`. |
 | MUST-T10-3 | A settled Spend Receipt whose `x402PaymentRef` is not on the extract MUST be reported as a completeness failure. |
 | MUST-T10-4 | An audit that has any fail-severity completeness finding MUST fail (non-zero status in the companion tool). |
@@ -1856,11 +1886,28 @@ two cases and says why it differs from `MUST-T4-17`, which is a naming
 question rather than a charge and is answered from the presented set
 whether or not anything vouches for it.
 
-`MUST-T4-18` is new and small: -03 bound the encoder to deterministic
-CBOR and said nothing about the decoder.
+`MUST-T4-18` and `MUST-T4-19` are new: -03 bound the encoder to
+deterministic CBOR and said nothing about the decoder, neither about a
+duplicate key nor about what a decoder does when an input is larger
+than it is willing to read. The second fixes no numbers. A bound is
+deployment policy; refusing by name rather than by running out of stack
+is not.
 
 `MUST-T3-3` and `MUST-T8-2` gain the boundary and the comparison rule
-they were missing. Appendix A no longer defers to the tests of an
+they were missing: whether a settlement exactly at expiry is inside the
+manifest, and whether a currency may be case-folded before it is
+compared. `MUST-T10-1` says what an audit with nothing in it reports.
+
+The acceptance-criteria hash had two readings and no way to signal
+which one was used, so two implementations would have hashed the same
+delivery differently. This revision defines one of them and puts the
+other out of scope until something can say which is meant.
+
+The verification algorithm now names both of its data dependencies. -03
+named one and said nothing else fed another step, which stopped being
+true once `MUST-T8-9` took the attested set as its input.
+
+Appendix A no longer defers to the tests of an
 implementation; a specification that points at code cannot be
 implemented from its own text, which is the property this revision is
 trying to restore.
