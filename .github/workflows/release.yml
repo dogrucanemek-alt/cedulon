@@ -1,0 +1,93 @@
+# Publishes the eight public packages from a tag, with no token on anyone's
+# laptop. npm trusted publishing exchanges the workflow's OIDC identity for a
+# short-lived credential, so there is nothing long-lived to leak and no
+# one-time password to type eight times.
+#
+# One-time setup on npmjs.com, per package: Settings -> Trusted publisher ->
+# GitHub Actions, repository dogrucanemek-alt/cedulon, workflow release.yml.
+# Until that is done for a package, its publish step fails with a permission
+# error rather than falling back to anything weaker.
+#
+# The MCP Registry step is deliberately absent. mcp-publisher authenticates
+# with its own GitHub device flow and whether it accepts Actions OIDC has not
+# been measured here. Adding it untested would put a claim in this file that
+# nobody checked, which is the defect this repository keeps finding elsewhere.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          # A cached store can hand the build an artifact the tag did not
+          # produce. A release resolves from nothing.
+          package-manager-cache: false
+
+      - run: npm ci
+
+      # A tag that does not match the workspace is how you ship 0.5.0 while
+      # believing you shipped 0.6.0. Checked before anything is built.
+      - name: the tag names the version every package carries
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          echo "tag says $tag"
+          fail=0
+          for f in packages/*/package.json; do
+            name=$(node -p "require('./$f').name")
+            ver=$(node -p "require('./$f').version")
+            if [ "$ver" != "$tag" ]; then
+              echo "  $name is $ver, tag says $tag"
+              fail=1
+            fi
+          done
+          if [ "$fail" = "1" ]; then
+            echo "refusing to ship a tag that disagrees with the tree"
+            exit 1
+          fi
+
+      - run: npm run build:packages
+
+      # Everything that can be true before the registry has heard of this
+      # version. The later gate is separate, because a suite that cannot be
+      # green until after the irreversible step is a suite nobody can read.
+      - run: npm run test:pre-release
+      - run: npm run guard:claims
+      - run: npm run guard:crlf
+
+      # Dependency order. Reversed, npm cannot resolve what it is asked to
+      # install. base-extract and mcp-guard are private and stay unshipped.
+      - name: send them in dependency order
+        run: |
+          set -e
+          for p in cose core receipts manifest checkpoint x402-adapter audit mcp-server; do
+            echo "=== @cedulon/$p ==="
+            npm publish -w "@cedulon/$p"
+          done
+
+      # Read back from the registry rather than from this checkout.
+      - name: the registry answers with this version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for p in cose core receipts manifest checkpoint x402-adapter audit mcp-server; do
+            got=$(npm view "@cedulon/$p" version)
+            echo "  @cedulon/$p -> $got"
+            [ "$got" = "$tag" ] || { echo "registry says $got, tag says $tag"; exit 1; }
+          done
+
+      - run: npm run test:post-release
