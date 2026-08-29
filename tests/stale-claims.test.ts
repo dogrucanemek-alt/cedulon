@@ -8,28 +8,55 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p: string): string => readFileSync(join(root, p), "utf8");
 
 /**
- * The unpublished 0.6.0 terms split lives in two living sentences.
- * P4 changed the code and neither document; the suite stayed green.
- * The check reads those two sections, not a third restatement.
+ * The terms split lives in two living sentences about the version
+ * this tree carries. P4 changed the code and neither document; P5
+ * pinned the sentences to "prepared, not published", which dies on
+ * the publish day. The version is read from packages/*, not from a
+ * heading adjective.
  */
-function unpublishedUpgradeSection(upgrading: string): string {
-  const m = upgrading.match(
-    /^## (\d+\.\d+\.\d+) \(prepared, not published\)[^\n]*\n[\s\S]*?(?=^## )/m,
+function workspaceVersion(): string {
+  const names = readdirSync(join(root, "packages"));
+  const versions = new Set<string>();
+  for (const name of names) {
+    const pkgPath = join("packages", name, "package.json");
+    let raw: string;
+    try {
+      raw = read(pkgPath);
+    } catch {
+      continue;
+    }
+    const version = (JSON.parse(raw) as { version?: string }).version;
+    assert.ok(version, `${pkgPath} has no version`);
+    versions.add(version);
+  }
+  assert.ok(versions.size > 0, "no package.json version found under packages/");
+  assert.equal(
+    versions.size,
+    1,
+    `packages/* disagree on version: ${[...versions].join(", ")}`,
   );
-  assert.ok(m, "docs/UPGRADING.md has no unpublished (prepared, not published) section");
-  return m[0];
+  return [...versions][0]!;
 }
 
-function unpublishedVersion(section: string): string {
-  const m = section.match(/^## (\d+\.\d+\.\d+) \(prepared, not published\)/m);
-  assert.ok(m, "unpublished UPGRADING section lost its version heading");
-  return m[1]!;
-}
-
-function statusPreparedParagraph(status: string, version: string): string {
+function upgradeSectionFor(upgrading: string, version: string): string {
   const esc = version.replace(/\./g, "\\.");
-  const m = status.match(new RegExp("`" + esc + "` is prepared[\\s\\S]*?(?:\\n\\n|$)"));
-  assert.ok(m, `docs/STATUS.md has no prepared paragraph for ${version}`);
+  const start = upgrading.search(new RegExp(`^## ${esc}\\b`, "m"));
+  assert.ok(
+    start >= 0,
+    `docs/UPGRADING.md has no ## ${version} section (workspace version is ${version})`,
+  );
+  const from = upgrading.slice(start);
+  const next = from.slice(1).search(/^## /m);
+  return next < 0 ? from : from.slice(0, next + 1);
+}
+
+function statusVersionParagraph(status: string, version: string): string {
+  const esc = version.replace(/\./g, "\\.");
+  const m = status.match(new RegExp("(?:^|\\n\\n)`" + esc + "`[\\s\\S]*?(?:\\n\\n|$)"));
+  assert.ok(
+    m,
+    `docs/STATUS.md has no paragraph that names \`${version}\` (workspace version is ${version})`,
+  );
   return m[0];
 }
 
@@ -51,12 +78,25 @@ function assertTermsSplitNamed(text: string, where: string): void {
   );
 }
 
-function assertUnpublishedTermsAligned(upgrading: string, status: string): void {
-  const section = unpublishedUpgradeSection(upgrading);
-  const version = unpublishedVersion(section);
-  const paragraph = statusPreparedParagraph(status, version);
+function assertTermsSplitAligned(upgrading: string, status: string): void {
+  const version = workspaceVersion();
+  const section = upgradeSectionFor(upgrading, version);
+  const paragraph = statusVersionParagraph(status, version);
   assertTermsSplitNamed(section, `docs/UPGRADING.md ${version}`);
   assertTermsSplitNamed(paragraph, `docs/STATUS.md ${version}`);
+}
+
+/** The publish-day shape: adjectives gone, version heading still there. */
+function stripPreparedPhrases(upgrading: string, status: string): {
+  upgrading: string;
+  status: string;
+} {
+  return {
+    upgrading: upgrading
+      .replaceAll(" (prepared, not published)", "")
+      .replace("it is prepared in this tree, not a published npm\nrelease. ", ""),
+    status: status.replace(" is prepared in this tree, not a published npm release.", ""),
+  };
 }
 
 const DRAFT = "spec/draft-dogru-cedulon-03.md";
@@ -405,7 +445,7 @@ describe("claims that describe something outside their own file", () => {
     );
   });
 
-  it("RED: STATUS's prepared paragraph without the terms split fails before the living files are accepted", () => {
+  it("RED: STATUS's version paragraph without the terms split fails before the living files are accepted", () => {
     const upgrading = read("docs/UPGRADING.md");
     const status = read("docs/STATUS.md");
     const drifted = status.replace(
@@ -414,12 +454,31 @@ describe("claims that describe something outside their own file", () => {
     );
     assert.notEqual(drifted, status, "fixture did not remove the terms split from STATUS");
     assert.throws(
-      () => assertUnpublishedTermsAligned(upgrading, drifted),
+      () => assertTermsSplitAligned(upgrading, drifted),
       /docs\/STATUS\.md \d+\.\d+\.\d+ does not name manifest-terms-mismatch/,
     );
   });
 
-  it("GREEN: the unpublished UPGRADING section and STATUS paragraph name the same terms split", () => {
-    assertUnpublishedTermsAligned(read("docs/UPGRADING.md"), read("docs/STATUS.md"));
+  it("RED: a missing version section names the workspace version, and does not skip", () => {
+    const version = workspaceVersion();
+    assert.throws(
+      () => assertTermsSplitAligned("# Upgrading\n\n## 9.9.9\n\nno terms here\n", read("docs/STATUS.md")),
+      new RegExp(`docs/UPGRADING.md has no ## ${version.replace(/\./g, "\\.")} section`),
+    );
+  });
+
+  it("GREEN: the workspace-version UPGRADING section and STATUS paragraph name the same terms split", () => {
+    assertTermsSplitAligned(read("docs/UPGRADING.md"), read("docs/STATUS.md"));
+  });
+
+  it("GREEN: the same check still holds after the prepared phrases are gone", () => {
+    const livingUp = read("docs/UPGRADING.md");
+    const livingSt = read("docs/STATUS.md");
+    const published = stripPreparedPhrases(livingUp, livingSt);
+    assert.notEqual(published.upgrading, livingUp, "fixture left the UPGRADING prepared phrase");
+    assert.notEqual(published.status, livingSt, "fixture left the STATUS prepared phrase");
+    assert.doesNotMatch(published.upgrading, /prepared, not published/);
+    assert.doesNotMatch(published.status, /is prepared/);
+    assertTermsSplitAligned(published.upgrading, published.status);
   });
 });
