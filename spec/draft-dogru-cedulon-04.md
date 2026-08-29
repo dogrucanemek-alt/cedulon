@@ -280,8 +280,8 @@ the adapter that performs settlement.
 
 After the adapter attempts settlement (success or a recorded deny that
 still needs an audit trail for an allowed-then-aborted path), the
-Receipt Issuer signs a Spend Receipt over a canonical encoding
-(`MUST-T4-1`). Verifiers reject bad signatures and byte mismatch
+Receipt Issuer signs a Spend Receipt over the deterministic CBOR
+encoding of its claims (`MUST-T4-1`). Verifiers reject bad signatures and byte mismatch
 (`MUST-T4-2`).
 
 ## Anchor / SCITT
@@ -615,7 +615,8 @@ and one half-open time window `[windowStartMs, windowEndMs)`.
 ## Authentication
 
 The mock rail in the companion implementation signs the extract with
-Ed25519 over a canonical encoding of the scoped body. A verifier MUST
+Ed25519 over the canonical encoding of the scoped body, which is a
+JSON document and therefore takes the encoding of {{canonical-json}}. A verifier MUST
 obtain the extract from the rail or from a signature the rail
 published (`MUST-T10-7`). A deployment that cannot do so is running
 the reconciliation against evidence it did not obtain independently,
@@ -1460,7 +1461,7 @@ requirement text those citations refer to.
 
 | ID | Requirement |
 |---|---|
-| MUST-T4-1 | A Spend Receipt MUST be signed by the Receipt Issuer over a canonical encoding of its claims. |
+| MUST-T4-1 | A Spend Receipt MUST be signed by the Receipt Issuer over the deterministic CBOR encoding of its claims, as profiled in {{cose-profile}}. The phrase "canonical encoding" is reserved for JSON documents ({{canonical-json}}); the previous revision used it for both and left a reader to work out which was meant. |
 | MUST-T4-2 | Verifiers MUST reject a receipt whose signature does not validate or whose canonical bytes do not match the signed payload. |
 | MUST-T4-3 | A Spend Receipt MUST include `payer`, `payee`, `amount`, `currency`, `policyHash`, `timestampMs`, and `nonce`. |
 | MUST-T4-4 | A Spend Receipt MUST include `manifestHash` or an explicit `noManifest` flag, never an ambiguous empty hash. Empty optional values are CBOR null; labels are never absent. |
