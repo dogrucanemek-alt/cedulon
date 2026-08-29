@@ -1,0 +1,31 @@
+# Full pre-release suite as a non-root user.
+# posix-nonroot.yml still runs only 76|80|81. macos-tmpdir.yml still
+# runs the session/lock files. Neither would have seen the P2 watchdog
+# set or a crlf-guard failure on a copied Windows tree.
+#
+# Do not add a Windows runner as the only full-suite job. Eight cases
+# skip there (40 42 60 68 70 75 76 83), so a green Windows job alone
+# is a smaller claim than a green POSIX job. A Windows job is only
+# meaningful beside this one.
+name: posix-full
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: refuse root
+        run: |
+          test "$(id -u)" != "0"
+          echo "uid=$(id -u) user=$(id -un)"
+      - run: npm ci --ignore-scripts
+      - run: npm run test:pre-release

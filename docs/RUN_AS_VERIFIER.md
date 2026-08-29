@@ -52,6 +52,18 @@ docker run --rm --user 1000:1000 \
   bash /src/scripts/posix-pre-release.sh
 ```
 
+That copies the working tree. A copy of a Windows checkout can make
+`git diff spec` dirty on Linux even when the host tree is clean. A
+native Linux measurement clones the git objects and checks them out
+inside the container (needs `git` in the image):
+
+```bash
+docker run --rm \
+  -v "$PWD:/origin:ro" -w /tmp \
+  node:22-bookworm \
+  bash /origin/scripts/posix-native-bootstrap.sh
+```
+
 Expect: `tsc` silent, and every test passing. The run prints its own count at
 the end; this file deliberately does not restate it, having twice told readers
 a number the suite had already moved past. Input bounds a third-party
