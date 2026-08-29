@@ -18,7 +18,7 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-`0.6.0` is prepared in this tree, not a published npm release. It names
+`0.6.0` is published on npm. It names
 the CBOR refuse codes (`cbor-eof`, `cbor-too-deep`, `cbor-too-large`,
 `cbor-unsupported`, `cbor-duplicate-key`) and the audit input bound
 (`audit-too-large`) that used to surface as a `RangeError` or an
@@ -27,9 +27,17 @@ usable issuer pin the walk is the attested set and the charge is a
 finding; without a pin the same departure is a warning and does not by
 itself fail the audit. It also binds `requestHash` as SHA-256 of the
 six-field canonical document (lowercase hex); the posted draft names a
-hash but not the digest. The eight packages on npm remain `0.5.0`.
+hash but not the digest.
 
-Eight packages are published on npm at `0.5.0`, so the server runs without a
+Checked from the published packages rather than from this tree: a clean install
+of `@cedulon/audit@0.6.0` in an empty folder reports no terms finding for a
+receipt the pinned issuer key does not attest, reports the same departure as a
+warning when no issuer key is pinned, and still reports a finding and `ok:
+false` for a departure the pinned key does attest. A clean install of
+`@cedulon/core@0.6.0` returns a 64-character lowercase hex digest from
+`requestHashOf`, matching the value the conformance run records.
+
+Eight packages are published on npm at `0.6.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
 `MUST-T8-9`, and it breaks: an audit that used to return a clean
 unconditional result over a receipt carrying the hash of terms it departs from
@@ -53,11 +61,12 @@ external-rail path in this tree, so the indeterminate outcome and the
 That is a gap, not a pass.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.5.0` answers `initialize` reporting `0.5.0`, the
+`@cedulon/mcp-server@0.6.0` answers `initialize` reporting `0.6.0`. The same
+check against the 0.5.0 packages found that the
 installed `dist/session.js` refuses a lock it cannot take with a reason rather
 than an exception and checks the state path before reading its fingerprint, and
-the
-installed `@cedulon/audit` carries the finding codes this round added -
+that the
+installed `@cedulon/audit` carries the finding codes that round added -
 `issuer-key-mismatch`, `countersign-key-mismatch`, `countersign-missing`,
 `witness-entry-unattributable` and the three `unauthenticated-*` warnings.
 `padNonce` is gone from the installed `@cedulon/receipts`, and `verifyReceipt`
@@ -78,9 +87,9 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.5.0 bundle was built and unpacked: its manifest states
-`0.5.0` and the server inside it installs `@cedulon/mcp-server@^0.5.0`. Every
-`@cedulon` package inside it reads `0.5.0`, with no older copy left beside them. The builder installs the published version rather than the
+desktop install. The 0.6.0 bundle was built and unpacked: its manifest states
+`0.6.0` and the server inside it installs `@cedulon/mcp-server@^0.6.0`. Every
+`@cedulon` package inside it reads `0.6.0`, with no older copy left beside them. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -103,7 +112,7 @@ checking before a build and not after. The 0.5.0 build ran against `5b080e6`,
 started, and listed five tools.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.5.0` is the current version (`isLatest`), read back from the registry
+where `0.6.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output. `server.json` is the entry
 it was published from. Earlier listings: `0.2.1` announced itself as `0.2.0`
 over `initialize`, because the version was written out a second time in the

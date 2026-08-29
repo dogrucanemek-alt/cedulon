@@ -4,10 +4,9 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
-## 0.6.0 (prepared, not published): named refuse codes, input bounds, and a narrower terms charge
+## 0.6.0: named refuse codes, input bounds, and a narrower terms charge
 
-This one breaks, and it is prepared in this tree, not a published npm
-release. Inputs that used to throw `RangeError` (a truncated CBOR length
+This one breaks. Inputs that used to throw `RangeError` (a truncated CBOR length
 header, nesting past the stack) now throw named `cbor-eof`,
 `cbor-too-deep`, `cbor-too-large`, `cbor-unsupported`, or
 `cbor-duplicate-key`. An audit whose receipt, settlement, checkpoint,
@@ -47,8 +46,7 @@ not treat a missing catch as "the input was accepted". If you treated
 `ok: false` as the signal that a receipt broke its terms, stop: that
 signal is now only a terms finding, and a terms finding is raised only
 when a usable pin attests the receipt. A warning on the same code is
-not a fail. The published packages on npm remain `0.5.0` until this
-version is released.
+not a fail. The eight packages are published on npm at `0.6.0`.
 
 ## 0.5.0: a bound receipt that breaks its terms fails the audit
 

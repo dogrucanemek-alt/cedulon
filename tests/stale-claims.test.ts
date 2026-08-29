@@ -159,16 +159,25 @@ function assertDraftSplitsAligned(
   }
 }
 
-/** The publish-day shape: adjectives gone, version heading still there. */
-function stripPreparedPhrases(upgrading: string, status: string): {
+/**
+ * The pre-publish shape: version heading carries the adjective, and both
+ * documents say the version is prepared rather than shipped.
+ *
+ * This used to strip those phrases instead of adding them, because the
+ * living files carried them and the publish day was the case worth
+ * simulating. 0.6.0 shipped, the living files became that shape, and the
+ * strip turned into a no-op that asserted nothing. The direction that
+ * still needs a fixture is the other one.
+ */
+function addPreparedPhrases(upgrading: string, status: string): {
   upgrading: string;
   status: string;
 } {
   return {
     upgrading: upgrading
-      .replaceAll(" (prepared, not published)", "")
-      .replace("it is prepared in this tree, not a published npm\nrelease. ", ""),
-    status: status.replace(" is prepared in this tree, not a published npm release.", ""),
+      .replace(/^(## \d+\.\d+\.\d+)(:)/m, "$1 (prepared, not published)$2")
+      .replace("This one breaks. ", "This one breaks, and it is prepared in this tree, not a published npm\nrelease. "),
+    status: status.replace(" is published on npm.", " is prepared in this tree, not a published npm release."),
   };
 }
 
@@ -602,14 +611,14 @@ describe("claims that describe something outside their own file", () => {
     assertTermsSplitAligned(read("docs/UPGRADING.md"), read("docs/STATUS.md"));
   });
 
-  it("GREEN: the same check still holds after the prepared phrases are gone", () => {
+  it("GREEN: the same check still holds while a version is prepared and not yet published", () => {
     const livingUp = read("docs/UPGRADING.md");
     const livingSt = read("docs/STATUS.md");
-    const published = stripPreparedPhrases(livingUp, livingSt);
-    assert.notEqual(published.upgrading, livingUp, "fixture left the UPGRADING prepared phrase");
-    assert.notEqual(published.status, livingSt, "fixture left the STATUS prepared phrase");
-    assert.doesNotMatch(published.upgrading, /prepared, not published/);
-    assert.doesNotMatch(published.status, /is prepared/);
-    assertTermsSplitAligned(published.upgrading, published.status);
+    const prepared = addPreparedPhrases(livingUp, livingSt);
+    assert.notEqual(prepared.upgrading, livingUp, "fixture did not add the UPGRADING prepared phrase");
+    assert.notEqual(prepared.status, livingSt, "fixture did not add the STATUS prepared phrase");
+    assert.match(prepared.upgrading, /prepared, not published/);
+    assert.match(prepared.status, /is prepared in this tree/);
+    assertTermsSplitAligned(prepared.upgrading, prepared.status);
   });
 });
