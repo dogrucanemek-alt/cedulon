@@ -854,7 +854,7 @@ export function audit(input: AuditInput): AuditReport {
 
     // Attribution answers who published the terms. It does not answer which
     // spends were made under them, and those are two different questions. A
-    // manifest whose hash appears on no receipt in the window describes some
+    // manifest whose hash appears on no presented receipt describes some
     // other window; presenting it beside a set of noManifest receipts would
     // otherwise leave a report that reads as terms-backed and is not.
     const presentedHash = manifestHash(input.manifest);
@@ -864,7 +864,7 @@ export function audit(input: AuditInput): AuditReport {
         code: "manifest-covers-no-receipt",
         id: "manifest",
         detail:
-          "the presented Trade Manifest is referenced by no receipt in the window; it states terms nothing here was spent under, so the completeness guarantee is conditional",
+          "the presented Trade Manifest is referenced by no presented receipt; it states terms nothing here was spent under, so the completeness guarantee is conditional",
         severity: "warn",
       });
     }
