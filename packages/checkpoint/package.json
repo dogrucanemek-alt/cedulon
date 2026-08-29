@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/checkpoint",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Epoch checkpoints and an in-process transparency log for Cedulon.",
   "license": "Apache-2.0",
   "type": "module",
@@ -40,8 +40,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/core": "^0.5.0",
-    "@cedulon/cose": "^0.5.0",
-    "@cedulon/receipts": "^0.5.0"
+    "@cedulon/core": "^0.6.0",
+    "@cedulon/cose": "^0.6.0",
+    "@cedulon/receipts": "^0.6.0"
   }
 }

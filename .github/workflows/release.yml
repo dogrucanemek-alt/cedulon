@@ -77,7 +77,7 @@ jobs:
           set -e
           for p in cose core receipts manifest checkpoint x402-adapter audit mcp-server; do
             echo "=== @cedulon/$p ==="
-            npm publish -w "@cedulon/$p"
+            npm publish -w "@cedulon/$p" --provenance
           done
 
       # Read back from the registry rather than from this checkout.

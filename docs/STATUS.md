@@ -18,6 +18,12 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.6.0` is prepared in this tree, not a published npm release. It names
+the CBOR refuse codes (`cbor-eof`, `cbor-too-deep`, `cbor-too-large`,
+`cbor-unsupported`, `cbor-duplicate-key`) and the audit input bound
+(`audit-too-large`) that used to surface as a `RangeError` or an
+unbounded walk. The eight packages on npm remain `0.5.0`.
+
 Eight packages are published on npm at `0.5.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
 `MUST-T8-9`, and it breaks: an audit that used to return a clean
