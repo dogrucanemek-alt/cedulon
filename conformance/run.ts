@@ -28,6 +28,7 @@ type Vector = {
   windowEndMs?: number;
   timestampMs?: number;
   expectFinding?: string | null;
+  expectNoFinding?: string;
   expectWarning?: string;
   expectRefuse?: boolean;
   claims?: Record<string, unknown>;
@@ -167,6 +168,7 @@ for (const v of spec.vectors) {
 
     if (v.kind === "terms-mismatch") {
       const honest = generateReceiptKeys();
+      const signer = v.signWith === "attacker" ? generateReceiptKeys() : honest;
       const manifestKeys = generateManifestKeys();
       const manifest = signManifest(
         {
@@ -189,8 +191,8 @@ for (const v of spec.vectors) {
           x402PaymentRef: "ref-ok",
           outcome: "settled",
         },
-        honest.privateKeyPem,
-        honest.publicKeyPem,
+        signer.privateKeyPem,
+        signer.publicKeyPem,
       );
       const report = audit({
         receipts: [receipt],
@@ -199,15 +201,41 @@ for (const v of spec.vectors) {
         manifestTrust: { publicKeyPem: manifestKeys.publicKeyPem },
         issuerTrust: v.pinIssuer ? { publicKeyPem: honest.publicKeyPem } : undefined,
       });
-      const hit = report.findings.some((f) => f.code === v.expectFinding);
-      if (!hit) {
+      const findingCodes = report.findings.map((f) => f.code);
+      const warningCodes = report.warnings.map((w) => w.code);
+      const problems: string[] = [];
+      if (typeof v.expectFinding === "string" && !findingCodes.includes(v.expectFinding)) {
+        problems.push(`missing finding ${v.expectFinding}`);
+      }
+      if (v.expectNoFinding && findingCodes.includes(v.expectNoFinding)) {
+        problems.push(`unexpected finding ${v.expectNoFinding}`);
+      }
+      if (v.expectWarning) {
+        const warning = report.warnings.find((w) => w.code === v.expectWarning);
+        if (!warning) {
+          problems.push(`missing warning ${v.expectWarning}`);
+        } else if (warning.severity !== "warn") {
+          problems.push(`warning ${v.expectWarning} severity=${warning.severity}`);
+        }
+      }
+      if (v.pinIssuer === false && !warningCodes.includes("unauthenticated-issuer")) {
+        problems.push("missing warning unauthenticated-issuer");
+      }
+      if (problems.length > 0) {
         rows.push({
           id: v.id,
           status: "split",
-          detail: `draft requires ${v.expectFinding}; companion findings=${report.findings.map((f) => f.code).join(",") || "none"}`,
+          detail: `${problems.join("; ")}; findings=${findingCodes.join(",") || "none"} warnings=${warningCodes.join(",") || "none"}`,
         });
       } else {
-        rows.push({ id: v.id, status: "pass", detail: `found ${v.expectFinding}` });
+        const said = [
+          typeof v.expectFinding === "string" ? `found ${v.expectFinding}` : "",
+          v.expectNoFinding ? `no finding ${v.expectNoFinding}` : "",
+          v.expectWarning ? `warning ${v.expectWarning}` : "",
+        ]
+          .filter(Boolean)
+          .join("; ");
+        rows.push({ id: v.id, status: "pass", detail: said || "terms vector matched" });
       }
       continue;
     }

@@ -73,6 +73,32 @@
       "expectFinding": "manifest-terms-mismatch"
     },
     {
+      "id": "V-T8-9-forged-pinned",
+      "must": "MUST-T8-9",
+      "draft": "A verifier presented with a Trade Manifest MUST compare the amount, currency and settlement time of every presented receipt that names it against the manifest's amount, currency and expiry, and MUST report a receipt that departs from them.",
+      "kind": "terms-mismatch",
+      "receiptAmount": "99",
+      "manifestAmount": "1",
+      "signWith": "attacker",
+      "pinIssuer": true,
+      "expectFinding": "issuer-key-mismatch",
+      "expectNoFinding": "manifest-terms-mismatch",
+      "note": "-03 states a single branch: a departing receipt is reported as manifest-terms-mismatch and fails the audit. This tree walks the attested set when a pin is usable, so a receipt that does not verify under the pin cannot invent that charge. The vector records the companion; the split is a finding about the draft, not a licence to invent a -04 sentence."
+    },
+    {
+      "id": "V-T8-9-depart-unpinned",
+      "must": "MUST-T8-9",
+      "draft": "A verifier presented with a Trade Manifest MUST compare the amount, currency and settlement time of every presented receipt that names it against the manifest's amount, currency and expiry, and MUST report a receipt that departs from them.",
+      "kind": "terms-mismatch",
+      "receiptAmount": "99",
+      "manifestAmount": "1",
+      "signWith": "honest",
+      "pinIssuer": false,
+      "expectWarning": "manifest-terms-mismatch",
+      "expectNoFinding": "manifest-terms-mismatch",
+      "note": "-03 states that this departure fails the audit. This tree reports it as a warning (severity warn) and does not fail the audit on that code alone. unauthenticated-issuer sits beside it. The vector records the companion; the split is a finding about the draft, not a licence to invent a -04 sentence."
+    },
+    {
       "id": "V-T4-17-unbound",
       "must": "MUST-T4-17",
       "draft": "MUST report a presented manifest that no presented receipt references.",
