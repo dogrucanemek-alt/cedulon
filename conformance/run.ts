@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { audit } from "@cedulon/audit";
@@ -14,11 +14,8 @@ import { generateReceiptKeys, receiptHash, signReceipt } from "@cedulon/receipts
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const spec = JSON.parse(readFileSync(join(root, "conformance", "vectors.json"), "utf8")) as {
-  vectors: Vector[];
-};
 
-type Vector = {
+export type Vector = {
   id: string;
   must: string;
   draft: string;
@@ -39,10 +36,16 @@ type Vector = {
   bindReceipt?: boolean;
 };
 
-type Row = { id: string; status: "pass" | "split" | "note"; detail: string };
+export type Row = { id: string; status: "pass" | "split" | "error"; detail: string };
 
 const NOW = 1_700_000_000_000;
-const rows: Row[] = [];
+
+export function loadVectors(): Vector[] {
+  const spec = JSON.parse(readFileSync(join(root, "conformance", "vectors.json"), "utf8")) as {
+    vectors: Vector[];
+  };
+  return spec.vectors;
+}
 
 function sha256Hex(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -65,8 +68,10 @@ function baseClaims() {
   };
 }
 
-for (const v of spec.vectors) {
-  try {
+export function evaluateVectors(vectors: Vector[]): Row[] {
+  const rows: Row[] = [];
+  for (const v of vectors) {
+    try {
     if (v.kind === "sha256-of-hex") {
       const bytes = Buffer.from(v.hex!, "hex");
       const digest = sha256Hex(bytes);
@@ -81,6 +86,7 @@ for (const v of spec.vectors) {
                 cancelCondition: "none",
                 expiresAtMs: NOW,
               },
+              encoding: "cose",
               coseHex: v.hex!,
               signature: "",
               publicKeyPem: "",
@@ -204,10 +210,10 @@ for (const v of spec.vectors) {
       const findingCodes = report.findings.map((f) => f.code);
       const warningCodes = report.warnings.map((w) => w.code);
       const problems: string[] = [];
-      if (typeof v.expectFinding === "string" && !findingCodes.includes(v.expectFinding)) {
+      if (typeof v.expectFinding === "string" && !findingCodes.some((c) => c === v.expectFinding)) {
         problems.push(`missing finding ${v.expectFinding}`);
       }
-      if (v.expectNoFinding && findingCodes.includes(v.expectNoFinding)) {
+      if (v.expectNoFinding && findingCodes.some((c) => c === v.expectNoFinding)) {
         problems.push(`unexpected finding ${v.expectNoFinding}`);
       }
       if (v.expectWarning) {
@@ -292,8 +298,8 @@ for (const v of spec.vectors) {
         currency: "USD",
         payee: "payee",
         nonce: "n0".padEnd(16, "-"),
+        nowMs: NOW,
         tool: "spend",
-        manifestHash: null,
       };
       const bound = requestHashOf(req);
       const asSha = sha256Hex(Buffer.from(bound, "utf8"));
@@ -308,15 +314,29 @@ for (const v of spec.vectors) {
       continue;
     }
 
-    rows.push({ id: v.id, status: "note", detail: `unknown kind ${v.kind}` });
-  } catch (err) {
-    rows.push({ id: v.id, status: "split", detail: (err as Error).message });
+    rows.push({ id: v.id, status: "error", detail: `unknown kind ${v.kind}` });
+    } catch (err) {
+      rows.push({ id: v.id, status: "error", detail: (err as Error).message });
+    }
   }
+  return rows;
 }
 
-for (const r of rows) {
-  console.log(`${r.status}\t${r.id}\t${r.detail}`);
+function invokedAsCli(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return resolve(entry) === resolve(fileURLToPath(import.meta.url));
 }
-const splits = rows.filter((r) => r.status === "split");
-console.log(`conformance: ${rows.length} vectors, ${splits.length} split`);
-if (splits.length > 0) process.exitCode = 1;
+
+if (invokedAsCli()) {
+  const rows = evaluateVectors(loadVectors());
+  for (const r of rows) {
+    console.log(`${r.status}\t${r.id}\t${r.detail}`);
+  }
+  const splits = rows.filter((r) => r.status === "split");
+  const errors = rows.filter((r) => r.status === "error");
+  console.log(
+    `conformance: ${rows.length} vectors, ${splits.length} split, ${errors.length} error`,
+  );
+  if (splits.length > 0 || errors.length > 0) process.exitCode = 1;
+}
