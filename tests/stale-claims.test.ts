@@ -51,10 +51,22 @@ describe("claims that describe something outside their own file", () => {
     assert.ok(inDraft, `${DRAFT} no longer names a published version`);
     const inStatus = status.match(/published on npm at `(\d+\.\d+\.\d+)`/);
     assert.ok(inStatus, "docs/STATUS.md no longer names the published version");
-    assert.equal(
-      inDraft[1],
-      inStatus[1],
-      "the frozen draft and STATUS disagree on what a reader can install from npm",
+    // A posted draft is frozen; the packages keep moving. The invariant is not
+    // that the two agree, it is that the draft never claims more than npm
+    // carries. Overstating is the -00 defect that drew a DO NOT SUBMIT.
+    // Understating is what a frozen document does between releases, and the
+    // reader who checks finds more than was promised rather than less.
+    const cmp = (a: string, b: string): number => {
+      const x = a.split(".").map(Number);
+      const y = b.split(".").map(Number);
+      for (let i = 0; i < 3; i += 1) {
+        if (x[i]! !== y[i]!) return x[i]! < y[i]! ? -1 : 1;
+      }
+      return 0;
+    };
+    assert.ok(
+      cmp(inDraft[1]!, inStatus[1]!) <= 0,
+      `the frozen draft claims ${inDraft[1]} published while STATUS says npm carries ${inStatus[1]}; a draft may lag the packages but must never claim ahead of them`,
     );
     const published = inStatus[1];
 

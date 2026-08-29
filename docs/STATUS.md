@@ -18,11 +18,15 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-Eight packages are published on npm at `0.4.0`, so the server runs without a
-clone: `npx -y @cedulon/mcp-server`. `0.5.0` is prepared in this tree
-and is not a published npm release: it carries `MUST-T4-17` and
-`MUST-T8-9`, which a clean install of 0.4.0 does not. Publishing is a
-separate step. 0.3.0 was the breaking release and
+Eight packages are published on npm at `0.5.0`, so the server runs without a
+clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
+`MUST-T8-9`, and it breaks: an audit that used to return a clean
+unconditional result over a receipt carrying the hash of terms it departs from
+now reports `manifest-terms-mismatch` and fails. Checked from the published
+package rather than from this tree: a clean install of `@cedulon/audit@0.5.0`
+in an empty folder reports that finding for a receipt of 99 against a manifest
+of 1, with the guarantee still unconditional, because every root was supplied
+and the statement being made is not in doubt. 0.3.0 was the breaking release and
 `docs/UPGRADING.md` says what breaks and why; the short version is that a
 verifier which kept the old behaviour would keep reporting a clean audit over a
 forged receipt. 0.3.1 breaks nothing further: it repairs three defects an
@@ -38,7 +42,7 @@ external-rail path in this tree, so the indeterminate outcome and the
 That is a gap, not a pass.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.4.0` answers `initialize` reporting `0.4.0`, the
+`@cedulon/mcp-server@0.5.0` answers `initialize` reporting `0.5.0`, the
 installed `dist/session.js` refuses a lock it cannot take with a reason rather
 than an exception and checks the state path before reading its fingerprint, and
 the
@@ -63,8 +67,9 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.4.0 bundle was built and unpacked: its manifest states
-`0.4.0` and the server inside it installs `@cedulon/mcp-server@^0.4.0`. The builder installs the published version rather than the
+desktop install. The 0.5.0 bundle was built and unpacked: its manifest states
+`0.5.0` and the server inside it installs `@cedulon/mcp-server@^0.5.0`. Every
+`@cedulon` package inside it reads `0.5.0`, with no older copy left beside them. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -83,7 +88,7 @@ is active. That number moves when Glama is actually updated, not when npm is. Th
 `initialize`, listed five tools, and returned a signed receipt.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.4.0` is the current version (`isLatest`), read back from the registry
+where `0.5.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output. `server.json` is the entry
 it was published from. Earlier listings: `0.2.1` announced itself as `0.2.0`
 over `initialize`, because the version was written out a second time in the
