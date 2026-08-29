@@ -82,10 +82,14 @@ submitted to that directory yet. Smithery takes an HTTPS endpoint or a bundle;
 neither has been submitted there either.
 
 The server is listed on Glama at `dogrucanemek-alt/cedulon`. License and
-quality both grade A; the release listed there is still 0.2.3 and Install Server
-is active. That number moves when Glama is actually updated, not when npm is. The
-`Dockerfile` here is the image that was built and whose server answered
-`initialize`, listed five tools, and returned a signed receipt.
+quality both grade A, Install Server is active, and the release listed there is
+0.5.0. That number moves when Glama is actually updated, not when npm is, and it
+sat at 0.2.3 for three releases: anyone installing from that listing was getting
+the payment path from before 0.4.0 refused an unattributable manifest. Glama
+builds from its own spec rather than the `Dockerfile` here, and it builds the
+commit it last synced rather than the one on the remote, so the head is worth
+checking before a build and not after. The 0.5.0 build ran against `5b080e6`,
+started, and listed five tools.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
 where `0.5.0` is the current version (`isLatest`), read back from the registry
