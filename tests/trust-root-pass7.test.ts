@@ -51,18 +51,26 @@ describe("settle and record are one operation", () => {
     // not: writeFileSync or renameSync throwing left the payment complete in
     // memory with the disk still holding the old state - and the next successful
     // save then wrote out a payment the caller had been told failed.
-    if (process.platform === "win32") {
-      return; // making a directory unwritable needs POSIX modes
-    }
     const statePath = statePathIn("cedulon-io-");
     const session = new CedulonSession({ statePath });
     assert.equal(spend(session, "a0", 1).ok, true);
 
     const ledgerBefore = session.ledger.extract().length;
     const receiptsBefore = session.receipts.length;
-    chmodSync(dirname(statePath), 0o500); // readable, not writable
-    const denied = spend(session, "a1", 2);
-    chmodSync(dirname(statePath), 0o700);
+    // POSIX: directory 0500. Windows: the directory read-only bit is ignored
+    // (measured); marking the state file read-only makes the atomic rename fail.
+    if (process.platform === "win32") {
+      chmodSync(statePath, 0o444);
+    } else {
+      chmodSync(dirname(statePath), 0o500);
+    }
+    let denied;
+    try {
+      denied = spend(session, "a1", 2);
+    } finally {
+      if (process.platform === "win32") chmodSync(statePath, 0o666);
+      else chmodSync(dirname(statePath), 0o700);
+    }
 
     assert.equal(denied.ok, false, "the caller is told the payment did not happen");
     assert.equal(denied.ok === false && denied.reason, "state-io");
@@ -83,9 +91,6 @@ describe("settle and record are one operation", () => {
     // evaluate() takes the nonce and the slot before anything is written, so a
     // failure after that point charged the payer for a payment that never
     // happened - and with maxPayments reached, the next honest one is refused.
-    if (process.platform === "win32") {
-      return;
-    }
     const statePath = statePathIn("cedulon-quota-");
     const session = new CedulonSession({
       statePath,
@@ -101,9 +106,14 @@ describe("settle and record are one operation", () => {
     });
     assert.equal(spend(session, "q0", 1).ok, true);
 
-    chmodSync(dirname(statePath), 0o500);
-    assert.equal(spend(session, "q1", 2).ok, false);
-    chmodSync(dirname(statePath), 0o700);
+    if (process.platform === "win32") chmodSync(statePath, 0o444);
+    else chmodSync(dirname(statePath), 0o500);
+    try {
+      assert.equal(spend(session, "q1", 2).ok, false);
+    } finally {
+      if (process.platform === "win32") chmodSync(statePath, 0o666);
+      else chmodSync(dirname(statePath), 0o700);
+    }
 
     assert.equal(session.engine.store.counters.allowedCount, 1, "the slot was given back");
     assert.equal(
@@ -133,10 +143,7 @@ describe("settle and record are one operation", () => {
     assert.equal(spend(first, "r4", 5).ok, true, "and it can write again");
   });
 
-  it("83 RED then GREEN: the lock path is guarded like the state path, and stale temp files go", () => {
-    if (process.platform === "win32") {
-      return; // symlinkSync needs privilege here
-    }
+  it("83 RED then GREEN: the lock path is guarded like the state path, and stale temp files go", (t) => {
     const statePath = statePathIn("cedulon-lock2-");
     const session = new CedulonSession({ statePath });
     assert.equal(spend(session, "l0", 1).ok, true);
@@ -155,7 +162,18 @@ describe("settle and record are one operation", () => {
 
     // The lock path decides where a file gets created, so it is guarded too.
     const elsewhere = join(dirname(statePath), "elsewhere.lock");
-    symlinkSync(elsewhere, `${statePath}.lock`);
+    try {
+      symlinkSync(elsewhere, `${statePath}.lock`);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "EACCES") {
+        if (process.platform === "win32") {
+          t.skip("lock-path symlink half needs privilege on this host; stale-temp cleanup already asserted");
+        }
+        return;
+      }
+      throw err;
+    }
     assert.throws(() => spend(session, "l2", 3), /cedulon-state-symlink/);
   });
 

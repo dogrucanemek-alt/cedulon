@@ -12,9 +12,14 @@ Run as an ordinary user, not as root. Several cases make a directory
 unwritable and then expect a payment to be refused, and root writes to an
 unwritable directory regardless of its mode, so those cases report the payment
 as having succeeded instead. In a container that means `--user` or a `su` to a
-normal account; the author lost a run to this. Cases that need POSIX modes or
-symbolic links return early on Windows rather than failing, so a green suite
-there is a smaller claim than a green suite on Linux, and the report says which
+normal account; the author lost a run to this. Eight cases skip on Windows
+with a reason, so a green suite there cannot hide them as passes: file and
+directory mode (40, 60, 68, 75) and symbolic-link refusal (42, 70, 76, 83). Those
+are POSIX access-control and symlink privileges this server does not emulate;
+the suite names them instead of asserting a protection that is not present.
+The undo after a failed write (80, 81) is exercised on Windows by marking the
+state file read-only so the atomic rename fails. A green suite on Windows is
+still a smaller claim than a green suite on Linux, and the report says which
 platform it came from.
 
 ## 1. Clone and install
@@ -35,9 +40,22 @@ npx tsc --noEmit
 npm run test:all
 ```
 
+A green suite on Windows is a smaller claim than a green suite on Linux.
+The full pre-release suite as a non-root user on Linux, from this tree,
+is a Docker run that copies the source and installs inside the container
+so Windows `node_modules` binaries are not reused:
+
+```bash
+docker run --rm --user 1000:1000 \
+  -v "$PWD:/src:ro" -w /tmp \
+  node:22-bookworm \
+  bash /src/scripts/posix-pre-release.sh
+```
+
 Expect: `tsc` silent, and every test passing. The run prints its own count at
 the end; this file deliberately does not restate it, having twice told readers
-a number the suite had already moved past. The suite includes red-then-green
+a number the suite had already moved past. Input bounds a third-party
+decoder must apply are in `docs/LIMITS.md`. The suite includes red-then-green
 cases for COSE tamper, checkpoint equivocation, field-level settlement
 matching, window coverage, signed extracts, extract binding and trust pinning,
 and each audit finding.
@@ -354,3 +372,32 @@ refused, at startup and again at every save, since a path checked once is a path
 that can be replaced afterwards. `absent` can appear beside a non-zero
 `receiptCount`: the ledger is in memory and the file is gone, which is worth
 telling apart from a file with no protection.
+
+## 9. How to verify this version
+
+`docs/LIMITS.md` is the bound table a third-party decoder has to apply.
+
+The software bill of materials is produced from `package-lock.json` with
+no extra dependency:
+
+```bash
+npm run sbom > sbom.cdx.json
+```
+
+The document is CycloneDX 1.5. Running the command twice must emit the
+same bytes: the timestamp inside is fixed so a clock cannot make two
+honest runs look like two different trees.
+
+npm trusted publishing is the maintainer's step, not yours. The release
+workflow requests `id-token: write` and publishes with `--provenance`.
+After a version is on the registry, check the attestation rather than
+the tarball's mtime:
+
+```bash
+npm view @cedulon/cose@0.5.0 dist.integrity
+npm audit signatures
+```
+
+`npm pack` of the same package twice lists the same files in the same
+order. The `.tgz` bytes themselves may differ: ustar stores a
+modification time. Compare the member list, not the archive hash.

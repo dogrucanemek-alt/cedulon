@@ -24,21 +24,95 @@ const DRAFT = "spec/draft-dogru-cedulon-03.md";
  * needs a reader.
  */
 
-/** Cases that return early on Windows instead of asserting. */
-function casesSkippedOnWindows(): string[] {
-  const found: string[] = [];
-  for (const file of readdirSync(join(root, "tests")).filter((n) => n.endsWith(".ts"))) {
-    const source = read(join("tests", file));
-    for (const match of source.matchAll(/it\(\s*"(\d+)\s/g)) {
-      const start = match.index + match[0].length;
-      const next = source.indexOf("\n  it(", start);
-      const body = source.slice(start, next > 0 ? next : source.length);
-      const guard = body.indexOf('process.platform === "win32"');
-      if (guard === -1) continue;
-      if (body.slice(guard, guard + 140).includes("return")) found.push(match[1]);
-    }
+const WIN32_GUARD = 'process.platform === "win32"';
+
+/**
+ * A numbered case exits before its last assert when the `it()` body has
+ * `assert.` / `throws(` and a word-boundary `return` that sits before that
+ * last assert, or when it names a node:test skip (`t.skip(...)` /
+ * `it(..., { skip: ... })`). Platform guards are not part of the criterion:
+ * case 42 returns on EPERM without asking `win32`, and the old scanner
+ * called that a pass.
+ *
+ * Findings that are not skips live in EARLY_RETURN_ALLOWLIST with a reason.
+ * Silent omission is how the previous criterion went stale.
+ */
+function lastAssertIndex(body: string): number {
+  let last = -1;
+  for (const re of [/\bassert\./g, /\bthrows\s*\(/g]) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body))) last = Math.max(last, m.index);
   }
-  return found.sort();
+  return last;
+}
+
+function namesSkip(body: string): boolean {
+  if (/\.skip\s*\(/.test(body)) return true;
+  const headerEnd = body.search(/\)\s*=>/);
+  const header = headerEnd >= 0 ? body.slice(0, headerEnd) : "";
+  return /\bskip\s*:/.test(header);
+}
+
+function exitsBeforeLastAssert(body: string): boolean {
+  if (namesSkip(body)) return true;
+  const lastAssert = lastAssertIndex(body);
+  if (lastAssert < 0) return false;
+  const re = /\breturn\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) {
+    if (m.index < lastAssert) return true;
+  }
+  return false;
+}
+
+function casesSkippedInSource(
+  source: string,
+  file = "",
+): { id: string; file: string; line: number }[] {
+  const found: { id: string; file: string; line: number }[] = [];
+  for (const match of source.matchAll(/it\(\s*"(\d+)\s/g)) {
+    const start = match.index + match[0].length;
+    const next = source.indexOf("\n  it(", start);
+    const body = source.slice(start, next > 0 ? next : source.length);
+    if (!exitsBeforeLastAssert(body)) continue;
+    found.push({
+      id: match[1]!,
+      file,
+      line: source.slice(0, match.index).split("\n").length,
+    });
+  }
+  return found.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+}
+
+/** Numbered cases whose early return is not a skip. Empty: every finding is counted. */
+const EARLY_RETURN_ALLOWLIST: Record<string, string> = {};
+
+/** Why each counted id is a skip, not a silent pass. */
+const COUNTED_EARLY_EXITS: Record<string, string> = {
+  "40": "POSIX file mode is not the access control on Windows",
+  "42": "directory symlink EPERM/EACCES; TMPDIR through a link is unmeasurable here",
+  "60": "POSIX directory mode is not the access control on Windows",
+  "68": "POSIX directory mode is not the access control on Windows",
+  "70": "file symlink EPERM on this host",
+  "75": "POSIX directory mode is not the access control on Windows",
+  "76": "directory symlink EPERM on this host",
+  "83": "lock symlink EPERM on this host",
+};
+
+/** Cases that return or skip before their last assert, minus the allowlist. */
+function casesSkippedOnWindows(): { id: string; file: string; line: number }[] {
+  const found: { id: string; file: string; line: number }[] = [];
+  for (const file of readdirSync(join(root, "tests")).filter(
+    (n) => n.endsWith(".ts") && n !== "stale-claims.test.ts",
+  )) {
+    found.push(...casesSkippedInSource(read(join("tests", file)), `tests/${file}`));
+  }
+  return found
+    .filter((c) => {
+      if (EARLY_RETURN_ALLOWLIST[c.id]) return false;
+      return true;
+    })
+    .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 }
 
 describe("claims that describe something outside their own file", () => {
@@ -112,21 +186,103 @@ describe("claims that describe something outside their own file", () => {
     assert.equal(registry[1], published, "STATUS registry isLatest is not the published version");
   });
 
-  it("the set of cases that skip on Windows is the one three documents describe", () => {
+  it("the set of cases that skip on Windows is the one two living documents describe", () => {
     // Written down rather than derived, because the point is to notice a change
-    // and go read the prose. The three places that describe this set:
-    //   - the Coverage paragraph in the draft, which says which protections a
-    //     green suite on Windows leaves unexercised
+    // and go read the prose. The posted draft is frozen: its Coverage paragraph
+    // is corrected in -04, not by editing -03. The two living places:
     //   - docs/RUN_AS_VERIFIER.md, which warns an external verifier
     //   - docs/UPGRADING.md, under what is open on purpose
-    const expected = ["60", "68", "70", "75", "76", "80", "81", "83"];
+    const found = casesSkippedOnWindows();
+    for (const c of found) {
+      const reason = COUNTED_EARLY_EXITS[c.id] ?? EARLY_RETURN_ALLOWLIST[c.id] ?? "UNSTATED";
+      console.log(`early-exit ${c.id} ${c.file}:${c.line} ${reason}`);
+    }
+    const expected = Object.keys(COUNTED_EARLY_EXITS).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true }),
+    );
     assert.deepEqual(
-      casesSkippedOnWindows(),
+      found.map((c) => c.id),
       expected,
-      "The set of cases that skip on Windows changed. Three documents describe it: the " +
-        `Coverage paragraph in ${DRAFT}, the note near the top of docs/RUN_AS_VERIFIER.md, ` +
-        "and the open-on-purpose list in docs/UPGRADING.md. Read all three, then update " +
-        "this list.",
+      "-03 is frozen; do not edit its Coverage paragraph. The set of cases that exit " +
+        "before their last assert changed. Read docs/RUN_AS_VERIFIER.md and docs/UPGRADING.md, carry " +
+        "the correction to -04, then update COUNTED_EARLY_EXITS. Allowlisted ids must keep a reason.",
+    );
+    for (const c of found) {
+      assert.ok(
+        COUNTED_EARLY_EXITS[c.id],
+        `${c.id} at ${c.file}:${c.line} exits before its last assert and has no reason`,
+      );
+    }
+  });
+
+  it("the Windows-skip scanner sees a return that sits far past the platform guard", () => {
+    // Case 40's return is 335 characters after the guard because a comment sits
+    // between them. A 140-character window called that a pass. This fixture
+    // puts the return even farther away so the same blind spot cannot come back.
+    const padding = "      // the mode bits are not the access control here\n".repeat(12);
+    const far = [
+      `  it("99 RED then GREEN: return sits well beyond a 140-character window", () => {`,
+      `    if (process.platform === "win32") {`,
+      padding,
+      `      return;`,
+      `    }`,
+      `    assert.ok(false);`,
+      `  });`,
+      ``,
+    ].join("\n");
+    const guard = far.indexOf(WIN32_GUARD);
+    const ret = far.indexOf("return;");
+    assert.ok(ret - guard > 140, `fixture is not far enough: ${ret - guard}`);
+    assert.deepEqual(
+      casesSkippedInSource(far).map((c) => c.id),
+      ["99"],
+    );
+
+    const lookalike = [
+      `  it("98 RED then GREEN: the word returns is not a skip", () => {`,
+      `    if (process.platform === "win32") {`,
+      `      const returns = 1;`,
+      `      assert.equal(returns, 1);`,
+      `    }`,
+      `  });`,
+      ``,
+    ].join("\n");
+    assert.deepEqual(casesSkippedInSource(lookalike).map((c) => c.id), []);
+
+    const skipped = [
+      `  it("97 RED then GREEN: node:test skip is a skip", (t) => {`,
+      `    if (process.platform === "win32") {`,
+      `      t.skip("POSIX modes are not the access control here");`,
+      `    }`,
+      `  });`,
+      ``,
+    ].join("\n");
+    assert.deepEqual(
+      casesSkippedInSource(skipped).map((c) => c.id),
+      ["97"],
+    );
+
+    // Case 42's class: a host-capability return with no platform guard.
+    // The win32-only scanner called this a pass while the suite did too.
+    const unguarded = [
+      `  it("96 RED then GREEN: EPERM return without a platform guard", () => {`,
+      `    try {`,
+      `      symlinkSync("x", "y", "dir");`,
+      `    } catch (err) {`,
+      `      const code = (err as NodeJS.ErrnoException).code;`,
+      `      if (code === "EPERM" || code === "EACCES") {`,
+      `        return;`,
+      `      }`,
+      `      throw err;`,
+      `    }`,
+      `    assert.ok(true);`,
+      `  });`,
+      ``,
+    ].join("\n");
+    assert.ok(!unguarded.includes(WIN32_GUARD), "fixture must not mention win32");
+    assert.deepEqual(
+      casesSkippedInSource(unguarded).map((c) => c.id),
+      ["96"],
     );
   });
 

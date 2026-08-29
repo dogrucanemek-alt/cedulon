@@ -237,7 +237,7 @@ describe("trust roots, fifth pass", () => {
     assert.equal(stripped.guarantee, "conditional");
   });
 
-  it("68 RED then GREEN: a state file is only owner-only if its directory is too", () => {
+  it("68 RED then GREEN: a state file is only owner-only if its directory is too", (t) => {
     // Mode 0600 on the file says who can open it. A world-writable directory says
     // who can replace it, which reaches the same private key by another route.
     const dir = mkdtempSync(join(tmpdir(), "cedulon-dir-"));
@@ -250,6 +250,7 @@ describe("trust roots, fifth pass", () => {
 
     if (process.platform === "win32") {
       assert.equal(session.status().stateProtection, "unprotected-on-this-platform");
+      t.skip("directory mode is not the access control on Windows; the unprotected report is asserted, the POSIX flip is not");
       return;
     }
     assert.equal(session.status().stateProtection, "owner-only");
@@ -279,18 +280,26 @@ describe("trust roots, fifth pass", () => {
     assert.equal(session.status().stateProtection, "absent");
   });
 
-  it("70 RED then GREEN: the state path is refused when it is a symlink", () => {
+  it("70 RED then GREEN: the state path is refused when it is a symlink", (t) => {
     // A symlink at the state path is read through on load, so an attacker who can
     // place one decides what this server starts up believing. Refusing the path
     // outright is the only answer that does not depend on write ordering.
-    if (process.platform === "win32") {
-      return; // creating a symlink needs privilege here; measured on POSIX instead
-    }
     const dir = mkdtempSync(join(tmpdir(), "cedulon-link-"));
     const real = join(dir, "real.json");
     const link = join(dir, "state.json");
     writeFileSync(real, "{}\n", { mode: 0o600 });
-    symlinkSync(real, link);
+    try {
+      symlinkSync(real, link);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "EACCES") {
+        if (process.platform === "win32") {
+          t.skip("creating a symlink needs privilege on this host (Developer Mode off); measured on POSIX instead");
+        }
+        return;
+      }
+      throw err;
+    }
 
     assert.throws(
       () => new CedulonSession({ statePath: link }),

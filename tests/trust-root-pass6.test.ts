@@ -186,12 +186,13 @@ describe("trust roots, sixth pass", () => {
     assert.equal(report.guarantee, "conditional");
   });
 
-  it("75 RED then GREEN: owner-only means every directory on the way, not just the last one", () => {
+  it("75 RED then GREEN: owner-only means every directory on the way, not just the last one", (t) => {
     // Mode 0600 says who can open the file and the parent says who can replace
     // it - but a grandparent anyone can write lets the parent itself be renamed
     // away, taking the private key with it and putting a decoy in its place.
     if (process.platform === "win32") {
-      return; // POSIX modes are not the access control here; measured on Linux
+      t.skip("POSIX directory modes are not the access control on Windows; measured on Linux");
+      return;
     }
     const grand = mkdtempSync(join(tmpdir(), "cedulon-grand-"));
     const parent = join(grand, "inner");
@@ -212,17 +213,25 @@ describe("trust roots, sixth pass", () => {
     );
   });
 
-  it("76 RED then GREEN: a symlink is refused when saving, and so is a symlinked directory", () => {
-    if (process.platform === "win32") {
-      return; // symlinkSync needs privilege here
-    }
+  it("76 RED then GREEN: a symlink is refused when saving, and so is a symlinked directory", (t) => {
     // A path checked once at startup is a path an attacker can replace at any
     // point after startup, and the directory was never checked at all.
     const dir = mkdtempSync(join(tmpdir(), "cedulon-link2-"));
     const real = join(dir, "real");
     mkdirSync(real, { mode: 0o700 });
     const linkedDir = join(dir, "linked");
-    symlinkSync(real, linkedDir);
+    try {
+      symlinkSync(real, linkedDir);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "EACCES") {
+        if (process.platform === "win32") {
+          t.skip("creating a directory symlink needs privilege on this host (Developer Mode off); measured on POSIX instead");
+        }
+        return;
+      }
+      throw err;
+    }
     assert.throws(
       () => new CedulonSession({ statePath: join(linkedDir, "state.json") }),
       /cedulon-state-symlink/,

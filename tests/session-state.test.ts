@@ -17,7 +17,7 @@ function spendOnce(session: CedulonSession, nonce: string) {
 }
 
 describe("session state file", () => {
-  it("40 RED then GREEN: the state file holding the private key is not world-readable", () => {
+  it("40 RED then GREEN: the state file holding the private key is not world-readable", (t) => {
     // The receipt private key is written into this file in the clear. Encryption
     // needs a secret this server does not have, so the file mode is the whole of
     // the protection - which makes an unstated mode a decision, not an omission.
@@ -33,6 +33,7 @@ describe("session state file", () => {
       // bits are not the access control - the directory ACL is, and this project
       // does not set it. Asserting 0600 here would be a green light for a
       // protection that is not present on this platform.
+      t.skip("POSIX file mode is not the access control on Windows; the directory ACL is, and this server does not set it");
       return;
     }
     assert.equal(statSync(statePath).mode & 0o777, 0o600, "state file is owner-only");
@@ -66,7 +67,7 @@ describe("session state file", () => {
     assert.throws(() => new CedulonSession({ statePath }), /state/i);
   });
 
-  it("42 RED then GREEN: a temp directory reached through a symlink is not an attacker path", () => {
+  it("42 RED then GREEN: a temp directory reached through a symlink is not an attacker path", (t) => {
     // macOS /var → /private/var, and a TMPDIR that is itself a link, put every
     // mkdtemp path behind a symlink the operator did not place. Walking every
     // ancestor then throws cedulon-state-symlink and the suite falls over.
@@ -79,7 +80,8 @@ describe("session state file", () => {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === "EPERM" || code === "EACCES") {
-        return; // this host cannot create directory symlinks; measured on POSIX
+        t.skip("directory symlinks unavailable on this host");
+        return;
       }
       throw err;
     }

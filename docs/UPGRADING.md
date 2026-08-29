@@ -4,10 +4,24 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
-## 0.5.0 (prepared, not published): a bound receipt that breaks its terms fails the audit
+## 0.6.0 (prepared, not published): named refuse codes and input bounds
 
 This one breaks, and it is prepared in this tree, not a published npm
-release. `audit()` used to report `guarantee=unconditional` over a
+release. Inputs that used to throw `RangeError` (a truncated CBOR length
+header, nesting past the stack) now throw named `cbor-eof`,
+`cbor-too-deep`, `cbor-too-large`, `cbor-unsupported`, or
+`cbor-duplicate-key`. An audit whose receipt, settlement, checkpoint,
+or inclusion list exceeds the bound in `docs/LIMITS.md` is refused with
+`audit-too-large`. A third-party decoder that does not apply the same
+bounds is answering a different question.
+
+**What to change:** catch the named codes instead of `RangeError`. Do
+not treat a missing catch as "the input was accepted". The published
+packages on npm remain `0.5.0` until this version is released.
+
+## 0.5.0: a bound receipt that breaks its terms fails the audit
+
+This one breaks. `audit()` used to report `guarantee=unconditional` over a
 receipt whose `manifestHash` matched a presented Trade Manifest while
 the receipt amount, currency, or settlement time departed from those
 terms (`amount=99` against a manifest of `1`). `MUST-T8-2` and
@@ -183,7 +197,13 @@ lose a receipt quietly.
 
 - On Windows the file mode call succeeds and protects nothing; the access control
   there is the directory ACL and this server does not set it. `stateProtection`
-  says `unprotected-on-this-platform` rather than pretending otherwise.
+  says `unprotected-on-this-platform` rather than pretending otherwise. Cases 40,
+  60, 68 and 75 skip on Windows for that reason: they measure POSIX file and
+  directory modes, which this platform does not use. Cases 42, 70, 76 and 83 skip
+  when the host cannot create a symbolic link (Windows without Developer Mode
+  returns `EPERM`). Cases 80 and 81, the undo after a failed write, do run on
+  Windows: a read-only state file makes the atomic rename fail the same way a
+  POSIX directory mode 0500 does.
 - `demo:unguarded` still allows 100 payments with no gate. That is the hole the
   rest of the demos exist to show closed.
 - SMB and UNC shares, and a second Windows user account reading the state file,
