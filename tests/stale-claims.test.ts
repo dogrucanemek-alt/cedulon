@@ -7,6 +7,58 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p: string): string => readFileSync(join(root, p), "utf8");
 
+/**
+ * The unpublished 0.6.0 terms split lives in two living sentences.
+ * P4 changed the code and neither document; the suite stayed green.
+ * The check reads those two sections, not a third restatement.
+ */
+function unpublishedUpgradeSection(upgrading: string): string {
+  const m = upgrading.match(
+    /^## (\d+\.\d+\.\d+) \(prepared, not published\)[^\n]*\n[\s\S]*?(?=^## )/m,
+  );
+  assert.ok(m, "docs/UPGRADING.md has no unpublished (prepared, not published) section");
+  return m[0];
+}
+
+function unpublishedVersion(section: string): string {
+  const m = section.match(/^## (\d+\.\d+\.\d+) \(prepared, not published\)/m);
+  assert.ok(m, "unpublished UPGRADING section lost its version heading");
+  return m[1]!;
+}
+
+function statusPreparedParagraph(status: string, version: string): string {
+  const esc = version.replace(/\./g, "\\.");
+  const m = status.match(new RegExp("`" + esc + "` is prepared[\\s\\S]*?(?:\\n\\n|$)"));
+  assert.ok(m, `docs/STATUS.md has no prepared paragraph for ${version}`);
+  return m[0];
+}
+
+function assertTermsSplitNamed(text: string, where: string): void {
+  assert.match(
+    text,
+    /manifest-terms-mismatch/,
+    `${where} does not name manifest-terms-mismatch`,
+  );
+  assert.match(
+    text,
+    /usable(?: issuer)? pin[\s\S]{0,280}finding/i,
+    `${where} does not say a usable pin raises a finding`,
+  );
+  assert.match(
+    text,
+    /without a pin[\s\S]{0,280}warning/i,
+    `${where} does not say that without a pin the charge is a warning`,
+  );
+}
+
+function assertUnpublishedTermsAligned(upgrading: string, status: string): void {
+  const section = unpublishedUpgradeSection(upgrading);
+  const version = unpublishedVersion(section);
+  const paragraph = statusPreparedParagraph(status, version);
+  assertTermsSplitNamed(section, `docs/UPGRADING.md ${version}`);
+  assertTermsSplitNamed(paragraph, `docs/STATUS.md ${version}`);
+}
+
 const DRAFT = "spec/draft-dogru-cedulon-03.md";
 
 /**
@@ -351,5 +403,23 @@ describe("claims that describe something outside their own file", () => {
       /An audit presented with no Trade Manifest is not made conditional by this requirement/,
       "the no-manifest exception must be said in the requirement, not only nearby",
     );
+  });
+
+  it("RED: STATUS's prepared paragraph without the terms split fails before the living files are accepted", () => {
+    const upgrading = read("docs/UPGRADING.md");
+    const status = read("docs/STATUS.md");
+    const drifted = status.replace(
+      /It also narrows `manifest-terms-mismatch`:[\s\S]*?fail the audit\. /,
+      "",
+    );
+    assert.notEqual(drifted, status, "fixture did not remove the terms split from STATUS");
+    assert.throws(
+      () => assertUnpublishedTermsAligned(upgrading, drifted),
+      /docs\/STATUS\.md \d+\.\d+\.\d+ does not name manifest-terms-mismatch/,
+    );
+  });
+
+  it("GREEN: the unpublished UPGRADING section and STATUS paragraph name the same terms split", () => {
+    assertUnpublishedTermsAligned(read("docs/UPGRADING.md"), read("docs/STATUS.md"));
   });
 });
