@@ -150,14 +150,16 @@ returned for checkpoints, names what a witness holding a checkpoint the
 presented chain omits reports, brings equivocation within reach by
 comparing recorded copies against the presented chain, and states how
 checkpoint totals may be withheld without withholding the fact that
-they were. This revision states the trust roots the earlier ones left
-implicit: no signed object may be verified against a key it carries
+they were. No signed object may be verified against a key it carries
 itself, and a presented Trade Manifest must be bound both to the
-receipts that name it and to the terms those receipts claim. It also
-names a threat no adversary causes, a settlement recorded on a rail
-with no receipt behind it. It also defines a Dispute Evidence Bundle (evidence, not an
-award) and optional SCITT anchoring. Cedulon is not a competitor to
-x402 or AP2; it sits above them.
+receipts that name it and to the terms those receipts claim. The
+document also names a threat no adversary causes, a settlement
+recorded on a rail with no receipt behind it, and defines a Dispute
+Evidence Bundle (evidence, not an award) and optional SCITT anchoring.
+This revision defines the encodings earlier revisions called canonical
+without defining them, and states the exact input to every hash-valued
+field, so that an independent verifier can be written from the text
+alone. Cedulon is not a competitor to x402 or AP2; it sits above them.
 
 --- middle
 
@@ -166,7 +168,7 @@ x402 or AP2; it sits above them.
 *Note to Readers:* This document is submitted as Informational. The
 author's eventual intended track, if the work is taken up, is a
 Standards Track profile of COSE {{RFC9052}} and CWT {{RFC8392}} for
-agent-spend receipts. This -03 does not claim IETF consensus.
+agent-spend receipts. This -04 does not claim IETF consensus.
 
 Agents can now pay. Open HTTP 402 protocols {{X402}} attach
 stablecoin settlement to ordinary requests. Card networks and
@@ -1602,7 +1604,7 @@ Issuer self-attestation:
   signature.
 
 Key rotation and revocation:
-: `kid` identifies the verification key. This -03 does not specify
+: `kid` identifies the verification key. This -04 does not specify
   a revocation list. Verifiers MUST pin the issuer keys they
   accept and MUST stop accepting a `kid` after an authenticated
   revocation signal.
@@ -1723,7 +1725,7 @@ RFC 7942 {{RFC7942}} note.
 Implementation:
 : A companion implementation with a runnable verification suite at
   <https://github.com/dogrucanemek-alt/cedulon>. The code is a profile
-  of this document, not a second specification. This -03 is not an
+  of this document, not a second specification. This -04 is not an
   IETF working-group item.
 
 Maturity:
@@ -1913,6 +1915,12 @@ implementation; a specification that points at code cannot be
 implemented from its own text, which is the property this revision is
 trying to restore.
 
+One change is metadata rather than text: the submission stream in the
+document's header changes from independent to IETF. The Note to
+Readers has named an eventual Standards Track intent since -00, and
+{{iana}} asks for Standards Tree registration; neither belongs on the
+Independent Stream. The rendered pages are unchanged by it.
+
 What has not changed: `MUST-T12-4` remains specified and not executed,
 and this document still has no independent implementation written from
 its text alone. The point of this revision is to make that possible,
@@ -1920,7 +1928,7 @@ not to claim it happened.
 
 ## Changes from -02 {#changes-02}
 
-This -03 has two subjects. The first is that -02 stated a rule
+-03 had two subjects. The first is that -02 stated a rule
 for signed objects and left the implementation and the verification
 algorithm without a counterpart for every object the rule applied to.
 The second is T12, which no reader reported and which is not about an
@@ -2072,8 +2080,8 @@ The reporters are named in the Acknowledgments.
 
 This section is a direction, not a commitment. The structures below
 are reserved in name only. Normative wire formats, tests, and
-threat-model MUST lines for them belong in later revisions (-04 or
-later), written with the same discipline as this -03.
+threat-model MUST lines for them belong in later revisions (-05 or
+later), written with the same discipline as this -04.
 
 ## Re-attestation profile
 
@@ -2097,7 +2105,7 @@ did not arrive in this revision either.
 
 ## Generalization
 
-Payment is the special case that this -03 implements. The same
+Payment is the special case that this -04 implements. The same
 completeness calculus (an authenticated extract of consumed units
 reconciled to signed receipts) can apply to other consumable
 resources such as compute, data, or energy. This document does

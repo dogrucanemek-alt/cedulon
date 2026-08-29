@@ -33,22 +33,22 @@ Abstract
    chain omits reports, brings equivocation within reach by comparing
    recorded copies against the presented chain, and states how
    checkpoint totals may be withheld without withholding the fact that
-   they were.  This revision states the trust roots the earlier ones
-   left implicit: no signed object may be verified against a key it
-   carries itself, and a presented Trade Manifest must be bound both to
-   the receipts that name it and to the terms those receipts claim.  It
-   also names a threat no adversary causes, a settlement recorded on a
-   rail with no receipt behind it.  It also defines a Dispute Evidence
-   Bundle (evidence, not an award) and optional SCITT anchoring.
-   Cedulon is not a competitor to x402 or AP2; it sits above them.
+   they were.  No signed object may be verified against a key it carries
+   itself, and a presented Trade Manifest must be bound both to the
+   receipts that name it and to the terms those receipts claim.  The
+   document also names a threat no adversary causes, a settlement
+   recorded on a rail with no receipt behind it, and defines a Dispute
+   Evidence Bundle (evidence, not an award) and optional SCITT
+   anchoring.  This revision defines the encodings earlier revisions
+   called canonical without defining them, and states the exact input to
+   every hash-valued field, so that an independent verifier can be
+   written from the text alone.  Cedulon is not a competitor to x402 or
+   AP2; it sits above them.
 
 Status of This Memo
 
    This Internet-Draft is submitted in full conformance with the
    provisions of BCP 78 and BCP 79.
-
-
-
 
 
 
@@ -175,7 +175,7 @@ Internet-Draft                   Cedulon                     August 2026
    _Note to Readers:_ This document is submitted as Informational.  The
    author's eventual intended track, if the work is taken up, is a
    Standards Track profile of COSE [RFC9052] and CWT [RFC8392] for
-   agent-spend receipts.  This -03 does not claim IETF consensus.
+   agent-spend receipts.  This -04 does not claim IETF consensus.
 
    Agents can now pay.  Open HTTP 402 protocols [X402] attach stablecoin
    settlement to ordinary requests.  Card networks and processors issue
@@ -2920,7 +2920,7 @@ Internet-Draft                   Cedulon                     August 2026
       from a rail signature.
 
    Key rotation and revocation:  kid identifies the verification key.
-      This -03 does not specify a revocation list.  Verifiers MUST pin
+      This -04 does not specify a revocation list.  Verifiers MUST pin
       the issuer keys they accept and MUST stop accepting a kid after an
       authenticated revocation signal.
 
@@ -3095,7 +3095,7 @@ Internet-Draft                   Cedulon                     August 2026
    Implementation:  A companion implementation with a runnable
       verification suite at https://github.com/dogrucanemek-alt/cedulon
       (https://github.com/dogrucanemek-alt/cedulon).  The code is a
-      profile of this document, not a second specification.  This -03 is
+      profile of this document, not a second specification.  This -04 is
       not an IETF working-group item.
 
    Maturity:  Research code by a single implementer.  Three readers have
@@ -3319,6 +3319,12 @@ Internet-Draft                   Cedulon                     August 2026
    specification that points at code cannot be implemented from its own
    text, which is the property this revision is trying to restore.
 
+   One change is metadata rather than text: the submission stream in the
+   document's header changes from independent to IETF.  The Note to
+   Readers has named an eventual Standards Track intent since -00, and
+   Section 17 asks for Standards Tree registration; neither belongs on
+   the Independent Stream.  The rendered pages are unchanged by it.
+
    What has not changed: MUST-T12-4 remains specified and not executed,
    and this document still has no independent implementation written
    from its text alone.  The point of this revision is to make that
@@ -3326,10 +3332,10 @@ Internet-Draft                   Cedulon                     August 2026
 
 18.2.  Changes from -02
 
-   This -03 has two subjects.  The first is that -02 stated a rule for
-   signed objects and left the implementation and the verification
-   algorithm without a counterpart for every object the rule applied to.
-   The second is T12, which no reader reported and which is not about an
+   -03 had two subjects.  The first is that -02 stated a rule for signed
+   objects and left the implementation and the verification algorithm
+   without a counterpart for every object the rule applied to.  The
+   second is T12, which no reader reported and which is not about an
    adversary at all.
 
    -02 Section 6.2 already required a verifier to obtain the public key
@@ -3349,18 +3355,17 @@ Internet-Draft                   Cedulon                     August 2026
    algorithm and the error semantics, and the verification algorithm now
    applies them.
 
-   A reader raised the inclusion-receipt half of this against the posted
-   -02 after checking the archived text against the implementation
-   commit.  Following it into the code turned up the other three, along
-   with two conditions that were not about keys at all.
-
-
 
 
 Dogru                     Expires 3 March 2027                 [Page 60]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   A reader raised the inclusion-receipt half of this against the posted
+   -02 after checking the archived text against the implementation
+   commit.  Following it into the code turned up the other three, along
+   with two conditions that were not about keys at all.
 
    The first is that reporting a mismatch is not enough.  An
    implementation that names a foreign key and then still lets the
@@ -3406,11 +3411,6 @@ Internet-Draft                   Cedulon                     August 2026
    file permission moot.  They are stated because the implementation
    reported protection it did not have.
 
-   Two things are stated here that -02 got right and this revision keeps
-   unchanged: the extract rule itself, and the treatment of a pinned key
-   the verifier cannot decode.  What changed is their reach, and the
-   change is not backward compatible.  Where a verifier pinned the rail
-
 
 
 Dogru                     Expires 3 March 2027                 [Page 61]
@@ -3418,6 +3418,10 @@ Dogru                     Expires 3 March 2027                 [Page 61]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   Two things are stated here that -02 got right and this revision keeps
+   unchanged: the extract rule itself, and the treatment of a pinned key
+   the verifier cannot decode.  What changed is their reach, and the
+   change is not backward compatible.  Where a verifier pinned the rail
    key, supplied no issuer key, and was presented with receipts or
    checkpoints, -02 reported the guarantee as unconditional and this
    revision reports it as conditional.  Nothing about the evidence
@@ -3462,10 +3466,6 @@ Internet-Draft                   Cedulon                     August 2026
       window-coverage (MUST-T11-11).  The reporter asked which way it
       should go.  Coverage says the record shown is incomplete; a
       withheld checkpoint says the party under audit is holding a record
-      it did not show.  An operator who sees one identifier for both
-      cannot tell an incomplete record from a concealed one, which is
-      the distinction the whole threat is about.
-
 
 
 
@@ -3473,6 +3473,10 @@ Dogru                     Expires 3 March 2027                 [Page 62]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+      it did not show.  An operator who sees one identifier for both
+      cannot tell an incomplete record from a concealed one, which is
+      the distinction the whole threat is about.
 
    *  A checkpoint with no receipt in a supplied witness is a warning
       rather than a failure.  A witness may be configured after
@@ -3505,8 +3509,8 @@ Internet-Draft                   Cedulon                     August 2026
 
    This section is a direction, not a commitment.  The structures below
    are reserved in name only.  Normative wire formats, tests, and
-   threat-model MUST lines for them belong in later revisions (-04 or
-   later), written with the same discipline as this -03.
+   threat-model MUST lines for them belong in later revisions (-05 or
+   later), written with the same discipline as this -04.
 
 19.1.  Re-attestation profile
 
@@ -3518,10 +3522,6 @@ Internet-Draft                   Cedulon                     August 2026
    structures outlive ciphers.  The first concrete example is the
    profile's own move from generic EdDSA (-8) to Ed25519 (-19) in
    [RFC9864].
-
-
-
-
 
 
 
@@ -3541,7 +3541,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 19.3.  Generalization
 
-   Payment is the special case that this -03 implements.  The same
+   Payment is the special case that this -04 implements.  The same
    completeness calculus (an authenticated extract of consumed units
    reconciled to signed receipts) can apply to other consumable
    resources such as compute, data, or energy.  This document does not

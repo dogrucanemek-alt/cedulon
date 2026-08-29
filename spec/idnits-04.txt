@@ -1,0 +1,31 @@
+idnits 2.17.1 
+
+draft-dogru-cedulon-04.txt:
+
+  Checking boilerplate required by RFC 5378 and the IETF Trust (see
+  https://trustee.ietf.org/license-info):
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+  Checking nits according to https://www.ietf.org/id-info/1id-guidelines.txt:
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+  Checking nits according to https://www.ietf.org/id-info/checklist :
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+  Miscellaneous warnings:
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+  Checking references for intended status: Informational
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+     No nits found.

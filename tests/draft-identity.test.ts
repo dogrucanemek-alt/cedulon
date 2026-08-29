@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -7,7 +7,16 @@ import { fileURLToPath } from "node:url";
 import { draftRevision, identityHits } from "../scripts/draft-identity-guard.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const DRAFT = join(root, "spec", "draft-dogru-cedulon-03.md");
+// The draft under guard is the newest revision in the tree: a pinned
+// filename went stale the moment -04 was written, and the five sentences
+// this scan exists to catch sat in -04 while the guard read -03.
+const LATEST = readdirSync(join(root, "spec"))
+  .map((f) => /^draft-dogru-cedulon-(\d+)\.md$/.exec(f))
+  .filter((m): m is RegExpExecArray => m !== null)
+  .map((m) => m[1])
+  .sort((a, b) => Number(a) - Number(b))
+  .at(-1);
+const DRAFT = join(root, "spec", `draft-dogru-cedulon-${LATEST}.md`);
 
 describe("draft identity", () => {
   it("RED then GREEN: a -03 that still says This -02 is refused", () => {
@@ -38,7 +47,7 @@ describe("draft identity", () => {
 
   it("the submitted draft's docname matches the voice of the document", () => {
     const md = readFileSync(DRAFT, "utf8");
-    assert.equal(draftRevision(md), "03", "this test is pinned to the -03 file");
+    assert.equal(draftRevision(md), LATEST, "docname disagrees with the filename");
     const hits = identityHits(md);
     assert.deepEqual(
       hits,
