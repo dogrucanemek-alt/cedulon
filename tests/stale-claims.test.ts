@@ -317,6 +317,13 @@ describe("claims that describe something outside their own file", () => {
       `the frozen draft claims ${inDraft[1]} published while STATUS says npm carries ${inStatus[1]}; a draft may lag the packages but must never claim ahead of them`,
     );
     const published = inStatus[1];
+    // Offline on purpose: this number is what STATUS named, and the
+    // rest of this file checks the documents against each other. They
+    // can be consistent and still wrong about npm — that is how 0.6.0
+    // shipped while STATUS still said 0.5.0. Whether the number is
+    // what npm actually serves is tests/published-as.test.ts under
+    // test:post-release. The two checks stay apart so pre-release
+    // never grows a network dependency.
 
     // A prepared bump leaves the workspace ahead of npm. The sentences below
     // describe installed artifacts, not this tree. They stay on the published
