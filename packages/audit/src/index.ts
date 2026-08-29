@@ -895,35 +895,10 @@ export function audit(input: AuditInput): AuditReport {
       });
     }
 
-    // Naming a manifest is not obeying one. MUST-T8-2 denies a bound spend
-    // whose amount or currency differs from the manifest, and MUST-T3-3 denies
-    // a spend against an expired one, but both are written for the gate. An
-    // audit reads the settled record, where the gate is no longer present, so
-    // without a counterpart here a receipt can carry the hash of terms it
-    // breaks and the report still calls the books balanced. Only receipts that
-    // named this manifest are measured against it; reading it onto the rest
-    // would invent a violation the payer never claimed.
-    const terms = input.manifest.body;
-    for (const r of input.receipts) {
-      if (r.claims.manifestHash !== presentedHash) continue;
-      const broken: string[] = [];
-      if (r.claims.amount !== terms.amount) {
-        broken.push(`amount ${r.claims.amount} against manifest ${terms.amount}`);
-      }
-      if (r.claims.currency !== terms.currency) {
-        broken.push(`currency ${r.claims.currency} against manifest ${terms.currency}`);
-      }
-      if (r.claims.timestampMs > terms.expiresAtMs) {
-        broken.push(`settled at ${r.claims.timestampMs} after the manifest expired at ${terms.expiresAtMs}`);
-      }
-      if (broken.length > 0) {
-        findings.push({
-          code: "manifest-terms-mismatch",
-          id: r.claims.x402PaymentRef ?? r.claims.nonce,
-          detail: `the receipt carries the hash of this Trade Manifest but departs from it: ${broken.join("; ")}. A gate applying MUST-T8-2 and MUST-T3-3 would have refused this payment`,
-        });
-      }
-    }
+    // Naming a manifest is not obeying one. The terms walk itself sits
+    // after the issuer pin is resolved: a charge needs a set the
+    // verifier can vouch for, and that set is not ready here. Cover
+    // stays on the presented list; it is a name, not a charge.
   }
 
   // The rail pin answers who reported the settlements. It says nothing about who
@@ -1016,6 +991,43 @@ export function audit(input: AuditInput): AuditReport {
         }
       }
       attested = input.receipts.filter((r) => attests(r.publicKeyPem));
+    }
+  }
+
+  // A terms mismatch is a charge: this receipt broke the terms it named.
+  // The same split as receiptRef clashes. With a usable pin the walk is
+  // attested, so a foreign receipt never invents a verdict. Without one
+  // the departure is said out loud, but not as a finding against a set
+  // the verifier cannot vouch for. Cover, above, stays on the presented
+  // list: silencing a name is not the same as inventing a charge.
+  // Moved below the pin on purpose. Lifting attested above the manifest
+  // block would also move issuer-key-mismatch before cover and the
+  // manifest-key checks; those checks do not need the pin, and their
+  // order is the order they are asked.
+  if (input.manifest) {
+    const presentedHash = manifestHash(input.manifest);
+    const terms = input.manifest.body;
+    for (const r of issuerPinUsable ? attested : input.receipts) {
+      if (r.claims.manifestHash !== presentedHash) continue;
+      const broken: string[] = [];
+      if (r.claims.amount !== terms.amount) {
+        broken.push(`amount ${r.claims.amount} against manifest ${terms.amount}`);
+      }
+      if (r.claims.currency !== terms.currency) {
+        broken.push(`currency ${r.claims.currency} against manifest ${terms.currency}`);
+      }
+      if (r.claims.timestampMs > terms.expiresAtMs) {
+        broken.push(`settled at ${r.claims.timestampMs} after the manifest expired at ${terms.expiresAtMs}`);
+      }
+      if (broken.length > 0) {
+        const charge = {
+          code: "manifest-terms-mismatch" as const,
+          id: r.claims.x402PaymentRef ?? r.claims.nonce,
+          detail: `the receipt carries the hash of this Trade Manifest but departs from it: ${broken.join("; ")}. A gate applying MUST-T8-2 and MUST-T3-3 would have refused this payment`,
+        };
+        if (issuerPinUsable) findings.push(charge);
+        else warnings.push({ ...charge, severity: "warn" });
+      }
     }
   }
 
