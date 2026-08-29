@@ -115,16 +115,37 @@ function head(major: number, n: number): Buffer {
   return b;
 }
 
+/** One signed object. The largest fixture COSE in this tree is a few hundred bytes. */
+export const CBOR_MAX_BYTES = 65_536;
+/** COSE_Sign1 is an array of four, header and claims are maps: depth 4 in honest use. */
+export const CBOR_MAX_DEPTH = 16;
+/** Arrays and maps. A receipt claim map has 12 keys. */
+export const CBOR_MAX_ELEMENTS = 4_096;
+/** Text and byte strings inside one value. */
+export const CBOR_MAX_STRING = 16_384;
+
+type Reader = { bytes: Buffer; offset: number };
+
+function remaining(r: Reader): number {
+  return r.bytes.length - r.offset;
+}
+
 export function decodeCbor(bytes: Uint8Array): CborVal {
-  const r = { bytes: Buffer.from(bytes), offset: 0 };
-  const value = readVal(r);
+  if (bytes.length > CBOR_MAX_BYTES) {
+    throw new Error("cbor-too-large");
+  }
+  const r: Reader = { bytes: Buffer.from(bytes), offset: 0 };
+  const value = readVal(r, 0);
   if (r.offset !== r.bytes.length) {
     throw new Error("cbor-trailing");
   }
   return value;
 }
 
-function readVal(r: { bytes: Buffer; offset: number }): CborVal {
+function readVal(r: Reader, depth: number): CborVal {
+  if (depth > CBOR_MAX_DEPTH) {
+    throw new Error("cbor-too-deep");
+  }
   const ib = r.bytes[r.offset];
   if (ib === undefined) {
     throw new Error("cbor-eof");
@@ -135,54 +156,83 @@ function readVal(r: { bytes: Buffer; offset: number }): CborVal {
   if (ib === 0xf4) return false;
   if (ib === 0xf5) return true;
   if (ib === 0xf6) return null;
+  // Major 6 is tags; major 7 is floats and unassigned simple values. Read the
+  // length first and a 64-bit float's payload is treated as an integer, which
+  // threw cbor-too-large. Reject the type before touching the payload.
+  if (major > MT_MAP) {
+    throw new Error("cbor-unsupported");
+  }
   const n = readLength(r, ai);
   if (major === MT_UINT) return n;
   if (major === MT_NINT) return -1 - n;
-  if (major === MT_BSTR) {
+  if (major === MT_BSTR || major === MT_TSTR) {
+    if (n > CBOR_MAX_STRING) {
+      throw new Error("cbor-too-large");
+    }
+    if (n > remaining(r)) {
+      throw new Error("cbor-eof");
+    }
     const slice = r.bytes.subarray(r.offset, r.offset + n);
     r.offset += n;
-    return new Uint8Array(slice);
-  }
-  if (major === MT_TSTR) {
-    const slice = r.bytes.subarray(r.offset, r.offset + n);
-    r.offset += n;
-    return slice.toString("utf8");
+    return major === MT_TSTR ? slice.toString("utf8") : new Uint8Array(slice);
   }
   if (major === MT_ARRAY) {
+    if (n > CBOR_MAX_ELEMENTS) {
+      throw new Error("cbor-too-large");
+    }
+    if (n > remaining(r)) {
+      throw new Error("cbor-eof");
+    }
     const arr: CborVal[] = [];
     for (let i = 0; i < n; i += 1) {
-      arr.push(readVal(r));
+      arr.push(readVal(r, depth + 1));
     }
     return arr;
   }
-  if (major === MT_MAP) {
-    const entries: Array<[CborVal, CborVal]> = [];
-    for (let i = 0; i < n; i += 1) {
-      entries.push([readVal(r), readVal(r)]);
-    }
-    return cborMap(entries);
+  if (n > CBOR_MAX_ELEMENTS) {
+    throw new Error("cbor-too-large");
   }
-  throw new Error("cbor-unsupported");
+  if (n * 2 > remaining(r)) {
+    throw new Error("cbor-eof");
+  }
+  const entries: Array<[CborVal, CborVal]> = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < n; i += 1) {
+    const key = readVal(r, depth + 1);
+    const val = readVal(r, depth + 1);
+    const id = Buffer.from(encodeCbor(key)).toString("hex");
+    if (seen.has(id)) {
+      throw new Error("cbor-duplicate-key");
+    }
+    seen.add(id);
+    entries.push([key, val]);
+  }
+  return cborMap(entries);
 }
 
-function readLength(r: { bytes: Buffer; offset: number }, ai: number): number {
+function readLength(r: Reader, ai: number): number {
   if (ai < 24) return ai;
   if (ai === 24) {
+    if (remaining(r) < 1) throw new Error("cbor-eof");
     const v = r.bytes[r.offset];
+    if (v === undefined) throw new Error("cbor-eof");
     r.offset += 1;
     return v;
   }
   if (ai === 25) {
+    if (remaining(r) < 2) throw new Error("cbor-eof");
     const v = r.bytes.readUInt16BE(r.offset);
     r.offset += 2;
     return v;
   }
   if (ai === 26) {
+    if (remaining(r) < 4) throw new Error("cbor-eof");
     const v = r.bytes.readUInt32BE(r.offset);
     r.offset += 4;
     return v;
   }
   if (ai === 27) {
+    if (remaining(r) < 8) throw new Error("cbor-eof");
     const v = r.bytes.readBigUInt64BE(r.offset);
     r.offset += 8;
     if (v > BigInt(Number.MAX_SAFE_INTEGER)) {

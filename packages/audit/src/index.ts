@@ -681,7 +681,33 @@ export type AuditInput = {
   inclusionReceipts?: InclusionReceipt[];
 };
 
+/** Largest honest audit in this suite is 41 receipts (case 86). 100× that. */
+export const AUDIT_MAX_RECEIPTS = 4_096;
+/** Same bound for rail rows. A window that large is a different product. */
+export const AUDIT_MAX_SETTLEMENTS = 4_096;
+/** Epochs in one report. */
+export const AUDIT_MAX_CHECKPOINTS = 256;
+/** Inclusion receipts; case 79 uses 51. */
+export const AUDIT_MAX_INCLUSIONS = 4_096;
+
+function assertAuditBounds(input: AuditInput): void {
+  if (input.receipts.length > AUDIT_MAX_RECEIPTS) {
+    throw new Error("audit-too-large");
+  }
+  if (input.checkpoints.length > AUDIT_MAX_CHECKPOINTS) {
+    throw new Error("audit-too-large");
+  }
+  const settlements = input.extract ? input.extract.body.settlements : (input.settlements ?? []);
+  if (settlements.length > AUDIT_MAX_SETTLEMENTS) {
+    throw new Error("audit-too-large");
+  }
+  if ((input.inclusionReceipts?.length ?? 0) > AUDIT_MAX_INCLUSIONS) {
+    throw new Error("audit-too-large");
+  }
+}
+
 export function audit(input: AuditInput): AuditReport {
+  assertAuditBounds(input);
   const findings: Finding[] = [];
   const warnings: Finding[] = [];
 
