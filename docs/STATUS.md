@@ -25,7 +25,9 @@ the CBOR refuse codes (`cbor-eof`, `cbor-too-deep`, `cbor-too-large`,
 unbounded walk. It also narrows `manifest-terms-mismatch`: with a
 usable issuer pin the walk is the attested set and the charge is a
 finding; without a pin the same departure is a warning and does not by
-itself fail the audit. The eight packages on npm remain `0.5.0`.
+itself fail the audit. It also binds `requestHash` as SHA-256 of the
+six-field canonical document (lowercase hex); the posted draft names a
+hash but not the digest. The eight packages on npm remain `0.5.0`.
 
 Eight packages are published on npm at `0.5.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and

@@ -96,7 +96,8 @@
       "pinIssuer": false,
       "expectWarning": "manifest-terms-mismatch",
       "expectNoFinding": "manifest-terms-mismatch",
-      "note": "-03 states that this departure fails the audit. This tree reports it as a warning (severity warn) and does not fail the audit on that code alone. unauthenticated-issuer sits beside it. The vector records the companion; the split is a finding about the draft, not a licence to invent a -04 sentence."
+      "draftOpen": true,
+      "note": "-03 states that this departure fails the audit. This tree reports it as a warning (severity warn) and does not fail the audit on that code alone. unauthenticated-issuer sits beside it. The vector records the companion; draftOpen records the split. It is not a licence to invent a -04 sentence."
     },
     {
       "id": "V-T4-17-unbound",
@@ -111,7 +112,8 @@
       "must": "MUST-T3-4 / MUST-T6-1",
       "draft": "A PDP allow decision MUST be bound to a hash of the request fields it evaluated. MUST-T6-1 names the six fields (amount, currency, payee, tool, nonce, manifestHash) but not the octets or the digest.",
       "kind": "request-hash",
-      "note": "Two readings: SHA-256 of some encoding of the six fields, or any binding of those fields. The vector records what the companion does; a split from SHA-256 of the canonical JSON is a finding about the draft, not a licence to change the expected digest."
+      "draftNamesDigest": false,
+      "note": "The companion binds SHA-256 of the six-field canonical JSON (lowercase hex). The posted draft names a hash of the request fields but not the octets or the digest. That silence is a finding about the draft, not a licence to record an expected digest in this vector. draftNamesDigest stays false until the posted draft names the digest; it is not a licence to write an expected digest here."
     }
   ]
 }

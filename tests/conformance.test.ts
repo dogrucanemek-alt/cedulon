@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
+import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import {
   evaluateVectors,
   loadVectors,
@@ -15,11 +16,6 @@ import {
  * that vanished, an unknown kind, and a thrown vector each fail
  * this file. They used to be a note, a split, or a memory.
  */
-const COUNTED_SPLITS: Record<string, string> = {
-  "V-T3-4-request-hash":
-    "MUST-T3-4 names a hash of the request fields but not the octets or the digest; the companion binds canonical JSON, not SHA-256. The vector note records the split; it is not a licence to change the expected digest.",
-};
-
 function assertConformance(rows: Row[]): void {
   const errors = rows.filter((r) => r.status === "error");
   assert.equal(
@@ -82,6 +78,17 @@ describe("conformance vectors run in the suite", () => {
     assert.equal(hit?.status, "error", `expected error, got ${hit?.status}: ${hit?.detail}`);
     assert.notEqual(hit?.status, "split");
     assert.throws(() => assertConformance(rows), /conformance error \(not a split\): V-T8-7-manifest-hash/);
+  });
+
+  it("RED: a request-hash vector that claims the draft named a digest, without carrying one, is an error", () => {
+    const drifted = living().map((v) =>
+      v.id === "V-T3-4-request-hash" ? { ...v, draftNamesDigest: true } : v,
+    );
+    const rows = evaluateVectors(drifted);
+    const hit = rows.find((r) => r.id === "V-T3-4-request-hash");
+    assert.equal(hit?.status, "error", `expected error, got ${hit?.status}: ${hit?.detail}`);
+    assert.match(hit!.detail, /draftNamesDigest is true/);
+    assert.throws(() => assertConformance(rows), /conformance error \(not a split\): V-T3-4-request-hash/);
   });
 
   it("GREEN: living vectors match the counted split list", () => {

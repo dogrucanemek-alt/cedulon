@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { canonical } from "./canonical.ts";
 import { issueDecisionToken, verifyDecisionToken, type SignedDecisionToken } from "./decision-token.ts";
 import type { Decision, Policy, SpendRequest } from "./types.ts";
@@ -10,14 +12,18 @@ export type DecisionIssuerKeys = {
 };
 
 export function requestHashOf(req: SpendRequest): string {
-  return canonical({
-    amount: req.amount.toString(),
-    currency: req.currency,
-    payee: req.payee,
-    nonce: req.nonce,
-    manifestHash: req.manifestHash ?? null,
-    tool: req.tool ?? null,
-  });
+  return createHash("sha256")
+    .update(
+      canonical({
+        amount: req.amount.toString(),
+        currency: req.currency,
+        payee: req.payee,
+        nonce: req.nonce,
+        manifestHash: req.manifestHash ?? null,
+        tool: req.tool ?? null,
+      }),
+    )
+    .digest("hex");
 }
 
 export function policyDocument(policy: Policy): Record<string, unknown> {

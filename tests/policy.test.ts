@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   PolicyEngine,
+  canonical,
   issueDecisionToken,
   requestHashOf,
   verifyDecisionToken,
@@ -235,6 +236,19 @@ describe("policy limits velocity scope", () => {
       tool: "spend",
     };
     assert.equal(requestHashOf(req), requestHashOf({ ...req, nowMs: 99 }));
+    const sixField = canonical({
+      amount: req.amount.toString(),
+      currency: req.currency,
+      payee: req.payee,
+      nonce: req.nonce,
+      manifestHash: null,
+      tool: req.tool ?? null,
+    });
+    assert.equal(
+      requestHashOf(req),
+      createHash("sha256").update(sixField).digest("hex"),
+      "requestHashOf must be SHA-256 of the six-field canonical document, lowercase hex",
+    );
   });
 
   it("consumeDecision rejects swapped fields", () => {

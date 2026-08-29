@@ -33,6 +33,15 @@ does not fail the audit on that path. The difference will be closed in
 `-04`, with the reason. A reader who implements `-03` and runs 0.6.0
 should take the split from this section, not discover it in production.
 
+The published draft `-03` (MUST-T3-4 / MUST-T6-1) says a Decision
+Token is bound to a hash of the six request fields, and does not name
+the octets or the digest. This tree binds SHA-256 of the six-field
+canonical JSON document (lowercase hex), the same digest and encoding
+`policyHash` already uses. A reader who implements `-03` as the
+canonical JSON without a digest, or as SHA-256 of some other encoding,
+will not match a 0.6.0 token. The difference will be closed in `-04`,
+with the reason.
+
 **What to change:** catch the named codes instead of `RangeError`. Do
 not treat a missing catch as "the input was accepted". If you treated
 `ok: false` as the signal that a receipt broke its terms, stop: that

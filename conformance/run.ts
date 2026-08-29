@@ -34,6 +34,8 @@ export type Vector = {
   signWith?: string;
   pinIssuer?: boolean;
   bindReceipt?: boolean;
+  draftNamesDigest?: boolean;
+  draftOpen?: boolean;
 };
 
 export type Row = { id: string; status: "pass" | "split" | "error"; detail: string };
@@ -233,6 +235,19 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
           status: "split",
           detail: `${problems.join("; ")}; findings=${findingCodes.join(",") || "none"} warnings=${warningCodes.join(",") || "none"}`,
         });
+      } else if (v.draftOpen === true) {
+        const said = [
+          typeof v.expectFinding === "string" ? `found ${v.expectFinding}` : "",
+          v.expectNoFinding ? `no finding ${v.expectNoFinding}` : "",
+          v.expectWarning ? `warning ${v.expectWarning}` : "",
+        ]
+          .filter(Boolean)
+          .join("; ");
+        rows.push({
+          id: v.id,
+          status: "split",
+          detail: `${said}; companion matched its own recording; posted draft still states a single branch that fails the audit`,
+        });
       } else {
         const said = [
           typeof v.expectFinding === "string" ? `found ${v.expectFinding}` : "",
@@ -293,6 +308,14 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
     }
 
     if (v.kind === "request-hash") {
+      if (v.draftNamesDigest !== true && v.draftNamesDigest !== false) {
+        rows.push({
+          id: v.id,
+          status: "error",
+          detail: "request-hash vector must set draftNamesDigest",
+        });
+        continue;
+      }
       const req = {
         amount: 1n,
         currency: "USD",
@@ -302,14 +325,19 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
         tool: "spend",
       };
       const bound = requestHashOf(req);
-      const asSha = sha256Hex(Buffer.from(bound, "utf8"));
-      const looksLikeSha = /^[0-9a-f]{64}$/.test(bound);
+      if (v.draftNamesDigest === true) {
+        rows.push({
+          id: v.id,
+          status: "error",
+          detail:
+            "draftNamesDigest is true but the vector still carries no expected digest; naming a digest here is not licensed until the posted draft names one",
+        });
+        continue;
+      }
       rows.push({
         id: v.id,
-        status: looksLikeSha ? "pass" : "split",
-        detail: looksLikeSha
-          ? `companion requestHash is a 64-hex digest`
-          : `draft T3-4 says "hash of the request fields"; companion binds canonical JSON (${bound.slice(0, 48)}…) not SHA-256 (${asSha.slice(0, 16)}…)`,
+        status: "split",
+        detail: `companion binds SHA-256 of the six-field canonical JSON (lowercase hex ${bound}); posted draft names a hash of the request fields but not the octets or the digest`,
       });
       continue;
     }

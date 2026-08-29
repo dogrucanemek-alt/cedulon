@@ -4,6 +4,9 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
+import { loadVectors } from "../conformance/run.ts";
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p: string): string => readFileSync(join(root, p), "utf8");
 
@@ -84,6 +87,76 @@ function assertTermsSplitAligned(upgrading: string, status: string): void {
   const paragraph = statusVersionParagraph(status, version);
   assertTermsSplitNamed(section, `docs/UPGRADING.md ${version}`);
   assertTermsSplitNamed(paragraph, `docs/STATUS.md ${version}`);
+}
+
+function assertRequestHashSplitNamed(text: string, where: string): void {
+  assert.match(text, /SHA-256/, `${where} does not say requestHash is SHA-256`);
+  assert.match(
+    text,
+    /six-field\s+canonical/i,
+    `${where} does not name the six-field canonical document`,
+  );
+  assert.match(
+    text,
+    /digest/,
+    `${where} does not say the posted draft does not name the digest`,
+  );
+}
+
+function assertRequestHashSplitAligned(upgrading: string, status: string): void {
+  const version = workspaceVersion();
+  const section = upgradeSectionFor(upgrading, version);
+  const paragraph = statusVersionParagraph(status, version);
+  assertRequestHashSplitNamed(section, `docs/UPGRADING.md ${version}`);
+  assertRequestHashSplitNamed(paragraph, `docs/STATUS.md ${version}`);
+}
+
+function mustIdsIn(text: string): Set<string> {
+  return new Set([...text.matchAll(/MUST-T\d+-\d+/g)].map((m) => m[0]));
+}
+
+function countedMustIds(counted: Record<string, string>): Set<string> {
+  const vectors = loadVectors();
+  const out = new Set<string>();
+  for (const id of Object.keys(counted)) {
+    const v = vectors.find((x) => x.id === id);
+    assert.ok(v, `COUNTED_SPLITS ${id} has no vector`);
+    for (const m of mustIdsIn(v.must)) out.add(m);
+    for (const m of mustIdsIn(counted[id]!)) out.add(m);
+  }
+  return out;
+}
+
+function upgrading03SplitMustIds(section: string): Set<string> {
+  const out = new Set<string>();
+  for (const block of section.split(/\n\n/)) {
+    if (!/-03/.test(block)) continue;
+    if (!/difference will be closed/i.test(block)) continue;
+    for (const m of mustIdsIn(block)) out.add(m);
+  }
+  return out;
+}
+
+function assertDraftSplitsAligned(
+  upgrading: string,
+  counted: Record<string, string>,
+): void {
+  const version = workspaceVersion();
+  const section = upgradeSectionFor(upgrading, version);
+  const documented = upgrading03SplitMustIds(section);
+  const countedIds = countedMustIds(counted);
+  for (const must of documented) {
+    assert.ok(
+      countedIds.has(must),
+      `UPGRADING ${version} names ${must} as a -03 split but COUNTED_SPLITS has no vector for it`,
+    );
+  }
+  for (const must of countedIds) {
+    assert.ok(
+      documented.has(must),
+      `COUNTED_SPLITS names ${must} but UPGRADING ${version} does not name it as a -03 split`,
+    );
+  }
 }
 
 /** The publish-day shape: adjectives gone, version heading still there. */
@@ -443,6 +516,64 @@ describe("claims that describe something outside their own file", () => {
       /An audit presented with no Trade Manifest is not made conditional by this requirement/,
       "the no-manifest exception must be said in the requirement, not only nearby",
     );
+  });
+
+  it("RED: UPGRADING without the requestHash split fails before the living files are accepted", () => {
+    const upgrading = read("docs/UPGRADING.md");
+    const status = read("docs/STATUS.md");
+    const drifted = upgrading.replace(
+      /\nThe published draft `-03` \(MUST-T3-4 \/ MUST-T6-1\)[\s\S]*?with the reason\.\n/,
+      "\n",
+    );
+    assert.notEqual(drifted, upgrading, "fixture did not remove the requestHash split from UPGRADING");
+    assert.throws(
+      () => assertRequestHashSplitAligned(drifted, status),
+      /docs\/UPGRADING\.md \d+\.\d+\.\d+ does not say requestHash is SHA-256/,
+    );
+  });
+
+  it("RED: STATUS's version paragraph without the requestHash split fails before the living files are accepted", () => {
+    const upgrading = read("docs/UPGRADING.md");
+    const status = read("docs/STATUS.md");
+    const drifted = status.replace(
+      / It also binds `requestHash` as SHA-256 of the[\s\S]*?hash but not the digest\./,
+      "",
+    );
+    assert.notEqual(drifted, status, "fixture did not remove the requestHash split from STATUS");
+    assert.throws(
+      () => assertRequestHashSplitAligned(upgrading, drifted),
+      /docs\/STATUS\.md \d+\.\d+\.\d+ does not say requestHash is SHA-256/,
+    );
+  });
+
+  it("GREEN: the workspace-version UPGRADING section and STATUS paragraph name the requestHash split", () => {
+    assertRequestHashSplitAligned(read("docs/UPGRADING.md"), read("docs/STATUS.md"));
+  });
+
+  it("RED: a COUNTED_SPLITS entry removed while UPGRADING still names the MUST fails", () => {
+    const { "V-T3-4-request-hash": _removed, ...drifted } = COUNTED_SPLITS;
+    assert.ok(!drifted["V-T3-4-request-hash"], "fixture left the T3-4 counted split");
+    assert.throws(
+      () => assertDraftSplitsAligned(read("docs/UPGRADING.md"), drifted),
+      /UPGRADING \d+\.\d+\.\d+ names MUST-T3-4 as a -03 split but COUNTED_SPLITS has no vector for it/,
+    );
+  });
+
+  it("RED: an UPGRADING -03 split removed while COUNTED_SPLITS still names the MUST fails", () => {
+    const upgrading = read("docs/UPGRADING.md");
+    const drifted = upgrading.replace(
+      /\nThe published draft `-03` \(MUST-T3-4 \/ MUST-T6-1\)[\s\S]*?with the reason\.\n/,
+      "\n",
+    );
+    assert.notEqual(drifted, upgrading, "fixture did not remove the T3-4 split from UPGRADING");
+    assert.throws(
+      () => assertDraftSplitsAligned(drifted, COUNTED_SPLITS),
+      /COUNTED_SPLITS names MUST-T3-4 but UPGRADING \d+\.\d+\.\d+ does not name it as a -03 split/,
+    );
+  });
+
+  it("GREEN: UPGRADING -03 splits and COUNTED_SPLITS name the same MUST identities", () => {
+    assertDraftSplitsAligned(read("docs/UPGRADING.md"), COUNTED_SPLITS);
   });
 
   it("RED: STATUS's version paragraph without the terms split fails before the living files are accepted", () => {
