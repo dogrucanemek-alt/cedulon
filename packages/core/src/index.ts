@@ -20,4 +20,13 @@ export type {
   Policy,
   SpendRequest,
 } from "./types.ts";
-export { AMOUNT_RE, isValidAmountText } from "./types.ts";
+export {
+  AMOUNT_RE,
+  HASH_CLAIM_FIELDS,
+  HASH_HEX_RE,
+  hashClaimRefusal,
+  isValidAmountText,
+  isValidHashText,
+  malformedHashCode,
+  type HashClaimField,
+} from "./types.ts";
