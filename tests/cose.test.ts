@@ -85,9 +85,16 @@ const FIXTURE_MANIFEST = {
 const FIXTURE_CLAIMS_CBOR_HEX =
   "ac3a000111706770617965722d313a000111716770617965652d313a0001117261313a00011173635553443a000111746261613a00011175f63a00011176f53a00011177f63a000111781b0000018bcfe568003a00011179706e3130303030303030303030303030303a0001117af63a0001117b6761626f72746564";
 
-/** Vector 1: fixture Ed25519 #1 + FIXTURE_CLAIMS → COSE_Sign1 hex. */
-const VECTOR_RECEIPT_COSE_HEX =
+/** Posted -04 Appendix A receipt vector: signed with policyHash="aa". */
+const VECTOR_RECEIPT_COSE_HEX_POSTED_04 =
   "845830a301320378206170706c69636174696f6e2f636564756c6f6e2d726563656970742b63626f72044806e3fd8fda29bb60a0587cac3a000111706770617965722d313a000111716770617965652d313a0001117261313a00011173635553443a000111746261613a00011175f63a00011176f53a00011177f63a000111781b0000018bcfe568003a00011179706e3130303030303030303030303030303a0001117af63a0001117b6761626f727465645840685c01aa778a850b9d35250406f092b6f5cb03fb3595930422533e28ac620ad439f5e7bd8ed1fa5ded90d4421a2de34f94d1d78d38a65812cb5315ee7f1cf403";
+
+/** -05 appendix policyHash: SHA-256 of the UTF-8 octets of "cedulon/appendix-policy". */
+const VECTOR_POLICY_HASH = "fca4142da8ad241d24928227893894f4b5365efb746a4529fe9df0119d10da2c";
+
+/** Vector 1: fixture Ed25519 #1 + FIXTURE_CLAIMS with the -05 policyHash → COSE_Sign1 hex. */
+const VECTOR_RECEIPT_COSE_HEX =
+  "845830a301320378206170706c69636174696f6e2f636564756c6f6e2d726563656970742b63626f72044806e3fd8fda29bb60a058bbac3a000111706770617965722d313a000111716770617965652d313a0001117261313a00011173635553443a000111747840666361343134326461386164323431643234393238323237383933383934663462353336356566623734366134353239666539646630313139643130646132633a00011175f63a00011176f53a00011177f63a000111781b0000018bcfe568003a00011179706e3130303030303030303030303030303a0001117af63a0001117b6761626f7274656458400a24269b7521d409ebe462db297c3aa25b23d6c697aa4a864b1b3a3edb5b30537b34b048a797073eaee41af371effb68ecbb47b80e62d7e775e8cae5b066c30c";
 
 /** Vector 2: same key + FIXTURE_MANIFEST → COSE_Sign1 hex. */
 const VECTOR_MANIFEST_COSE_HEX =
@@ -183,16 +190,34 @@ describe("COSE_Sign1 receipts", () => {
     assert.equal(verifyReceipt(signed), true);
   });
 
-  it("vector 1: locked Appendix A COSE still verifies; the signer refuses its claims", () => {
-    // -04 Appendix A is signed with policyHash=aa. Table 3 of the same draft
-    // names lowercase hex SHA-256. Companion enforces the table. The locked
-    // bytes stay; they are not re-signed here. Counted as V-T4-appendix-a-policy-hash.
+  it("vector 1: fixture key + appendix claims equals locked receipt COSE hex", () => {
+    // -05 regenerated the appendix vector: policyHash is the SHA-256 of
+    // "cedulon/appendix-policy", in the Table 3 grammar the companion enforces.
     const keys = fixtureEd25519Pems();
-    assert.equal(verifyCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX), keys.publicKeyPem, CTY_RECEIPT), true);
-    const msg = decodeCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX));
-    const header = decodeProtectedHeader(msg.protectedHeader);
+    const signed = signReceipt(
+      { ...FIXTURE_CLAIMS, policyHash: VECTOR_POLICY_HASH },
+      keys.privateKeyPem,
+      keys.publicKeyPem,
+    );
+    assert.equal(signed.coseHex, VECTOR_RECEIPT_COSE_HEX);
+    assert.equal(verifyReceipt(signed, keys.publicKeyPem), true);
+    const header = decodeProtectedHeader(decodeCoseSign1(hexToBytes(signed.coseHex ?? "")).protectedHeader);
     assert.equal(header.alg, -19);
     assert.equal(header.contentType, CTY_RECEIPT);
+    assert.equal(
+      VECTOR_POLICY_HASH,
+      bytesToHex(createHash("sha256").update(Buffer.from("cedulon/appendix-policy", "utf8")).digest()),
+    );
+  });
+
+  it("vector 1 (posted -04): the violating bytes still verify; the signer refuses their claims", () => {
+    // Posted -04 Appendix A is signed with policyHash=aa. Table 3 of the same
+    // draft names lowercase hex SHA-256. Companion enforces the table; the
+    // frozen -04 bytes stay valid COSE and are not re-signed. Counted as
+    // V-T4-appendix-a-policy-hash until -05 is posted.
+    const keys = fixtureEd25519Pems();
+    assert.equal(verifyCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX_POSTED_04), keys.publicKeyPem, CTY_RECEIPT), true);
+    const msg = decodeCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX_POSTED_04));
     assert.equal(claimsFromCbor(msg.payload).policyHash, "aa");
     assert.throws(
       () => signReceipt(FIXTURE_CLAIMS, keys.privateKeyPem, keys.publicKeyPem),

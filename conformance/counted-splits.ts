@@ -5,7 +5,7 @@
  *
  * One living split: Table 3 of posted -04 names lowercase hex SHA-256, and
  * Appendix A of the same draft still signs policyHash=aa. Companion enforces
- * the table. The appendix is re-signed in -05; this tree does not re-sign it.
+ * the table. -05 in this tree regenerates the appendix vector with a computed digest; the split stands against the posted -04 and closes when -05 is posted.
  * The two -03 splits (request-hash octets, unpinned MUST-T8-9) are closed.
  *
  * The guard that reads this list fires when a split appears in the runner and
@@ -16,5 +16,5 @@
  */
 export const COUNTED_SPLITS: Record<string, string> = {
   "V-T4-appendix-a-policy-hash":
-    "Posted -04 Appendix A still signs policyHash=aa. Table 3 of the same draft names lowercase hex SHA-256. Companion enforces the table and refuses to produce that vector. The appendix is re-signed in -05; this tree does not re-sign it.",
+    "Posted -04 Appendix A still signs policyHash=aa. Table 3 of the same draft names lowercase hex SHA-256. Companion enforces the table and refuses to produce that vector. -05 in this tree regenerates the appendix vector with a computed digest; the split stands against the posted -04 and closes when -05 is posted.",
 };
