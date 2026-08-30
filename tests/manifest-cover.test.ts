@@ -1,3 +1,4 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
@@ -40,7 +41,7 @@ describe("manifest-covers-no-receipt and an unverified receipt", () => {
         payee: "payee",
         amount: "1",
         currency: "USD",
-        policyHash: "p",
+        policyHash: TEST_HASH,
         manifestHash: boundTo,
         noManifest: false,
         x402PaymentRef: "ref-fake",
@@ -97,7 +98,7 @@ describe("manifest-covers-no-receipt and an unverified receipt", () => {
         payee: "payee",
         amount: "1",
         currency: "USD",
-        policyHash: "p",
+        policyHash: TEST_HASH,
         manifestHash: null,
         noManifest: true,
         x402PaymentRef: "ref-none",

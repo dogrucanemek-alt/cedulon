@@ -44,7 +44,7 @@ describe("hash claim grammar (Table 3/5/7)", () => {
     assert.equal(malformedHashCode("prevReceiptHash"), "malformed-prev-receipt-hash");
     assert.equal(malformedHashCode("chainHeadHash"), "malformed-chain-head-hash");
     assert.equal(malformedHashCode("prevCheckpointHash"), "malformed-prev-checkpoint-hash");
-    assert.equal(malformedHashCode("ap2MandateHash"), "malformed-ap2-mandate-hash");
+    assert.equal(malformedHashCode("ap2MandateHash"), "malformed-ap-two-mandate-hash");
     assert.equal(malformedHashCode("requestHash"), "malformed-request-hash");
     assert.equal(malformedHashCode("receiptHash"), "malformed-receipt-hash");
     assert.equal(malformedHashCode("manifestHash"), "malformed-manifest-hash");

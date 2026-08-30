@@ -29,7 +29,7 @@ export function runDispute(nowMs = 1_700_000_000_000): {
     acceptanceCriteriaHash: sha256Hex(expected),
     cancelCondition: "before-delivery",
     expiresAtMs: nowMs + 60_000,
-    ap2MandateHash: "mandate-demo",
+    ap2MandateHash: sha256Hex("mandate-demo"),
   };
   const mkeys = generateManifestKeys();
   const manifest = signManifest(body, mkeys.privateKeyPem, mkeys.publicKeyPem);

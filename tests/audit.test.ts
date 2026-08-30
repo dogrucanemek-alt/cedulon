@@ -1,3 +1,4 @@
+import { TEST_HASH, TEST_HASH_OTHER } from "./hash-fixtures.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { audit, formatAudit } from "@cedulon/audit";
@@ -32,7 +33,7 @@ function chainReceipts(keys: { privateKeyPem: string; publicKeyPem: string }, am
         payee: "q",
         amount,
         currency: "USD",
-        policyHash: "ph",
+        policyHash: TEST_HASH,
         manifestHash: null,
         noManifest: true,
         x402PaymentRef: `x402-n${i}`,
@@ -112,7 +113,7 @@ describe("cedulon-audit detections", () => {
     const broken = [
       receipts[0],
       signReceipt(
-        { ...receipts[1].claims, prevReceiptHash: "deadbeef" },
+        { ...receipts[1].claims, prevReceiptHash: TEST_HASH_OTHER },
         k.privateKeyPem,
         k.publicKeyPem,
       ),
@@ -207,7 +208,7 @@ describe("adversarial bypasses — RED then GREEN", () => {
         payee: "q",
         amount: "5",
         currency: "USD",
-        policyHash: "ph",
+        policyHash: TEST_HASH,
         manifestHash: null,
         noManifest: true,
         x402PaymentRef: null,
@@ -236,7 +237,7 @@ describe("adversarial bypasses — RED then GREEN", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
     const garbage = signCheckpoint(
-      { ...buildCheckpointClaims(1, receipts, 1_700_000_000_000, 1_700_000_000_010, null), chainHeadHash: "deadbeef" },
+      { ...buildCheckpointClaims(1, receipts, 1_700_000_000_000, 1_700_000_000_010, null), chainHeadHash: TEST_HASH_OTHER },
       k.privateKeyPem,
       k.publicKeyPem,
     );
@@ -337,7 +338,7 @@ describe("new detections — RED then GREEN", () => {
         payee: "q",
         amount: "99",
         currency: "USD",
-        policyHash: "ph",
+        policyHash: TEST_HASH,
         manifestHash: null,
         noManifest: true,
         x402PaymentRef: null,

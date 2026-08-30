@@ -16,7 +16,14 @@ import {
   signCheckpoint,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
-import { PolicyEngine, canonical, isValidAmountText, policyDocument, type Policy } from "@cedulon/core";
+import {
+  PolicyEngine,
+  canonical,
+  hashClaimRefusal,
+  isValidAmountText,
+  policyDocument,
+  type Policy,
+} from "@cedulon/core";
 import type { SignedManifest } from "@cedulon/manifest";
 import { claimsFromCbor, generateReceiptKeys, isValidNonce, receiptHash, signReceipt, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import { decodeCoseSign1, namedDecodeRefusal, pemSigner, type Signer } from "@cedulon/cose";
@@ -844,6 +851,21 @@ export class CedulonSession {
         countersignature: null,
         issuerCheckedAgainstSuppliedKey: args.expectIssuerKeyPem !== undefined,
         payeeCheckedAgainstSuppliedKey: null,
+      };
+    }
+    const hashRefusal =
+      hashClaimRefusal("policyHash", signed.claims.policyHash) ??
+      hashClaimRefusal("manifestHash", signed.claims.manifestHash, true) ??
+      hashClaimRefusal("prevReceiptHash", signed.claims.prevReceiptHash, true);
+    if (hashRefusal !== null) {
+      return {
+        ok: false,
+        receipt: false,
+        countersignature: signed.counterCoseHex ? false : null,
+        issuerCheckedAgainstSuppliedKey: args.expectIssuerKeyPem !== undefined,
+        payeeCheckedAgainstSuppliedKey: signed.counterCoseHex
+          ? args.expectPayeeKeyPem !== undefined
+          : null,
       };
     }
     const receiptOk = verifyReceipt(signed, args.expectIssuerKeyPem);

@@ -11,6 +11,7 @@ import {
 } from "@cedulon/checkpoint";
 import { manifestHash, verifyManifest, type SignedManifest } from "@cedulon/manifest";
 import {
+  hashClaimRefusal,
   receiptEncodeRefusal,
   receiptHash,
   verifyCounterSignature,
@@ -53,6 +54,15 @@ export const FINDING_CODES = [
   "trust-key-unreadable",
   "unstated-audit-window",
   "malformed-amount",
+  "malformed-policy-hash",
+  "malformed-request-hash",
+  "malformed-acceptance-criteria-hash",
+  "malformed-manifest-hash",
+  "malformed-receipt-hash",
+  "malformed-prev-receipt-hash",
+  "malformed-chain-head-hash",
+  "malformed-prev-checkpoint-hash",
+  "malformed-ap-two-mandate-hash",
   "countersign-bad",
   "checkpoint-not-anchored",
   "checkpoint-withheld",
@@ -784,9 +794,50 @@ function assertAuditBounds(input: AuditInput): void {
   }
 }
 
+function pushHashRefusal(
+  findings: Finding[],
+  field: Parameters<typeof hashClaimRefusal>[0],
+  value: unknown,
+  id: string,
+  nullable = false,
+): void {
+  const code = hashClaimRefusal(field, value, nullable);
+  if (code) {
+    findings.push({
+      code: code as FindingCode,
+      id,
+      detail: `${field} ${JSON.stringify(value)} is not 64-character lowercase hex SHA-256`,
+    });
+  }
+}
+
+function findMalformedHashClaims(input: AuditInput): Finding[] {
+  const findings: Finding[] = [];
+  for (const r of input.receipts) {
+    pushHashRefusal(findings, "policyHash", r.claims.policyHash, r.claims.nonce);
+    pushHashRefusal(findings, "manifestHash", r.claims.manifestHash, r.claims.nonce, true);
+    pushHashRefusal(findings, "prevReceiptHash", r.claims.prevReceiptHash, r.claims.nonce, true);
+  }
+  for (const cp of input.checkpoints) {
+    const id = `epoch-${cp.claims.epoch}`;
+    pushHashRefusal(findings, "chainHeadHash", cp.claims.chainHeadHash, id, true);
+    pushHashRefusal(findings, "prevCheckpointHash", cp.claims.prevCheckpointHash, id, true);
+  }
+  if (input.manifest) {
+    pushHashRefusal(
+      findings,
+      "acceptanceCriteriaHash",
+      input.manifest.body.acceptanceCriteriaHash,
+      "manifest",
+    );
+    pushHashRefusal(findings, "ap2MandateHash", input.manifest.body.ap2MandateHash ?? null, "manifest", true);
+  }
+  return findings;
+}
+
 export function audit(input: AuditInput): AuditReport {
   assertAuditBounds(input);
-  const findings: Finding[] = [];
+  const findings: Finding[] = [...findMalformedHashClaims(input)];
   const warnings: Finding[] = [];
 
   // When an extract is supplied it is the subject of the audit: reconcile the

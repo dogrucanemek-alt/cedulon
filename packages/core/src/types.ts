@@ -90,6 +90,9 @@ export function isValidHashText(value: unknown): value is string {
 }
 
 export function malformedHashCode(field: HashClaimField): `malformed-${string}` {
+  // Finding codes are letter-only kebab (`malformed-amount`). ap2 would
+  // otherwise emit a digit.
+  if (field === "ap2MandateHash") return "malformed-ap-two-mandate-hash";
   const kebab = field.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
   return `malformed-${kebab}`;
 }

@@ -1,3 +1,4 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
@@ -24,7 +25,7 @@ function receiptFor(keys: Keys, ref: string, i: number, boundTo: string | null =
       payee: "payee",
       amount: "1",
       currency: "USD",
-      policyHash: "policy-hash",
+      policyHash: TEST_HASH,
       manifestHash: boundTo,
       noManifest: boundTo === null,
       x402PaymentRef: ref,

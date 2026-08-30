@@ -658,9 +658,11 @@ describe("claims that describe something outside their own file", () => {
   });
 
   it("GREEN: an empty split list and an UPGRADING that names none agree", () => {
-    // The state the tree is in now, asserted rather than assumed.
-    assert.deepEqual(Object.keys(COUNTED_SPLITS), []);
     assertDraftSplitsAligned(syntheticSection("No divergence is named here."), {});
+  });
+
+  it("GREEN: the living split list is the Appendix A policyHash grammar departure", () => {
+    assert.deepEqual(Object.keys(COUNTED_SPLITS), ["V-T4-appendix-a-policy-hash"]);
   });
 
   it("GREEN: UPGRADING -03 splits and COUNTED_SPLITS name the same MUST identities", () => {

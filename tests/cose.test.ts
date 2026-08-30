@@ -23,6 +23,7 @@ import {
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
+import { TEST_HASH } from "./hash-fixtures.ts";
 import { manifestHash, manifestToCbor, signManifest, verifyManifest } from "@cedulon/manifest";
 import {
   RECEIPT_CLAIM,
@@ -65,6 +66,9 @@ const FIXTURE_CLAIMS: SpendReceiptClaims = {
   prevReceiptHash: null,
   outcome: "aborted",
 };
+
+/** Same claims with a grammar-valid policyHash, for tests that must sign. */
+const SIGNABLE_CLAIMS: SpendReceiptClaims = { ...FIXTURE_CLAIMS, policyHash: TEST_HASH };
 
 const FIXTURE_MANIFEST = {
   description: "fixture-goods",
@@ -165,7 +169,7 @@ describe("independent cbor-x decoder", () => {
 describe("COSE_Sign1 receipts", () => {
   it("default sign path is COSE and verifies", () => {
     const k = generateReceiptKeys();
-    const signed = signReceipt(FIXTURE_CLAIMS, k.privateKeyPem, k.publicKeyPem);
+    const signed = signReceipt(SIGNABLE_CLAIMS, k.privateKeyPem, k.publicKeyPem);
     assert.equal(signed.encoding, "cose");
     assert.ok(signed.coseHex);
     assert.equal(verifyReceipt(signed), true);
@@ -173,22 +177,27 @@ describe("COSE_Sign1 receipts", () => {
 
   it("legacy JSON path still verifies", () => {
     const k = generateReceiptKeys();
-    const signed = signReceiptJson(FIXTURE_CLAIMS, k.privateKeyPem, k.publicKeyPem);
+    const signed = signReceiptJson(SIGNABLE_CLAIMS, k.privateKeyPem, k.publicKeyPem);
     assert.equal(signed.encoding, "json");
     assert.equal(verifyReceiptJson(signed), true);
     assert.equal(verifyReceipt(signed), true);
   });
 
-  it("vector 1: fixture key + claims equals locked receipt COSE hex", () => {
+  it("vector 1: locked Appendix A COSE still verifies; the signer refuses its claims", () => {
+    // -04 Appendix A is signed with policyHash=aa. Table 3 of the same draft
+    // names lowercase hex SHA-256. Companion enforces the table. The locked
+    // bytes stay; they are not re-signed here. Counted as V-T4-appendix-a-policy-hash.
     const keys = fixtureEd25519Pems();
-    const signed = signReceipt(FIXTURE_CLAIMS, keys.privateKeyPem, keys.publicKeyPem);
-    assert.equal(signed.coseHex, VECTOR_RECEIPT_COSE_HEX);
-    assert.equal(verifyReceipt(signed), true);
-    const msg = decodeCoseSign1(hexToBytes(signed.coseHex ?? ""));
+    assert.equal(verifyCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX), keys.publicKeyPem, CTY_RECEIPT), true);
+    const msg = decodeCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX));
     const header = decodeProtectedHeader(msg.protectedHeader);
     assert.equal(header.alg, -19);
     assert.equal(header.contentType, CTY_RECEIPT);
-    assert.equal(verifyCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX), keys.publicKeyPem, CTY_RECEIPT), true);
+    assert.equal(claimsFromCbor(msg.payload).policyHash, "aa");
+    assert.throws(
+      () => signReceipt(FIXTURE_CLAIMS, keys.privateKeyPem, keys.publicKeyPem),
+      /malformed-policy-hash/,
+    );
   });
 
   it("vector 2: fixture key + manifest equals locked manifest COSE hex", () => {
@@ -209,7 +218,7 @@ describe("COSE_Sign1 receipts", () => {
 
   it("RED then GREEN: COSE byte tamper fails verify", () => {
     const keys = fixtureEd25519Pems();
-    const signed = signReceipt(FIXTURE_CLAIMS, keys.privateKeyPem, keys.publicKeyPem);
+    const signed = signReceipt(SIGNABLE_CLAIMS, keys.privateKeyPem, keys.publicKeyPem);
     assert.equal(verifyReceipt(signed), true);
     const raw = Buffer.from(signed.coseHex ?? "", "hex");
     raw[raw.length - 1] ^= 0x01;
@@ -221,7 +230,7 @@ describe("COSE_Sign1 receipts", () => {
 
   it("RED then GREEN: claim object tamper fails COSE verify", () => {
     const k = generateReceiptKeys();
-    const signed = signReceipt(FIXTURE_CLAIMS, k.privateKeyPem, k.publicKeyPem);
+    const signed = signReceipt(SIGNABLE_CLAIMS, k.privateKeyPem, k.publicKeyPem);
     assert.equal(verifyReceipt(signed), true);
     const tampered = { ...signed, claims: { ...signed.claims, amount: "9" } };
     assert.equal(verifyReceipt(tampered), false);

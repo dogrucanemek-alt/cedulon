@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { PolicyEngine } from "@cedulon/core";
 import { audit, formatAudit } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint } from "@cedulon/checkpoint";
@@ -8,6 +9,9 @@ import {
   gatedSettleWithLedger,
   type AdapterKeys,
 } from "@cedulon/x402-adapter";
+
+const TEST_HASH = createHash("sha256").update("cedulon/test-policy").digest("hex");
+const TEST_HASH_OTHER = createHash("sha256").update("cedulon/test-other").digest("hex");
 
 export type BypassKind = "missing" | "amount" | "null-ref" | "head";
 
@@ -103,7 +107,7 @@ export function runBypass(
         payee: "payee-1",
         amount: "5",
         currency: "USD",
-        policyHash: "ph",
+        policyHash: TEST_HASH,
         manifestHash: null,
         noManifest: true,
         x402PaymentRef: null,
@@ -121,7 +125,7 @@ export function runBypass(
   }
 
   if (kind === "head") {
-    checkpointClaims = { ...checkpointClaims, chainHeadHash: "deadbeef" };
+    checkpointClaims = { ...checkpointClaims, chainHeadHash: TEST_HASH_OTHER };
   }
 
   const checkpoint = signCheckpoint(checkpointClaims, keys.privateKeyPem, keys.publicKeyPem);

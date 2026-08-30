@@ -1,3 +1,4 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
 import { createHash } from "node:crypto";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
@@ -35,7 +36,7 @@ const CLAIMS: SpendReceiptClaims = {
   payee: "payee-1",
   amount: "1",
   currency: "USD",
-  policyHash: "aa",
+  policyHash: TEST_HASH,
   manifestHash: null,
   noManifest: true,
   x402PaymentRef: null,

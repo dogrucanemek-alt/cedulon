@@ -11,7 +11,7 @@ import {
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
-import { canonical, isValidAmountText } from "@cedulon/core";
+import { canonical, hashClaimRefusal, isValidAmountText } from "@cedulon/core";
 
 /** CWT private-use labels for Trade Manifest claims. */
 export const MANIFEST_CLAIM = {
@@ -108,6 +108,10 @@ export function signManifest(
   if (!isValidAmountText(body.amount)) {
     throw new Error("amount grammar");
   }
+  const acceptance = hashClaimRefusal("acceptanceCriteriaHash", body.acceptanceCriteriaHash);
+  if (acceptance) throw new Error(acceptance);
+  const ap2 = hashClaimRefusal("ap2MandateHash", body.ap2MandateHash ?? null, true);
+  if (ap2) throw new Error(ap2);
   const cose = signCoseSign1(manifestToCbor(body), privateKeyPem, CTY_MANIFEST);
   const msg = decodeCoseSign1(cose);
   return {

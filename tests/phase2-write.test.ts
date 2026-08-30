@@ -1,3 +1,4 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -121,7 +122,7 @@ describe("phase 2 write path (dry-run, fail-closed)", () => {
         payee: OTHER,
         amount: extract.settlements[0].amount,
         currency: extract.settlements[0].currency,
-        policyHash: "ph",
+        policyHash: TEST_HASH,
         manifestHash: null,
         noManifest: true,
         x402PaymentRef: extract.settlements[0].ref,

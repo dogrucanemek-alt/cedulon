@@ -114,6 +114,17 @@
       "draftNamesDigest": true,
       "note": "-03 named a hash of the request fields and neither the octets nor the digest, so this vector recorded that silence and carried no expected value: writing one would have recorded the companion's answer as though it were the draft's. -04 is posted and names the digest, the encoding and the exact document, so the expected value is now derivable from the text and is recorded here. A reader implementing -04 from the text alone who computes a different digest has found a defect, in one of us.",
       "expectRequestHash": "3e262d840ea2309af6064958d8194dd33a244893867ea7fdf86072d07c23537e"
+    },
+    {
+      "id": "V-T4-appendix-a-policy-hash",
+      "must": "Table 3 policyHash (lowercase hex SHA-256)",
+      "draft": "Table 3 names policyHash as lowercase hex SHA-256. Appendix A of the posted -04 still carries policyHash=aa on a signed receipt.",
+      "kind": "sign-refuse",
+      "claims": {
+        "policyHash": "aa"
+      },
+      "expectRefuse": false,
+      "note": "Companion now enforces Table 3 and refuses to sign the appendix claims. The vector is re-signed in -05; this tree does not re-sign it."
     }
   ]
 }

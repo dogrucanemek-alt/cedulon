@@ -1,3 +1,4 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { audit } from "@cedulon/audit";
@@ -33,7 +34,7 @@ function chainReceipts(
         payee: "q",
         amount,
         currency: "USD",
-        policyHash: "ph",
+        policyHash: TEST_HASH,
         manifestHash: null,
         noManifest: true,
         x402PaymentRef: `x402-n${i}`,

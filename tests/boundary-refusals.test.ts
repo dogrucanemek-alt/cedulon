@@ -1,3 +1,4 @@
+import { TEST_HASH, TEST_HASH_OTHER } from "./hash-fixtures.ts";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -23,7 +24,7 @@ const CLAIMS: SpendReceiptClaims = {
   payee: "payee-1",
   amount: "1",
   currency: "USD",
-  policyHash: "aa",
+  policyHash: TEST_HASH,
   manifestHash: null,
   noManifest: true,
   x402PaymentRef: null,
@@ -281,7 +282,7 @@ describe("no verify path throws, whoever forgets to ask why (MUST-T4-19)", () =>
   });
 
   it("RED then GREEN: a decision token that cannot be read is denied, not thrown", () => {
-    const token = { claims: { requestHash: "aa", policyHash: "bb", expiryMs: 9e12, nonce: "n", singleUseId: "s" }, publicKeyPem: k.publicKeyPem, coseHex: "00".repeat(65_537) };
+    const token = { claims: { requestHash: TEST_HASH, policyHash: TEST_HASH_OTHER, expiryMs: 9e12, nonce: "n", singleUseId: "s" }, publicKeyPem: k.publicKeyPem, coseHex: "00".repeat(65_537) };
     assert.equal(verifyDecisionToken(token as never, 1, k.publicKeyPem), false);
   });
 
@@ -375,7 +376,7 @@ describe("the JSON verifiers answer on input RFC 8785 cannot encode", () => {
         payee: "q",
         amount: "1",
         currency: "USD",
-        policyHash: "aa",
+        policyHash: TEST_HASH,
         manifestHash: null,
         noManifest: true,
         x402PaymentRef: null,
@@ -404,7 +405,7 @@ describe("the JSON verifiers answer on input RFC 8785 cannot encode", () => {
             payee: "q",
             amount: "1",
             currency: "USD",
-            policyHash: "aa",
+            policyHash: TEST_HASH,
             manifestHash: null,
             noManifest: true,
             x402PaymentRef: null,

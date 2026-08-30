@@ -13,7 +13,7 @@ import {
 } from "@cedulon/cose";
 import { canonical } from "./canonical.ts";
 import { policyDocument, requestHashOf } from "./policy.ts";
-import type { Policy, SpendRequest } from "./types.ts";
+import { hashClaimRefusal, type Policy, type SpendRequest } from "./types.ts";
 
 /** CWT private-use labels for the Decision Token. */
 export const DECISION_CLAIM = {
@@ -74,6 +74,10 @@ export function signDecisionToken(
   privateKeyPem: string,
   publicKeyPem: string,
 ): SignedDecisionToken {
+  const request = hashClaimRefusal("requestHash", claims.requestHash);
+  if (request) throw new Error(request);
+  const policy = hashClaimRefusal("policyHash", claims.policyHash);
+  if (policy) throw new Error(policy);
   const cose = signCoseSign1(decisionTokenToCbor(claims), privateKeyPem, CTY_DECISION);
   return {
     claims,

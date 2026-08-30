@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { canonical } from "@cedulon/core";
+import { canonical, hashClaimRefusal } from "@cedulon/core";
 import {
   CTY_CHECKPOINT,
   asMap,
@@ -156,6 +156,10 @@ export function signCheckpoint(
   publicKeyPem?: string,
 ): SignedCheckpoint {
   const signer = asSigner(key, publicKeyPem);
+  const head = hashClaimRefusal("chainHeadHash", claims.chainHeadHash, true);
+  if (head) throw new Error(head);
+  const prev = hashClaimRefusal("prevCheckpointHash", claims.prevCheckpointHash, true);
+  if (prev) throw new Error(prev);
   const cose = signCoseSign1(checkpointToCbor(claims), signer, CTY_CHECKPOINT);
   return {
     claims,

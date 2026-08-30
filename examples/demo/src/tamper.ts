@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
 import { generateManifestKeys, signManifest, verifyManifest } from "@cedulon/manifest";
 import { generateReceiptKeys, signReceipt, verifyReceipt } from "@cedulon/receipts";
+
+const TEST_HASH = createHash("sha256").update("cedulon/test-policy").digest("hex");
 
 const nowMs = 1_700_000_000_000;
 const mk = generateManifestKeys();
@@ -8,7 +11,7 @@ const manifest = signManifest(
     description: "x",
     amount: "1",
     currency: "USD",
-    acceptanceCriteriaHash: "aa",
+    acceptanceCriteriaHash: TEST_HASH,
     cancelCondition: "none",
     expiresAtMs: nowMs + 1,
   },
@@ -27,7 +30,7 @@ const receipt = signReceipt(
     payee: "q",
     amount: "1",
     currency: "USD",
-    policyHash: "ph",
+    policyHash: TEST_HASH,
     manifestHash: null,
     noManifest: true,
     x402PaymentRef: "r",

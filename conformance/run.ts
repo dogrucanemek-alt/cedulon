@@ -55,13 +55,17 @@ function sha256Hex(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/** SHA-256("cedulon/test-policy") — a real digest, not a placeholder. */
+const TEST_POLICY_HASH = sha256Hex(Buffer.from("cedulon/test-policy"));
+const EMPTY_DELIVERY_HASH = sha256Hex(Buffer.alloc(0));
+
 function baseClaims() {
   return {
     payer: "payer",
     payee: "payee",
     amount: "1",
     currency: "USD",
-    policyHash: "aa",
+    policyHash: TEST_POLICY_HASH,
     manifestHash: null as string | null,
     noManifest: true,
     x402PaymentRef: null as string | null,
@@ -86,7 +90,7 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
                 description: "x",
                 amount: "1",
                 currency: "USD",
-                acceptanceCriteriaHash: "00",
+                acceptanceCriteriaHash: EMPTY_DELIVERY_HASH,
                 cancelCondition: "none",
                 expiresAtMs: NOW,
               },
@@ -185,7 +189,7 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
           description: "vec",
           amount: v.manifestAmount ?? "1",
           currency: "USD",
-          acceptanceCriteriaHash: "00",
+          acceptanceCriteriaHash: EMPTY_DELIVERY_HASH,
           cancelCondition: "none",
           expiresAtMs: NOW + 60_000,
         },
@@ -271,7 +275,7 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
           description: "vec",
           amount: "1",
           currency: "USD",
-          acceptanceCriteriaHash: "00",
+          acceptanceCriteriaHash: EMPTY_DELIVERY_HASH,
           cancelCondition: "none",
           expiresAtMs: NOW + 60_000,
         },

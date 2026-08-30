@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, verify } from "node:crypto";
-import { AMOUNT_RE, canonical, jcsEncodeRefusal } from "@cedulon/core";
+import { AMOUNT_RE, canonical, hashClaimRefusal, isValidHashText, jcsEncodeRefusal } from "@cedulon/core";
 import {
   CTY_COUNTERSIGN,
   CTY_RECEIPT,
@@ -43,7 +43,7 @@ export const COUNTERSIGN_CLAIM = {
 
 // The grammar lives in @cedulon/core so every boundary checks one spelling
 // of the rule; re-exported here to keep this package's surface unchanged.
-export { AMOUNT_RE };
+export { AMOUNT_RE, hashClaimRefusal, isValidHashText };
 export const NONCE_MIN_BYTES = 16;
 
 export type ReceiptEncoding = "cose" | "json";
@@ -168,6 +168,12 @@ function assertClaimConsistency(claims: SpendReceiptClaims): void {
   if (!isValidNonce(claims.nonce)) {
     throw new Error("nonce-too-short");
   }
+  const policy = hashClaimRefusal("policyHash", claims.policyHash);
+  if (policy) throw new Error(policy);
+  const manifest = hashClaimRefusal("manifestHash", claims.manifestHash, true);
+  if (manifest) throw new Error(manifest);
+  const prev = hashClaimRefusal("prevReceiptHash", claims.prevReceiptHash, true);
+  if (prev) throw new Error(prev);
 }
 
 export function signReceiptJson(

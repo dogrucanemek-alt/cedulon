@@ -1,3 +1,4 @@
+import { TEST_HASH, TEST_HASH_OTHER } from "./hash-fixtures.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { fixtureEd25519Pems } from "@cedulon/cose";
@@ -20,7 +21,7 @@ function sampleClaims(nonce: string, amount = "1"): SpendReceiptClaims {
     payee: "q",
     amount,
     currency: "USD",
-    policyHash: "ph",
+    policyHash: TEST_HASH,
     manifestHash: null,
     noManifest: true,
     x402PaymentRef: nonce,
@@ -68,7 +69,7 @@ describe("epoch checkpoints", () => {
       k.publicKeyPem,
     );
     const secondBroken = signCheckpoint(
-      buildCheckpointClaims(2, [r], 2, 3, "deadbeef"),
+      buildCheckpointClaims(2, [r], 2, 3, TEST_HASH_OTHER),
       k.privateKeyPem,
       k.publicKeyPem,
     );

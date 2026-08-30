@@ -1,3 +1,4 @@
+import { TEST_HASH, TEST_HASH_OTHER } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
@@ -38,7 +39,7 @@ function receiptFor(keys: Keys, ref: string, i: number, boundTo: string | null =
       payee: "payee",
       amount: "1",
       currency: "USD",
-      policyHash: "policy-hash",
+      policyHash: TEST_HASH,
       manifestHash: boundTo,
       noManifest: boundTo === null,
       x402PaymentRef: ref,
@@ -228,8 +229,8 @@ describe("pin optionality, measured rather than guessed", () => {
 
     const token = signDecisionToken(
       {
-        requestHash: "req",
-        policyHash: "policy-hash",
+        requestHash: TEST_HASH,
+        policyHash: TEST_HASH,
         expiryMs: NOW + 60_000,
         nonce: "n0".padEnd(16, "-"),
         singleUseId: "single",
@@ -244,7 +245,7 @@ describe("pin optionality, measured rather than guessed", () => {
       manifestCanonical: "m",
       receiptCanonical: "r",
       deliveryBytes: Buffer.from("x"),
-      acceptanceCriteriaHash: "not-the-hash",
+      acceptanceCriteriaHash: TEST_HASH_OTHER,
     });
     assert.equal(verifyDisputeBundle(bundle), true, "verifyDisputeBundle is hash consistency, not a signature");
   });

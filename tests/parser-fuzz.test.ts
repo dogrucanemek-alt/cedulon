@@ -1,3 +1,4 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
 import { decode as decodeCborX } from "cbor-x";
 import { describe, it } from "node:test";
@@ -42,7 +43,7 @@ const CLAIMS: SpendReceiptClaims = {
   payee: "payee-1",
   amount: "1",
   currency: "USD",
-  policyHash: "aa",
+  policyHash: TEST_HASH,
   manifestHash: null,
   noManifest: true,
   x402PaymentRef: null,
@@ -66,7 +67,7 @@ const CHECKPOINT: CheckpointClaims = {
   startMs: 1_700_000_000_000,
   endMs: 1_700_003_600_000,
   receiptCount: 1,
-  chainHeadHash: "aa",
+  chainHeadHash: TEST_HASH,
   totals: { USD: "1" },
   prevCheckpointHash: null,
 };

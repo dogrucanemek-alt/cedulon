@@ -1,3 +1,4 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
@@ -38,7 +39,7 @@ function receiptFor(
       payee: "payee",
       amount,
       currency: "USD",
-      policyHash: "policy-hash",
+      policyHash: TEST_HASH,
       manifestHash: null,
       noManifest: true,
       x402PaymentRef: ref,
@@ -268,8 +269,8 @@ describe("issuer trust root", () => {
 
     const token = signDecisionToken(
       {
-        requestHash: "req",
-        policyHash: "policy-hash",
+        requestHash: TEST_HASH,
+        policyHash: TEST_HASH,
         expiryMs: NOW + 60_000,
         nonce: "n0".padEnd(16, "-"),
         singleUseId: "single",

@@ -1,3 +1,4 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
 import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -39,7 +40,7 @@ function receiptFor(
     payee: "payee-1",
     amount,
     currency: "USD",
-    policyHash: "policy-hash",
+    policyHash: TEST_HASH,
     manifestHash: null,
     noManifest: true,
     x402PaymentRef: ref,
