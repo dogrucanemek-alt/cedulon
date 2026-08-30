@@ -18,9 +18,11 @@ function spendOnce(session: CedulonSession, nonce: string) {
 
 describe("session state file", () => {
   it("40 RED then GREEN: the state file holding the private key is not world-readable", (t) => {
-    // The receipt private key is written into this file in the clear. Encryption
-    // needs a secret this server does not have, so the file mode is the whole of
-    // the protection - which makes an unstated mode a decision, not an omission.
+    // The receipt private key is written into this file in the clear. On POSIX
+    // there is no ambient per-user secret to encrypt it with, so the file mode
+    // is the whole of the protection - which makes an unstated mode a decision,
+    // not an omission. (Windows does hold such a secret - DPAPI - which is why
+    // its skip below is a feature gap with a named exit, not a shrug.)
     const statePath = tempStatePath();
     const session = new CedulonSession({ statePath });
     assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);

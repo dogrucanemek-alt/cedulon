@@ -289,7 +289,13 @@ lose a receipt quietly.
   there is the directory ACL and this server does not set it. `stateProtection`
   says `unprotected-on-this-platform` rather than pretending otherwise. Cases 40,
   60, 68 and 75 skip on Windows for that reason: they measure POSIX file and
-  directory modes, which this platform does not use. Cases 42, 70, 76 and 83 skip
+  directory modes, which this platform does not use. This is a platform feature
+  gap, not a conformance gap - the draft requires reporting the protection
+  actually obtained, and that is asserted on every platform. The named exit is
+  not ACL emulation but DPAPI: Windows does hold a per-user OS secret this
+  server could encrypt the state file with. That belongs to the key-protection
+  part of the key-lifecycle design, not to a mode bit, and these four cases
+  stay skipped until that design lands. Cases 42, 70, 76 and 83 skip
   when the host cannot create a symbolic link (Windows without Developer Mode
   returns `EPERM`). Cases 80 and 81, the undo after a failed write, do run on
   Windows: a read-only state file makes the atomic rename fail the same way a
