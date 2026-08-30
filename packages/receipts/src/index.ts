@@ -338,7 +338,11 @@ export function verifyCounterSignature(signed: SignedReceipt, payeePublicKeyPem?
       d |= bound[i] ^ issuer[i];
     }
     return d === 0;
-  } catch {
+  } catch (err) {
+    // Named decoder refusals stay named (MUST-T4-18, MUST-T4-19).
+    if (namedDecodeRefusal(err) !== null) {
+      throw err;
+    }
     return false;
   }
 }

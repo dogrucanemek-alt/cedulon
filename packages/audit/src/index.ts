@@ -510,11 +510,14 @@ function inclusionFromPinnedLog(
   rec: InclusionReceipt,
   witnessKeyPem?: string | readonly string[],
 ): boolean {
+  // A named decoder refusal makes the receipt unverifiable, and an
+  // unverifiable receipt is left out (MUST-T11-15) - it must not become an
+  // uncaught exception that takes the whole audit down with it.
   if (witnessKeyPem === undefined) {
-    return verifyInclusionReceipt(rec);
+    return verifiesOrRefusal(() => verifyInclusionReceipt(rec)).ok;
   }
   const pems = typeof witnessKeyPem === "string" ? [witnessKeyPem] : witnessKeyPem;
-  return pems.some((pem) => verifyInclusionReceipt(rec, pem));
+  return pems.some((pem) => verifiesOrRefusal(() => verifyInclusionReceipt(rec, pem)).ok);
 }
 
 /**
@@ -628,11 +631,15 @@ function findCountersignFindings(
   const countersigned = input.receipts.filter((r) => r.counterCoseHex);
   for (const r of countersigned) {
     const pinned = input.payeeTrust?.[r.claims.payee];
-    if (!verifyCounterSignature(r)) {
+    const v = verifiesOrRefusal(() => verifyCounterSignature(r));
+    if (!v.ok) {
       findings.push({
         code: "countersign-bad",
         id: r.claims.nonce,
-        detail: `payee countersignature on nonce=${r.claims.nonce} failed verify`,
+        detail:
+          v.refusal !== null
+            ? `payee countersignature on nonce=${r.claims.nonce} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`
+            : `payee countersignature on nonce=${r.claims.nonce} failed verify`,
       });
       continue;
     }

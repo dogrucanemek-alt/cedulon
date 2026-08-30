@@ -19,7 +19,23 @@ import {
 import { PolicyEngine, isValidAmountText, policyDocument, type Policy } from "@cedulon/core";
 import type { SignedManifest } from "@cedulon/manifest";
 import { claimsFromCbor, generateReceiptKeys, receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
-import { decodeCoseSign1 } from "@cedulon/cose";
+import { decodeCoseSign1, namedDecodeRefusal } from "@cedulon/cose";
+
+/**
+ * Caller-supplied bytes that hit a decoder bound or a duplicate key are
+ * unverifiable, and the tool answers false; anything else thrown is a bug
+ * in this server and stays thrown.
+ */
+function boolOrRefusalFalse(check: () => boolean): boolean {
+  try {
+    return check();
+  } catch (err) {
+    if (namedDecodeRefusal(err) !== null) {
+      return false;
+    }
+    throw err;
+  }
+}
 import {
   RailLedger,
   gatedSettleWithLedger,
@@ -266,6 +282,14 @@ export class CedulonSession {
           this.restore(undo);
           if ((err as Error)?.message === "cedulon-state-symlink") {
             throw err;
+          }
+          // A named decoder refusal came from the caller's own wire input
+          // (an oversized or malformed manifest, most likely). Reporting it
+          // as state-io sends the operator to the disk for a fault that is
+          // in the request.
+          const refusal = namedDecodeRefusal(err);
+          if (refusal !== null) {
+            return { ok: false, reason: refusal };
           }
           return { ok: false, reason: "state-io" };
         }
@@ -641,7 +665,9 @@ export class CedulonSession {
     payeeCheckedAgainstSuppliedKey: boolean | null;
   } {
     const signed = receiptFromArgs(args);
-    const receiptOk = verifyReceipt(signed, args.expectIssuerKeyPem);
+    // A named decoder refusal is an unverifiable receipt, answered false
+    // rather than thrown: the verify tool's caller supplied the bytes.
+    const receiptOk = boolOrRefusalFalse(() => verifyReceipt(signed, args.expectIssuerKeyPem));
     // Two questions, so two answers. One flag read as "nothing was checked"
     // whenever either key was missing, including when the issuer had been.
     const issuerCheckedAgainstSuppliedKey = args.expectIssuerKeyPem !== undefined;
@@ -654,7 +680,7 @@ export class CedulonSession {
         payeeCheckedAgainstSuppliedKey: null,
       };
     }
-    const counterOk = verifyCounterSignature(signed, args.expectPayeeKeyPem);
+    const counterOk = boolOrRefusalFalse(() => verifyCounterSignature(signed, args.expectPayeeKeyPem));
     return {
       ok: receiptOk && counterOk,
       receipt: receiptOk,

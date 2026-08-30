@@ -1,4 +1,5 @@
 import { isValidAmountText, type PolicyEngine, type SpendRequest } from "@cedulon/core";
+import { namedDecodeRefusal } from "@cedulon/cose";
 import { gatedSettle, type AdapterKeys, type PayResult } from "@cedulon/x402-adapter";
 import type { SignedManifest } from "@cedulon/manifest";
 
@@ -51,17 +52,32 @@ export function wrapToolsCall(deps: GuardDeps): (call: ToolCall) => ToolResult {
     }
     const req = argsToRequest(call.arguments, deps.nowMs);
     const manifest = call.arguments.manifest as SignedManifest | undefined;
-    const result: PayResult = gatedSettle(
-      deps.engine,
-      {
-        req,
-        payer: deps.payer,
-        manifest,
-        paymentHeader: "mock-signed",
-      },
-      deps.keys,
-      deps.nowMs,
-    );
+    let result: PayResult;
+    try {
+      result = gatedSettle(
+        deps.engine,
+        {
+          req,
+          payer: deps.payer,
+          manifest,
+          paymentHeader: "mock-signed",
+        },
+        deps.keys,
+        deps.nowMs,
+      );
+    } catch (err) {
+      // A named decoder refusal came from the caller's own bytes (an
+      // oversized or malformed manifest); deny by that name instead of
+      // letting the exception take the host's tool call down.
+      const refusal = namedDecodeRefusal(err);
+      if (refusal === null) {
+        throw err;
+      }
+      return {
+        content: [{ type: "text", text: `denied:${refusal}` }],
+        isError: true,
+      };
+    }
     if (result.status !== 200) {
       return {
         content: [{ type: "text", text: `denied:${result.reason}` }],

@@ -6,6 +6,7 @@ import {
   type SpendRequest,
 } from "@cedulon/core";
 import { canonical } from "@cedulon/core";
+import { namedDecodeRefusal } from "@cedulon/cose";
 import {
   isManifestExpired,
   manifestHash,
@@ -19,6 +20,26 @@ import {
   type SignedReceipt,
 } from "@cedulon/receipts";
 import { RailLedger, type RailSettlement } from "./rail.ts";
+
+/**
+ * Manifest bytes that hit a decoder bound or a duplicate key are a named
+ * refusal, not a signature verdict; the gate turns them into a deny under
+ * that name rather than throwing into its caller.
+ */
+function manifestVerdict(
+  manifest: SignedManifest,
+  trust: string | undefined,
+): { ok: boolean; refusal: string | null } {
+  try {
+    return { ok: verifyManifest(manifest, trust), refusal: null };
+  } catch (err) {
+    const name = namedDecodeRefusal(err);
+    if (name === null) {
+      throw err;
+    }
+    return { ok: false, refusal: name };
+  }
+}
 
 export {
   RailLedger,
@@ -139,7 +160,14 @@ export function gatedSettle(
     if (input.manifestTrust === undefined) {
       return deny402(input.req, "manifest-unauthenticated");
     }
-    if (!verifyManifest(input.manifest, input.manifestTrust)) {
+    const gateVerdict = manifestVerdict(input.manifest, input.manifestTrust);
+    if (gateVerdict.refusal !== null) {
+      // The manifest bytes hit a decoder bound or a duplicate key. The gate
+      // denies by that name (MUST-T4-18, MUST-T4-19) instead of throwing
+      // into whoever called it - a thrown gate is not fail-closed.
+      return deny402(input.req, gateVerdict.refusal);
+    }
+    if (!gateVerdict.ok) {
       return deny402(input.req, "manifest-bad-sig");
     }
     if (isManifestExpired(input.manifest, nowMs)) {
@@ -211,8 +239,14 @@ function issue(
   // reached here directly and wrote the hash of terms nobody had looked at, into
   // a receipt that is otherwise perfectly real. Being unguarded is about the
   // policy gate, not about signatures.
-  if (input.manifest && !verifyManifest(input.manifest, input.manifestTrust)) {
-    return deny402(input.req, "manifest-bad-sig");
+  if (input.manifest) {
+    const verdict = manifestVerdict(input.manifest, input.manifestTrust);
+    if (verdict.refusal !== null) {
+      return deny402(input.req, verdict.refusal);
+    }
+    if (!verdict.ok) {
+      return deny402(input.req, "manifest-bad-sig");
+    }
   }
   const policyHash = engine
     ? sha256Hex(canonical(policyDocument(engine.policy)))

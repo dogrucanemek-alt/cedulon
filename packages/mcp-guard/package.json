@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@cedulon/core": "^0.6.0",
+    "@cedulon/cose": "^0.6.0",
     "@cedulon/manifest": "^0.6.0",
     "@cedulon/x402-adapter": "^0.6.0"
   }
