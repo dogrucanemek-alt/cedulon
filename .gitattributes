@@ -2,6 +2,7 @@
 # spec/ is intentionally unlisted: those drafts are frozen on the datatracker.
 # A normalization rule there would desync the tree from the published bytes.
 
+/.github/** text eol=lf
 /docs/** text eol=lf
 /packages/** text eol=lf
 /tests/** text eol=lf

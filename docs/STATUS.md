@@ -1,14 +1,16 @@
 # Status
 
 `npm run test:all` is green on Linux and macOS, where CI runs the whole
-pre-release suite as a non-root user and asserts every case: 311 of 311, none
+pre-release suite as a non-root user and asserts every case: 314 of 314, none
 skipped, on both. `npx tsc --noEmit` is silent; `npm run audit` exits 0 and the
-four bypass demos fail as designed. There is no Windows CI job: the suite is
-run there by hand and asserts 303 of the same 311, because POSIX file modes and
-symbolic links are not the access control on that platform and the eight cases
-that measure them skip with a stated reason rather than passing without
-measuring. A green run on Windows is that much smaller a claim
-(`docs/RUN_AS_VERIFIER.md` says which cases). While the workspace
+four bypass demos fail as designed. Windows runs the same suite in CI on a
+hosted runner and asserts 310 of the same 314: the four POSIX-mode cases skip
+with a stated reason, because file and directory modes are not the access
+control on that platform. The four symbolic-link cases assert there because
+the hosted runner may create symlinks; on a Windows machine without that
+privilege they skip too, with the same discipline, which is the eight-case
+set `docs/RUN_AS_VERIFIER.md` describes. A green run on Windows is that much
+smaller a claim. While the workspace
 version is ahead of npm, `npm run test:all` also carries one deliberate red -
 the gate that refuses to call a prepared version published; `npm run
 test:pre-release` is the green one until the publish. `docs/RUN_AS_VERIFIER.md`

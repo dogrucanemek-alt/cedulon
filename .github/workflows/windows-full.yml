@@ -1,9 +1,11 @@
 # The full pre-release suite on Windows, on a hosted runner neither party
-# keeps. Eight cases skip here with a stated reason (40 42 60 68 70 75 76 83):
-# POSIX file modes and symbolic links are not the access control on this
-# platform, so a green run is a smaller claim than posix-full or macos-full,
-# and it is counted as exactly that — docs/RUN_AS_VERIFIER.md says which
-# cases and why.
+# keeps. The POSIX-mode cases (40 60 68 75) skip here with a stated reason:
+# file and directory modes are not the access control on this platform. The
+# symbolic-link cases assert when the runner may create symlinks — the first
+# run measured exactly that, 310 of 314 — and skip with the same discipline
+# where it may not. Either way a green run is a smaller claim than
+# posix-full or macos-full, and it is counted as exactly that;
+# docs/RUN_AS_VERIFIER.md says which cases and why.
 #
 # This job was withheld while a fresh Windows clone was believed to fail the
 # line-ending guard. That belief went stale: the guard reads the object
