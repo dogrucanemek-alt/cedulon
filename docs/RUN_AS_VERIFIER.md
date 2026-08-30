@@ -296,7 +296,26 @@ authorised to make and the naked row goes quiet. With `issuerTrust`, a receipt
 from any other key is `issuer-key-mismatch` and is not counted as coverage, so
 the settlement it named stays reported; an issuer key you supply but that cannot
 be read is `trust-key-unreadable` on `id: "issuer"`, which is a broken setting
-rather than evidence against the receipts. Every verify in the project takes the key
+rather than evidence against the receipts.
+
+Issuer pin matrix, measured. Attestation today compares the **carried SPKI**
+(`publicKeyPem`) to the pin. COSE `kid` is checked when a signature is verified
+under a chosen key, not when the attested set is built.
+
+| Carried SPKI vs pin | Signature under the pin | Named result | Attested set |
+|---|---|---|---|
+| match | valid | none of `issuer-key-mismatch` / `receipt-chain-break` | included |
+| match | invalid | `receipt-chain-break` (signature failed); not `issuer-key-mismatch` | included, then walked |
+| mismatch | valid under the foreign key (invalid under the pin) | `issuer-key-mismatch` | dropped |
+| mismatch | invalid | `issuer-key-mismatch` | dropped |
+| unpinned | n/a | `unauthenticated-issuer` | whole list weighed |
+
+A sixth measured case: an honest COSE object whose carried PEM is swapped for
+another key still has a `kid` that names the pin, and `verifyReceipt(signed, pin)`
+would succeed, but the PEM filter reports `issuer-key-mismatch` and drops it.
+That split is deterministic under the PEM rule above.
+
+Every verify in the project takes the key
 directly for callers outside `audit()`: `verifyReceipt(signed, issuerKey)`,
 `verifyCheckpoint(signed, issuerKey)`, `verifyDecisionToken(signed, nowMs,
 issuerKey)`, `verifyInclusionReceipt(signed, witnessKey)`,
