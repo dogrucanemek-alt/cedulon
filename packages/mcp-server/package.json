@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/mcp-server",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "mcpName": "io.github.dogrucanemek-alt/cedulon",
   "description": "Local stdio MCP server for policy-gated Cedulon spend and audit.",
   "license": "Apache-2.0",
@@ -44,13 +44,13 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/audit": "^0.6.0",
-    "@cedulon/checkpoint": "^0.6.0",
-    "@cedulon/core": "^0.6.0",
-    "@cedulon/cose": "^0.6.0",
-    "@cedulon/manifest": "^0.6.0",
-    "@cedulon/receipts": "^0.6.0",
-    "@cedulon/x402-adapter": "^0.6.0",
+    "@cedulon/audit": "^0.7.0",
+    "@cedulon/checkpoint": "^0.7.0",
+    "@cedulon/core": "^0.7.0",
+    "@cedulon/cose": "^0.7.0",
+    "@cedulon/manifest": "^0.7.0",
+    "@cedulon/receipts": "^0.7.0",
+    "@cedulon/x402-adapter": "^0.7.0",
     "@modelcontextprotocol/sdk": "^1.30.0"
   }
 }

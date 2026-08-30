@@ -20,22 +20,6 @@ import { PolicyEngine, isValidAmountText, policyDocument, type Policy } from "@c
 import type { SignedManifest } from "@cedulon/manifest";
 import { claimsFromCbor, generateReceiptKeys, receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import { decodeCoseSign1, namedDecodeRefusal } from "@cedulon/cose";
-
-/**
- * Caller-supplied bytes that hit a decoder bound or a duplicate key are
- * unverifiable, and the tool answers false; anything else thrown is a bug
- * in this server and stays thrown.
- */
-function boolOrRefusalFalse(check: () => boolean): boolean {
-  try {
-    return check();
-  } catch (err) {
-    if (namedDecodeRefusal(err) !== null) {
-      return false;
-    }
-    throw err;
-  }
-}
 import {
   RailLedger,
   gatedSettleWithLedger,
@@ -664,10 +648,23 @@ export class CedulonSession {
     issuerCheckedAgainstSuppliedKey: boolean;
     payeeCheckedAgainstSuppliedKey: boolean | null;
   } {
-    const signed = receiptFromArgs(args);
-    // A named decoder refusal is an unverifiable receipt, answered false
-    // rather than thrown: the verify tool's caller supplied the bytes.
-    const receiptOk = boolOrRefusalFalse(() => verifyReceipt(signed, args.expectIssuerKeyPem));
+    // Reading the caller's bytes is where a decoder bound is hit, and this
+    // tool's answer to bytes it cannot read is "not verified", never a thrown
+    // exception: the caller supplied them, and MUST-T4-19 asks for a refusal
+    // rather than a crash.
+    let signed: SignedReceipt;
+    try {
+      signed = receiptFromArgs(args);
+    } catch {
+      return {
+        ok: false,
+        receipt: false,
+        countersignature: null,
+        issuerCheckedAgainstSuppliedKey: args.expectIssuerKeyPem !== undefined,
+        payeeCheckedAgainstSuppliedKey: null,
+      };
+    }
+    const receiptOk = verifyReceipt(signed, args.expectIssuerKeyPem);
     // Two questions, so two answers. One flag read as "nothing was checked"
     // whenever either key was missing, including when the issuer had been.
     const issuerCheckedAgainstSuppliedKey = args.expectIssuerKeyPem !== undefined;
@@ -680,7 +677,7 @@ export class CedulonSession {
         payeeCheckedAgainstSuppliedKey: null,
       };
     }
-    const counterOk = boolOrRefusalFalse(() => verifyCounterSignature(signed, args.expectPayeeKeyPem));
+    const counterOk = verifyCounterSignature(signed, args.expectPayeeKeyPem);
     return {
       ok: receiptOk && counterOk,
       receipt: receiptOk,

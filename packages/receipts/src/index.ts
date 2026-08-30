@@ -9,7 +9,6 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
-  namedDecodeRefusal,
   sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
@@ -229,11 +228,10 @@ export function verifyReceiptCose(signed: SignedReceipt, expectedIssuerKeyPem?: 
     const msg = decodeCoseSign1(bytes);
     const decoded = claimsFromCbor(msg.payload);
     return canonical(decoded) === canonical(signed.claims);
-  } catch (err) {
-    // Named decoder refusals stay named (MUST-T4-18, MUST-T4-19).
-    if (namedDecodeRefusal(err) !== null) {
-      throw err;
-    }
+  } catch {
+    // Anything unreadable is unverified, which is fail-closed on its own.
+    // A caller that wants to say why asks coseDecodeRefusalHex; see the note
+    // on that function for why this no longer rethrows.
     return false;
   }
 }
@@ -338,11 +336,7 @@ export function verifyCounterSignature(signed: SignedReceipt, payeePublicKeyPem?
       d |= bound[i] ^ issuer[i];
     }
     return d === 0;
-  } catch (err) {
-    // Named decoder refusals stay named (MUST-T4-18, MUST-T4-19).
-    if (namedDecodeRefusal(err) !== null) {
-      throw err;
-    }
+  } catch {
     return false;
   }
 }

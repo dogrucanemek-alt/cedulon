@@ -3,10 +3,13 @@ import { describe, it } from "node:test";
 
 import { audit } from "@cedulon/audit";
 import { PolicyEngine } from "@cedulon/core";
-import { hexToBytes, verifyCoseSign1 } from "@cedulon/cose";
+import { coseDecodeRefusalHex, hexToBytes, verifyCoseSign1 } from "@cedulon/cose";
 import { wrapToolsCall } from "@cedulon/mcp-guard";
 import { gatedSettle } from "@cedulon/x402-adapter";
 import { generateReceiptKeys, signReceipt, type SpendReceiptClaims } from "@cedulon/receipts";
+import { findCheckpointChainBreak, findEquivocation, signCheckpoint, verifyCheckpoint } from "@cedulon/checkpoint";
+import { verifyDecisionToken } from "@cedulon/core";
+import { signManifest } from "@cedulon/manifest";
 
 // The package entry starts a stdio server on import; the session is the unit
 // under test here.
@@ -96,9 +99,14 @@ describe("decoder refusals keep their names (MUST-T4-18, MUST-T4-19)", () => {
 
   it("RED then GREEN: a duplicate protected-header key is refused by name", () => {
     // COSE_Sign1 [protected: h'a20101 0102' ({1:1, 1:2}), {}, h'00', h'00'].
-    const bytes = hexToBytes("8445a201010102a041004100");
+    const hex = "8445a201010102a041004100";
     const k = generateReceiptKeys();
-    assert.throws(() => verifyCoseSign1(bytes, k.publicKeyPem), /cbor-duplicate-key/);
+    // Two answers, not one: verification says "no" without throwing, and the
+    // name of the refusal is a separate question asked of the bytes. An earlier
+    // shape had verification throw the name, which made every caller one
+    // forgotten catch away from a crash.
+    assert.equal(verifyCoseSign1(hexToBytes(hex), k.publicKeyPem), false);
+    assert.equal(coseDecodeRefusalHex(hex), "cbor-duplicate-key");
   });
 });
 
@@ -221,5 +229,91 @@ describe("named refusals do not crash the surfaces that carry them", () => {
       true,
       `expected the attribution refusal, got: ${out.content[0].text}`,
     );
+  });
+});
+
+describe("no verify path throws, whoever forgets to ask why (MUST-T4-19)", () => {
+  // Codex broke the previous repair here. Teaching verifyCoseSign1 to rethrow
+  // made every caller responsible for a try/catch; four were wrapped, five were
+  // not, and a 65KB checkpoint took a whole audit down. Verification now answers
+  // false for bytes it cannot read - fail-closed without a catch - and the name
+  // is asked of the bytes at the surfaces that report it.
+  const k = generateReceiptKeys();
+  const cp = () =>
+    signCheckpoint(
+      {
+        epoch: 0,
+        startMs: 0,
+        endMs: 10,
+        receiptCount: 0,
+        chainHeadHash: null,
+        totals: {},
+        prevCheckpointHash: null,
+      },
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+
+  for (const [label, hex] of [
+    ["over the byte bound", "00".repeat(65_537)],
+    ["under the byte bound but past the nesting bound", "aa".repeat(35_000)],
+  ] as const) {
+    it(`RED then GREEN: an oversized checkpoint ${label} is a finding, not a crash`, () => {
+      const report = audit({ receipts: [], checkpoints: [{ ...cp(), coseHex: hex }] });
+      const named = report.findings.find(
+        (f) => f.code === "checkpoint-total-mismatch" && /cbor-too-(large|deep)/.test(f.detail),
+      );
+      assert.ok(
+        named,
+        `expected a named checkpoint refusal, got: ${report.findings.map((f) => `${f.code}:${f.detail}`).join(" | ")}`,
+      );
+    });
+  }
+
+  it("RED then GREEN: the bare checkpoint helpers answer instead of throwing", () => {
+    const bad = { ...cp(), coseHex: "00".repeat(65_537) };
+    assert.equal(verifyCheckpoint(bad), false);
+    assert.doesNotThrow(() => findCheckpointChainBreak([bad]));
+    assert.doesNotThrow(() => findEquivocation([bad]));
+  });
+
+  it("RED then GREEN: a decision token that cannot be read is denied, not thrown", () => {
+    const token = { claims: { requestHash: "aa", policyHash: "bb", expiryMs: 9e12, nonce: "n", singleUseId: "s" }, publicKeyPem: k.publicKeyPem, coseHex: "00".repeat(65_537) };
+    assert.equal(verifyDecisionToken(token as never, 1, k.publicKeyPem), false);
+  });
+
+  it("RED then GREEN: verify by coseHex answers false for bytes it cannot decode", () => {
+    const session = new CedulonSession({ statePath: null });
+    const out = session.verify({ coseHex: "00".repeat(65_537), publicKeyPem: k.publicKeyPem });
+    assert.equal(out.ok, false);
+    assert.equal(out.receipt, false);
+  });
+});
+
+describe("the manifest signer holds the amount grammar signReceipt holds", () => {
+  // signReceipt has refused "01" since -00; signManifest signed it. A manifest
+  // is where the terms are stated, and MUST-T8-2 compares its amount as exact
+  // octets, so terms spelled "01" are terms no honest spend can match.
+  const k = generateReceiptKeys();
+  const body = (amount: string) => ({
+    description: "d",
+    amount,
+    currency: "USD",
+    acceptanceCriteriaHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    cancelCondition: "none",
+    expiresAtMs: 9_000_000_000_000,
+    ap2MandateHash: null,
+  });
+
+  it("RED then GREEN: signManifest refuses a spelling the grammar forbids", () => {
+    for (const bad of ["01", " 1", "0x10", "-1", ""]) {
+      assert.throws(
+        () => signManifest(body(bad), k.privateKeyPem, k.publicKeyPem),
+        /amount grammar/,
+        `signManifest must refuse ${JSON.stringify(bad)}`,
+      );
+    }
+    assert.doesNotThrow(() => signManifest(body("0"), k.privateKeyPem, k.publicKeyPem));
+    assert.doesNotThrow(() => signManifest(body("1"), k.privateKeyPem, k.publicKeyPem));
   });
 });

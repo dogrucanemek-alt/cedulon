@@ -30,6 +30,8 @@ export {
   CTY_INCLUSION,
   CTY_MANIFEST,
   CTY_RECEIPT,
+  coseDecodeRefusal,
+  coseDecodeRefusalHex,
   coseFromHex,
   coseToHex,
   decodeCoseSign1,

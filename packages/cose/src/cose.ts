@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
-import { asArray, asMap, cborMap, decodeCbor, encodeCbor, mapGet, namedDecodeRefusal } from "./cbor.ts";
+import { asArray, asMap, cborMap, decodeCbor, encodeCbor, hexToBytes, mapGet, namedDecodeRefusal } from "./cbor.ts";
 
 /** RFC 9052 EdDSA. Deprecated for this profile; use Ed25519 (-19). */
 export const COSE_ALG_EDDSA = -8;
@@ -173,14 +173,50 @@ export function verifyCoseSign1(
     }
     const toBeSigned = sigStructure(msg.protectedHeader, msg.payload);
     return verify(null, Buffer.from(toBeSigned), publicKeyPem, Buffer.from(msg.signature));
-  } catch (err) {
-    // A decoder bound or a duplicate key is a named refusal (MUST-T4-18,
-    // MUST-T4-19), not a signature verdict. Swallowing it here rebadged the
-    // refusal as "signature failed" by the time it reached an audit report.
-    if (namedDecodeRefusal(err) !== null) {
-      throw err;
-    }
+  } catch {
     return false;
+  }
+}
+
+/**
+ * Why a set of COSE bytes could not be read, when the answer is a bound this
+ * profile names rather than a signature verdict (MUST-T4-18, MUST-T4-19).
+ * Returns null when the bytes decode - a false from verifyCoseSign1 then means
+ * what it says, that the signature did not verify.
+ *
+ * This is a separate question on purpose. An earlier repair made
+ * verifyCoseSign1 rethrow the named refusals so a caller could report them,
+ * which put every caller one forgotten try/catch away from turning a refused
+ * input into an uncaught exception - the crash MUST-T4-19 forbids, moved one
+ * level up. Four callers were wrapped, five were missed, and a 65KB checkpoint
+ * took a whole audit down. Verification now answers false for anything it
+ * cannot read, which is fail-closed on its own, and a caller that wants to name
+ * the reason asks for it here. Forgetting to ask costs a less specific message;
+ * it cannot cost a crash.
+ */
+export function coseDecodeRefusal(bytes: Uint8Array): string | null {
+  try {
+    const msg = decodeCoseSign1(bytes);
+    decodeProtectedHeader(msg.protectedHeader);
+    // The payload is CBOR in every object this profile defines; a bound hit
+    // while reading it is the same class of refusal as one hit above it.
+    decodeCbor(msg.payload);
+    return null;
+  } catch (err) {
+    return namedDecodeRefusal(err);
+  }
+}
+
+/** The same question for the hex encoding these objects travel as. */
+export function coseDecodeRefusalHex(coseHex: string | undefined | null): string | null {
+  if (!coseHex) {
+    return null;
+  }
+  try {
+    return coseDecodeRefusal(hexToBytes(coseHex));
+  } catch {
+    // Not even hex. Whatever it is, it is not a bound this profile names.
+    return null;
   }
 }
 

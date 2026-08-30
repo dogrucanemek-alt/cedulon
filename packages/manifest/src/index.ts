@@ -11,7 +11,7 @@ import {
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
-import { canonical } from "@cedulon/core";
+import { canonical, isValidAmountText } from "@cedulon/core";
 
 /** CWT private-use labels for Trade Manifest claims. */
 export const MANIFEST_CLAIM = {
@@ -100,6 +100,14 @@ export function signManifest(
   privateKeyPem: string,
   publicKeyPem: string,
 ): SignedManifest {
+  // The same grammar the receipt claims are held to. A manifest is where the
+  // terms are stated and MUST-T8-2 compares its amount as exact octets, so an
+  // issuer that publishes "01" states terms no honest spend can ever match:
+  // the receipt for that spend carries "1" and the gate calls it a mismatch.
+  // signReceipt has refused this since -00; the manifest signer had not.
+  if (!isValidAmountText(body.amount)) {
+    throw new Error("amount grammar");
+  }
   const cose = signCoseSign1(manifestToCbor(body), privateKeyPem, CTY_MANIFEST);
   const msg = decodeCoseSign1(cose);
   return {

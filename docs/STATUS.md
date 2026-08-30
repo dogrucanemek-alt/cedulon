@@ -18,6 +18,22 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.7.0` is prepared in this tree and is not a published npm release; npm still
+serves `0.6.0`, and a reader checking a claim against an installed package will
+find the older behaviour until this bump ships. What it changes: an amount is
+checked as text at every boundary before anything parses it, so `"01"` is
+answered `malformed-amount` rather than reinterpreted as `1` and printed back
+as `"1"`, and `signManifest` holds the grammar `signReceipt` has always held.
+Verification answers `false` for bytes it cannot read and never throws; the
+name of a refusal (`cbor-too-large`, `cbor-too-deep`, `cbor-duplicate-key`) is
+asked of the bytes through `coseDecodeRefusal`, after an interim shape that
+rethrew those names left a 65KB checkpoint able to crash `audit()`. Behaviour
+carried forward unchanged: `manifest-terms-mismatch` keeps its split - with a
+usable issuer pin the walk is the attested set and the departure is a finding,
+without a pin the same departure is a warning that does not by itself fail the
+audit - and `requestHash` is the SHA-256 of the six-field canonical document in
+lowercase hex, the digest the posted `-03` named a hash for without naming.
+
 `0.6.0` is published on npm. It names
 the CBOR refuse codes (`cbor-eof`, `cbor-too-deep`, `cbor-too-large`,
 `cbor-unsupported`, `cbor-duplicate-key`) and the audit input bound

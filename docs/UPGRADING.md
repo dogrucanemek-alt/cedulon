@@ -4,6 +4,62 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.7.0: the amount grammar at every boundary, and refusals that answer
+
+This one breaks, and it breaks two things that used to be accepted.
+
+A boundary now checks the amount as text before anything parses it. `spend` on
+the MCP server and the tool guard both took the caller's string, ran it through
+`BigInt()`, and printed the result back: `"01"` entered as `1n` and left as
+`"1"`. The octets `MUST-T8-2` compares were gone before the gate ever saw them,
+and one number had two spellings. Both boundaries now answer
+`malformed-amount` for a spelling the grammar forbids - `"01"`, `" 1"`,
+`"0x10"`, `"1n"`, `""` - and `signManifest` refuses the same set, which
+`signReceipt` has refused since -00. A manifest that stated `"01"` stated terms
+no honest spend could match: the receipt carries `"1"` and the gate calls it a
+mismatch. Callers that were sending non-canonical spellings and relying on the
+reinterpretation will now be refused; send the canonical decimal string.
+
+Verification answers instead of throwing. `verifyCoseSign1`,
+`verifyReceipt`, `verifyCheckpoint`, `verifyManifest`,
+`verifyCounterSignature`, `verifyInclusionReceipt` and `verifyDecisionToken`
+return `false` for bytes they cannot read - a decoder bound, a duplicate key,
+anything malformed - and never throw. The name of that refusal is a separate
+question, asked of the bytes: `coseDecodeRefusal` and `coseDecodeRefusalHex`
+return `cbor-too-large`, `cbor-too-deep`, `cbor-duplicate-key`, or `null` when
+the bytes decode and the verdict really was the signature. An interim shape had
+verification rethrow those names so a caller could report them; that put every
+caller one forgotten `try` away from an uncaught exception, and a 65KB
+checkpoint took a whole `audit()` down. Fail-closed is the default now, and
+naming the reason is opt-in. If you wrapped a Cedulon verifier in a `try/catch`
+for named refusals, the catch is dead - read the name from the bytes instead.
+
+The behaviour those refusals report is unchanged and still current. An audit
+still reports `manifest-terms-mismatch` with the split 0.6.0 introduced: with a
+usable issuer pin the walk is the attested set and the departure is a finding
+that fails the audit; without a pin the same departure is a warning and does not
+by itself fail it, because a charge no key stands behind is one a forged receipt
+can invent. `requestHash` is still the SHA-256 of the six-field canonical
+document, lowercase hex; `-04` states the digest and the exact JSON shape that
+`-03` left to the reader.
+
+Both divergences from the posted draft are still open, unchanged, and still
+named here rather than left to be discovered. The published draft `-03`
+(MUST-T8-9) says an unpinned departure is reported as
+`manifest-terms-mismatch` and fails the audit; this tree reports it and does
+not fail. The difference will be closed in `-04`, with the reason.
+
+The published draft `-03` (MUST-T3-4 / MUST-T6-1) says a Decision Token is
+bound to a hash of the six request fields without naming the octets or the
+digest; this tree binds SHA-256 of the six-field canonical JSON document in
+lowercase hex. A reader who implements `-03` literally will not match a 0.7.0
+token. The difference will be closed in `-04`, with the reason.
+
+**What to change:** send canonical decimal amounts. Delete a `try/catch`
+written for a rethrown decoder refusal, and read the name from the bytes with
+`coseDecodeRefusalHex` where you want to report it. A `false` from a verifier
+means unverified, whatever the reason - it is fail-closed on its own.
+
 ## 0.6.0: named refuse codes, input bounds, and a narrower terms charge
 
 This one breaks. Inputs that used to throw `RangeError` (a truncated CBOR length

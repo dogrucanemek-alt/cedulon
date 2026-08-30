@@ -6,7 +6,7 @@ import {
   type SpendRequest,
 } from "@cedulon/core";
 import { canonical } from "@cedulon/core";
-import { namedDecodeRefusal } from "@cedulon/cose";
+import { coseDecodeRefusalHex } from "@cedulon/cose";
 import {
   isManifestExpired,
   manifestHash,
@@ -23,22 +23,16 @@ import { RailLedger, type RailSettlement } from "./rail.ts";
 
 /**
  * Manifest bytes that hit a decoder bound or a duplicate key are a named
- * refusal, not a signature verdict; the gate turns them into a deny under
- * that name rather than throwing into its caller.
+ * refusal, not a signature verdict, and the gate denies under that name.
+ * Verification itself never throws, so a gate that forgot to ask would still
+ * deny - less precisely, but closed.
  */
 function manifestVerdict(
   manifest: SignedManifest,
   trust: string | undefined,
 ): { ok: boolean; refusal: string | null } {
-  try {
-    return { ok: verifyManifest(manifest, trust), refusal: null };
-  } catch (err) {
-    const name = namedDecodeRefusal(err);
-    if (name === null) {
-      throw err;
-    }
-    return { ok: false, refusal: name };
-  }
+  const ok = verifyManifest(manifest, trust);
+  return { ok, refusal: ok ? null : coseDecodeRefusalHex(manifest.coseHex) };
 }
 
 export {

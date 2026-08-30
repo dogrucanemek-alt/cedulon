@@ -1,4 +1,4 @@
-import { namedDecodeRefusal, sameSpkiKey, toSpkiDer } from "@cedulon/cose";
+import { coseDecodeRefusalHex, sameSpkiKey, toSpkiDer } from "@cedulon/cose";
 import {
   findCheckpointChainBreak,
   findEquivocation,
@@ -140,26 +140,29 @@ export function receiptsInWindow(receipts: SignedReceipt[], cp: SignedCheckpoint
 }
 
 /**
- * A verify call that hits a decoder bound or a duplicate key throws a named
- * refusal (MUST-T4-18, MUST-T4-19). The name must survive to the report: an
- * operator reading "signature failed" for an input the decoder refused cannot
- * tell a limit from a forgery. Anything else thrown is a bug and stays thrown.
+ * Verification answers whether an object is good for anything; when the answer
+ * is no, this asks whether the reason was a bound this profile names
+ * (MUST-T4-18, MUST-T4-19) rather than a signature verdict. An operator reading
+ * "signature failed" for an input the decoder refused cannot tell a limit from
+ * a forgery.
+ *
+ * The question is asked of the bytes rather than caught from the verifier on
+ * purpose: a verifier that threw would put every one of its callers a forgotten
+ * try/catch away from a crash, which is how a 65KB checkpoint took a whole
+ * audit down between one revision and the next. Forgetting to ask here costs a
+ * less specific message, never an exception.
  */
-function verifiesOrRefusal(check: () => boolean): { ok: boolean; refusal: string | null } {
-  try {
-    return { ok: check(), refusal: null };
-  } catch (err) {
-    const name = namedDecodeRefusal(err);
-    if (name === null) {
-      throw err;
-    }
-    return { ok: false, refusal: name };
-  }
+function verifiesOrRefusal(
+  check: () => boolean,
+  coseHex?: string | null,
+): { ok: boolean; refusal: string | null } {
+  const ok = check();
+  return { ok, refusal: ok ? null : coseDecodeRefusalHex(coseHex) };
 }
 
 export function findReceiptChainBreak(receipts: SignedReceipt[]): Finding | null {
   for (let i = 0; i < receipts.length; i += 1) {
-    const v = verifiesOrRefusal(() => verifyReceipt(receipts[i]));
+    const v = verifiesOrRefusal(() => verifyReceipt(receipts[i]), receipts[i].coseHex);
     if (v.refusal !== null) {
       return {
         code: "receipt-chain-break",
@@ -445,7 +448,7 @@ export function findCheckpointTotalMismatches(
 ): Finding[] {
   const findings: Finding[] = [];
   for (const cp of checkpoints) {
-    const v = verifiesOrRefusal(() => verifyCheckpoint(cp));
+    const v = verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex);
     if (!v.ok) {
       findings.push({
         code: "checkpoint-total-mismatch",
@@ -514,10 +517,10 @@ function inclusionFromPinnedLog(
   // unverifiable receipt is left out (MUST-T11-15) - it must not become an
   // uncaught exception that takes the whole audit down with it.
   if (witnessKeyPem === undefined) {
-    return verifiesOrRefusal(() => verifyInclusionReceipt(rec)).ok;
+    return verifiesOrRefusal(() => verifyInclusionReceipt(rec), rec.coseHex).ok;
   }
   const pems = typeof witnessKeyPem === "string" ? [witnessKeyPem] : witnessKeyPem;
-  return pems.some((pem) => verifiesOrRefusal(() => verifyInclusionReceipt(rec, pem)).ok);
+  return pems.some((pem) => verifiesOrRefusal(() => verifyInclusionReceipt(rec, pem), rec.coseHex).ok);
 }
 
 /**
@@ -543,7 +546,7 @@ function verifiedWitnessCheckpoints(
       continue;
     }
     const carried = rec.checkpoint;
-    if (!verifiesOrRefusal(() => verifyCheckpoint(carried)).ok) {
+    if (!verifiesOrRefusal(() => verifyCheckpoint(carried), carried.coseHex).ok) {
       continue;
     }
     out.push(carried);
@@ -631,7 +634,7 @@ function findCountersignFindings(
   const countersigned = input.receipts.filter((r) => r.counterCoseHex);
   for (const r of countersigned) {
     const pinned = input.payeeTrust?.[r.claims.payee];
-    const v = verifiesOrRefusal(() => verifyCounterSignature(r));
+    const v = verifiesOrRefusal(() => verifyCounterSignature(r), r.counterCoseHex);
     if (!v.ok) {
       findings.push({
         code: "countersign-bad",
@@ -905,14 +908,17 @@ export function audit(input: AuditInput): AuditReport {
             ? [input.manifestTrust.publicKeyPem]
             : input.manifestTrust.publicKeyPem;
         const answers = pems.some(
-          (pem) => toSpkiDer(pem) !== null && verifiesOrRefusal(() => verifyManifest(input.manifest!, pem)).ok,
+          (pem) => toSpkiDer(pem) !== null && verifiesOrRefusal(() => verifyManifest(input.manifest!, pem), input.manifest!.coseHex).ok,
         );
         if (!answers) {
+          const refusal = coseDecodeRefusalHex(input.manifest.coseHex);
           findings.push({
             code: "manifest-key-mismatch",
             id: "manifest",
             detail:
-              "the presented Trade Manifest is signed by a key other than the pinned manifest key, or does not verify against it",
+              refusal !== null
+                ? `the presented Trade Manifest was refused: ${refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a key verdict`
+                : "the presented Trade Manifest is signed by a key other than the pinned manifest key, or does not verify against it",
           });
         }
       }
@@ -1164,7 +1170,7 @@ export function audit(input: AuditInput): AuditReport {
   // conditional. Only a checkpoint that verifies gets to make this claim — an
   // unverifiable one has already been reported above.
   for (const cp of attestedCheckpoints) {
-    if (cp.claims.totals === null && verifiesOrRefusal(() => verifyCheckpoint(cp)).ok) {
+    if (cp.claims.totals === null && verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex).ok) {
       warnings.push({
         code: "checkpoint-totals-redacted",
         id: `epoch-${cp.claims.epoch}`,

@@ -111,6 +111,28 @@ function assertRequestHashSplitAligned(upgrading: string, status: string): void 
   assertRequestHashSplitNamed(paragraph, `docs/STATUS.md ${version}`);
 }
 
+/**
+ * Drift the living text the assertion actually reads: the section and paragraph
+ * for the workspace version. These probes used to name 0.6.0's sentences, which
+ * measured the right thing only while 0.6.0 was the workspace version - the
+ * moment the tree moved to 0.7.0 they drifted text nothing checked and reported
+ * a guard that still worked. A probe has to follow the version its assertion
+ * follows.
+ */
+function driftUpgradingSection(upgrading: string, phrase: string): string {
+  const section = upgradeSectionFor(upgrading, workspaceVersion());
+  const drifted = section.replaceAll(phrase, "");
+  assert.notEqual(drifted, section, `fixture did not remove ${phrase} from the UPGRADING section`);
+  return upgrading.replace(section, drifted);
+}
+
+function driftStatusParagraph(status: string, phrase: string): string {
+  const paragraph = statusVersionParagraph(status, workspaceVersion());
+  const drifted = paragraph.replaceAll(phrase, "");
+  assert.notEqual(drifted, paragraph, `fixture did not remove ${phrase} from the STATUS paragraph`);
+  return status.replace(paragraph, drifted);
+}
+
 function mustIdsIn(text: string): Set<string> {
   return new Set([...text.matchAll(/MUST-T\d+-\d+/g)].map((m) => m[0]));
 }
@@ -537,11 +559,7 @@ describe("claims that describe something outside their own file", () => {
   it("RED: UPGRADING without the requestHash split fails before the living files are accepted", () => {
     const upgrading = read("docs/UPGRADING.md");
     const status = read("docs/STATUS.md");
-    const drifted = upgrading.replace(
-      /\nThe published draft `-03` \(MUST-T3-4 \/ MUST-T6-1\)[\s\S]*?with the reason\.\n/,
-      "\n",
-    );
-    assert.notEqual(drifted, upgrading, "fixture did not remove the requestHash split from UPGRADING");
+    const drifted = driftUpgradingSection(upgrading, "SHA-256");
     assert.throws(
       () => assertRequestHashSplitAligned(drifted, status),
       /docs\/UPGRADING\.md \d+\.\d+\.\d+ does not say requestHash is SHA-256/,
@@ -551,11 +569,7 @@ describe("claims that describe something outside their own file", () => {
   it("RED: STATUS's version paragraph without the requestHash split fails before the living files are accepted", () => {
     const upgrading = read("docs/UPGRADING.md");
     const status = read("docs/STATUS.md");
-    const drifted = status.replace(
-      / It also binds `requestHash` as SHA-256 of the[\s\S]*?hash but not the digest\./,
-      "",
-    );
-    assert.notEqual(drifted, status, "fixture did not remove the requestHash split from STATUS");
+    const drifted = driftStatusParagraph(status, "SHA-256");
     assert.throws(
       () => assertRequestHashSplitAligned(upgrading, drifted),
       /docs\/STATUS\.md \d+\.\d+\.\d+ does not say requestHash is SHA-256/,
@@ -595,11 +609,7 @@ describe("claims that describe something outside their own file", () => {
   it("RED: STATUS's version paragraph without the terms split fails before the living files are accepted", () => {
     const upgrading = read("docs/UPGRADING.md");
     const status = read("docs/STATUS.md");
-    const drifted = status.replace(
-      /It also narrows `manifest-terms-mismatch`:[\s\S]*?fail the audit\. /,
-      "",
-    );
-    assert.notEqual(drifted, status, "fixture did not remove the terms split from STATUS");
+    const drifted = driftStatusParagraph(status, "manifest-terms-mismatch");
     assert.throws(
       () => assertTermsSplitAligned(upgrading, drifted),
       /docs\/STATUS\.md \d+\.\d+\.\d+ does not name manifest-terms-mismatch/,
