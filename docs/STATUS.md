@@ -113,6 +113,29 @@ on contain no HTTP client and no socket, and their only dependency outside the
 project is the MCP SDK. A test reads those annotations off the wire, so a tool
 added without them fails the suite instead of failing a review.
 
+Identity on this server is the process boundary, said plainly so nobody reads
+more into it. The stdio transport runs as the user who started the process;
+that account is the principal, and there is no in-band authentication - a
+username or token field would authenticate nothing the OS has not already
+decided, and building one would suggest a separation the transport cannot
+provide. The roles the protocol names are key possession, not accounts:
+
+| Role | Holds | Can |
+|---|---|---|
+| Issuer | the receipt signing key (this server's state file) | sign receipts and checkpoints |
+| Payee | a countersigning key | countersign a receipt it accepts |
+| Witness | a witness key | co-sign checkpoints for transparency |
+| Decision (PDP) | a decision-token key | sign Decision Tokens |
+| Manifest publisher | a manifest key | sign Trade Manifests |
+| Auditor | public pins only, no secret | verify and audit, on a machine the issuer does not control |
+| Operator | the OS account owning the state file | start and stop the server; is the principal |
+
+The auditor row is the product's whole claim, so it is worth repeating: an
+auditor holds nothing secret and runs elsewhere. Two issuers must not share one
+state file - `MUST-T12-3` makes that failure loud rather than silent - and a
+multi-tenant server would be a different product with a database and row-level
+isolation, deliberately not this one.
+
 `@cedulon/base-extract` and `@cedulon/mcp-guard` are not published and are
 marked `private`, so a workspace publish skips them rather than relying on
 this sentence staying true. Both build to `dist` like the other packages;
