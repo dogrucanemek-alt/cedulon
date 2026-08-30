@@ -1,5 +1,5 @@
-import { generateKeyPairSync, sign, verify } from "node:crypto";
-import { sameSpkiKey } from "@cedulon/cose";
+import { generateKeyPairSync, verify } from "node:crypto";
+import { pemSigner, sameSpkiKey } from "@cedulon/cose";
 import { canonical } from "@cedulon/core";
 
 export type RailSettlement = {
@@ -37,7 +37,9 @@ export function signRailExtract(
   publicKeyPem: string,
 ): SignedRailExtract {
   const payload = Buffer.from(canonical(body), "utf8");
-  const signature = sign(null, payload, privateKeyPem).toString("base64");
+  const signature = Buffer.from(pemSigner(privateKeyPem, publicKeyPem).sign(payload)).toString(
+    "base64",
+  );
   return { body, signature, publicKeyPem };
 }
 

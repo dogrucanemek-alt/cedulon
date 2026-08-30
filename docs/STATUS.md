@@ -253,7 +253,8 @@ concurrent pairs lost six receipts with both sides reporting success. The compar
 and the write are under an exclusive lock now. `stateProtection` walks the whole
 path rather than the immediate parent, since a grandparent anyone can write lets
 the parent be renamed away with the key in it, and symlinks are refused at every
-save rather than only at startup.
+save rather than only at startup. The live receipt issuer signs through a
+`Signer` (`pemSigner`); the state file still stores the PEM pair.
 
 The sharpest finding of the whole round came from that lock rather than from the
 audit engine. The server settled, appended the receipt, and saved - so a save

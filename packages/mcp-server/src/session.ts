@@ -19,7 +19,7 @@ import {
 import { PolicyEngine, isValidAmountText, policyDocument, type Policy } from "@cedulon/core";
 import type { SignedManifest } from "@cedulon/manifest";
 import { claimsFromCbor, generateReceiptKeys, receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
-import { decodeCoseSign1, namedDecodeRefusal } from "@cedulon/cose";
+import { decodeCoseSign1, namedDecodeRefusal, pemSigner, type Signer } from "@cedulon/cose";
 import {
   RailLedger,
   gatedSettleWithLedger,
@@ -202,6 +202,7 @@ export class CedulonSession {
   readonly receipts: SignedReceipt[] = [];
   checkpoints: SignedCheckpoint[] = [];
   readonly payer: string;
+  private issuer: Signer;
   private readonly statePath: string | null;
   /** Fingerprint of the state file as this session last saw it. */
   private lastSeenState: string | null = null;
@@ -217,12 +218,14 @@ export class CedulonSession {
       receiptPrivatePem: generated.privateKeyPem,
       receiptPublicPem: generated.publicKeyPem,
     };
+    this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
     if (this.statePath) {
       // Read through on load, a symlink at this path lets whoever placed it
       // decide what this server starts up believing. Refusing the path is the
       // only answer that does not depend on write ordering.
       this.assertNoSymlink();
       this.load();
+      this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
       this.lastSeenState = this.readStateFingerprint();
     }
   }
@@ -305,6 +308,7 @@ export class CedulonSession {
     this.ledger.restore([]);
     this.engine.store.reset();
     this.load();
+    this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
     this.lastSeenState = this.readStateFingerprint();
     const now = new Set(this.receipts.map((r) => r.claims.nonce));
     return { dropped: held.filter((nonce) => !now.has(nonce)) };
@@ -696,11 +700,7 @@ export class CedulonSession {
     const last = this.receipts[this.receipts.length - 1].claims.timestampMs;
     const endMs = Math.max(last + 1, nowMs + 1);
     this.checkpoints = [
-      signCheckpoint(
-        buildCheckpointClaims(1, this.receipts, startMs, endMs, null),
-        this.keys.receiptPrivatePem,
-        this.keys.receiptPublicPem,
-      ),
+      signCheckpoint(buildCheckpointClaims(1, this.receipts, startMs, endMs, null), this.issuer),
     ];
   }
 

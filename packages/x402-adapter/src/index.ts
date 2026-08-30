@@ -6,7 +6,7 @@ import {
   type SpendRequest,
 } from "@cedulon/core";
 import { canonical } from "@cedulon/core";
-import { coseDecodeRefusalHex } from "@cedulon/cose";
+import { coseDecodeRefusalHex, pemSigner } from "@cedulon/cose";
 import {
   isManifestExpired,
   manifestHash,
@@ -254,6 +254,7 @@ function issue(
       timestampMs: nowMs,
     });
   }
+  const issuer = pemSigner(keys.receiptPrivatePem, keys.receiptPublicPem);
   const receipt = signReceipt(
     {
       payer: input.payer,
@@ -269,8 +270,7 @@ function issue(
       prevReceiptHash,
       outcome: "settled",
     },
-    keys.receiptPrivatePem,
-    keys.receiptPublicPem,
+    issuer,
   );
   return {
     status: 200,

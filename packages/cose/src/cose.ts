@@ -1,4 +1,5 @@
-import { createHash, createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, verify } from "node:crypto";
+import { asSigner, type Signer } from "./signer.ts";
 import { asArray, asMap, cborMap, decodeCbor, encodeCbor, hexToBytes, mapGet, namedDecodeRefusal } from "./cbor.ts";
 
 /** RFC 9052 EdDSA. Deprecated for this profile; use Ed25519 (-19). */
@@ -101,15 +102,20 @@ export function sigStructure(protectedHeader: Uint8Array, payload: Uint8Array): 
   return encodeCbor(["Signature1", protectedHeader, new Uint8Array(0), payload]);
 }
 
-export function signCoseSign1(payload: Uint8Array, privateKeyPem: string, contentType: string): Uint8Array {
-  const publicKeyPem = publicKeyPemFromPrivate(privateKeyPem);
+export function signCoseSign1(
+  payload: Uint8Array,
+  key: string | Signer,
+  contentType: string,
+): Uint8Array {
+  const signer =
+    typeof key === "string" ? asSigner(key, publicKeyPemFromPrivate(key)) : key;
   const protectedHeader = encodeProtectedHeader({
     alg: COSE_ALG_ED25519,
-    kid: kidFromPublicKeyPem(publicKeyPem),
+    kid: kidFromPublicKeyPem(signer.publicKeyPem),
     contentType,
   });
   const toBeSigned = sigStructure(protectedHeader, payload);
-  const signature = sign(null, Buffer.from(toBeSigned), privateKeyPem);
+  const signature = signer.sign(toBeSigned);
   return encodeCoseSign1({
     protectedHeader,
     unprotected: {},

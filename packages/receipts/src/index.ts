@@ -1,9 +1,10 @@
-import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
+import { createHash, generateKeyPairSync, verify } from "node:crypto";
 import { AMOUNT_RE, canonical } from "@cedulon/core";
 import {
   CTY_COUNTERSIGN,
   CTY_RECEIPT,
   asMap,
+  asSigner,
   cborMap,
   decodeCbor,
   decodeCoseSign1,
@@ -12,7 +13,10 @@ import {
   sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
+  type Signer,
 } from "@cedulon/cose";
+
+export { pemSigner, type Signer } from "@cedulon/cose";
 
 export type ReceiptOutcome = "settled" | "aborted";
 
@@ -170,11 +174,18 @@ export function signReceiptJson(
   claims: SpendReceiptClaims,
   privateKeyPem: string,
   publicKeyPem: string,
+): SignedReceipt;
+export function signReceiptJson(claims: SpendReceiptClaims, signer: Signer): SignedReceipt;
+export function signReceiptJson(
+  claims: SpendReceiptClaims,
+  key: string | Signer,
+  publicKeyPem?: string,
 ): SignedReceipt {
+  const signer = asSigner(key, publicKeyPem);
   assertClaimConsistency(claims);
   const payload = Buffer.from(canonical(claims), "utf8");
-  const signature = sign(null, payload, privateKeyPem).toString("base64");
-  return { claims, signature, publicKeyPem, encoding: "json" };
+  const signature = Buffer.from(signer.sign(payload)).toString("base64");
+  return { claims, signature, publicKeyPem: signer.publicKeyPem, encoding: "json" };
 }
 
 export function verifyReceiptJson(signed: SignedReceipt, expectedIssuerKeyPem?: string): boolean {
@@ -199,15 +210,22 @@ export function signReceiptCose(
   claims: SpendReceiptClaims,
   privateKeyPem: string,
   publicKeyPem: string,
+): SignedReceipt;
+export function signReceiptCose(claims: SpendReceiptClaims, signer: Signer): SignedReceipt;
+export function signReceiptCose(
+  claims: SpendReceiptClaims,
+  key: string | Signer,
+  publicKeyPem?: string,
 ): SignedReceipt {
+  const signer = asSigner(key, publicKeyPem);
   assertClaimConsistency(claims);
   const payload = claimsToCbor(claims);
-  const cose = signCoseSign1(payload, privateKeyPem, CTY_RECEIPT);
+  const cose = signCoseSign1(payload, signer, CTY_RECEIPT);
   const msg = decodeCoseSign1(cose);
   return {
     claims,
     signature: Buffer.from(msg.signature).toString("base64"),
-    publicKeyPem,
+    publicKeyPem: signer.publicKeyPem,
     encoding: "cose",
     coseHex: Buffer.from(cose).toString("hex"),
   };
@@ -243,11 +261,29 @@ export function signReceipt(
   claims: SpendReceiptClaims,
   privateKeyPem: string,
   publicKeyPem: string,
+  encoding?: ReceiptEncoding,
+): SignedReceipt;
+export function signReceipt(
+  claims: SpendReceiptClaims,
+  signer: Signer,
+  encoding?: ReceiptEncoding,
+): SignedReceipt;
+export function signReceipt(
+  claims: SpendReceiptClaims,
+  key: string | Signer,
+  publicKeyOrEncoding?: string,
   encoding: ReceiptEncoding = "cose",
 ): SignedReceipt {
-  return encoding === "json"
-    ? signReceiptJson(claims, privateKeyPem, publicKeyPem)
-    : signReceiptCose(claims, privateKeyPem, publicKeyPem);
+  if (typeof key === "string") {
+    return encoding === "json"
+      ? signReceiptJson(claims, key, publicKeyOrEncoding as string)
+      : signReceiptCose(claims, key, publicKeyOrEncoding as string);
+  }
+  const enc =
+    publicKeyOrEncoding === "json" || publicKeyOrEncoding === "cose"
+      ? publicKeyOrEncoding
+      : "cose";
+  return enc === "json" ? signReceiptJson(claims, key) : signReceiptCose(claims, key);
 }
 
 /** Adversary/test helper: signs claims that an issuer MUST reject. */
@@ -255,14 +291,21 @@ export function signReceiptUnchecked(
   claims: SpendReceiptClaims,
   privateKeyPem: string,
   publicKeyPem: string,
+): SignedReceipt;
+export function signReceiptUnchecked(claims: SpendReceiptClaims, signer: Signer): SignedReceipt;
+export function signReceiptUnchecked(
+  claims: SpendReceiptClaims,
+  key: string | Signer,
+  publicKeyPem?: string,
 ): SignedReceipt {
+  const signer = asSigner(key, publicKeyPem);
   const payload = claimsToCbor(claims);
-  const cose = signCoseSign1(payload, privateKeyPem, CTY_RECEIPT);
+  const cose = signCoseSign1(payload, signer, CTY_RECEIPT);
   const msg = decodeCoseSign1(cose);
   return {
     claims,
     signature: Buffer.from(msg.signature).toString("base64"),
-    publicKeyPem,
+    publicKeyPem: signer.publicKeyPem,
     encoding: "cose",
     coseHex: Buffer.from(cose).toString("hex"),
   };

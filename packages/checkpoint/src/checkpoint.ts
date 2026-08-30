@@ -8,9 +8,11 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
+  asSigner,
   sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
+  type Signer,
   type CborMap,
   type CborVal,
 } from "@cedulon/cose";
@@ -146,11 +148,18 @@ export function signCheckpoint(
   claims: CheckpointClaims,
   privateKeyPem: string,
   publicKeyPem: string,
+): SignedCheckpoint;
+export function signCheckpoint(claims: CheckpointClaims, signer: Signer): SignedCheckpoint;
+export function signCheckpoint(
+  claims: CheckpointClaims,
+  key: string | Signer,
+  publicKeyPem?: string,
 ): SignedCheckpoint {
-  const cose = signCoseSign1(checkpointToCbor(claims), privateKeyPem, CTY_CHECKPOINT);
+  const signer = asSigner(key, publicKeyPem);
+  const cose = signCoseSign1(checkpointToCbor(claims), signer, CTY_CHECKPOINT);
   return {
     claims,
-    publicKeyPem,
+    publicKeyPem: signer.publicKeyPem,
     encoding: "cose",
     coseHex: Buffer.from(cose).toString("hex"),
   };

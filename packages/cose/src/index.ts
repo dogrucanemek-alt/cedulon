@@ -50,3 +50,4 @@ export {
   type CoseSign1,
   type ProtectedHeader,
 } from "./cose.ts";
+export { asSigner, pemSigner, type Signer } from "./signer.ts";
