@@ -1846,18 +1846,24 @@ Coverage:
   two-branch form this revision specifies rather than the single branch
   the previous one did.
   Some of those cases need POSIX file modes or symbolic links and
-  assert only there. On Windows eight of them skip with a stated
-  reason rather than returning silently, so a green suite on that
-  platform names what it did not cover instead of hiding it: file and
-  directory mode, and symbolic-link refusal. The undo after a failed
-  write is exercised on Windows by making the state file read-only so
-  the atomic rename fails, and the protection report and the refusal to
-  settle without a durable record are checked on both platforms. An
+  assert only there. Continuous integration runs the whole suite as a
+  non-root user on Linux and on macOS, and both assert every case, 311
+  of 311, with none skipped. Windows has no such job: the suite is run
+  there by hand and asserts 303 of the same 311, because file and
+  directory mode and symbolic-link refusal are not the access control
+  on that platform, and the eight cases that measure them skip with a
+  stated reason rather than returning silently. A green suite on
+  Windows therefore names what it did not cover instead of hiding it,
+  and is that much smaller a claim. The undo after a failed write is
+  exercised on Windows too, by making the state file read-only so the
+  atomic rename fails, and the protection report and the refusal to
+  settle without a durable record are checked on all three. An
   independent runner reported the first distinction back from a Linux
-  run after this text claimed otherwise, and this is the third
-  correction to the same sentence: the second added the reasons, and
-  this one removes a claim that the undo was untested after it stopped
-  being true.
+  run after this text claimed otherwise, and the sentence has been
+  corrected once per platform that joined: the second added the
+  reasons, the third removed a claim that the undo was untested after
+  it stopped being true, and this one follows a macOS job that stopped
+  being four files and became the whole suite.
   The witness used in the suite is the in-process append-only log that
   `MAY-T11-6` permits; the implementation has not been run against a
   deployed Transparency Service, and it treats a receipt as a signature

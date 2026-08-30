@@ -3214,34 +3214,34 @@ Internet-Draft                   Cedulon                     August 2026
       T8-9 is published in the two-branch form this revision specifies
       rather than the single branch the previous one did.  Some of those
       cases need POSIX file modes or symbolic links and assert only
-      there.  On Windows eight of them skip with a stated reason rather
-      than returning silently, so a green suite on that platform names
-      what it did not cover instead of hiding it: file and directory
-      mode, and symbolic-link refusal.  The undo after a failed write is
-      exercised on Windows by making the state file read-only so the
-      atomic rename fails, and the protection report and the refusal to
-      settle without a durable record are checked on both platforms.  An
-      independent runner reported the first distinction back from a
-      Linux run after this text claimed otherwise, and this is the third
-      correction to the same sentence: the second added the reasons, and
-      this one removes a claim that the undo was untested after it
-      stopped being true.  The witness used in the suite is the in-
-      process append-only log that MAY-T11-6 permits; the implementation
-      has not been run against a deployed Transparency Service, and it
-      treats a receipt as a signature over a statement, not as a proof
-      of log membership.  The escrow role, reversal, refund, and partial
+      there.  Continuous integration runs the whole suite as a non-root
+      user on Linux and on macOS, and both assert every case, 311 of
+      311, with none skipped.  Windows has no such job: the suite is run
+      there by hand and asserts 303 of the same 311, because file and
+      directory mode and symbolic-link refusal are not the access
+      control on that platform, and the eight cases that measure them
+      skip with a stated reason rather than returning silently.  A green
+      suite on Windows therefore names what it did not cover instead of
+      hiding it, and is that much smaller a claim.  The undo after a
+      failed write is exercised on Windows too, by making the state file
+      read-only so the atomic rename fails, and the protection report
+      and the refusal to settle without a durable record are checked on
+      all three.  An independent runner reported the first distinction
+      back from a Linux run after this text claimed otherwise, and the
+      sentence has been corrected once per platform that joined: the
+      second added the reasons, the third removed a claim that the undo
+      was untested after it stopped being true, and this one follows a
+      macOS job that stopped being four files and became the whole
+      suite.  The witness used in the suite is the in-process append-
+      only log that MAY-T11-6 permits; the implementation has not been
+      run against a deployed Transparency Service, and it treats a
+      receipt as a signature over a statement, not as a proof of log
+      membership.  The escrow role, reversal, refund, and partial
       settlement are not implemented.
 
    Licensing:  Apache-2.0.
 
    Contact:  The author of this document.
-
-   Experience:  Readers of -00, -01 and -02 have reported defects in
-
-
-
-
-
 
 
 
@@ -3250,6 +3250,7 @@ Dogru                     Expires 3 March 2027                 [Page 58]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   Experience:  Readers of -00, -01 and -02 have reported defects in
       each, and every revision has been driven by what they found rather
       than by a plan. -01 fixed a bypass of the completeness claim and a
       gap about which key an extract is checked against. -02 repaired a
@@ -3283,29 +3284,6 @@ Internet-Draft                   Cedulon                     August 2026
    not repeat it.  Versions 0.2.x and earlier predate everything in this
    revision.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Dogru                     Expires 3 March 2027                 [Page 59]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    0.3.0 predated the manifest root and the T12 bound.  It carried three
    defects that only appear away from the platform it was written on,
    which an independent runner found by taking up a standing invitation
@@ -3320,6 +3298,14 @@ Internet-Draft                   Cedulon                     August 2026
    destination. 0.3.1 closes all four.  The manifest root (MUST-T4-15)
    and the gate's refusal to settle against a manifest it cannot
    attribute (MUST-T4-16) were published as 0.4.0 rather than as a
+
+
+
+Dogru                     Expires 3 March 2027                 [Page 59]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    patch: the gate had been answering 200 to an unattributable manifest
    and writing that manifest's hash into the receipt, and refusing it is
    a change in behaviour that a version number ought to announce.
@@ -3353,6 +3339,20 @@ Internet-Draft                   Cedulon                     August 2026
    shape that rethrew those names left a single oversized checkpoint
    able to end an audit by exception rather than by finding.
 
+   MUST-T12-4 is the one exception left in this revision.  It is
+   specified, not executed: the suite and the published server only
+   drive the in-process RailLedger.  There is no authenticated external-
+   rail path in this tree, so the indeterminate outcome and the rule
+   that forbids returning authority without evidence have no red-then-
+   green case.  A reader checking MUST-T12-4 against an installed 0.7.0
+   will not find it.
+
+
+
+
+
+
+
 
 
 
@@ -3361,14 +3361,6 @@ Dogru                     Expires 3 March 2027                 [Page 60]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   MUST-T12-4 is the one exception left in this revision.  It is
-   specified, not executed: the suite and the published server only
-   drive the in-process RailLedger.  There is no authenticated external-
-   rail path in this tree, so the indeterminate outcome and the rule
-   that forbids returning authority without evidence have no red-then-
-   green case.  A reader checking MUST-T12-4 against an installed 0.7.0
-   will not find it.
 
 18.1.  Changes from -03
 
@@ -3411,17 +3403,20 @@ Internet-Draft                   Cedulon                     August 2026
    the manifest, and whether a currency may be case-folded before it is
    compared.  MUST-T10-1 says what an audit with nothing in it reports.
 
+   The acceptance-criteria hash had two readings and no way to signal
+   which one was used, so two implementations would have hashed the same
+   delivery differently.  This revision defines one of them and puts the
+   other out of scope until something can say which is meant.
+
+
+
+
 
 
 Dogru                     Expires 3 March 2027                 [Page 61]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   The acceptance-criteria hash had two readings and no way to signal
-   which one was used, so two implementations would have hashed the same
-   delivery differently.  This revision defines one of them and puts the
-   other out of scope until something can say which is meant.
 
    The verification algorithm now names its data dependencies. -03 named
    one and said nothing else fed another step, which stopped being true
@@ -3466,6 +3461,11 @@ Internet-Draft                   Cedulon                     August 2026
    second is T12, which no reader reported and which is not about an
    adversary at all.
 
+   -02 Section 6.2 already required a verifier to obtain the public key
+   from an authenticated channel (a preconfigured issuer set, a
+   directory, or a transparency statement) and to reject a message whose
+   kid does not match that key (MUST-T4-8).  That rule was general.
+   What -02 did not carry was the verification algorithm that applies it
 
 
 
@@ -3474,11 +3474,6 @@ Dogru                     Expires 3 March 2027                 [Page 62]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   -02 Section 6.2 already required a verifier to obtain the public key
-   from an authenticated channel (a preconfigured issuer set, a
-   directory, or a transparency statement) and to reject a message whose
-   kid does not match that key (MUST-T4-8).  That rule was general.
-   What -02 did not carry was the verification algorithm that applies it
    to each signed object, the separate root inputs a verifier supplies
    out of band, and the error semantics that name a missing, unreadable,
    or mismatched pin.  A companion implementation that followed the
@@ -3522,6 +3517,11 @@ Internet-Draft                   Cedulon                     August 2026
    named so far, all of them stated in Section 10.  A pinned key that
    cannot be decoded MUST NOT fall back to the keys the objects carry
    (MUST-T4-11).  An issuer root may comprise more than one key, and a
+   verifier must accept one that does, so a rotation inside the audited
+   window does not force it to choose between findings against honest
+   receipts and abandoning the pin (MUST-T4-12); the same set-of-keys
+   acceptance applies to a publisher, witness, or rail pin.  The same
+   out-of-band rule reaches the payee countersignature (MUST-T4-13), the
 
 
 
@@ -3530,11 +3530,6 @@ Dogru                     Expires 3 March 2027                 [Page 63]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   verifier must accept one that does, so a rotation inside the audited
-   window does not force it to choose between findings against honest
-   receipts and abandoning the pin (MUST-T4-12); the same set-of-keys
-   acceptance applies to a publisher, witness, or rail pin.  The same
-   out-of-band rule reaches the payee countersignature (MUST-T4-13), the
    transparency witness (MUST-T11-15 and MUST-T11-16), the Decision
    Token, whose consumer issued it and therefore already holds the key
    to check it with (MUST-T6-6), and a presented Trade Manifest (MUST-
@@ -3578,6 +3573,11 @@ Internet-Draft                   Cedulon                     August 2026
    were the presented ones, and MUST-T11-8 requires those to be
    consecutive, so no two of them can share an epoch.  A second copy is
    found in a witness, and nothing brought one in.  And the checkpoint
+   binds a per-currency total for a window while the privacy section
+   counted only receipt fields, so a window total could be published, or
+   withheld, with no stated rule either way.
+
+
 
 
 
@@ -3585,10 +3585,6 @@ Dogru                     Expires 3 March 2027                 [Page 64]
 
 Internet-Draft                   Cedulon                     August 2026
 
-
-   binds a per-currency total for a window while the privacy section
-   counted only receipt fields, so a window total could be published, or
-   withheld, with no stated rule either way.
 
    The repairs are MUST-T11-10 through MUST-T11-14.  The transparency
    receipt is a new optional input; supplying none leaves the verifier
@@ -3634,6 +3630,10 @@ Internet-Draft                   Cedulon                     August 2026
    same, and no revision since has improved on it.
 
    The reporters are named in the Acknowledgments.
+
+
+
+
 
 
 
