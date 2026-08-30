@@ -1128,7 +1128,10 @@ The checkpoint window is half-open `[startMs, endMs)`
 (`MUST-T11-7`). `receiptCount` MUST equal the number of receipts
 (settled and aborted) whose `timestampMs` falls in that window.
 `chainHeadHash` MUST equal `receiptHash` of the last receipt in that
-window, or null if the window is empty (`MUST-T11-2`). Where `totals`
+window - the last link, in issuer order (the `prevReceiptHash` chain,
+as the verification algorithm's step 6 defines it), of the chain
+inside the window, not the last one presented or the latest
+`timestampMs` - or null if the window is empty (`MUST-T11-2`). Where `totals`
 is present it MUST sum only receipts with `outcome` = `settled`; the
 one permitted absence is the signed redaction below.
 
@@ -1355,7 +1358,7 @@ identifiers are not an interoperability surface.
    | yes | yes | attested; a carried key other than the verifying one is `carried-key-mismatch`, a warning, and does not move the receipt |
    | yes | no | excluded from the attested set; still walked and named in step 6 (`receipt-chain-break`, signature-failed detail); its settlement stays uncovered in step 8 |
    | no | no | `issuer-key-mismatch`; excluded; its settlement stays uncovered in step 8 (`MUST-T4-9`, `MUST-T4-10`) |
-   | no pin held | not checked | no signature comparison happens at all - the profile deliberately carries no key to fall back to; receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and accusation-shaped findings take the two-branch severity of `MUST-T8-9` |
+   | no pin held | not checked | no signature comparison happens at all - there is no key to check under, and the keys the objects carry are not a fallback (`MUST-T4-11`); receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and accusation-shaped findings take the two-branch severity of `MUST-T8-9` |
 
    Every cell is a named condition plus a membership decision; no
    cell is a silent removal, and the word "reject" in earlier
@@ -1829,7 +1832,7 @@ requirement text those citations refer to.
 | MUST-T4-11 | Pinned issuer keys MUST be compared by SubjectPublicKeyInfo DER encoding. A pinned key that cannot be decoded MUST be reported as a verifier configuration fault rather than as a mismatch, and where no pinned key decodes, the verifier MUST NOT fall back to the keys the objects carry. |
 | MUST-T4-12 | A verifier MUST accept an issuer, publisher, witness, or rail root comprising more than one key, so that a key rotation inside the audited window does not require it to abandon pinning. |
 | MUST-T4-13 | A payee countersignature MUST NOT be treated as evidence of payee approval unless it verifies against a payee key the verifier obtained out of band. |
-| MUST-T4-14 | Where a verifier has pinned a key for a payee, a settled receipt naming that payee and carrying no countersignature MUST be reported, so that deleting the evidence does not delete the question. |
+| MUST-T4-14 | Where a verifier has pinned a key for a payee, a settled receipt naming that payee and carrying no attributable countersignature MUST be reported, so that deleting the evidence - or substituting an unattributable object for it - does not delete the question. |
 | MUST-T4-15 | A verifier that is presented with a Trade Manifest MUST obtain the publisher public key out of band and MUST verify the manifest signature against that key, not against a key the manifest carries. A pin that cannot be read MUST be reported as `trust-key-unreadable`; a readable pin the manifest does not answer to MUST be reported as `manifest-key-mismatch` and MUST fail the audit. A verifier without such a key that is presented with a Trade Manifest MUST report the completeness guarantee as conditional. An audit presented with no Trade Manifest is not made conditional by this requirement. |
 | MUST-T4-16 | A policy decision point presented with a Trade Manifest it cannot verify against a key supplied out of band MUST refuse the payment. Settling and reporting the doubt afterwards is not available to it: the receipt carries the manifest hash as terms the named party agreed to. |
 | MUST-T4-17 | A verifier presented with a Trade Manifest MUST compare the manifest hash against the `manifestHash` of the receipts presented to the audit, including aborted ones, before any extract window is applied and before any issuer key is applied, and MUST report a presented manifest that no presented receipt references. Verifying who published the terms does not establish that any receipt names them, and whether a hash appears is a question a verifier can answer from a document nobody vouches for. An audit presented with no Trade Manifest is not made conditional by this requirement. |
@@ -1935,7 +1938,7 @@ The verification algorithm states that distinction by behaviour
 | ID | Requirement |
 |---|---|
 | MUST-T11-1 | An epoch checkpoint MUST be COSE-signed and MUST bind epoch number, time window, receipt count, chain-head hash, per-currency totals, and the previous checkpoint hash. |
-| MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the last in-window receipt hash. Where the signed totals are null, MUST-T11-12 governs instead: there is no total to disagree with, the comparison is reported as skipped, and the count and chain-head checks still apply. |
+| MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the hash of the last in-window receipt in issuer order (the `prevReceiptHash` chain). Where the signed totals are null, MUST-T11-12 governs instead: there is no total to disagree with, the comparison is reported as skipped, and the count and chain-head checks still apply. |
 | MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those presented together with those carried by verified witness receipts; the presented chain alone cannot satisfy this requirement, because MUST-T11-8 makes its epochs consecutive. |
 | MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
 | SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
@@ -1943,7 +1946,7 @@ The verification algorithm states that distinction by behaviour
 | MUST-T11-7 | Checkpoint windows MUST be half-open `[startMs, endMs)`. Every chained receipt MUST fall in exactly one window. |
 | MUST-T11-8 | Presented checkpoint epochs MUST be consecutive and adjacent windows MUST meet at `endMs = next.startMs`. |
 | MUST-T11-9 | Prefix-deletion and suppression claims that go beyond the presented chain are conditional on an external transparency witness. A report MUST NOT present a completeness guarantee as settling suppression when no witness was consulted. |
-| MUST-T11-10 | Transparency receipts are an optional, separate input. A verifier given none MUST behave as it did without this input. A receipt MUST have its signature verified before it counts for anything. Where a receipt also carries the statement body, that body MUST NOT be relied on unless its statement hash equals the one the receipt binds and it verifies as a checkpoint; a discarded body does not discard its receipt. |
+| MUST-T11-10 | Witness receipts are an optional, separate input. A verifier given none MUST behave as it did without this input. A receipt MUST have its signature verified before it counts for anything. Where a receipt also carries the statement body, that body MUST NOT be relied on unless its statement hash equals the one the receipt binds and it verifies as a checkpoint; a discarded body does not discard its receipt. |
 | MUST-T11-11 | A verified receipt binding a checkpoint absent from the presented chain MUST be reported as a withheld checkpoint, and MUST NOT be reported as a window coverage failure. A presented checkpoint with no verified receipt, where a witness was supplied, MUST be reported and makes the guarantee conditional. |
 | MUST-T11-12 | Withheld checkpoint totals MUST be encoded as null in the signed payload. A verifier MUST report that the totals comparison was skipped and MUST treat the guarantee as conditional; `receiptCount` and `chainHeadHash` MUST still be checked. |
 | MUST-T11-13 | A redaction asserted outside the signed payload MUST NOT be honoured, and structural claims MUST NOT be redacted. A checkpoint that fails verification MUST NOT be treated as redacted. |
@@ -2098,12 +2101,18 @@ Maturity:
   independent implementation of the reconciliation algorithm is known
   to the author.
 
-: The requirements the last two revisions added came out of five
-  adversarial rounds against the implementation, each one asking a
-  reviewer to break the code rather than to read it, with the reviewer
-  barred from changing it. Four of those rounds found a defect inside
-  the previous round's repair rather than in the original code, which
-  is the reason this section does not describe the result as settled.
+: The requirements -03 and -04 added came out of five adversarial
+  rounds against the implementation, each one asking a reviewer to
+  break the code rather than to read it, with the reviewer barred from
+  changing it. Four of those rounds found a defect inside the previous
+  round's repair rather than in the original code, which is the reason
+  this section does not describe the result as settled. The
+  requirements this revision adds came from a different direction: a
+  reader ran the posted -04 Appendix A vectors against the exact
+  archive bytes in an independent toolchain, reproduced both
+  signatures and the byte-for-byte re-encoding, and filed the
+  first-failure list {{changes-04}} answers - the first verification
+  of this profile's vectors outside the companion codebase.
 
 Coverage:
 : The receipt, checkpoint, extract, reconciliation, and verification
@@ -2213,7 +2222,7 @@ that manifest's hash into the receipt, and refusing it is a change in
 behaviour that a version number ought to announce.
 
 `MUST-T4-17` and `MUST-T8-9` were the exceptions in the previous
-revision and are no longer; `MUST-T12-4` still is. The same independent
+revision and are no longer; `MUST-T12-4`'s reversal branch still is. The same independent
 runner who took up the invitation against 0.4.0 reported that
 attributing a manifest was not the same as establishing that anything
 in the window was spent under it, which is the distinction that
@@ -2241,13 +2250,15 @@ it cannot read, in either the CBOR or the JSON path, after an interim
 shape that rethrew those names left a single oversized checkpoint able
 to end an audit by exception rather than by finding.
 
-`MUST-T12-4` is the one exception left in this revision. It is
-specified, not executed: the suite and the published
-server only drive the in-process `RailLedger`. There is no
-authenticated external-rail path in this tree, so the indeterminate
-outcome and the rule that forbids returning authority without
-evidence have no red-then-green case. A reader checking
-`MUST-T12-4` against an installed 0.7.0 will not find it.
+`MUST-T12-4` is the one exception left in this revision, and it is
+now half an exception. Its extract branch - authenticated rail
+evidence resolving an indeterminate outcome - is executed
+red-then-green against the in-process `RailLedger` and ships in
+0.7.0. Its reversal branch is specified and not executed: there is
+no authenticated external-rail path in this tree, so the rule that
+forbids returning authority without evidence of a completed
+reversing entry has no red-then-green case, and a reader checking
+that branch against an installed 0.7.0 will not find it.
 
 ## Changes from -04 {#changes-04}
 
@@ -2656,6 +2667,22 @@ rather than an independent implementation. Walter Hawkins did not run it; he rea
 reported figures and pressed for the run to be stated precisely enough
 to be repeatable, which is why the conditions and not only the totals
 appear in {{impl-status}}.
+
+Tiago Pinto ran the -04 Appendix A vectors against the exact
+datatracker archive bytes in an independent toolchain before reading
+the text, confirmed both signatures, the SPKI-derived `kid`, and
+deterministic re-encoding byte for byte, and then filed the
+first-failure list that this revision answers: eight points where an
+independent implementation could no longer be built from the text,
+one question, and three mechanical defects. The two-tier witness
+split, the single key-resolution rule, the normative extract shape,
+the issuer-order definition, the boundary allowance, the
+countersignature attribution rule, the counterparty bindings, and the
+delivery binding follow the failure points he named. Iman Schrock
+additionally reran the frozen -04 claims against the archive and the
+package registry, and corrected this document's description of what
+its continuous integration measures; that correction is recorded in
+{{impl-status}} where it landed.
 
 None of them reviewed this text, and any error in it is the author's.
 
