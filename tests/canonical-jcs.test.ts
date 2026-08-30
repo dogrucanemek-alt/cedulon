@@ -60,10 +60,10 @@ describe("canonical() against RFC 8785", () => {
     assert.equal(canonical({ n: 99n }), '{"n":"99"}');
   });
 
-  it("divergence: a lone surrogate is encoded; RFC 8785 §3.2.2.2 requires terminate", () => {
-    // Do not "fix" this to throw without a protocol decision. The
-    // bytes of every existing receipt and extract were produced by
-    // the encoder that is measured here.
-    assert.equal(canonical("\uDEAD"), '"\\udead"');
+  it("a lone surrogate is refused; RFC 8785 §3.2.2.2 requires terminate", () => {
+    // Decision: Tiago inbox 561 + RFC 8785 §3.2.2.2. Existing Appendix A
+    // vectors and fixtures were measured to contain no lone surrogate
+    // before this encoder changed.
+    assert.throws(() => canonical("\uDEAD"), /lone-surrogate/);
   });
 });
