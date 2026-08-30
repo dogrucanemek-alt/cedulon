@@ -902,6 +902,16 @@ neither verifies under the pin nor claims it is
 `issuer-key-mismatch`, excluded, and the settlement it names stays
 uncovered.
 
+The rule, read out per cell (steps 6 and 8 are the verification
+algorithm's):
+
+| Claims the pin (carried key or `kid`) | Verifies under the pin | Result |
+|---|---|---|
+| yes | yes | attested; a carried key other than the verifying one is `carried-key-mismatch`, a warning, and does not move the receipt |
+| yes | no | excluded from the attested set; still walked and named in step 6 (`receipt-chain-break`, signature-failed detail); its settlement stays uncovered in step 8 |
+| no | no | `issuer-key-mismatch`; excluded; its settlement stays uncovered in step 8 (`MUST-T4-9`, `MUST-T4-10`) |
+| no pin held | not checked | no signature comparison happens at all - there is no key to check under, and the keys the objects carry are not a fallback (`MUST-T4-11`); receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and accusation-shaped findings take the two-branch severity of `MUST-T8-9` |
+
 A verifier MUST accept an issuer root that is a set of keys rather
 than a single key (`MUST-T4-12`). An issuer that rotates its key
 mid-window otherwise
@@ -1350,19 +1360,11 @@ identifiers are not an interoperability surface.
    ask one question: does the signature verify under a pinned issuer
    key. `kid` routes the check to a candidate key and carries no
    authority of its own; the carried key is not consulted for
-   membership at all ({{issuer-root}}). The table reads the answer
-   out per cell:
-
-   | Claims the pin (carried key or `kid`) | Verifies under the pin | Result |
-   |---|---|---|
-   | yes | yes | attested; a carried key other than the verifying one is `carried-key-mismatch`, a warning, and does not move the receipt |
-   | yes | no | excluded from the attested set; still walked and named in step 6 (`receipt-chain-break`, signature-failed detail); its settlement stays uncovered in step 8 |
-   | no | no | `issuer-key-mismatch`; excluded; its settlement stays uncovered in step 8 (`MUST-T4-9`, `MUST-T4-10`) |
-   | no pin held | not checked | no signature comparison happens at all - there is no key to check under, and the keys the objects carry are not a fallback (`MUST-T4-11`); receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and accusation-shaped findings take the two-branch severity of `MUST-T8-9` |
-
-   Every cell is a named condition plus a membership decision; no
-   cell is a silent removal, and the word "reject" in earlier
-   revisions meant nothing more than a cell of this table.
+   membership at all. The resolution table in {{issuer-root}} reads
+   the answer out per cell. Every cell there is a named condition
+   plus a membership decision; no cell is a silent removal, and the
+   word "reject" in earlier revisions meant nothing more than a cell
+   of that table.
    Where a countersignature is present,
    {{payee-root}} governs what it establishes (`MUST-T4-13`,
    `MUST-T4-14`). Where a Trade Manifest is presented, {{manifest-root}}
