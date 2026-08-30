@@ -37,8 +37,11 @@ function manifestVerdict(
 
 export {
   RailLedger,
+  EXTRACT_SCOPE_FIELDS,
+  SETTLEMENT_CORE_FIELDS,
   generateExtractKeys,
   railExtractEncodeRefusal,
+  railExtractShapeRefusal,
   signRailExtract,
   verifyRailExtract,
   type RailExtractBody,

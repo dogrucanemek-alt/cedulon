@@ -1,6 +1,74 @@
 import { generateKeyPairSync, verify } from "node:crypto";
 import { pemSigner, sameSpkiKey } from "@cedulon/cose";
-import { canonical, jcsEncodeRefusal } from "@cedulon/core";
+import { canonical, isValidAmountText, jcsEncodeRefusal } from "@cedulon/core";
+
+/** Table 8 settlement members. A rail may add members; it may not rename these. */
+export const SETTLEMENT_CORE_FIELDS = ["ref", "amount", "currency", "timestampMs"] as const;
+/** Extract scope members the verifier walks. Extra members are free. */
+export const EXTRACT_SCOPE_FIELDS = [
+  "accountId",
+  "railId",
+  "windowStartMs",
+  "windowEndMs",
+  "settlements",
+] as const;
+
+/**
+ * Why this extract body is not the Table 8 / scope shape, by name, or null
+ * when it is. signRailExtract and verifyRailExtract both ask this before
+ * they encode or check a signature, so a renamed core member and a missing
+ * window are the same refusal on both sides.
+ */
+export function railExtractShapeRefusal(body: unknown): string | null {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return "missing-extract-body";
+  }
+  const rec = body as Record<string, unknown>;
+  for (const field of EXTRACT_SCOPE_FIELDS) {
+    if (!(field in rec)) {
+      return `missing-extract-${field}`;
+    }
+  }
+  if (typeof rec.accountId !== "string") {
+    return "missing-extract-accountId";
+  }
+  if (typeof rec.railId !== "string") {
+    return "missing-extract-railId";
+  }
+  if (typeof rec.windowStartMs !== "number") {
+    return "missing-extract-windowStartMs";
+  }
+  if (typeof rec.windowEndMs !== "number") {
+    return "missing-extract-windowEndMs";
+  }
+  if (!Array.isArray(rec.settlements)) {
+    return "missing-extract-settlements";
+  }
+  for (const row of rec.settlements) {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) {
+      return "renamed-settlement-ref";
+    }
+    const s = row as Record<string, unknown>;
+    for (const field of SETTLEMENT_CORE_FIELDS) {
+      if (!(field in s)) {
+        return `renamed-settlement-${field}`;
+      }
+    }
+    if (typeof s.ref !== "string") {
+      return "renamed-settlement-ref";
+    }
+    if (!isValidAmountText(s.amount)) {
+      return "renamed-settlement-amount";
+    }
+    if (typeof s.currency !== "string") {
+      return "renamed-settlement-currency";
+    }
+    if (typeof s.timestampMs !== "number") {
+      return "renamed-settlement-timestampMs";
+    }
+  }
+  return null;
+}
 
 export type RailSettlement = {
   ref: string;
@@ -36,6 +104,10 @@ export function signRailExtract(
   privateKeyPem: string,
   publicKeyPem: string,
 ): SignedRailExtract {
+  const shape = railExtractShapeRefusal(body);
+  if (shape !== null) {
+    throw new Error(shape);
+  }
   const payload = Buffer.from(canonical(body), "utf8");
   const signature = Buffer.from(pemSigner(privateKeyPem, publicKeyPem).sign(payload)).toString(
     "base64",
@@ -49,6 +121,9 @@ export function signRailExtract(
  * consistent: any key can sign any body, including its own.
  */
 export function verifyRailExtract(signed: SignedRailExtract, expectedRailKeyPem?: string): boolean {
+  if (railExtractShapeRefusal(signed.body) !== null) {
+    return false;
+  }
   if (expectedRailKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedRailKeyPem)) {
     return false;
   }
@@ -76,7 +151,7 @@ export function verifyRailExtract(signed: SignedRailExtract, expectedRailKeyPem?
  * coseDecodeRefusal; this is the RFC 8785 sibling.
  */
 export function railExtractEncodeRefusal(signed: SignedRailExtract): string | null {
-  return jcsEncodeRefusal(signed.body);
+  return railExtractShapeRefusal(signed.body) ?? jcsEncodeRefusal(signed.body);
 }
 
 function extractBodyOf(rows: RailSettlement[], accountId: string, railId: string): RailExtractBody {
