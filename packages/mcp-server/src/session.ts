@@ -23,12 +23,15 @@ import { decodeCoseSign1, namedDecodeRefusal, pemSigner, type Signer } from "@ce
 import {
   RailLedger,
   gatedSettleWithLedger,
+  verifyRailExtract,
   type AdapterKeys,
   type RailSettlement,
+  type SignedRailExtract,
 } from "@cedulon/x402-adapter";
 import {
   foldJournal,
   type ExternalRail,
+  type FoldedIntent,
   type JournalEntry,
 } from "./journal.ts";
 
@@ -40,6 +43,16 @@ export type SubmitExternalOpts = {
   /** Test-only: throw after this phase is durable. */
   crashAfter?: "prepared" | "submitted";
 };
+
+export type IndeterminateEvidence = {
+  extract: SignedRailExtract;
+  railKeyPem: string;
+};
+
+export type ResolveIndeterminateOutcome =
+  | { ok: true; receipt: SignedReceipt }
+  | { ok: true; released: true }
+  | { ok: false; reason: string };
 
 // Read from package.json rather than restating it: the version reaches clients
 // through `initialize` and through `cedulon_status`, and a second hand-written
@@ -346,6 +359,74 @@ export class CedulonSession {
       if (message === "cedulon-rail-crash" || message === "cedulon-injected-crash") {
         throw err;
       }
+      if (message.startsWith("cedulon-state-locked")) {
+        return { ok: false, reason: `state-locked:${message.split(":")[1] ?? "unknown"}` };
+      }
+      if (message === "cedulon-state-lock-io") {
+        return { ok: false, reason: "state-io" };
+      }
+      throw err;
+    }
+    return locked;
+  }
+
+  /**
+   * Re-present an indeterminate row to a rail that has declared
+   * `idempotentSubmit`. The default is to refuse: a second submit on a
+   * non-idempotent rail is a double-spend, not a recovery.
+   */
+  retryIndeterminate(nonce: string, rail: ExternalRail, nowMs = Date.now()): SpendOutcome {
+    let locked: SpendOutcome | null = null;
+    try {
+      locked = this.withStateLock(() => {
+        if (this.statePath) {
+          this.assertNoSymlink();
+          if (this.readStateFingerprint() !== this.lastSeenState) {
+            return { ok: false, reason: "state-conflict" };
+          }
+        }
+        return this.retryIndeterminateLocked(nonce, rail, nowMs);
+      });
+    } catch (err) {
+      const message = (err as Error)?.message ?? "";
+      if (message === "cedulon-rail-crash" || message === "cedulon-injected-crash") {
+        throw err;
+      }
+      if (message.startsWith("cedulon-state-locked")) {
+        return { ok: false, reason: `state-locked:${message.split(":")[1] ?? "unknown"}` };
+      }
+      if (message === "cedulon-state-lock-io") {
+        return { ok: false, reason: "state-io" };
+      }
+      throw err;
+    }
+    return locked;
+  }
+
+  /**
+   * Leave `indeterminate` only with authenticated extract evidence.
+   * Presence of a matching row settles late; authenticated full-window
+   * absence returns the reserve. A reversing-entry object does not exist
+   * on the wire, so that branch is not implemented here.
+   */
+  resolveIndeterminate(
+    nonce: string,
+    evidence: IndeterminateEvidence,
+    nowMs = Date.now(),
+  ): ResolveIndeterminateOutcome {
+    let locked: ResolveIndeterminateOutcome | null = null;
+    try {
+      locked = this.withStateLock(() => {
+        if (this.statePath) {
+          this.assertNoSymlink();
+          if (this.readStateFingerprint() !== this.lastSeenState) {
+            return { ok: false, reason: "state-conflict" };
+          }
+        }
+        return this.resolveIndeterminateLocked(nonce, evidence, nowMs);
+      });
+    } catch (err) {
+      const message = (err as Error)?.message ?? "";
       if (message.startsWith("cedulon-state-locked")) {
         return { ok: false, reason: `state-locked:${message.split(":")[1] ?? "unknown"}` };
       }
@@ -860,6 +941,119 @@ export class CedulonSession {
     );
   }
 
+  private retryIndeterminateLocked(nonce: string, rail: ExternalRail, nowMs: number): SpendOutcome {
+    const folded = this.foldedIntent(nonce);
+    if (!folded || folded.phase !== "indeterminate") {
+      return { ok: false, reason: "not-indeterminate" };
+    }
+    if (rail.idempotentSubmit !== true) {
+      return { ok: false, reason: "rail-not-idempotent" };
+    }
+    const row = {
+      nonce: folded.nonce,
+      amount: folded.amount,
+      currency: folded.currency,
+      payee: folded.payee,
+    };
+    this.appendJournal({ ...row, phase: "submitted", atMs: nowMs });
+    this.save();
+    const result = rail.submit(row);
+    if (result === "failed") {
+      this.engine.release(folded.nonce, BigInt(folded.amount));
+      this.appendJournal({ ...row, phase: "failed", atMs: nowMs });
+      this.save();
+      return { ok: false, reason: "rail-failed" };
+    }
+    return this.recordExternalSettled(row, nowMs, nowMs);
+  }
+
+  private resolveIndeterminateLocked(
+    nonce: string,
+    evidence: IndeterminateEvidence,
+    nowMs: number,
+  ): ResolveIndeterminateOutcome {
+    const folded = this.foldedIntent(nonce);
+    if (!folded || folded.phase !== "indeterminate") {
+      return { ok: false, reason: "not-indeterminate" };
+    }
+    if (!verifyRailExtract(evidence.extract, evidence.railKeyPem)) {
+      return { ok: false, reason: "evidence-unverified" };
+    }
+    const submittedAt = this.lastSubmittedAtMs(nonce);
+    if (submittedAt === null) {
+      return { ok: false, reason: "not-indeterminate" };
+    }
+    const { windowStartMs, windowEndMs, settlements } = evidence.extract.body;
+    if (submittedAt < windowStartMs || submittedAt >= windowEndMs) {
+      return { ok: false, reason: "window-not-covering" };
+    }
+    const ref = `x402-${nonce}`;
+    const hit = settlements.find((row) => row.ref === ref);
+    if (hit) {
+      if (hit.amount !== folded.amount || hit.currency !== folded.currency) {
+        return { ok: false, reason: "evidence-mismatch" };
+      }
+      const receipt = this.recordExternalSettled(
+        {
+          nonce: folded.nonce,
+          amount: folded.amount,
+          currency: folded.currency,
+          payee: folded.payee,
+        },
+        nowMs,
+        hit.timestampMs,
+      );
+      return receipt;
+    }
+    this.engine.release(folded.nonce, BigInt(folded.amount));
+    this.appendJournal({
+      nonce: folded.nonce,
+      amount: folded.amount,
+      currency: folded.currency,
+      payee: folded.payee,
+      phase: "failed",
+      atMs: nowMs,
+    });
+    this.save();
+    return { ok: true, released: true };
+  }
+
+  private recordExternalSettled(
+    row: { nonce: string; amount: string; currency: string; payee: string },
+    nowMs: number,
+    receiptTimestampMs: number,
+  ): { ok: true; receipt: SignedReceipt } {
+    const receipt = this.cutSettledReceipt(
+      { amount: row.amount, currency: row.currency, payee: row.payee, nonce: row.nonce },
+      receiptTimestampMs,
+    );
+    this.receipts.push(receipt);
+    this.ledger.record({
+      ref: receipt.claims.x402PaymentRef ?? `x402-${row.nonce}`,
+      amount: row.amount,
+      currency: row.currency,
+      timestampMs: receiptTimestampMs,
+    });
+    this.rebuildCheckpoint(nowMs);
+    this.appendJournal({ ...row, phase: "settled", atMs: nowMs });
+    this.save();
+    return { ok: true, receipt };
+  }
+
+  private foldedIntent(nonce: string): FoldedIntent | undefined {
+    return foldJournal(this.journal).find((row) => row.nonce === nonce);
+  }
+
+  private lastSubmittedAtMs(nonce: string): number | null {
+    let at: number | null = null;
+    for (const entry of this.journal) {
+      if (entry.nonce === nonce && entry.phase === "submitted") {
+        at = entry.atMs;
+      }
+    }
+    return at;
+  }
+
   private appendJournal(entry: JournalEntry): void {
     this.journal.push(entry);
   }
@@ -902,9 +1096,9 @@ export class CedulonSession {
       this.checkpoints = [];
       return;
     }
-    const startMs = this.receipts[0].claims.timestampMs;
-    const last = this.receipts[this.receipts.length - 1].claims.timestampMs;
-    const endMs = Math.max(last + 1, nowMs + 1);
+    const times = this.receipts.map((r) => r.claims.timestampMs);
+    const startMs = Math.min(...times);
+    const endMs = Math.max(Math.max(...times) + 1, nowMs + 1);
     this.checkpoints = [
       signCheckpoint(buildCheckpointClaims(1, this.receipts, startMs, endMs, null), this.issuer),
     ];

@@ -83,7 +83,7 @@ independent runner found on Linux, and a fourth found while repairing them.
 supplied key attributes, where it used to settle against the key the manifest
 carried. The same release adds that fifth trust root to the audit path, which
 reports rather than refuses, and names the external-rail bound on T12 in the
-draft. The state file may carry a journal of external-settlement intents; `indeterminate` lives only there. `MUST-T12-4` is still not executed end-to-end — the evidence exits are not built, and `gatedSettle` still only drives the in-process `RailLedger`.
+draft. The extract-evidence exits from `indeterminate` are built and red-then-green: authenticated presence settles late, authenticated full-window absence releases the authority. The reversing-entry branch of `MUST-T12-4` still has no evidence object, so T12-4 is executed for the extract branch and open for the reversal branch.
 
 Checked from npm rather than from this tree: a clean install of
 `@cedulon/mcp-server@0.7.0` answers `initialize` reporting `0.7.0`. A clean
