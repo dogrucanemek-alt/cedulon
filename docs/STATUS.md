@@ -219,6 +219,19 @@ bound, an `allowedTools` list a caller could skip by omitting the field, a nonce
 padding that made two different requests share one receipt nonce, and a state
 file that stored the signing key with no mode and no atomic write.
 
+Round 4 is the first one filed against posted archive bytes rather
+than a working tree. A reader ran the -04 Appendix A vectors against
+the exact datatracker bytes before reading, confirmed both signatures
+and byte-for-byte re-encoding, and then filed a first-failure list:
+eight points where an independent implementation could no longer be
+built from the text, one question, and three mechanical defects. The
+sharpest was an appendable countersignature that could fail an honest
+audit - the same lesson `MUST-T8-9` already encoded, missed one object
+over. The repairs landed in two waves on master (eleven commits to
+`94f07e9`, two more to `c263834`), every guard red before its fix, and
+`spec/draft-dogru-cedulon-05.md` carries the text side; see
+`docs/EXTERNAL_REVIEW.md` Round 4 for the per-item record.
+
 A second pass over the same round, prompted by an independent reader, found that
 half a fix is its own failure mode. Setting a forged receipt aside for matching
 was not enough while the totals, the head and the chain still walked the whole

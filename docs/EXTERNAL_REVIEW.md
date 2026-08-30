@@ -181,3 +181,116 @@ The implementation also now emits finding codes that -00 does not define:
 `extract-key-mismatch`, `extract-scope-mismatch`, `extract-settlement-mismatch`,
 `trust-key-unreadable`, and `malformed-amount`. The finding code table moves to
 -01 with them.
+
+## Round 4 — draft-04 archive bytes, 2026-08-30
+
+Tiago Pinto ran the Appendix A vectors against the exact IETF archive
+bytes (Python 3.14.4, cbor2 6.1.4, cryptography 50.0.1) before reading
+for failure points: both Ed25519 signatures verify, the SPKI-derived
+kid matches, and deterministic re-encoding reproduces the protected
+headers and payloads byte for byte. He then filed a first-failure list
+- the point where an independent implementation could no longer be
+built from the text - rather than a prose review: eight failures, one
+question, three mechanical points. Every repair below landed with its
+guard red before the fix; the branch history is the evidence.
+
+### 1. Transparency receipt path vs RFC 9942 - fixed
+
+Section 11.3 described a hash comparison while citing RFC 9942
+verification mechanics, and the evidence bundle never carried the
+candidate-entry bytes Section 5.2.1 consumes. Split into two named
+tiers: the witness receipt (a co-signature over the statement hash)
+and log membership (candidate bytes + inclusion proof, verified per
+9942 §5.2.1 against a witness-signed tree head, exact receipt match
+required). The in-process witness became a Merkle tree issuing
+inclusion proofs, and absence of tier-2 inputs is reported as
+not exercised. Code: `c263834`. Text: the -05 witness-section
+rewrite, MUST-T11-18/19.
+
+### 2. Key resolution in the unpinned branch - fixed
+
+Step 4 said "reject" and "report issuer-key-mismatch" in the same
+breath. Measured cell by cell (`a65a40a`), then decided: membership in
+the attested set follows verification under the pinned root, read out
+in one table, each cell a named condition plus a membership decision.
+Measuring the cells surfaced a sibling of break 6: the carried PEM is
+an unsigned surface, and swapping it off an honest receipt used to
+drop the receipt. Now `carried-key-mismatch`, a warning, and the
+receipt stays attested (`c263834`). Text: -05 step 4 table +
+issuer-root rule.
+
+### 3. Rail Extract construction - fixed
+
+"The member names of that body are the rail's to define" contradicted
+Table 8. One runtime schema now sits behind signing, verification and
+the refusal channel (`00a791b`); Table 8 names are normative, added
+members are free, and -05 carries the full signed body shape in JSON
+terms, taken from the implementation.
+
+### 4. Issuer order, chainHeadHash, zero checkpoints - fixed
+
+"Issuer order" defined as the prevReceiptHash chain order; the
+verifier rebuilds the chain from links and a shuffled presentation
+yields a byte-identical finding set (`e5ebe22`). `chainHeadHash` binds
+to the chain's last in-window link. Zero-checkpoint and open-epoch
+behaviour measured (fail-closed window-coverage findings) and written
+into -05 as measured; the false "nothing else feeds another step"
+sentence replaced by the maintained dependency list.
+
+### 5. Window boundary vs two honest clocks - fixed
+
+A design gap, not a text gap: both honest verifiers reached the same
+false finding at the boundary. Probes locked the failure (`5735c62`),
+then the decision landed (`c263834`): ref binding governs membership
+first, and an unmatched item within the extract-declared `clockSkewMs`
+of the edge is `boundary-deferred`, resolving against the adjacent
+window and hardening when that window arrives without it.
+MUST-T10-17.
+
+### 6. Appendable countersignature fails an honest audit - fixed
+
+The sharpest point on the list, and the mirror of MUST-T8-9's own
+lesson. Attack named red (`e6c76f6`), then fixed (`b630e83`): an
+unattributable countersignature is discarded as approval evidence
+with a warning, `countersign-missing` stays open under a pin, and the
+verdict on the untouched issuer receipt cannot be moved by anything
+appended beside it. Measured from both directions in the gate: the
+pre-repair tree flipped ok=true to false on a junk blob; the repaired
+tree holds the finding set byte-identical.
+
+### 7. Counterparty binding - fixed
+
+A manifest by A, a receipt paying B, and a matching extract row all
+passed. Probes locked it (`5735c62`), then two optional bindings and
+one scope statement landed (`c263834`): manifest `payee` compared
+under MUST-T8-9's two branches, settlement-record `beneficiary`
+compared against the receipt payee, and `counterparty-unbound`
+reported when neither is present - a scope record, not an accusation.
+
+### 8. Delivery hash bound to nothing - fixed
+
+Optional `deliveredHash` (claim -70402) in the countersignature
+payload binds the delivered bytes to the exact issuer receipt bytes
+under the payee key; the acceptanceCriteriaHash comparison is
+signed-to-signed (`delivery-mismatch`, MAY-T8-11), and the
+Introduction's delivery question is conditioned on that evidence
+(`c263834`; -05 text).
+
+### Question: whose assertion is "allowed by policy"
+
+The Receipt Issuer's signed assertion; the Decision Token is consumed
+at the gate and the audit never sees it. -05 states the boundary in
+those terms and names a receipt-to-token binding as a possible
+extension rather than smuggling it in.
+
+### Mechanical
+
+Table 3's hash grammar (64 lowercase hex) moved into signers and
+validators, named per claim (`cbcee11`, `2601b34`); the -04 Appendix A
+receipt vector that violated it is registered as the counted split
+V-T4-appendix-a-policy-hash and -05 regenerates the vector with a
+computed digest. MAY-T8-9 renumbered MAY-T8-10. The lone-surrogate
+escape permission removed: encoder refuses by name, verify surfaces
+report rather than throw (`d58594b`, `09959af`), and a guard scans
+the tree's vectors and fixtures for lone surrogates before the rule
+can move again.
