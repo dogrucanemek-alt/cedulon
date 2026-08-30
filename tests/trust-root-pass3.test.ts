@@ -176,7 +176,7 @@ describe("trust roots, third pass", () => {
     );
     assert.equal(
       onDisk.status().stateProtection,
-      process.platform === "win32" ? "unprotected-on-this-platform" : "owner-only",
+      process.platform === "win32" ? "encrypted-at-rest" : "owner-only",
     );
   });
 });

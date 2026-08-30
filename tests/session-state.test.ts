@@ -17,33 +17,30 @@ function spendOnce(session: CedulonSession, nonce: string) {
 }
 
 describe("session state file", () => {
-  it("40 RED then GREEN: the state file holding the private key is not world-readable", (t) => {
-    // The receipt private key is written into this file in the clear. On POSIX
-    // there is no ambient per-user secret to encrypt it with, so the file mode
-    // is the whole of the protection - which makes an unstated mode a decision,
-    // not an omission. (Windows does hold such a secret - DPAPI - which is why
-    // its skip below is a feature gap with a named exit, not a shrug.)
+  it("40 RED then GREEN: the state file holding the private key is not world-readable", () => {
+    // POSIX: the PEM is in the file and the mode is the whole protection.
+    // Windows: the PEM is a CurrentUser DPAPI blob, measured, not a mode bit.
     const statePath = tempStatePath();
     const session = new CedulonSession({ statePath });
     assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
 
-    const saved = JSON.parse(readFileSync(statePath, "utf8"));
-    assert.ok(saved.keys.receiptPrivatePem.includes("PRIVATE KEY"), "the key really is in there");
+    const raw = readFileSync(statePath, "utf8");
+    const saved = JSON.parse(raw);
 
     if (process.platform === "win32") {
-      // Measured, not assumed: on Windows the same call leaves 0666 and the mode
-      // bits are not the access control - the directory ACL is, and this project
-      // does not set it. Asserting 0600 here would be a green light for a
-      // protection that is not present on this platform.
-      t.skip("POSIX file mode is not the access control on Windows; the directory ACL is, and this server does not set it");
-      return;
+      assert.equal(saved.keys.receiptPrivatePem, undefined, "the PEM is not on disk");
+      assert.equal(typeof saved.keys.receiptPrivateDpapi, "string");
+      assert.equal(raw.includes("-----BEGIN PRIVATE KEY-----"), false);
+      assert.equal(session.stateProtection(), "encrypted-at-rest");
+    } else {
+      assert.ok(saved.keys.receiptPrivatePem.includes("PRIVATE KEY"), "the key really is in there");
+      assert.equal(statSync(statePath).mode & 0o777, 0o600, "state file is owner-only");
+      assert.equal(
+        statSync(join(statePath, "..")).mode & 0o777,
+        0o700,
+        "the directory the server created is owner-only too",
+      );
     }
-    assert.equal(statSync(statePath).mode & 0o777, 0o600, "state file is owner-only");
-    assert.equal(
-      statSync(join(statePath, "..")).mode & 0o777,
-      0o700,
-      "the directory the server created is owner-only too",
-    );
   });
 
   it("41 RED then GREEN: a save that fails midway cannot leave a truncated state file", () => {

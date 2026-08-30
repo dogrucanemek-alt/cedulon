@@ -237,7 +237,7 @@ describe("trust roots, fifth pass", () => {
     assert.equal(stripped.guarantee, "conditional");
   });
 
-  it("68 RED then GREEN: a state file is only owner-only if its directory is too", (t) => {
+  it("68 RED then GREEN: a state file is only owner-only if its directory is too", () => {
     // Mode 0600 on the file says who can open it. A world-writable directory says
     // who can replace it, which reaches the same private key by another route.
     const dir = mkdtempSync(join(tmpdir(), "cedulon-dir-"));
@@ -249,17 +249,16 @@ describe("trust roots, fifth pass", () => {
     );
 
     if (process.platform === "win32") {
-      assert.equal(session.status().stateProtection, "unprotected-on-this-platform");
-      t.skip("directory mode is not the access control on Windows; the unprotected report is asserted, the POSIX flip is not");
-      return;
+      assert.equal(session.status().stateProtection, "encrypted-at-rest");
+    } else {
+      assert.equal(session.status().stateProtection, "owner-only");
+      chmodSync(dirname(statePath), 0o777);
+      assert.equal(
+        session.status().stateProtection,
+        "unprotected-on-this-platform",
+        "anyone who can write the directory can replace the file",
+      );
     }
-    assert.equal(session.status().stateProtection, "owner-only");
-    chmodSync(dirname(statePath), 0o777);
-    assert.equal(
-      session.status().stateProtection,
-      "unprotected-on-this-platform",
-      "anyone who can write the directory can replace the file",
-    );
   });
 
   it("69 RED then GREEN: a missing state file is not the same answer as an unprotected one", () => {

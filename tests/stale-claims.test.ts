@@ -294,12 +294,8 @@ const EARLY_RETURN_ALLOWLIST: Record<string, string> = {};
 
 /** Why each counted id is a skip, not a silent pass. */
 const COUNTED_EARLY_EXITS: Record<string, string> = {
-  "40": "POSIX file mode is not the access control on Windows",
   "42": "directory symlink EPERM/EACCES; TMPDIR through a link is unmeasurable here",
-  "60": "POSIX directory mode is not the access control on Windows",
-  "68": "POSIX directory mode is not the access control on Windows",
   "70": "file symlink EPERM on this host",
-  "75": "POSIX directory mode is not the access control on Windows",
   "76": "directory symlink EPERM on this host",
   "83": "lock symlink EPERM on this host",
 };

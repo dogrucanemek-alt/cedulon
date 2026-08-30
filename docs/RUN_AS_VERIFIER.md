@@ -12,11 +12,11 @@ Run as an ordinary user, not as root. Several cases make a directory
 unwritable and then expect a payment to be refused, and root writes to an
 unwritable directory regardless of its mode, so those cases report the payment
 as having succeeded instead. In a container that means `--user` or a `su` to a
-normal account; the author lost a run to this. Eight cases skip on Windows
-with a reason, so a green suite there cannot hide them as passes: file and
-directory mode (40, 60, 68, 75) and symbolic-link refusal (42, 70, 76, 83). Those
-are POSIX access-control and symlink privileges this server does not emulate;
-the suite names them instead of asserting a protection that is not present.
+normal account; the author lost a run to this. Four cases skip on Windows
+when the host cannot create a symbolic link (42, 70, 76, 83). File and
+directory mode cases (40, 60, 68, 75) now measure the DPAPI wrap of the
+issuer key rather than skipping. A green suite there still cannot hide a
+symlink skip as a pass.
 The undo after a failed write (80, 81) is exercised on Windows by marking the
 state file read-only so the atomic rename fails. A green suite on Windows is
 still a smaller claim than a green suite on Linux, and the report says which
@@ -308,10 +308,11 @@ The MCP server exposes the same choice: `cedulon_verify_receipt` takes
 `expectIssuerKeyPem` and `expectPayeeKeyPem`, and reports
 `checkedAgainstSuppliedKey` so a caller cannot mistake the weaker answer for the
 stronger one. `cedulon_status` reports `stateProtection`, read back off the file rather than
-inferred from the platform: `owner-only` when the file really carries mode 0600,
-`unprotected-on-this-platform` otherwise - Windows, where the call succeeds and
-the access control is the directory ACL this server does not set, and any mount
-that ignores POSIX modes, such as a Windows drive seen from WSL - and
+inferred from the platform: `encrypted-at-rest` when the issuer key is a
+measured DPAPI blob, `owner-only` when the file really carries mode 0600,
+`unprotected-on-this-platform` otherwise - a clear PEM on a platform whose
+mode bits are not the access control, and any mount that ignores POSIX
+modes, such as a Windows drive seen from WSL - and
 `in-memory` when no state path is configured, and `absent` when the path holds
 no file yet, which is a different fact from a file with no protection. The
 directory counts too: mode 0600 says who can open the file, and a directory

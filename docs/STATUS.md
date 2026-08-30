@@ -4,13 +4,14 @@
 pre-release suite as a non-root user and asserts every case: 314 of 314, none
 skipped, on both. `npx tsc --noEmit` is silent; `npm run audit` exits 0 and the
 four bypass demos fail as designed. Windows runs the same suite in CI on a
-hosted runner and asserts 310 of the same 314: the four POSIX-mode cases skip
-with a stated reason, because file and directory modes are not the access
-control on that platform. The four symbolic-link cases assert there because
-the hosted runner may create symlinks; on a Windows machine without that
-privilege they skip too, with the same discipline, which is the eight-case
-set `docs/RUN_AS_VERIFIER.md` describes. A green run on Windows is that much
-smaller a claim. While the workspace
+hosted runner and asserts 310 of the same 314: the four POSIX-mode cases
+used to skip because file and directory modes are not the access control
+on that platform; they now measure the DPAPI wrap of the issuer key on
+this host. The four symbolic-link cases assert in hosted CI because that
+runner may create symlinks; on a Windows machine without that privilege
+they skip too, with the same discipline. A green run on Windows is still
+a smaller claim than Linux. The CI sentence above is the last hosted
+count; it is not restated as a new total here. While the workspace
 version is ahead of npm, `npm run test:all` also carries one deliberate red -
 the gate that refuses to call a prepared version published; `npm run
 test:pre-release` is the green one until the publish. `docs/RUN_AS_VERIFIER.md`
@@ -284,18 +285,16 @@ counterpart for receipts and checkpoints (`MUST-T4-9`), for decision tokens
 (`MUST-T6-6`) and for inclusion receipts (`MUST-T11-15`). That draft is posted
 on the IETF datatracker.
 
-Measured on this Windows host, 28–29 August 2026: `stateProtection` on a
-fresh state file is `unprotected-on-this-platform` (cases 56 / 60 / 68). The
-mode call succeeds and the bits are not the access control. A spend whose
-`CEDULON_STATE_PATH` was `\\localhost\C$\…` (the administrative share that
-already exists on this machine) also succeeded and also reported
-`unprotected-on-this-platform` — same user, same volume, UNC spelling. That
-is not a second principal and not a foreign SMB share. Not measured, and
-why it will not be measured on this host: a second Windows user reading the
-file — `ACER` and `Guest` exist, this session has no password and will not
-create one. PID reuse on a stale lock — the lock stores a pid and treats a
-live pid as a holder; Windows will not be forced to recycle that number onto
-an unrelated process from this session. `demo:unguarded` remains the
-intentional hole.
+On Windows the issuer private key is written as a CurrentUser DPAPI blob
+(`keys.receiptPrivateDpapi`); the rest of the state file stays clear.
+`stateProtection` reports `encrypted-at-rest` only after the file is
+re-read as a blob and this process has unprotected it and signed with it.
+A blob that cannot be opened is `cedulon-state-key-unreadable` and does
+not mint a replacement key. POSIX still writes the PEM. macOS Keychain
+is not built. The hosted Windows job's last published count is unchanged
+in the opening paragraph until that job is measured again.
+
+Not measured on this host: a second Windows user reading the file, and
+PID reuse on a stale lock. `demo:unguarded` remains the intentional hole.
 
 To reproduce any of the above, see `docs/RUN_AS_VERIFIER.md`.

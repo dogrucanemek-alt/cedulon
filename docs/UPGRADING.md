@@ -280,26 +280,27 @@ lose a receipt quietly.
 - `cedulon_audit` takes the same four roots as `audit()`.
 - `cedulon_status` reports `stateProtection`, read off the file rather than
   guessed from the platform: `owner-only`, `unprotected-on-this-platform`,
-  `absent`, or `in-memory`.
+  `encrypted-at-rest`, `absent`, or `in-memory`.
+- On Windows the issuer private key is wrapped with DPAPI (`CurrentUser`)
+  before it is written. The rest of the state file stays clear. The optional
+  entropy is the UTF-8 bytes of `cedulon-state-v1` (not a secret; it only
+  keeps this app's blobs apart from other CurrentUser data). A file that
+  already holds a blob is never rewritten as a PEM. A blob that cannot be
+  unprotected refuses to open (`cedulon-state-key-unreadable`) and does not
+  mint a replacement key. POSIX still writes the PEM.
 - The state path is refused if anything on it is a symlink.
 
 ## What is still open, on purpose
 
-- On Windows the file mode call succeeds and protects nothing; the access control
-  there is the directory ACL and this server does not set it. `stateProtection`
-  says `unprotected-on-this-platform` rather than pretending otherwise. Cases 40,
-  60, 68 and 75 skip on Windows for that reason: they measure POSIX file and
-  directory modes, which this platform does not use. This is a platform feature
-  gap, not a conformance gap - the draft requires reporting the protection
-  actually obtained, and that is asserted on every platform. The named exit is
-  not ACL emulation but DPAPI: Windows does hold a per-user OS secret this
-  server could encrypt the state file with. That belongs to the key-protection
-  part of the key-lifecycle design, not to a mode bit, and these four cases
-  stay skipped until that design lands. Cases 42, 70, 76 and 83 skip
-  when the host cannot create a symbolic link (Windows without Developer Mode
-  returns `EPERM`). Cases 80 and 81, the undo after a failed write, do run on
+- On Windows the issuer private key is a CurrentUser DPAPI blob
+  (`encrypted-at-rest` when that wrap is measured). Cases 40, 60, 68 and 75
+  now assert the blob and the report rather than skipping. POSIX file and
+  directory modes are still not the access control there; the mode-bit half of
+  those cases stays on Linux. Cases 42, 70, 76 and 83 skip when the host
+  cannot create a symbolic link (Windows without Developer Mode returns
+  `EPERM`). Cases 80 and 81, the undo after a failed write, do run on
   Windows: a read-only state file makes the atomic rename fail the same way a
-  POSIX directory mode 0500 does.
+  POSIX directory mode 0500 does. macOS Keychain wrapping is not built.
 - `demo:unguarded` still allows 100 payments with no gate. That is the hole the
   rest of the demos exist to show closed.
 - SMB and UNC shares, and a second Windows user account reading the state file,

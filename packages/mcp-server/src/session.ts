@@ -34,6 +34,7 @@ import {
   type FoldedIntent,
   type JournalEntry,
 } from "./journal.ts";
+import { protectPrivatePem, unprotectPrivatePem } from "./dpapi.ts";
 
 export type { ExternalRail, ExternalSubmitRow, JournalEntry, JournalPhase, FoldedIntent } from "./journal.ts";
 export { foldJournal, MockExternalRail } from "./journal.ts";
@@ -89,14 +90,16 @@ export type AuditArgs = {
 /**
  * Whether the file holding this server's signing key is protected by the OS.
  * `owner-only` is a mode this platform enforces; `unprotected-on-this-platform`
- * is Windows, where the same call succeeds and protects nothing because the
- * access control there is the directory ACL, which this server does not set.
+ * is a file whose mode bits are not the access control, or a clear PEM on a
+ * platform that could not wrap it. `encrypted-at-rest` is measured: the file
+ * holds a DPAPI blob and this process has unprotected it and signed with it.
  */
 export type StateProtection =
   | "in-memory"
   | "absent"
   | "owner-only"
-  | "unprotected-on-this-platform";
+  | "unprotected-on-this-platform"
+  | "encrypted-at-rest";
 
 export type StatusReport = {
   version: string;
@@ -156,10 +159,16 @@ export type VerifyArgs = {
   payeePublicKeyPem?: string;
 };
 
+type PersistedKeys = {
+  receiptPublicPem: string;
+  receiptPrivatePem?: string;
+  receiptPrivateDpapi?: string;
+};
+
 type Persisted = {
   version: 1;
   nextDecision: number;
-  keys: AdapterKeys;
+  keys: PersistedKeys;
   receipts: SignedReceipt[];
   settlements: RailSettlement[];
   checkpoints: SignedCheckpoint[];
@@ -233,6 +242,10 @@ export class CedulonSession {
   readonly journal: JournalEntry[] = [];
   readonly payer: string;
   private issuer: Signer;
+  /** DPAPI blob last written or loaded. Save writes this; it does not re-protect. */
+  private sealedPrivate: string | null = null;
+  /** Unprotect succeeded in this process (load or first-save roundtrip). */
+  private keyUnprotectOk = false;
   private readonly statePath: string | null;
   /** Fingerprint of the state file as this session last saw it. */
   private lastSeenState: string | null = null;
@@ -450,6 +463,8 @@ export class CedulonSession {
     this.receipts.length = 0;
     this.checkpoints = [];
     this.journal.length = 0;
+    this.sealedPrivate = null;
+    this.keyUnprotectOk = false;
     this.ledger.restore([]);
     this.engine.store.reset();
     this.load();
@@ -562,6 +577,21 @@ export class CedulonSession {
       // protection", and an operator acting on the second would be chasing a
       // permission problem that does not exist.
       return "absent";
+    }
+    try {
+      const parsed = JSON.parse(readFileSync(this.statePath, "utf8")) as Persisted;
+      const blob = parsed.keys?.receiptPrivateDpapi;
+      const pem = parsed.keys?.receiptPrivatePem;
+      if (
+        typeof blob === "string" &&
+        blob.length > 0 &&
+        pem === undefined &&
+        this.keyUnprotectOk
+      ) {
+        return "encrypted-at-rest";
+      }
+    } catch {
+      // Unreadable JSON is not a protection claim; the mode walk still answers.
     }
     if ((file.mode & 0o777) !== 0o600) {
       return "unprotected-on-this-platform";
@@ -1125,8 +1155,23 @@ export class CedulonSession {
     if (parsed.version !== 1) {
       throw new Error("cedulon-state-version");
     }
-    this.keys.receiptPrivatePem = parsed.keys.receiptPrivatePem;
     this.keys.receiptPublicPem = parsed.keys.receiptPublicPem;
+    const blob = parsed.keys.receiptPrivateDpapi;
+    if (typeof blob === "string" && blob.length > 0) {
+      const pem = unprotectPrivatePem(blob);
+      if (pem === null) {
+        throw new Error("cedulon-state-key-unreadable");
+      }
+      this.keys.receiptPrivatePem = pem;
+      this.sealedPrivate = blob;
+      this.keyUnprotectOk = true;
+    } else if (typeof parsed.keys.receiptPrivatePem === "string") {
+      this.keys.receiptPrivatePem = parsed.keys.receiptPrivatePem;
+      this.sealedPrivate = null;
+      this.keyUnprotectOk = false;
+    } else {
+      throw new Error("cedulon-state-key-unreadable");
+    }
     this.receipts.splice(0, this.receipts.length, ...parsed.receipts);
     this.checkpoints = parsed.checkpoints;
     for (const row of parsed.settlements) {
@@ -1154,7 +1199,7 @@ export class CedulonSession {
     const payload: Persisted = {
       version: 1,
       nextDecision: (this.engine as unknown as { nextDecision: number }).nextDecision,
-      keys: this.keys,
+      keys: this.keysForDisk(),
       receipts: this.receipts,
       settlements: this.ledger.extract(),
       checkpoints: this.checkpoints,
@@ -1167,9 +1212,10 @@ export class CedulonSession {
       },
       journal: this.journal,
     };
-    // The receipt private key is in this payload in the clear: there is no
-    // secret to encrypt it with here, so the file mode is the whole protection.
-    // And writeFileSync truncates before it writes - a crash in between leaves a
+    // On Windows the private key is a DPAPI blob already in hand; this write
+    // does not Protect again. POSIX still writes the PEM, and so does a first
+    // Windows save that could not wrap the key.
+    // writeFileSync truncates before it writes - a crash in between leaves a
     // short file that the next start would read as the whole ledger. Write to a
     // temporary name in the same directory, then rename: on POSIX and on NTFS
     // the swap is atomic, so a reader sees the old file or the new one.
@@ -1177,6 +1223,36 @@ export class CedulonSession {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     this.assertNoSymlink();
     this.writeLocked(dir, payload);
+  }
+
+  private keysForDisk(): PersistedKeys {
+    if (this.sealedPrivate) {
+      return {
+        receiptPublicPem: this.keys.receiptPublicPem,
+        receiptPrivateDpapi: this.sealedPrivate,
+      };
+    }
+    let blob: string | null = null;
+    try {
+      blob = protectPrivatePem(this.keys.receiptPrivatePem);
+    } catch {
+      blob = null;
+    }
+    if (blob) {
+      const back = unprotectPrivatePem(blob);
+      if (back === this.keys.receiptPrivatePem) {
+        this.sealedPrivate = blob;
+        this.keyUnprotectOk = true;
+        return {
+          receiptPublicPem: this.keys.receiptPublicPem,
+          receiptPrivateDpapi: blob,
+        };
+      }
+    }
+    return {
+      receiptPublicPem: this.keys.receiptPublicPem,
+      receiptPrivatePem: this.keys.receiptPrivatePem,
+    };
   }
 
   private writeLocked(dir: string, payload: Persisted): void {

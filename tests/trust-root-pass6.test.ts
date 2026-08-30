@@ -186,31 +186,37 @@ describe("trust roots, sixth pass", () => {
     assert.equal(report.guarantee, "conditional");
   });
 
-  it("75 RED then GREEN: owner-only means every directory on the way, not just the last one", (t) => {
+  it("75 RED then GREEN: owner-only means every directory on the way, not just the last one", () => {
     // Mode 0600 says who can open the file and the parent says who can replace
     // it - but a grandparent anyone can write lets the parent itself be renamed
     // away, taking the private key with it and putting a decoy in its place.
     if (process.platform === "win32") {
-      t.skip("POSIX directory modes are not the access control on Windows; measured on Linux");
-      return;
-    }
-    const grand = mkdtempSync(join(tmpdir(), "cedulon-grand-"));
-    const parent = join(grand, "inner");
-    mkdirSync(parent, { mode: 0o700 });
-    const statePath = join(parent, "state.json");
-    const session = new CedulonSession({ statePath });
-    assert.equal(
-      session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-") }, 1).ok,
-      true,
-    );
-    assert.equal(session.status().stateProtection, "owner-only");
+      const path = join(mkdtempSync(join(tmpdir(), "cedulon-grand-")), "state.json");
+      const session = new CedulonSession({ statePath: path });
+      assert.equal(
+        session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-") }, 1).ok,
+        true,
+      );
+      assert.equal(session.status().stateProtection, "encrypted-at-rest");
+    } else {
+      const grand = mkdtempSync(join(tmpdir(), "cedulon-grand-"));
+      const parent = join(grand, "inner");
+      mkdirSync(parent, { mode: 0o700 });
+      const statePath = join(parent, "state.json");
+      const session = new CedulonSession({ statePath });
+      assert.equal(
+        session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-") }, 1).ok,
+        true,
+      );
+      assert.equal(session.status().stateProtection, "owner-only");
 
-    chmodSync(grand, 0o777);
-    assert.equal(
-      session.status().stateProtection,
-      "unprotected-on-this-platform",
-      "whoever can write the grandparent can rename the parent out from under this file",
-    );
+      chmodSync(grand, 0o777);
+      assert.equal(
+        session.status().stateProtection,
+        "unprotected-on-this-platform",
+        "whoever can write the grandparent can rename the parent out from under this file",
+      );
+    }
   });
 
   it("76 RED then GREEN: a symlink is refused when saving, and so is a symlinked directory", (t) => {

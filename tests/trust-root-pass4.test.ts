@@ -239,7 +239,7 @@ describe("trust roots, fourth pass", () => {
     );
   });
 
-  it("60 RED then GREEN: state protection is measured on the file, not guessed from the platform", (t) => {
+  it("60 RED then GREEN: state protection is measured on the file, not guessed from the platform", () => {
     // The claim was derived from process.platform, so on a mount that ignores
     // POSIX modes - a Windows drive seen from WSL - the server reported
     // owner-only over a world-readable file holding its private key.
@@ -251,15 +251,14 @@ describe("trust roots, fourth pass", () => {
     );
 
     if (process.platform === "win32") {
+      assert.equal(session.status().stateProtection, "encrypted-at-rest");
+    } else {
+      assert.equal(session.status().stateProtection, "owner-only");
+      // A mount that ignores the mode is indistinguishable from a platform that
+      // does, unless the claim is read back off the file.
+      chmodSync(statePath, 0o777);
       assert.equal(session.status().stateProtection, "unprotected-on-this-platform");
-      t.skip("chmod is not the access control on Windows; the unprotected report is asserted, the POSIX flip is not");
-      return;
     }
-    assert.equal(session.status().stateProtection, "owner-only");
-    // A mount that ignores the mode is indistinguishable from a platform that
-    // does, unless the claim is read back off the file.
-    chmodSync(statePath, 0o777);
-    assert.equal(session.status().stateProtection, "unprotected-on-this-platform");
   });
 
   it("61 RED then GREEN: a second writer cannot silently drop the first writer's receipt", () => {
