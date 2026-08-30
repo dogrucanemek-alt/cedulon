@@ -226,7 +226,8 @@ describe("trust roots, fifth pass", () => {
 
     const forged = counterSign(plain, attacker.privateKeyPem, attacker.publicKeyPem, honest.publicKeyPem);
     const caught = audit({ ...base, receipts: [forged] });
-    assert.ok(caught.findings.some((f) => f.code === "countersign-key-mismatch"));
+    assert.ok(caught.warnings.some((f) => f.code === "countersign-key-mismatch"));
+    assert.equal(caught.ok, true);
 
     // The attacker deletes the countersignature instead of forging one.
     const stripped = audit({ ...base, receipts: [plain] });

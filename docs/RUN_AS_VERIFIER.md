@@ -251,9 +251,11 @@ A fourth, when receipts carry payee countersignatures: `payeeTrust` maps each
 payee to the key you hold for them. `counterCoseHex` and `payeePublicKeyPem`
 travel beside the issuer signature without being covered by it, so anyone
 holding an honest receipt can append a countersignature of their own. Unpinned,
-that reads as payee approval; the report warns with
-`unauthenticated-countersigner`, and a pinned payee whose key does not match is
-`countersign-key-mismatch`.
+that is not payee approval; the report warns with
+`unauthenticated-countersigner`. A pinned payee whose countersignature fails
+verify, or is by another key, is `countersign-bad` or `countersign-key-mismatch`
+as a warning: the bytes cannot be attributed to that payee, so they are
+discarded as approval and do not fail the audit.
 
 `issuerTrust.publicKeyPem` takes a list as well as a single key. An issuer that
 rotated its key mid-window otherwise produces a wall of findings against honest
@@ -321,9 +323,9 @@ refused outright, since whoever placed the link would otherwise decide what this
 server starts up believing.
 
 `payeeTrust` is an expectation as well as a check: name a payee key and a settled
-receipt for that payee with no countersignature is reported as
-`countersign-missing`. Otherwise deleting the countersignature - or a forgery
-that failed - would delete the question with it.
+receipt for that payee with no *attributable* countersignature is reported as
+`countersign-missing`. Garbage and a foreign key are discarded, so they leave
+the question open the same way a missing countersignature does.
 
 A note on what `guarantee` means, because it is easy to read as a verdict. It is
 a statement about the evidence, not about the books: `conditional` means some

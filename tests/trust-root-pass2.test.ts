@@ -246,9 +246,10 @@ describe("issuer trust root, second pass", () => {
       payeeTrust: { [good.claims.payee]: payee.publicKeyPem },
     });
     assert.ok(
-      named.findings.some((f) => f.code === "countersign-key-mismatch"),
+      named.warnings.some((f) => f.code === "countersign-key-mismatch"),
       "a countersignature from a key that is not the payee's is named",
     );
+    assert.equal(named.ok, true);
 
     const real = counterSign(good, payee.privateKeyPem, payee.publicKeyPem);
     const green = audit({

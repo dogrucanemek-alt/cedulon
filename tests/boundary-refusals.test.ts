@@ -142,12 +142,12 @@ describe("named refusals do not crash the surfaces that carry them", () => {
   it("RED then GREEN: an oversized countersignature is refused by name", () => {
     const r = { ...signed(), counterCoseHex: "00".repeat(70_000), payeePublicKeyPem: k.publicKeyPem };
     const report = audit({ receipts: [r], checkpoints: [] });
-    const named = report.findings.find(
+    const named = [...report.findings, ...report.warnings].find(
       (f) => f.code === "countersign-bad" && f.detail.includes("cbor-too-large"),
     );
     assert.ok(
       named,
-      `expected countersign-bad naming cbor-too-large, got: ${report.findings.map((f) => `${f.code}:${f.detail}`).join(" | ")}`,
+      `expected countersign-bad naming cbor-too-large, got: ${[...report.findings, ...report.warnings].map((f) => `${f.code}:${f.detail}`).join(" | ")}`,
     );
   });
 

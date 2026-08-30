@@ -449,7 +449,8 @@ describe("new detections — RED then GREEN", () => {
       checkpoints: [oneCheckpoint(k, [bad])],
       settlements: settlementsOf([bad]),
     });
-    assert.equal(red.findings.some((f) => f.code === "countersign-bad"), true);
+    assert.equal(red.ok, true);
+    assert.equal(red.warnings.some((f) => f.code === "countersign-bad"), true);
     const green = audit({
       receipts: [good],
       checkpoints: [oneCheckpoint(k, [good])],

@@ -622,28 +622,30 @@ function findTransparencyWitness(
 
 /**
  * A countersignature travels beside the issuer signature without being covered
- * by it, so anyone holding an honest receipt can append one of their own and it
- * reads as the payee having approved the payment. Checking it against the key it
- * carries answers a question that answers itself; the payee key has to come from
- * the verifier. Findings go into `findings`; the return value is the warnings.
+ * by it, so anyone holding an honest receipt can append one of their own. An
+ * unverified countersignature cannot be attributed to a pinned payee, so it is
+ * discarded as approval evidence and reported as a warning. Adding one must
+ * not change the audit's fail/pass result.
  */
-function findCountersignFindings(
-  input: { receipts: SignedReceipt[]; payeeTrust?: PayeeTrustPins },
-  findings: Finding[],
-): Finding[] {
+function findCountersignFindings(input: {
+  receipts: SignedReceipt[];
+  payeeTrust?: PayeeTrustPins;
+}): Finding[] {
   const warnings: Finding[] = [];
   const countersigned = input.receipts.filter((r) => r.counterCoseHex);
+  const approved = new Set<string>();
   for (const r of countersigned) {
     const pinned = input.payeeTrust?.[r.claims.payee];
     const v = verifiesOrRefusal(() => verifyCounterSignature(r), r.counterCoseHex);
     if (!v.ok) {
-      findings.push({
+      warnings.push({
         code: "countersign-bad",
         id: r.claims.nonce,
+        severity: "warn",
         detail:
           v.refusal !== null
-            ? `payee countersignature on nonce=${r.claims.nonce} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`
-            : `payee countersignature on nonce=${r.claims.nonce} failed verify`,
+            ? `payee countersignature on nonce=${r.claims.nonce} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict; unattributable, discarded`
+            : `payee countersignature on nonce=${r.claims.nonce} failed verify; unattributable, discarded`,
       });
       continue;
     }
@@ -652,23 +654,22 @@ function findCountersignFindings(
     }
     const carried = r.payeePublicKeyPem;
     if (carried === undefined || !sameSpkiKey(carried, pinned)) {
-      findings.push({
+      warnings.push({
         code: "countersign-key-mismatch",
         id: r.claims.nonce,
-        detail: `the countersignature on nonce=${r.claims.nonce} is by a key other than the one pinned for payee ${r.claims.payee}, so it is not that payee approving the payment`,
+        severity: "warn",
+        detail: `the countersignature on nonce=${r.claims.nonce} is by a key other than the one pinned for payee ${r.claims.payee}, so it is not that payee approving the payment; unattributable, discarded`,
       });
+      continue;
     }
+    approved.add(r.claims.nonce);
   }
   // Naming a payee key is the verifier saying it expects that payee's word on
-  // these payments. Dropping the countersignature would otherwise drop the
-  // question with it, so deleting the evidence - or a failed forgery - would
-  // read as nothing to answer.
+  // these payments. A garbage or foreign countersignature is not that word, so
+  // the expectation stays open - otherwise appending junk would delete the
+  // question the pin asked.
   for (const r of input.receipts) {
-    if (
-      isSettled(r) &&
-      !r.counterCoseHex &&
-      input.payeeTrust?.[r.claims.payee] !== undefined
-    ) {
+    if (isSettled(r) && input.payeeTrust?.[r.claims.payee] !== undefined && !approved.has(r.claims.nonce)) {
       warnings.push({
         code: "countersign-missing",
         id: r.claims.nonce,
@@ -1133,10 +1134,10 @@ export function audit(input: AuditInput): AuditReport {
     ? input.checkpoints.filter((cp) => attestsIssuer!(cp.publicKeyPem))
     : input.checkpoints;
   warnings.push(
-    ...findCountersignFindings(
-      { receipts: issuerPinUsable ? attested : input.receipts, payeeTrust: input.payeeTrust },
-      findings,
-    ),
+    ...findCountersignFindings({
+      receipts: issuerPinUsable ? attested : input.receipts,
+      payeeTrust: input.payeeTrust,
+    }),
   );
   const chain = findReceiptChainBreak(attested);
   if (chain) findings.push(chain);
@@ -1211,7 +1212,6 @@ export function audit(input: AuditInput): AuditReport {
       f.code === "extract-scope-mismatch" ||
       f.code === "extract-settlement-mismatch" ||
       f.code === "issuer-key-mismatch" ||
-      f.code === "countersign-key-mismatch" ||
       f.code === "manifest-key-mismatch",
   );
   return {
