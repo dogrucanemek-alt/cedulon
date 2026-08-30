@@ -52,6 +52,7 @@ export type ExternalSubmitRow = {
 };
 
 export type ExternalRail = {
+  readonly idempotentSubmit: boolean;
   submit(row: ExternalSubmitRow): "settled" | "failed";
 };
 
@@ -59,16 +60,24 @@ export type ExternalRail = {
  * Test double. `outcome` is public so a crash can be injected without
  * reaching into the session: set it to `"crash"` and `submit` throws
  * `cedulon-rail-crash` after the caller has already written `submitted`.
+ * `idempotentSubmit` defaults to false — retry must not reach `submit`.
  */
 export class MockExternalRail implements ExternalRail {
+  readonly idempotentSubmit: boolean;
   outcome: "settled" | "failed" | "crash";
   lastRow: ExternalSubmitRow | null = null;
+  submitCalls = 0;
 
-  constructor(outcome: "settled" | "failed" | "crash" = "settled") {
+  constructor(
+    outcome: "settled" | "failed" | "crash" = "settled",
+    opts?: { idempotentSubmit?: boolean },
+  ) {
     this.outcome = outcome;
+    this.idempotentSubmit = opts?.idempotentSubmit ?? false;
   }
 
   submit(row: ExternalSubmitRow): "settled" | "failed" {
+    this.submitCalls += 1;
     this.lastRow = row;
     if (this.outcome === "crash") {
       throw new Error("cedulon-rail-crash");
