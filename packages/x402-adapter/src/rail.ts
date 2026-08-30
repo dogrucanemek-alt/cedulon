@@ -50,8 +50,15 @@ export function verifyRailExtract(signed: SignedRailExtract, expectedRailKeyPem?
   if (expectedRailKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedRailKeyPem)) {
     return false;
   }
-  const payload = Buffer.from(canonical(signed.body), "utf8");
   try {
+    // Encoding the body is part of verifying it, so it is inside the try. A
+    // body carrying a value RFC 8785 has no encoding for - a non-finite
+    // number, which `JSON.parse("1e309")` produces without a syntax error -
+    // is a document outside this specification, and the answer to it is
+    // "not verified", not an exception thrown through the caller. The
+    // producer side is the opposite: signRailExtract must refuse to sign
+    // what it cannot encode, and it still does.
+    const payload = Buffer.from(canonical(signed.body), "utf8");
     return verify(null, payload, signed.publicKeyPem, Buffer.from(signed.signature, "base64"));
   } catch {
     return false;

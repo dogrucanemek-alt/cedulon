@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { audit } from "@cedulon/audit";
 import { PolicyEngine } from "@cedulon/core";
 import { coseDecodeRefusalHex, hexToBytes, verifyCoseSign1 } from "@cedulon/cose";
 import { wrapToolsCall } from "@cedulon/mcp-guard";
-import { gatedSettle } from "@cedulon/x402-adapter";
-import { generateReceiptKeys, signReceipt, type SpendReceiptClaims } from "@cedulon/receipts";
+import { gatedSettle, verifyRailExtract } from "@cedulon/x402-adapter";
+import { generateReceiptKeys, signReceipt, signReceiptJson, verifyReceiptJson, type SpendReceiptClaims } from "@cedulon/receipts";
 import { findCheckpointChainBreak, findEquivocation, signCheckpoint, verifyCheckpoint } from "@cedulon/checkpoint";
 import { verifyDecisionToken } from "@cedulon/core";
 import { signManifest } from "@cedulon/manifest";
@@ -315,5 +318,109 @@ describe("the manifest signer holds the amount grammar signReceipt holds", () =>
     }
     assert.doesNotThrow(() => signManifest(body("0"), k.privateKeyPem, k.publicKeyPem));
     assert.doesNotThrow(() => signManifest(body("1"), k.privateKeyPem, k.publicKeyPem));
+  });
+});
+
+describe("the JSON verifiers answer on input RFC 8785 cannot encode", () => {
+  // The COSE class was closed first, and the RFC 8785 sibling was missed:
+  // canonical() sat outside the try in verifyRailExtract and
+  // verifyReceiptJson, so a body carrying a non-finite number threw through
+  // audit(). `JSON.parse("1e309")` yields Infinity without a syntax error, so
+  // an unsigned extract file is enough to reach it.
+  const k = generateReceiptKeys();
+  const INF = JSON.parse("1e309") as number;
+
+  it("RED then GREEN: an extract carrying a non-finite number is unverified, not thrown", () => {
+    const extract = {
+      body: { accountId: "a", railId: "r", windowStartMs: INF, windowEndMs: 2, settlements: [] },
+      signature: "AA",
+      publicKeyPem: k.publicKeyPem,
+    };
+    assert.equal(verifyRailExtract(extract as never), false);
+    const report = audit({ receipts: [], checkpoints: [], extract: extract as never });
+    assert.ok(report, "the audit must return a report, not throw");
+    assert.equal(report.guarantee, "conditional");
+  });
+
+  it("RED then GREEN: a JSON receipt carrying a non-finite number is unverified, not thrown", () => {
+    const signed = signReceiptJson(
+      {
+        payer: "p",
+        payee: "q",
+        amount: "1",
+        currency: "USD",
+        policyHash: "aa",
+        manifestHash: null,
+        noManifest: true,
+        x402PaymentRef: null,
+        timestampMs: 1,
+        nonce: "n".padEnd(16, "0"),
+        prevReceiptHash: null,
+        outcome: "aborted",
+      },
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const bad = { ...signed, claims: { ...signed.claims, timestampMs: INF } };
+    assert.equal(verifyReceiptJson(bad as never), false);
+    assert.ok(audit({ receipts: [bad as never], checkpoints: [] }), "the audit must return a report");
+    const session = new CedulonSession({ statePath: null });
+    assert.doesNotThrow(() => session.verify({ receipt: bad as never }));
+  });
+
+  it("the producer still refuses to sign what it cannot encode", () => {
+    // The asymmetry is deliberate: a verifier reports, a producer refuses.
+    assert.throws(
+      () =>
+        signReceiptJson(
+          {
+            payer: "p",
+            payee: "q",
+            amount: "1",
+            currency: "USD",
+            policyHash: "aa",
+            manifestHash: null,
+            noManifest: true,
+            x402PaymentRef: null,
+            timestampMs: INF,
+            nonce: "n".padEnd(16, "0"),
+            prevReceiptHash: null,
+            outcome: "aborted",
+          },
+          k.privateKeyPem,
+          k.publicKeyPem,
+        ),
+      /non-finite/,
+    );
+  });
+});
+
+describe("the suite runs every test file on disk", () => {
+  // A new test file passes on its own and stays out of test:all until someone
+  // remembers to add it by name. That happened today: boundary-refusals ran
+  // green alone while the suite that counts never saw it, so four RED-then-
+  // GREEN cases were absent from the number the release reads. This compares
+  // the two lists rather than trusting the copy in package.json.
+  it("RED then GREEN: test:all and test:pre-release list every tests/*.test.ts", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const onDisk = readdirSync(join(root, "tests"))
+      .filter((f) => f.endsWith(".test.ts"))
+      .sort();
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    for (const script of ["test:all", "test:pre-release"]) {
+      const listed = new Set(
+        [...pkg.scripts[script]!.matchAll(/tests\/([\w.-]+\.test\.ts)/g)].map((m) => m[1]!),
+      );
+      const missing = onDisk.filter((f) => !listed.has(f));
+      assert.deepEqual(
+        missing,
+        [],
+        `${script} does not run: ${missing.join(", ")} - a file the suite never sees is a case the release never counted`,
+      );
+      const vanished = [...listed].filter((f) => !onDisk.includes(f)).sort();
+      assert.deepEqual(vanished, [], `${script} names files that are gone: ${vanished.join(", ")}`);
+    }
   });
 });

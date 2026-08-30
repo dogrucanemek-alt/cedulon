@@ -1,22 +1,17 @@
 import { strict as assert } from "node:assert";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { draftRevision, identityHits } from "../scripts/draft-identity-guard.ts";
+import { latestDraftPath, latestDraftRevision } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-// The draft under guard is the newest revision in the tree: a pinned
-// filename went stale the moment -04 was written, and the five sentences
-// this scan exists to catch sat in -04 while the guard read -03.
-const LATEST = readdirSync(join(root, "spec"))
-  .map((f) => /^draft-dogru-cedulon-(\d+)\.md$/.exec(f))
-  .filter((m): m is RegExpExecArray => m !== null)
-  .map((m) => m[1])
-  .sort((a, b) => Number(a) - Number(b))
-  .at(-1);
-const DRAFT = join(root, "spec", `draft-dogru-cedulon-${LATEST}.md`);
+// The draft under guard is the newest revision in the tree; the computation
+// is shared so one new revision moves every guard that reads "the draft".
+const LATEST = latestDraftRevision(join(root, "spec"));
+const DRAFT = latestDraftPath(root);
 
 describe("draft identity", () => {
   it("RED then GREEN: a -03 that still says This -02 is refused", () => {

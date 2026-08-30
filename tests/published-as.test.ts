@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { latestDraftPath } from "../scripts/latest-draft.ts";
 
 import {
   PUBLISHED_MARKERS,
@@ -15,7 +16,9 @@ import {
 } from "../scripts/published-as-guard.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const DRAFT = join(root, "spec", "draft-dogru-cedulon-03.md");
+// The living draft: the published-as list this checks is the one the current
+// revision makes, not the one a frozen revision made.
+const DRAFT = latestDraftPath(root);
 
 function tarEntries(buf: Buffer): { name: string; body: Buffer }[] {
   // POSIX ustar: a 512-byte header (name at 0, octal size at 124, type at 156)

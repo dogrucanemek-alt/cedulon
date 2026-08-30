@@ -1,7 +1,8 @@
-# Full pre-release suite as a non-root user.
-# posix-nonroot.yml still runs only 76|80|81. macos-tmpdir.yml still
-# runs the session/lock files. Neither would have seen the P2 watchdog
-# set or a crlf-guard failure on a copied Windows tree.
+# Full pre-release suite as a non-root user, on Linux.
+# macos-full.yml is the same suite on the macOS default temp root; it
+# replaced a four-file job that read as a full run and was not one.
+# posix-nonroot.yml still runs only 76|80|81, deliberately: it is the
+# uid-1001 case, not a coverage claim.
 #
 # Do not add a Windows runner as the only full-suite job. Eight cases
 # skip there (40 42 60 68 70 75 76 83), so a green Windows job alone

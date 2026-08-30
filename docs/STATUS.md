@@ -1,7 +1,15 @@
 # Status
 
-`npm run test:all` is green; `npx tsc --noEmit` is silent; `npm run audit`
-exits 0 and the four bypass demos fail as designed. `docs/RUN_AS_VERIFIER.md`
+`npm run test:all` is green on Linux and macOS, where CI runs the whole
+pre-release suite as a non-root user; `npx tsc --noEmit` is silent; `npm run
+audit` exits 0 and the four bypass demos fail as designed. There is no Windows
+CI job: the suite is run there by hand, and eight cases skip with a stated
+reason because POSIX file modes are not the access control on that platform,
+so a green run on Windows is a smaller claim than a green run on either of the
+others (`docs/RUN_AS_VERIFIER.md` says which cases). While the workspace
+version is ahead of npm, `npm run test:all` also carries one deliberate red -
+the gate that refuses to call a prepared version published; `npm run
+test:pre-release` is the green one until the publish. `docs/RUN_AS_VERIFIER.md`
 carries the exact output of each demo, and part of the suite checks that file
 against what the commands actually print.
 

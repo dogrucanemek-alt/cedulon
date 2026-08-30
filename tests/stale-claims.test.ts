@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import { loadVectors } from "../conformance/run.ts";
+import { latestDraftRevision } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p: string): string => readFileSync(join(root, p), "utf8");
@@ -203,7 +204,9 @@ function addPreparedPhrases(upgrading: string, status: string): {
   };
 }
 
-const DRAFT = "spec/draft-dogru-cedulon-03.md";
+// The living draft, not a frozen one: this check describes what the current
+// revision says, and -03 stopped being that the day -04 was written.
+const DRAFT = `spec/draft-dogru-cedulon-${latestDraftRevision(join(root, "spec"))}.md`;
 
 /**
  * Three sentences in this repository describe something outside the file they

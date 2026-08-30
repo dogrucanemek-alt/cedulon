@@ -120,7 +120,7 @@ const result = gatedSettle(engine, {
 
       <h2>Measured in this repository</h2>
       <ul class="claims">
-        <li>the test suite is green (<span class="mono">npm run test:all</span>)</li>
+        <li>the test suite is green on Linux and macOS, where CI runs the whole suite as a non-root user (<span class="mono">npm run test:pre-release</span>); Windows has no CI job and skips eight cases, so a green run there is a smaller claim</li>
         <li>core packages carry zero runtime dependencies; the MCP server package depends only on the official MCP SDK</li>
         <li>fail-closed by default (missing or throwing policy engine denies)</li>
         <li>signed receipts, chained checkpoints, reconciliation audit</li>

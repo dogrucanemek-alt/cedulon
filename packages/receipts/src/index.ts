@@ -184,8 +184,11 @@ export function verifyReceiptJson(signed: SignedReceipt, expectedIssuerKeyPem?: 
   if (signed.claims.noManifest !== (signed.claims.manifestHash === null)) {
     return false;
   }
-  const payload = Buffer.from(canonical(signed.claims), "utf8");
   try {
+    // Same reason the COSE sibling encodes inside its try: a claim set
+    // carrying a value RFC 8785 cannot encode is unverifiable, and this
+    // function's contract is to say so rather than to throw.
+    const payload = Buffer.from(canonical(signed.claims), "utf8");
     return verify(null, payload, signed.publicKeyPem, Buffer.from(signed.signature, "base64"));
   } catch {
     return false;
