@@ -432,7 +432,7 @@ to interpret.
 
 ## Claim labels {#receipt-labels}
 
-Registered CWT claims {{RFC8392}} are not required in -02. Cedulon
+Registered CWT claims {{RFC8392}} are not required by this profile. Cedulon
 uses CWT private-use integer labels less than -65536 so that the
 profile does not occupy the 100-110 registry range.
 

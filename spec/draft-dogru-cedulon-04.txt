@@ -523,9 +523,9 @@ Internet-Draft                   Cedulon                     August 2026
 
 6.1.  Claim labels
 
-   Registered CWT claims [RFC8392] are not required in -02.  Cedulon
-   uses CWT private-use integer labels less than -65536 so that the
-   profile does not occupy the 100-110 registry range.
+   Registered CWT claims [RFC8392] are not required by this profile.
+   Cedulon uses CWT private-use integer labels less than -65536 so that
+   the profile does not occupy the 100-110 registry range.
 
    Receipt labels (MUST-T4-3, MUST-T4-4, MUST-T4-7):
 
