@@ -16,9 +16,9 @@ import {
   signCheckpoint,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
-import { PolicyEngine, isValidAmountText, policyDocument, type Policy } from "@cedulon/core";
+import { PolicyEngine, canonical, isValidAmountText, policyDocument, type Policy } from "@cedulon/core";
 import type { SignedManifest } from "@cedulon/manifest";
-import { claimsFromCbor, generateReceiptKeys, receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
+import { claimsFromCbor, generateReceiptKeys, isValidNonce, receiptHash, signReceipt, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import { decodeCoseSign1, namedDecodeRefusal, pemSigner, type Signer } from "@cedulon/cose";
 import {
   RailLedger,
@@ -26,6 +26,20 @@ import {
   type AdapterKeys,
   type RailSettlement,
 } from "@cedulon/x402-adapter";
+import {
+  foldJournal,
+  type ExternalRail,
+  type JournalEntry,
+} from "./journal.ts";
+
+export type { ExternalRail, ExternalSubmitRow, JournalEntry, JournalPhase, FoldedIntent } from "./journal.ts";
+export { foldJournal, MockExternalRail } from "./journal.ts";
+
+export type SubmitExternalOpts = {
+  nowMs?: number;
+  /** Test-only: throw after this phase is durable. */
+  crashAfter?: "prepared" | "submitted";
+};
 
 // Read from package.json rather than restating it: the version reaches clients
 // through `initialize` and through `cedulon_status`, and a second hand-written
@@ -139,6 +153,8 @@ type Persisted = {
   usedNonces: string[];
   consumedDecisions: string[];
   counters: { windowStartMs: number; allowedCount: number; allowedSum: string };
+  /** Absent on files written before the journal existed. */
+  journal?: JournalEntry[];
 };
 
 function envOr(name: string, fallback: string): string {
@@ -201,6 +217,7 @@ export class CedulonSession {
   readonly keys: AdapterKeys;
   readonly receipts: SignedReceipt[] = [];
   checkpoints: SignedCheckpoint[] = [];
+  readonly journal: JournalEntry[] = [];
   readonly payer: string;
   private issuer: Signer;
   private readonly statePath: string | null;
@@ -227,6 +244,7 @@ export class CedulonSession {
       this.load();
       this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
       this.lastSeenState = this.readStateFingerprint();
+      this.recoverJournal();
     }
   }
 
@@ -295,6 +313,51 @@ export class CedulonSession {
   }
 
   /**
+   * External-rail settle. The in-process `gatedSettle` path is unchanged.
+   * Order is durable: prepared (reserve) → submitted (before the rail call) →
+   * settled | failed. A crash after `submitted` recovers as `indeterminate`
+   * and does not return the nonce.
+   */
+  submitExternal(
+    args: SpendArgs,
+    rail: ExternalRail,
+    nowMs = Date.now(),
+    opts?: SubmitExternalOpts,
+  ): SpendOutcome {
+    if (!isValidAmountText(args.amount)) {
+      return { ok: false, reason: "malformed-amount" };
+    }
+    if (!isValidNonce(args.nonce)) {
+      return { ok: false, reason: "nonce-too-short" };
+    }
+    let locked: SpendOutcome | null = null;
+    try {
+      locked = this.withStateLock(() => {
+        if (this.statePath) {
+          this.assertNoSymlink();
+          if (this.readStateFingerprint() !== this.lastSeenState) {
+            return { ok: false, reason: "state-conflict" };
+          }
+        }
+        return this.submitExternalLocked(args, rail, nowMs, opts);
+      });
+    } catch (err) {
+      const message = (err as Error)?.message ?? "";
+      if (message === "cedulon-rail-crash" || message === "cedulon-injected-crash") {
+        throw err;
+      }
+      if (message.startsWith("cedulon-state-locked")) {
+        return { ok: false, reason: `state-locked:${message.split(":")[1] ?? "unknown"}` };
+      }
+      if (message === "cedulon-state-lock-io") {
+        return { ok: false, reason: "state-io" };
+      }
+      throw err;
+    }
+    return locked;
+  }
+
+  /**
    * Discard what this session was holding and take the file as it now stands.
    * A conflict is otherwise permanent - the session keeps a view the disk no
    * longer matches and refuses every write, with no way back short of restarting
@@ -305,11 +368,13 @@ export class CedulonSession {
     const held = this.receipts.map((r) => r.claims.nonce);
     this.receipts.length = 0;
     this.checkpoints = [];
+    this.journal.length = 0;
     this.ledger.restore([]);
     this.engine.store.reset();
     this.load();
     this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
     this.lastSeenState = this.readStateFingerprint();
+    this.recoverJournal();
     const now = new Set(this.receipts.map((r) => r.claims.nonce));
     return { dropped: held.filter((nonce) => !now.has(nonce)) };
   }
@@ -323,6 +388,7 @@ export class CedulonSession {
       consumedDecisions: new Set(this.engine.store.consumedDecisions),
       counters: { ...this.engine.store.counters },
       nextDecision: (this.engine as unknown as { nextDecision: number }).nextDecision,
+      journal: [...this.journal],
     };
   }
 
@@ -336,6 +402,7 @@ export class CedulonSession {
     for (const d of snap.consumedDecisions) this.engine.store.consumedDecisions.add(d);
     this.engine.store.counters = { ...snap.counters };
     (this.engine as unknown as { nextDecision: number }).nextDecision = snap.nextDecision;
+    this.journal.splice(0, this.journal.length, ...snap.journal);
   }
 
   private settleAndRecord(args: SpendArgs, nowMs: number): SpendOutcome {
@@ -691,6 +758,145 @@ export class CedulonSession {
     };
   }
 
+  private submitExternalLocked(
+    args: SpendArgs,
+    rail: ExternalRail,
+    nowMs: number,
+    opts?: SubmitExternalOpts,
+  ): SpendOutcome {
+    const row = {
+      nonce: args.nonce,
+      amount: args.amount,
+      currency: args.currency,
+      payee: args.payee,
+    };
+    const undo = this.snapshot();
+    let durable = false;
+    try {
+      const decision = this.engine.evaluate({
+        amount: BigInt(args.amount),
+        currency: args.currency,
+        payee: args.payee,
+        nonce: args.nonce,
+        nowMs,
+        tool: args.tool ?? "spend",
+      });
+      if (!decision.allow) {
+        return { ok: false, reason: decision.reason };
+      }
+      this.appendJournal({ ...row, phase: "prepared", atMs: nowMs });
+      this.save();
+      durable = true;
+      if (opts?.crashAfter === "prepared") {
+        throw new Error("cedulon-injected-crash");
+      }
+      this.appendJournal({ ...row, phase: "submitted", atMs: nowMs });
+      this.save();
+      if (opts?.crashAfter === "submitted") {
+        throw new Error("cedulon-injected-crash");
+      }
+      const result = rail.submit(row);
+      if (result === "failed") {
+        this.engine.release(args.nonce, BigInt(args.amount));
+        this.appendJournal({ ...row, phase: "failed", atMs: nowMs });
+        this.save();
+        return { ok: false, reason: "rail-failed" };
+      }
+      const receipt = this.cutSettledReceipt(args, nowMs);
+      this.receipts.push(receipt);
+      this.ledger.record({
+        ref: receipt.claims.x402PaymentRef ?? `x402-${args.nonce}`,
+        amount: args.amount,
+        currency: args.currency,
+        timestampMs: nowMs,
+      });
+      this.rebuildCheckpoint(nowMs);
+      this.appendJournal({ ...row, phase: "settled", atMs: nowMs });
+      this.save();
+      return { ok: true, receipt };
+    } catch (err) {
+      if (!durable) {
+        this.restore(undo);
+      }
+      const message = (err as Error)?.message ?? "";
+      if (message === "cedulon-rail-crash" || message === "cedulon-injected-crash") {
+        throw err;
+      }
+      if ((err as Error)?.message === "cedulon-state-symlink") {
+        throw err;
+      }
+      if (durable) {
+        return { ok: false, reason: "state-io" };
+      }
+      const refusal = namedDecodeRefusal(err);
+      if (refusal !== null) {
+        return { ok: false, reason: refusal };
+      }
+      return { ok: false, reason: "state-io" };
+    }
+  }
+
+  private cutSettledReceipt(args: SpendArgs, nowMs: number): SignedReceipt {
+    const prev = this.receipts.length === 0 ? null : receiptHash(this.receipts[this.receipts.length - 1]);
+    const policyHash = createHash("sha256")
+      .update(canonical(policyDocument(this.engine.policy)))
+      .digest("hex");
+    return signReceipt(
+      {
+        payer: this.payer,
+        payee: args.payee,
+        amount: args.amount,
+        currency: args.currency,
+        policyHash,
+        manifestHash: null,
+        noManifest: true,
+        x402PaymentRef: `x402-${args.nonce}`,
+        timestampMs: nowMs,
+        nonce: args.nonce,
+        prevReceiptHash: prev,
+        outcome: "settled",
+      },
+      this.issuer,
+    );
+  }
+
+  private appendJournal(entry: JournalEntry): void {
+    this.journal.push(entry);
+  }
+
+  private recoverJournal(nowMs = Date.now()): void {
+    let dirty = false;
+    for (const row of foldJournal(this.journal)) {
+      if (row.phase === "prepared") {
+        this.engine.release(row.nonce, BigInt(row.amount));
+        this.appendJournal({
+          nonce: row.nonce,
+          amount: row.amount,
+          currency: row.currency,
+          payee: row.payee,
+          phase: "failed",
+          atMs: nowMs,
+        });
+        dirty = true;
+        continue;
+      }
+      if (row.phase === "submitted") {
+        this.appendJournal({
+          nonce: row.nonce,
+          amount: row.amount,
+          currency: row.currency,
+          payee: row.payee,
+          phase: "indeterminate",
+          atMs: nowMs,
+        });
+        dirty = true;
+      }
+    }
+    if (dirty) {
+      this.save();
+    }
+  }
+
   private rebuildCheckpoint(nowMs: number): void {
     if (this.receipts.length === 0) {
       this.checkpoints = [];
@@ -744,6 +950,7 @@ export class CedulonSession {
       allowedSum: BigInt(parsed.counters.allowedSum),
     };
     (this.engine as unknown as { nextDecision: number }).nextDecision = parsed.nextDecision;
+    this.journal.splice(0, this.journal.length, ...(Array.isArray(parsed.journal) ? parsed.journal : []));
   }
 
   private save(): void {
@@ -764,6 +971,7 @@ export class CedulonSession {
         allowedCount: this.engine.store.counters.allowedCount,
         allowedSum: this.engine.store.counters.allowedSum.toString(),
       },
+      journal: this.journal,
     };
     // The receipt private key is in this payload in the clear: there is no
     // secret to encrypt it with here, so the file mode is the whole protection.

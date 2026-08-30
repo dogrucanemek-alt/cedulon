@@ -134,6 +134,21 @@ export class PolicyEngine {
     return this.consumeDecision(token.claims.singleUseId, token.claims.requestHash, req);
   }
 
+  /**
+   * Give back a reservation `evaluate` took. Used when a journal row dies
+   * before the rail is called (`prepared` without `submitted`). A row that
+   * reached `submitted` must not come through here — that nonce stays burned.
+   */
+  release(nonce: string, amount: bigint): void {
+    this.store.usedNonces.delete(nonce);
+    const c = this.store.counters;
+    this.store.counters = {
+      windowStartMs: c.windowStartMs,
+      allowedCount: Math.max(0, c.allowedCount - 1),
+      allowedSum: c.allowedSum >= amount ? c.allowedSum - amount : 0n,
+    };
+  }
+
   consumeDecision(decisionId: string, requestHash: string, req: SpendRequest): Decision {
     // evaluate() refuses these, but it is not the only door into a decision: a
     // caller holding a token reaches this one directly.
