@@ -42,9 +42,9 @@ npm run test:all
 ```
 
 Typecheck prints nothing. Tests pass, with two things worth expecting rather
-than debugging. On Windows eight cases skip and say why: POSIX file modes and
-symbolic links are not the access control there, so those assertions would be
-green without measuring anything. And while this tree carries a version npm has
+than debugging. On Windows the POSIX-mode cases measure the DPAPI blob instead
+of a mode bit, and only the symbolic-link cases skip - four of them, and only
+where the host cannot create symlinks; they say why. And while this tree carries a version npm has
 not served yet, `test:all` keeps one case red on purpose - the gate that
 refuses to call a prepared version published. `npm run test:pre-release` is the
 run without that gate. Running the server from the sources instead of npm is
