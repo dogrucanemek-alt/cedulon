@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, verify } from "node:crypto";
-import { AMOUNT_RE, canonical } from "@cedulon/core";
+import { AMOUNT_RE, canonical, jcsEncodeRefusal } from "@cedulon/core";
 import {
   CTY_COUNTERSIGN,
   CTY_RECEIPT,
@@ -186,6 +186,11 @@ export function signReceiptJson(
   const payload = Buffer.from(canonical(claims), "utf8");
   const signature = Buffer.from(signer.sign(payload)).toString("base64");
   return { claims, signature, publicKeyPem: signer.publicKeyPem, encoding: "json" };
+}
+
+/** Why encoding this receipt's claims would refuse, or null when it would not. */
+export function receiptEncodeRefusal(signed: SignedReceipt): string | null {
+  return jcsEncodeRefusal(signed.claims);
 }
 
 export function verifyReceiptJson(signed: SignedReceipt, expectedIssuerKeyPem?: string): boolean {

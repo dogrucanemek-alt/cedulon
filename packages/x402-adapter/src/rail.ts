@@ -1,6 +1,6 @@
 import { generateKeyPairSync, verify } from "node:crypto";
 import { pemSigner, sameSpkiKey } from "@cedulon/cose";
-import { canonical } from "@cedulon/core";
+import { canonical, jcsEncodeRefusal } from "@cedulon/core";
 
 export type RailSettlement = {
   ref: string;
@@ -76,12 +76,7 @@ export function verifyRailExtract(signed: SignedRailExtract, expectedRailKeyPem?
  * coseDecodeRefusal; this is the RFC 8785 sibling.
  */
 export function railExtractEncodeRefusal(signed: SignedRailExtract): string | null {
-  try {
-    canonical(signed.body);
-    return null;
-  } catch (err) {
-    return err instanceof Error && err.message !== "" ? err.message : "unencodable";
-  }
+  return jcsEncodeRefusal(signed.body);
 }
 
 function extractBodyOf(rows: RailSettlement[], accountId: string, railId: string): RailExtractBody {

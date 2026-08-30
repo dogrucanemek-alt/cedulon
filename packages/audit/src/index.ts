@@ -10,7 +10,13 @@ import {
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
 import { manifestHash, verifyManifest, type SignedManifest } from "@cedulon/manifest";
-import { receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
+import {
+  receiptEncodeRefusal,
+  receiptHash,
+  verifyCounterSignature,
+  verifyReceipt,
+  type SignedReceipt,
+} from "@cedulon/receipts";
 import {
   railExtractEncodeRefusal,
   verifyRailExtract,
@@ -164,11 +170,15 @@ function verifiesOrRefusal(
 export function findReceiptChainBreak(receipts: SignedReceipt[]): Finding | null {
   for (let i = 0; i < receipts.length; i += 1) {
     const v = verifiesOrRefusal(() => verifyReceipt(receipts[i]), receipts[i].coseHex);
-    if (v.refusal !== null) {
+    const jcs = v.ok ? null : receiptEncodeRefusal(receipts[i]);
+    if (v.refusal !== null || jcs !== null) {
       return {
         code: "receipt-chain-break",
         id: receipts[i].claims.nonce,
-        detail: `receipt ${i} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`,
+        detail:
+          v.refusal !== null
+            ? `receipt ${i} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`
+            : `receipt ${i} refused: ${jcs} - not a signature verdict`,
       };
     }
     if (!v.ok) {
@@ -178,7 +188,19 @@ export function findReceiptChainBreak(receipts: SignedReceipt[]): Finding | null
         detail: `receipt ${i} signature failed`,
       };
     }
-    const expected = i === 0 ? null : receiptHash(receipts[i - 1]);
+    let expected: string | null = null;
+    if (i > 0) {
+      try {
+        expected = receiptHash(receipts[i - 1]);
+      } catch (err) {
+        const name = err instanceof Error && err.message !== "" ? err.message : "unencodable";
+        return {
+          code: "receipt-chain-break",
+          id: receipts[i - 1].claims.nonce,
+          detail: `receipt ${i - 1} refused: ${name} - not a signature verdict`,
+        };
+      }
+    }
     if (receipts[i].claims.prevReceiptHash !== expected) {
       return {
         code: "receipt-chain-break",
@@ -477,7 +499,20 @@ export function findCheckpointTotalMismatches(
         detail: `checkpoint epoch ${cp.claims.epoch} receiptCount ${cp.claims.receiptCount} != ${inWindow.length}`,
       });
     }
-    const expectedHead = inWindow.length === 0 ? null : receiptHash(inWindow[inWindow.length - 1]);
+    let expectedHead: string | null = null;
+    if (inWindow.length > 0) {
+      try {
+        expectedHead = receiptHash(inWindow[inWindow.length - 1]);
+      } catch (err) {
+        const name = err instanceof Error && err.message !== "" ? err.message : "unencodable";
+        findings.push({
+          code: "checkpoint-head-mismatch",
+          id: `epoch-${cp.claims.epoch}-head`,
+          detail: `checkpoint epoch ${cp.claims.epoch} chain head refused: ${name} - not a signature verdict`,
+        });
+        continue;
+      }
+    }
     if (cp.claims.chainHeadHash !== expectedHead) {
       findings.push({
         code: "checkpoint-head-mismatch",
