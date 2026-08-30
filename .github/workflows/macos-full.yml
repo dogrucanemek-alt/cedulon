@@ -8,9 +8,9 @@
 # subsets to be distinguished from the full-suite acceptance target; the
 # honest way to answer that is to stop having a subset here.
 #
-# Linux is posix-full.yml. Windows has no job: eight cases skip there
-# (40 42 60 68 70 75 76 83), so a green Windows run is a smaller claim than
-# either of these, and it is stated as such rather than counted as a third.
+# Linux is posix-full.yml. Windows is windows-full.yml: eight cases skip
+# there (40 42 60 68 70 75 76 83), so its green is a smaller claim than
+# either of these, and it is stated as such rather than counted as equal.
 name: macos-full
 
 on:
