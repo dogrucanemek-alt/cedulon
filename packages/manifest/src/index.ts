@@ -22,6 +22,7 @@ export const MANIFEST_CLAIM = {
   cancelCondition: -70205,
   expiresAtMs: -70206,
   ap2MandateHash: -70207,
+  payee: -70208,
 } as const;
 
 export type TradeManifestBody = {
@@ -32,6 +33,8 @@ export type TradeManifestBody = {
   cancelCondition: string;
   expiresAtMs: number;
   ap2MandateHash?: string | null;
+  /** When present, the receipt payee is compared as exact octets (MUST-T8-9). */
+  payee?: string;
 };
 
 export type SignedManifest = {
@@ -55,17 +58,19 @@ export function generateManifestKeys(): { publicKeyPem: string; privateKeyPem: s
 }
 
 export function manifestToCbor(body: TradeManifestBody): Uint8Array {
-  return encodeCbor(
-    cborMap([
-      [MANIFEST_CLAIM.description, body.description],
-      [MANIFEST_CLAIM.amount, body.amount],
-      [MANIFEST_CLAIM.currency, body.currency],
-      [MANIFEST_CLAIM.acceptanceCriteriaHash, body.acceptanceCriteriaHash],
-      [MANIFEST_CLAIM.cancelCondition, body.cancelCondition],
-      [MANIFEST_CLAIM.expiresAtMs, body.expiresAtMs],
-      [MANIFEST_CLAIM.ap2MandateHash, body.ap2MandateHash ?? null],
-    ]),
-  );
+  const entries: Array<[number, string | number | null]> = [
+    [MANIFEST_CLAIM.description, body.description],
+    [MANIFEST_CLAIM.amount, body.amount],
+    [MANIFEST_CLAIM.currency, body.currency],
+    [MANIFEST_CLAIM.acceptanceCriteriaHash, body.acceptanceCriteriaHash],
+    [MANIFEST_CLAIM.cancelCondition, body.cancelCondition],
+    [MANIFEST_CLAIM.expiresAtMs, body.expiresAtMs],
+    [MANIFEST_CLAIM.ap2MandateHash, body.ap2MandateHash ?? null],
+  ];
+  if (typeof body.payee === "string") {
+    entries.push([MANIFEST_CLAIM.payee, body.payee]);
+  }
+  return encodeCbor(cborMap(entries));
 }
 
 export function manifestFromCbor(bytes: Uint8Array): TradeManifestBody {
@@ -84,6 +89,10 @@ export function manifestFromCbor(bytes: Uint8Array): TradeManifestBody {
   const exp = mapGet(map, MANIFEST_CLAIM.expiresAtMs);
   if (typeof exp !== "number") throw new Error("manifest-exp");
   const ap2 = textOrNull(MANIFEST_CLAIM.ap2MandateHash);
+  const payeeVal = mapGet(map, MANIFEST_CLAIM.payee);
+  if (payeeVal !== undefined && typeof payeeVal !== "string") {
+    throw new Error("manifest-payee");
+  }
   return {
     description: text(MANIFEST_CLAIM.description),
     amount: text(MANIFEST_CLAIM.amount),
@@ -92,6 +101,7 @@ export function manifestFromCbor(bytes: Uint8Array): TradeManifestBody {
     cancelCondition: text(MANIFEST_CLAIM.cancelCondition),
     expiresAtMs: exp,
     ...(ap2 === null ? {} : { ap2MandateHash: ap2 }),
+    ...(typeof payeeVal === "string" ? { payee: payeeVal } : {}),
   };
 }
 

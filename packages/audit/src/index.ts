@@ -1,29 +1,47 @@
-import { coseDecodeRefusalHex, sameSpkiKey, toSpkiDer } from "@cedulon/cose";
+import { createHash } from "node:crypto";
 import {
+  coseDecodeRefusalHex,
+  decodeCoseSign1,
+  decodeProtectedHeader,
+  hexToBytes,
+  kidFromPublicKeyPem,
+  sameSpkiKey,
+  toSpkiDer,
+} from "@cedulon/cose";
+import {
+  applyInclusionProof,
   findCheckpointChainBreak,
   findEquivocation,
   statementHashOfCheckpoint,
   totalsFromReceipts,
   verifyCheckpoint,
+  verifyCheckpointUnderPin,
   verifyInclusionReceipt,
+  type InclusionProof,
   type InclusionReceipt,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
 import { manifestHash, verifyManifest, type SignedManifest } from "@cedulon/manifest";
 import {
+  countersignDeliveredHashHex,
   hashClaimRefusal,
   receiptEncodeRefusal,
   receiptHash,
   verifyCounterSignature,
   verifyReceipt,
+  verifyReceiptUnderPin,
   type SignedReceipt,
 } from "@cedulon/receipts";
 import {
+  DEFAULT_CLOCK_SKEW_MS,
   railExtractEncodeRefusal,
   verifyRailExtract,
+  type RailExtractBody,
   type RailSettlement,
   type SignedRailExtract,
 } from "@cedulon/x402-adapter";
+
+export { DEFAULT_CLOCK_SKEW_MS };
 
 export const FINDING_CODES = [
   "settlement-without-receipt",
@@ -67,6 +85,13 @@ export const FINDING_CODES = [
   "checkpoint-not-anchored",
   "checkpoint-withheld",
   "checkpoint-totals-redacted",
+  "carried-key-mismatch",
+  "boundary-deferred",
+  "beneficiary-mismatch",
+  "counterparty-unbound",
+  "delivery-mismatch",
+  "witness-inclusion-invalid",
+  "witness-inclusion-not-exercised",
 ] as const;
 
 export type FindingCode = (typeof FINDING_CODES)[number];
@@ -123,6 +148,37 @@ function pinnedKeys(pin: string | readonly string[]): { usable: Buffer[]; unread
     }
   }
   return { usable, unreadable };
+}
+
+function pinPemsOf(pin: string | readonly string[]): string[] {
+  return typeof pin === "string" ? [pin] : [...pin];
+}
+
+function receiptAttestedByPins(r: SignedReceipt, pins: readonly string[]): boolean {
+  return pins.some((pem) => toSpkiDer(pem) !== null && verifyReceiptUnderPin(r, pem));
+}
+
+function checkpointAttestedByPins(cp: SignedCheckpoint, pins: readonly string[]): boolean {
+  return pins.some((pem) => toSpkiDer(pem) !== null && verifyCheckpointUnderPin(cp, pem));
+}
+
+function kidMatchesPin(coseHex: string, pinPem: string): boolean {
+  try {
+    const kid = decodeProtectedHeader(decodeCoseSign1(hexToBytes(coseHex)).protectedHeader).kid;
+    const pinKid = kidFromPublicKeyPem(pinPem);
+    return kid.length === pinKid.length && kid.every((byte, i) => byte === pinKid[i]);
+  } catch {
+    return false;
+  }
+}
+
+function receiptBelongsToPin(r: SignedReceipt, pins: readonly string[]): boolean {
+  for (const pem of pins) {
+    if (toSpkiDer(pem) === null) continue;
+    if (sameSpkiKey(r.publicKeyPem, pem)) return true;
+    if (r.coseHex && kidMatchesPin(r.coseHex, pem)) return true;
+  }
+  return false;
 }
 
 export type Finding = {
@@ -211,7 +267,17 @@ export function orderByIssuerChain(receipts: SignedReceipt[]): {
   return { ordered, leftover: [...remaining] };
 }
 
-export function findReceiptChainBreak(receipts: SignedReceipt[]): Finding | null {
+function receiptVerifiesForChain(receipt: SignedReceipt, pinPems?: readonly string[]): boolean {
+  if (pinPems && pinPems.length > 0) {
+    return pinPems.some((pem) => toSpkiDer(pem) !== null && verifyReceiptUnderPin(receipt, pem));
+  }
+  return verifyReceipt(receipt);
+}
+
+export function findReceiptChainBreak(
+  receipts: SignedReceipt[],
+  pinPems?: readonly string[],
+): Finding | null {
   const { ordered, leftover } = orderByIssuerChain(receipts);
   if (leftover.length > 0) {
     return {
@@ -221,7 +287,7 @@ export function findReceiptChainBreak(receipts: SignedReceipt[]): Finding | null
     };
   }
   for (let i = 0; i < ordered.length; i += 1) {
-    const v = verifiesOrRefusal(() => verifyReceipt(ordered[i]), ordered[i].coseHex);
+    const v = verifiesOrRefusal(() => receiptVerifiesForChain(ordered[i], pinPems), ordered[i].coseHex);
     const jcs = v.ok ? null : receiptEncodeRefusal(ordered[i]);
     if (v.refusal !== null || jcs !== null) {
       return {
@@ -330,9 +396,22 @@ export function findReceiptRefClashes(receipts: SignedReceipt[]): Finding[] {
   return findings;
 }
 
+export type SettlementBoundary = {
+  windowStartMs: number;
+  windowEndMs: number;
+  clockSkewMs: number;
+  /** Set when a following window was presented and verified. */
+  nextRefs?: ReadonlySet<string>;
+};
+
+function clockSkewOf(body: RailExtractBody): number {
+  return typeof body.clockSkewMs === "number" ? body.clockSkewMs : DEFAULT_CLOCK_SKEW_MS;
+}
+
 export function findSettlementMatches(
   receipts: SignedReceipt[],
   settlements: RailSettlement[],
+  boundary?: SettlementBoundary,
 ): Finding[] {
   const findings: Finding[] = [];
   const settled = receipts.filter(isSettled);
@@ -425,14 +504,28 @@ export function findSettlementMatches(
     }
   }
 
+  const consecutive = Boolean(boundary?.nextRefs);
+  const lowerCut = boundary ? boundary.windowStartMs + boundary.clockSkewMs : null;
+  const upperCut = boundary ? boundary.windowEndMs - boundary.clockSkewMs : null;
+
   for (const [ref, s] of settlementsByRef) {
     const r = receiptsByRef.get(ref);
     if (!r) {
-      findings.push({
-        code: "settlement-without-receipt",
-        id: ref,
-        detail: `settlement ${s.ref} ${s.amount} ${s.currency} has no spend receipt`,
-      });
+      const nearStart = lowerCut !== null && s.timestampMs < lowerCut;
+      if (nearStart && !consecutive) {
+        findings.push({
+          code: "boundary-deferred",
+          id: ref,
+          severity: "warn",
+          detail: `settlement ${s.ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than settlement-without-receipt`,
+        });
+      } else {
+        findings.push({
+          code: "settlement-without-receipt",
+          id: ref,
+          detail: `settlement ${s.ref} ${s.amount} ${s.currency} has no spend receipt`,
+        });
+      }
       continue;
     }
     if (r.claims.amount !== s.amount || r.claims.currency !== s.currency) {
@@ -442,15 +535,35 @@ export function findSettlementMatches(
         detail: `settlement ${ref} ${s.amount} ${s.currency} != receipt ${r.claims.amount} ${r.claims.currency}`,
       });
     }
+    if (typeof s.beneficiary === "string" && r.claims.payee !== s.beneficiary) {
+      findings.push({
+        code: "beneficiary-mismatch",
+        id: ref,
+        detail: `settlement ${ref} beneficiary ${JSON.stringify(s.beneficiary)} != receipt payee ${JSON.stringify(r.claims.payee)}`,
+      });
+    }
   }
 
   for (const [ref, r] of receiptsByRef) {
     if (!settlementsByRef.has(ref)) {
-      findings.push({
-        code: "receipt-without-settlement",
-        id: r.claims.nonce,
-        detail: `receipt nonce=${r.claims.nonce} ref=${ref} is not on the rail extract`,
-      });
+      const nearEnd = upperCut !== null && r.claims.timestampMs >= upperCut;
+      if (nearEnd && consecutive && boundary!.nextRefs!.has(ref)) {
+        continue;
+      }
+      if (nearEnd && !consecutive) {
+        findings.push({
+          code: "boundary-deferred",
+          id: r.claims.nonce,
+          severity: "warn",
+          detail: `receipt nonce=${r.claims.nonce} ref=${ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than receipt-without-settlement`,
+        });
+      } else {
+        findings.push({
+          code: "receipt-without-settlement",
+          id: r.claims.nonce,
+          detail: `receipt nonce=${r.claims.nonce} ref=${ref} is not on the rail extract`,
+        });
+      }
     }
   }
 
@@ -622,14 +735,14 @@ function inclusionFromPinnedLog(
 function verifiedWitnessCheckpoints(
   receipts: InclusionReceipt[],
   witnessKeyPem?: string | readonly string[],
-  attestsIssuer?: ((pem: string) => boolean) | null,
+  attestsCheckpoint?: ((cp: SignedCheckpoint) => boolean) | null,
 ): SignedCheckpoint[] {
   const out: SignedCheckpoint[] = [];
   for (const rec of receipts) {
     if (!inclusionFromPinnedLog(rec, witnessKeyPem) || !rec.checkpoint) {
       continue;
     }
-    if (attestsIssuer && !attestsIssuer(rec.checkpoint.publicKeyPem)) {
+    if (attestsCheckpoint && !attestsCheckpoint(rec.checkpoint)) {
       continue;
     }
     if (statementHashOfCheckpoint(rec.checkpoint) !== rec.statementHash) {
@@ -648,7 +761,7 @@ function findTransparencyWitness(
   checkpoints: SignedCheckpoint[],
   inclusionReceipts: InclusionReceipt[],
   witnessKeyPem?: string | readonly string[],
-  attestsIssuer?: ((pem: string) => boolean) | null,
+  attestsCheckpoint?: ((cp: SignedCheckpoint) => boolean) | null,
 ): { findings: Finding[]; warnings: Finding[] } {
   const findings: Finding[] = [];
   const warnings: Finding[] = [];
@@ -664,7 +777,7 @@ function findTransparencyWitness(
   // names nobody - stripping the body off a genuine entry is free, and it used
   // to be enough to report an honest issuer for hiding something never theirs.
   const accusing = anchoring.filter(
-    (r) => r.checkpoint && (!attestsIssuer || attestsIssuer(r.checkpoint.publicKeyPem)),
+    (r) => r.checkpoint && (!attestsCheckpoint || attestsCheckpoint(r.checkpoint)),
   );
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
 
@@ -719,8 +832,10 @@ function findTransparencyWitness(
 function findCountersignFindings(input: {
   receipts: SignedReceipt[];
   payeeTrust?: PayeeTrustPins;
-}): Finding[] {
+  manifest?: SignedManifest;
+}): { warnings: Finding[]; findings: Finding[] } {
   const warnings: Finding[] = [];
+  const findings: Finding[] = [];
   const countersigned = input.receipts.filter((r) => r.counterCoseHex);
   const approved = new Set<string>();
   for (const r of countersigned) {
@@ -776,7 +891,23 @@ function findCountersignFindings(input: {
       severity: "warn",
     });
   }
-  return warnings;
+  const acceptance = input.manifest?.body.acceptanceCriteriaHash;
+  if (typeof acceptance === "string") {
+    for (const r of input.receipts) {
+      if (!approved.has(r.claims.nonce)) {
+        continue;
+      }
+      const delivered = countersignDeliveredHashHex(r);
+      if (delivered !== null && delivered !== acceptance) {
+        findings.push({
+          code: "delivery-mismatch",
+          id: r.claims.nonce,
+          detail: `attributable countersignature on nonce=${r.claims.nonce} deliveredHash ${delivered} != manifest acceptanceCriteriaHash ${acceptance}`,
+        });
+      }
+    }
+  }
+  return { warnings, findings };
 }
 
 function settlementKey(s: RailSettlement): string {
@@ -811,6 +942,17 @@ export type AuditInput = {
   manifestTrust?: IssuerTrustPin;
   /** Checkpoint inclusion receipts. Absent ⇒ today's behaviour. Present ⇒ T11 witness is configured. */
   inclusionReceipts?: InclusionReceipt[];
+  /** Following rail window; closes `boundary-deferred` records that match it. */
+  nextExtract?: SignedRailExtract;
+  /**
+   * Layer-2 pair (RFC 9942 §5.2.1): candidate registered statement bytes +
+   * inclusion proof. Both present ⇒ proof is applied. Omitted ⇒ named as
+   * not exercised when inclusion receipts were supplied.
+   */
+  layer2?: {
+    candidateStatementHex: string;
+    inclusionProof?: InclusionProof;
+  };
 };
 
 /** Largest honest audit in this suite is 41 receipts (case 86). 100× that. */
@@ -1098,7 +1240,8 @@ export function audit(input: AuditInput): AuditReport {
   let attested = input.receipts;
   // Null while no issuer key was stated: there is no attested/unattested split
   // to make, and every check falls back to the whole submitted list.
-  let attestsIssuer: ((pem: string) => boolean) | null = null;
+  let attestsCheckpoint: ((cp: SignedCheckpoint) => boolean) | null = null;
+  let issuerPins: string[] = [];
   // True only when a pin was supplied and at least one key in it could be read.
   let issuerPinUsable = false;
   if (!input.issuerTrust) {
@@ -1129,41 +1272,29 @@ export function audit(input: AuditInput): AuditReport {
       });
     }
     {
-      const attests = (pem: string): boolean => {
-        if (issuerDers.length === 0) {
-          // Withholding trust, not handing it out: a pin nobody could read is
-          // the one case where falling back to "accept everything" turns a
-          // broken setting into a bypass.
-          return false;
-        }
-        const der = toSpkiDer(pem);
-        return der !== null && issuerDers.some((pinned) => pinned.equals(der));
-      };
-      attestsIssuer = attests;
+      issuerPins = pinPemsOf(input.issuerTrust.publicKeyPem).filter((pem) => toSpkiDer(pem) !== null);
+      attestsCheckpoint = (cp) => checkpointAttestedByPins(cp, issuerPins);
       issuerPinUsable = issuerDers.length > 0;
       // Naming a mismatch when the pin itself could not be read would blame the
       // receipts for the verifier's own broken setting - and every receipt at
       // once. `trust-key-unreadable` above already says what went wrong; nothing
       // is attested, so the settlements come back uncovered on their own.
       const namesMismatches = issuerDers.length > 0;
-      // Reported and then set aside: a receipt from another key is evidence about
-      // that key, not coverage of the settlement it names. Leaving it in the
-      // reconciliation is exactly how a forged receipt silences a naked row.
-      // Receipts are free to mint, so a report that lists one finding per rejected
-      // receipt can be buried under volume by anyone. Named individually while
-      // there are few enough to act on, counted once past that.
+      // Attestation is pin-under-signature (K2). The carried PEM is not the
+      // identity source; a kid match without a pin-valid signature still drops.
       const rejected = namesMismatches
-        ? input.receipts.filter((r) => !attests(r.publicKeyPem))
+        ? input.receipts.filter((r) => !receiptAttestedByPins(r, issuerPins))
         : [];
+      const foreign = rejected.filter((r) => !receiptBelongsToPin(r, issuerPins));
       const NAMED_LIMIT = 10;
-      if (rejected.length > NAMED_LIMIT) {
+      if (foreign.length > NAMED_LIMIT) {
         findings.push({
           code: "issuer-key-mismatch",
           id: "receipts",
-          detail: `${rejected.length} receipts are signed by a key other than the pinned issuer key, so none of them is coverage for any settlement; first is nonce=${rejected[0].claims.nonce}`,
+          detail: `${foreign.length} receipts are signed by a key other than the pinned issuer key, so none of them is coverage for any settlement; first is nonce=${foreign[0].claims.nonce}`,
         });
       } else {
-        for (const r of rejected) {
+        for (const r of foreign) {
           findings.push({
             code: "issuer-key-mismatch",
             id: r.claims.nonce,
@@ -1172,7 +1303,7 @@ export function audit(input: AuditInput): AuditReport {
         }
       }
       for (const cp of namesMismatches ? input.checkpoints : []) {
-        if (!attests(cp.publicKeyPem)) {
+        if (!attestsCheckpoint(cp)) {
           findings.push({
             code: "issuer-key-mismatch",
             id: `epoch-${cp.claims.epoch}`,
@@ -1180,7 +1311,29 @@ export function audit(input: AuditInput): AuditReport {
           });
         }
       }
-      attested = input.receipts.filter((r) => attests(r.publicKeyPem));
+      attested = input.receipts.filter((r) => receiptAttestedByPins(r, issuerPins));
+      for (const r of attested) {
+        const verifying = issuerPins.filter((pem) => verifyReceiptUnderPin(r, pem));
+        if (verifying.length > 0 && !verifying.some((pem) => sameSpkiKey(r.publicKeyPem, pem))) {
+          warnings.push({
+            code: "carried-key-mismatch",
+            id: r.claims.nonce,
+            severity: "warn",
+            detail: `receipt nonce=${r.claims.nonce} verifies under a pinned issuer key but the carried publicKeyPem is not that key`,
+          });
+        }
+      }
+      for (const cp of input.checkpoints.filter((c) => attestsCheckpoint!(c))) {
+        const verifying = issuerPins.filter((pem) => verifyCheckpointUnderPin(cp, pem));
+        if (verifying.length > 0 && !verifying.some((pem) => sameSpkiKey(cp.publicKeyPem, pem))) {
+          warnings.push({
+            code: "carried-key-mismatch",
+            id: `epoch-${cp.claims.epoch}`,
+            severity: "warn",
+            detail: `checkpoint epoch ${cp.claims.epoch} verifies under a pinned issuer key but the carried publicKeyPem is not that key`,
+          });
+        }
+      }
     }
   }
   // Presentation order carries no weight. Rebuild the attested bag from the
@@ -1216,6 +1369,9 @@ export function audit(input: AuditInput): AuditReport {
       if (r.claims.timestampMs > terms.expiresAtMs) {
         broken.push(`settled at ${r.claims.timestampMs} after the manifest expired at ${terms.expiresAtMs}`);
       }
+      if (typeof terms.payee === "string" && r.claims.payee !== terms.payee) {
+        broken.push(`payee ${JSON.stringify(r.claims.payee)} against manifest ${JSON.stringify(terms.payee)}`);
+      }
       if (broken.length > 0) {
         const charge = {
           code: "manifest-terms-mismatch" as const,
@@ -1228,16 +1384,22 @@ export function audit(input: AuditInput): AuditReport {
     }
   }
 
-  // An extract reports on the period it declares. Matching receipts from
-  // outside that period against it would call an honest later spend a
-  // completeness failure, so they are out of scope for this extract; auditing
-  // a longer period means obtaining extracts that cover it.
+  // Ref membership wins: a receipt whose ref appears on this extract is
+  // reconciled against it even when its own timestampMs sits outside the
+  // window. The timestamp sieve applies only to receipts the extract does
+  // not name (K5).
+  const extractRefs = new Set(reconciled.map((s) => s.ref));
   const inScope = input.extract
-    ? attested.filter(
-        (r) =>
+    ? attested.filter((r) => {
+        const ref = receiptRef(r);
+        if (ref !== null && extractRefs.has(ref)) {
+          return true;
+        }
+        return (
           r.claims.timestampMs >= input.extract!.body.windowStartMs &&
-          r.claims.timestampMs < input.extract!.body.windowEndMs,
-      )
+          r.claims.timestampMs < input.extract!.body.windowEndMs
+        );
+      })
     : attested;
 
   // Self-consistency is a question about the receipts this verifier accepts. Run
@@ -1262,21 +1424,54 @@ export function audit(input: AuditInput): AuditReport {
       warnings.push({ ...clash, severity: "warn" });
     }
   }
-  findings.push(...findSettlementMatches(inScope, reconciled));
+  const nextOk = Boolean(
+    input.nextExtract &&
+      (input.trust
+        ? verifyRailExtract(input.nextExtract, input.trust.publicKeyPem)
+        : verifyRailExtract(input.nextExtract)),
+  );
+  const settlementBoundary: SettlementBoundary | undefined = input.extract
+    ? {
+        windowStartMs: input.extract.body.windowStartMs,
+        windowEndMs: input.extract.body.windowEndMs,
+        clockSkewMs: clockSkewOf(input.extract.body),
+        ...(nextOk
+          ? { nextRefs: new Set(input.nextExtract!.body.settlements.map((s) => s.ref)) }
+          : {}),
+      }
+    : undefined;
+  findings.push(...findSettlementMatches(inScope, reconciled, settlementBoundary));
+  const manifestPayeeBound = Boolean(input.manifest && typeof input.manifest.body.payee === "string");
+  const beneficiaryBound = reconciled.some((s) => typeof s.beneficiary === "string");
+  if (input.extract && !manifestPayeeBound && !beneficiaryBound) {
+    warnings.push({
+      code: "counterparty-unbound",
+      id: "counterparty",
+      severity: "warn",
+      detail:
+        "ref/amount/currency closed against the extract; counterparty identity was not bound",
+    });
+  }
   // Every check below reasons about what the issuer published. Walking the whole
   // submitted list instead means one receipt from a key the verifier already
   // rejected writes "the checkpoint lied" and "the chain is broken" against an
   // honest issuer - noise that argues for switching the pin off.
-  const attestedCheckpoints = attestsIssuer
-    ? input.checkpoints.filter((cp) => attestsIssuer!(cp.publicKeyPem))
+  const attestedCheckpoints = attestsCheckpoint
+    ? input.checkpoints.filter((cp) => attestsCheckpoint!(cp))
     : input.checkpoints;
-  warnings.push(
-    ...findCountersignFindings({
-      receipts: issuerPinUsable ? attested : input.receipts,
-      payeeTrust: input.payeeTrust,
-    }),
-  );
-  const chain = findReceiptChainBreak(attested);
+  const countersign = findCountersignFindings({
+    receipts: issuerPinUsable ? attested : input.receipts,
+    payeeTrust: input.payeeTrust,
+    manifest: input.manifest,
+  });
+  warnings.push(...countersign.warnings);
+  findings.push(...countersign.findings);
+  const chainWalk = issuerPinUsable
+    ? input.receipts.filter(
+        (r) => receiptAttestedByPins(r, issuerPins) || receiptBelongsToPin(r, issuerPins),
+      )
+    : attested;
+  const chain = findReceiptChainBreak(chainWalk, issuerPinUsable ? issuerPins : undefined);
   if (chain) findings.push(chain);
   findings.push(...findCheckpointTotalMismatches(attested, attestedCheckpoints));
   findings.push(...findWindowCoverage(attested, attestedCheckpoints));
@@ -1290,7 +1485,7 @@ export function audit(input: AuditInput): AuditReport {
     ? verifiedWitnessCheckpoints(
         input.inclusionReceipts!,
         (input.witnessTrust as IssuerTrustPin).publicKeyPem,
-        attestsIssuer,
+        attestsCheckpoint,
       )
     : [];
   const equiv = findEquivocationFinding([...attestedCheckpoints, ...witnessCheckpoints]);
@@ -1302,7 +1497,7 @@ export function audit(input: AuditInput): AuditReport {
         attestedCheckpoints,
         input.inclusionReceipts,
         (input.witnessTrust as IssuerTrustPin).publicKeyPem,
-        attestsIssuer,
+        attestsCheckpoint,
       );
       findings.push(...witness.findings);
       warnings.push(...witness.warnings);
@@ -1315,6 +1510,54 @@ export function audit(input: AuditInput): AuditReport {
         severity: "warn",
       });
     }
+  }
+
+  if (input.layer2) {
+    const proof = input.layer2.inclusionProof;
+    if (proof === undefined) {
+      findings.push({
+        code: "witness-inclusion-invalid",
+        id: "witness-layer2",
+        detail: "layer-2 inclusion input was presented without an inclusion proof",
+      });
+    } else {
+      try {
+        const candidate = Buffer.from(input.layer2.candidateStatementHex, "hex");
+        if (candidate.length === 0 && input.layer2.candidateStatementHex.length > 0) {
+          throw new Error("hex");
+        }
+        const leaf = createHash("sha256").update(candidate).digest("hex");
+        const root = applyInclusionProof(leaf, proof);
+        const pinned = input.witnessTrust?.publicKeyPem;
+        const hit = (input.inclusionReceipts ?? []).some((rec) => {
+          if (rec.statementHash !== leaf || rec.treeHead !== root || proof.leafIndex !== rec.index) {
+            return false;
+          }
+          return inclusionFromPinnedLog(rec, pinned);
+        });
+        if (!hit) {
+          findings.push({
+            code: "witness-inclusion-invalid",
+            id: "witness-layer2",
+            detail:
+              "candidate statement bytes and inclusion proof do not reproduce a witness-signed tree head",
+          });
+        }
+      } catch {
+        findings.push({
+          code: "witness-inclusion-invalid",
+          id: "witness-layer2",
+          detail: "layer-2 inclusion input could not be applied",
+        });
+      }
+    }
+  } else if (input.inclusionReceipts && input.inclusionReceipts.length > 0) {
+    warnings.push({
+      code: "witness-inclusion-not-exercised",
+      id: "witness-layer2",
+      severity: "warn",
+      detail: "witness attested the statement hash; log membership was not proven",
+    });
   }
 
   // A signed redaction is honest but unverifiable: say so, and drop the claim to
@@ -1331,6 +1574,9 @@ export function audit(input: AuditInput): AuditReport {
     }
   }
 
+  for (const f of findings.filter((item) => item.severity === "warn")) {
+    warnings.push(f);
+  }
   const hard = findings.filter((f) => f.severity !== "warn");
   const missing = hard.filter((f) => f.code === "settlement-without-receipt");
   const summary =
@@ -1339,6 +1585,10 @@ export function audit(input: AuditInput): AuditReport {
       : missing.length > 0
         ? `audit: ${missing.length} settlement without receipt → FAIL`
         : `audit: ${hard.length} finding(s) → FAIL`;
+  // A scope record (`counterparty-unbound`) names what was not bound; it is
+  // not a doubt about the evidence that was authenticated.
+  const scopeOnly = new Set<FindingCode>(["counterparty-unbound"]);
+  const guaranteeWarnings = warnings.filter((w) => !scopeOnly.has(w.code));
   // A finding that says the evidence itself cannot be trusted also removes the
   // unconditional claim; otherwise a report could name a key mismatch and still
   // describe its own guarantee as unconditional.
@@ -1355,7 +1605,7 @@ export function audit(input: AuditInput): AuditReport {
     ok: hard.length === 0,
     findings: hard,
     warnings,
-    guarantee: warnings.length === 0 && !doubtedEvidence ? "unconditional" : "conditional",
+    guarantee: guaranteeWarnings.length === 0 && !doubtedEvidence ? "unconditional" : "conditional",
     summary,
   };
 }

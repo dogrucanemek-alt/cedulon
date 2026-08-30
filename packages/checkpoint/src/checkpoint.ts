@@ -199,6 +199,21 @@ export function verifyCheckpoint(signed: SignedCheckpoint, expectedIssuerKeyPem?
   }
 }
 
+/** Signature under this pin, ignoring the carried PEM. Same question as receipts. */
+export function verifyCheckpointUnderPin(signed: SignedCheckpoint, pinPem: string): boolean {
+  const bytes = Buffer.from(signed.coseHex, "hex");
+  if (!verifyCoseSign1(bytes, pinPem, CTY_CHECKPOINT)) {
+    return false;
+  }
+  try {
+    const msg = decodeCoseSign1(bytes);
+    const decoded = checkpointFromCbor(msg.payload);
+    return canonical(decoded) === canonical(signed.claims);
+  } catch {
+    return false;
+  }
+}
+
 export function checkpointHash(signed: SignedCheckpoint): string {
   return sha256Hex(Buffer.from(signed.coseHex, "hex"));
 }

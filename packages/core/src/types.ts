@@ -81,6 +81,7 @@ export const HASH_CLAIM_FIELDS = [
   "chainHeadHash",
   "prevCheckpointHash",
   "ap2MandateHash",
+  "deliveredHash",
 ] as const;
 
 export type HashClaimField = (typeof HASH_CLAIM_FIELDS)[number];

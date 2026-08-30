@@ -14,6 +14,16 @@ import {
 import { receiptHash, type SignedReceipt } from "@cedulon/receipts";
 import { checkpointHash, type SignedCheckpoint } from "./checkpoint.ts";
 
+/**
+ * RFC 6962-style audit path: sibling hashes plus the leaf index.
+ * A level with an odd last leaf is paired with itself so the path
+ * applies without a separate leaf count.
+ */
+export type InclusionProof = {
+  leafIndex: number;
+  siblings: string[];
+};
+
 export type InclusionReceipt = {
   statementHash: string;
   index: number;
@@ -22,7 +32,71 @@ export type InclusionReceipt = {
   coseHex: string;
   /** Statement body when the caller still holds it. Not part of the inclusion COSE. */
   checkpoint?: SignedCheckpoint;
+  /** Merkle audit path. Absent on receipts issued before the tree upgrade. */
+  inclusionProof?: InclusionProof;
 };
+
+function sha256Bytes(data: Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex");
+}
+
+function hex32(hex: string): Buffer {
+  return Buffer.from(hex, "hex");
+}
+
+/** Interior node: H(left ‖ right) over the 32-byte hashes. */
+export function merkleParent(leftHex: string, rightHex: string): string {
+  return sha256Bytes(Buffer.concat([hex32(leftHex), hex32(rightHex)]));
+}
+
+function padEven(level: string[]): string[] {
+  return level.length % 2 === 1 ? [...level, level[level.length - 1]] : level;
+}
+
+/** Merkle root of statement-hash leaves. Empty log is 32 zero bytes as hex. */
+export function merkleRoot(leaves: readonly string[]): string {
+  if (leaves.length === 0) {
+    return "0".repeat(64);
+  }
+  let level = [...leaves];
+  while (level.length > 1) {
+    const padded = padEven(level);
+    const next: string[] = [];
+    for (let i = 0; i < padded.length; i += 2) {
+      next.push(merkleParent(padded[i], padded[i + 1]));
+    }
+    level = next;
+  }
+  return level[0];
+}
+
+export function buildInclusionProof(leaves: readonly string[], leafIndex: number): InclusionProof {
+  const siblings: string[] = [];
+  let level = [...leaves];
+  let idx = leafIndex;
+  while (level.length > 1) {
+    const padded = padEven(level);
+    const sib = idx % 2 === 0 ? padded[idx + 1] : padded[idx - 1];
+    siblings.push(sib);
+    idx = Math.floor(idx / 2);
+    const next: string[] = [];
+    for (let i = 0; i < padded.length; i += 2) {
+      next.push(merkleParent(padded[i], padded[i + 1]));
+    }
+    level = next;
+  }
+  return { leafIndex, siblings };
+}
+
+export function applyInclusionProof(leafHash: string, proof: InclusionProof): string {
+  let hash = leafHash;
+  let idx = proof.leafIndex;
+  for (const sibling of proof.siblings) {
+    hash = idx % 2 === 0 ? merkleParent(hash, sibling) : merkleParent(sibling, hash);
+    idx = Math.floor(idx / 2);
+  }
+  return hash;
+}
 
 /** In-process append-only log. No network. SCITT/RFC 9943 spirit, not SCRAPI. */
 export class MemoryTransparencyService {
@@ -40,9 +114,8 @@ export class MemoryTransparencyService {
     const statementHash = createHash("sha256").update(Buffer.from(statementHex, "hex")).digest("hex");
     const index = this.leaves.length;
     this.leaves.push(statementHash);
-    this.treeHead = createHash("sha256")
-      .update(Buffer.from(this.treeHead + statementHash, "utf8"))
-      .digest("hex");
+    this.treeHead = merkleRoot(this.leaves);
+    const inclusionProof = buildInclusionProof(this.leaves, index);
     const payload = encodeCbor(
       cborMap([
         [1, statementHash],
@@ -57,6 +130,7 @@ export class MemoryTransparencyService {
       treeHead: this.treeHead,
       issuerPublicKeyPem: this.publicKeyPem,
       coseHex: Buffer.from(cose).toString("hex"),
+      inclusionProof,
     };
   }
 

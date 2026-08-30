@@ -298,22 +298,25 @@ the settlement it named stays reported; an issuer key you supply but that cannot
 be read is `trust-key-unreadable` on `id: "issuer"`, which is a broken setting
 rather than evidence against the receipts.
 
-Issuer pin matrix, measured. Attestation today compares the **carried SPKI**
-(`publicKeyPem`) to the pin. COSE `kid` is checked when a signature is verified
-under a chosen key, not when the attested set is built.
+Issuer pin matrix, decided (K2: kid × signature-under-pin). Attested membership
+is whether the signature verifies under one of the pinned keys. COSE `kid` is a
+routing hint; the carried `publicKeyPem` is not the identity source.
+`issuerTrust.publicKeyPem` still takes a list — any pin that verifies attests.
 
-| Carried SPKI vs pin | Signature under the pin | Named result | Attested set |
+| kid / carried pin | Signature under the pin | Named result | Attested set |
 |---|---|---|---|
-| match | valid | none of `issuer-key-mismatch` / `receipt-chain-break` | included |
-| match | invalid | `receipt-chain-break` (signature failed); not `issuer-key-mismatch` | included, then walked |
-| mismatch | valid under the foreign key (invalid under the pin) | `issuer-key-mismatch` | dropped |
-| mismatch | invalid | `issuer-key-mismatch` | dropped |
+| names a pin | valid | none of `issuer-key-mismatch` / `receipt-chain-break` | included |
+| names a pin | invalid | `receipt-chain-break` (signature failed); not `issuer-key-mismatch` | dropped from coverage, walked for the name |
+| no pin | valid under a foreign key (invalid under the pin) | `issuer-key-mismatch` | dropped |
+| no pin | invalid | `issuer-key-mismatch` | dropped |
 | unpinned | n/a | `unauthenticated-issuer` | whole list weighed |
 
-A sixth measured case: an honest COSE object whose carried PEM is swapped for
-another key still has a `kid` that names the pin, and `verifyReceipt(signed, pin)`
-would succeed, but the PEM filter reports `issuer-key-mismatch` and drops it.
-That split is deterministic under the PEM rule above.
+A sixth decided case: an honest COSE object whose carried PEM is swapped for
+another key still verifies under the pin, so it stays attested. The unsigned
+PEM surface is named `carried-key-mismatch` (warning, not a fail). The finding
+set other than that warning is unchanged. A signature that does not verify
+under the pin is still dropped even when `kid` names the pin — that door stays
+closed. The same rule filters checkpoints.
 
 Every verify in the project takes the key
 directly for callers outside `audit()`: `verifyReceipt(signed, issuerKey)`,

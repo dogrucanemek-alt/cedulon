@@ -37,6 +37,7 @@ function manifestVerdict(
 
 export {
   RailLedger,
+  DEFAULT_CLOCK_SKEW_MS,
   EXTRACT_SCOPE_FIELDS,
   SETTLEMENT_CORE_FIELDS,
   generateExtractKeys,

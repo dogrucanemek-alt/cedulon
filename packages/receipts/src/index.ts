@@ -36,9 +36,11 @@ export const RECEIPT_CLAIM = {
   outcome: -70012,
 } as const;
 
-/** CWT private-use label for a detached payee countersignature payload. */
+/** CWT private-use labels for a detached payee countersignature payload. */
 export const COUNTERSIGN_CLAIM = {
   receiptCose: -70401,
+  /** SHA-256 of the bytes the payee says were delivered, signed with the receipt. */
+  deliveredHash: -70402,
 } as const;
 
 // The grammar lives in @cedulon/core so every boundary checks one spelling
@@ -335,6 +337,38 @@ export function verifyReceipt(signed: SignedReceipt, expectedIssuerKeyPem?: stri
     : verifyReceiptCose(signed, expectedIssuerKeyPem);
 }
 
+/**
+ * Whether the signature verifies under this pin, ignoring the carried PEM.
+ * Attestation follows this question, not the unsigned `publicKeyPem` field.
+ */
+export function verifyReceiptUnderPin(signed: SignedReceipt, pinPem: string): boolean {
+  if (signed.claims.noManifest !== (signed.claims.manifestHash === null)) {
+    return false;
+  }
+  if (signed.encoding === "json") {
+    try {
+      const payload = Buffer.from(canonical(signed.claims), "utf8");
+      return verify(null, payload, pinPem, Buffer.from(signed.signature, "base64"));
+    } catch {
+      return false;
+    }
+  }
+  if (!signed.coseHex) {
+    return false;
+  }
+  const bytes = Buffer.from(signed.coseHex, "hex");
+  if (!verifyCoseSign1(bytes, pinPem, CTY_RECEIPT)) {
+    return false;
+  }
+  try {
+    const msg = decodeCoseSign1(bytes);
+    const decoded = claimsFromCbor(msg.payload);
+    return canonical(decoded) === canonical(signed.claims);
+  } catch {
+    return false;
+  }
+}
+
 function issuerCoseBytes(signed: SignedReceipt): Uint8Array {
   if (!signed.coseHex) {
     throw new Error("countersign-requires-cose");
@@ -352,17 +386,53 @@ export function counterSign(
   payeePrivateKeyPem: string,
   payeePublicKeyPem: string,
   expectedIssuerKeyPem?: string,
+  deliveredHash?: string | Uint8Array,
 ): SignedReceipt {
   if (!verifyReceipt(signed, expectedIssuerKeyPem)) {
     throw new Error("countersign-unsigned-receipt");
   }
-  const payload = encodeCbor(cborMap([[COUNTERSIGN_CLAIM.receiptCose, issuerCoseBytes(signed)]]));
+  const entries: Array<[number, Uint8Array]> = [
+    [COUNTERSIGN_CLAIM.receiptCose, issuerCoseBytes(signed)],
+  ];
+  if (deliveredHash !== undefined) {
+    const bytes =
+      typeof deliveredHash === "string"
+        ? Buffer.from(deliveredHash, "hex")
+        : Buffer.from(deliveredHash);
+    if (typeof deliveredHash === "string") {
+      const refused = hashClaimRefusal("deliveredHash", deliveredHash);
+      if (refused) throw new Error(refused);
+    } else if (bytes.length !== 32) {
+      throw new Error("malformed-delivered-hash");
+    }
+    entries.push([COUNTERSIGN_CLAIM.deliveredHash, new Uint8Array(bytes)]);
+  }
+  const payload = encodeCbor(cborMap(entries));
   const cose = signCoseSign1(payload, payeePrivateKeyPem, CTY_COUNTERSIGN);
   return {
     ...signed,
     counterCoseHex: Buffer.from(cose).toString("hex"),
     payeePublicKeyPem,
   };
+}
+
+/** Hex SHA-256 of `-70402` when the countersignature carries it; otherwise null. */
+export function countersignDeliveredHashHex(signed: SignedReceipt): string | null {
+  if (!signed.counterCoseHex) {
+    return null;
+  }
+  try {
+    const msg = decodeCoseSign1(Buffer.from(signed.counterCoseHex, "hex"));
+    const map = asMap(decodeCbor(msg.payload));
+    const raw = mapGet(map, COUNTERSIGN_CLAIM.deliveredHash);
+    if (!(raw instanceof Uint8Array)) {
+      return null;
+    }
+    const hex = Buffer.from(raw).toString("hex");
+    return isValidHashText(hex) ? hex : null;
+  } catch {
+    return null;
+  }
 }
 
 export function verifyCounterSignature(signed: SignedReceipt, payeePublicKeyPem?: string): boolean {

@@ -12,6 +12,8 @@ export const EXTRACT_SCOPE_FIELDS = [
   "windowEndMs",
   "settlements",
 ] as const;
+/** Profile default δ when an extract omits `clockSkewMs`. */
+export const DEFAULT_CLOCK_SKEW_MS = 300_000;
 
 /**
  * Why this extract body is not the Table 8 / scope shape, by name, or null
@@ -66,6 +68,15 @@ export function railExtractShapeRefusal(body: unknown): string | null {
     if (typeof s.timestampMs !== "number") {
       return "renamed-settlement-timestampMs";
     }
+    if ("beneficiary" in s && typeof s.beneficiary !== "string") {
+      return "malformed-settlement-beneficiary";
+    }
+  }
+  if (
+    "clockSkewMs" in rec &&
+    (typeof rec.clockSkewMs !== "number" || !Number.isFinite(rec.clockSkewMs))
+  ) {
+    return "malformed-extract-clockSkewMs";
   }
   return null;
 }
@@ -75,6 +86,8 @@ export type RailSettlement = {
   amount: string;
   currency: string;
   timestampMs: number;
+  /** When present, compared to the receipt payee. Extra members stay free. */
+  beneficiary?: string;
 };
 
 export type RailExtractBody = {
@@ -83,6 +96,8 @@ export type RailExtractBody = {
   windowStartMs: number;
   windowEndMs: number;
   settlements: RailSettlement[];
+  /** Optional δ in ms. Absent ⇒ DEFAULT_CLOCK_SKEW_MS. Extra members stay free. */
+  clockSkewMs?: number;
 };
 
 export type SignedRailExtract = {
