@@ -65,6 +65,23 @@ export function verifyRailExtract(signed: SignedRailExtract, expectedRailKeyPem?
   }
 }
 
+/**
+ * Why encoding this extract's body would refuse, by name, or null when it
+ * would not. verifyRailExtract answers only "verified or not"; a report that
+ * says "signature failed" for a body the encoder refused has kept the bound
+ * and lost the name, and an operator can no longer tell a limit from a
+ * forgery. The COSE side splits the same two questions with
+ * coseDecodeRefusal; this is the RFC 8785 sibling.
+ */
+export function railExtractEncodeRefusal(signed: SignedRailExtract): string | null {
+  try {
+    canonical(signed.body);
+    return null;
+  } catch (err) {
+    return err instanceof Error && err.message !== "" ? err.message : "unencodable";
+  }
+}
+
 function extractBodyOf(rows: RailSettlement[], accountId: string, railId: string): RailExtractBody {
   const times = rows.map((r) => r.timestampMs);
   return {

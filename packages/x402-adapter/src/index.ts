@@ -38,6 +38,7 @@ function manifestVerdict(
 export {
   RailLedger,
   generateExtractKeys,
+  railExtractEncodeRefusal,
   signRailExtract,
   verifyRailExtract,
   type RailExtractBody,

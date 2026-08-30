@@ -12,6 +12,7 @@ import {
 import { manifestHash, verifyManifest, type SignedManifest } from "@cedulon/manifest";
 import { receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import {
+  railExtractEncodeRefusal,
   verifyRailExtract,
   type RailSettlement,
   type SignedRailExtract,
@@ -785,13 +786,22 @@ export function audit(input: AuditInput): AuditReport {
       }
     }
 
+    // When the signature does not verify, the encoder may be the one that
+    // refused (a non-finite number is a document RFC 8785 has no encoding
+    // for). The refusal keeps its name in the report, the same split the
+    // COSE side makes: "signature failed" for a refused body would leave an
+    // operator unable to tell a limit from a forgery.
+    const encodeRefusal = signatureVerifies ? null : railExtractEncodeRefusal(input.extract);
+
     if (!input.trust) {
       warnings.push({
         code: "unauthenticated-extract",
         id: "extract",
         detail: signatureVerifies
           ? "no verifier-supplied rail key; the signature proves internal consistency, not that the named rail produced the extract, so the completeness guarantee is conditional"
-          : "rail extract signature failed and no rail key was pinned; completeness guarantee is conditional",
+          : encodeRefusal !== null
+            ? `rail extract body was refused: ${encodeRefusal} - not a signature verdict; no rail key was pinned and the completeness guarantee is conditional`
+            : "rail extract signature failed and no rail key was pinned; completeness guarantee is conditional",
         severity: "warn",
       });
     } else {
@@ -814,7 +824,10 @@ export function audit(input: AuditInput): AuditReport {
         findings.push({
           code: "extract-key-mismatch",
           id: "extract",
-          detail: "a rail key was pinned but the extract signature does not verify against the key it carries",
+          detail:
+            encodeRefusal !== null
+              ? `a rail key was pinned but the extract body was refused: ${encodeRefusal} - not a signature verdict`
+              : "a rail key was pinned but the extract signature does not verify against the key it carries",
         });
       } else {
         const carriedDer = toSpkiDer(input.extract.publicKeyPem);

@@ -342,6 +342,32 @@ describe("the JSON verifiers answer on input RFC 8785 cannot encode", () => {
     assert.equal(report.guarantee, "conditional");
   });
 
+  it("RED then GREEN: the refusal keeps its name in the audit report", () => {
+    // Closing the crash was half the fix: the report still said "signature
+    // failed" for a body the encoder refused, and an operator could not tell
+    // a limit from a forgery - the same rule the COSE side keeps by asking
+    // coseDecodeRefusal beside every false verdict.
+    const extract = {
+      body: { accountId: "a", railId: "r", windowStartMs: INF, windowEndMs: 2, settlements: [] },
+      signature: "AA",
+      publicKeyPem: k.publicKeyPem,
+    };
+    const unpinned = audit({ receipts: [], checkpoints: [], extract: extract as never });
+    const warn = unpinned.warnings.find((f) => f.code === "unauthenticated-extract");
+    assert.ok(warn, "the unauthenticated-extract warning must be present");
+    assert.match(warn.detail, /non-finite number/);
+
+    const pinned = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: extract as never,
+      trust: { publicKeyPem: k.publicKeyPem },
+    });
+    const mismatch = pinned.findings.find((f) => f.code === "extract-key-mismatch");
+    assert.ok(mismatch, "the pinned path must still fail closed");
+    assert.match(mismatch.detail, /non-finite number/);
+  });
+
   it("RED then GREEN: a JSON receipt carrying a non-finite number is unverified, not thrown", () => {
     const signed = signReceiptJson(
       {
