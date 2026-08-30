@@ -3275,7 +3275,7 @@ Internet-Draft                   Cedulon                     August 2026
 
    Note on distribution: the requirements the last two revisions add
    that are in a published package are in the published @cedulon
-   packages at version 0.6.0, not only in the repository, with the
+   packages at version 0.7.0, not only in the repository, with the
    exceptions named below.  A reader can check a claim against an
    installed package rather than against a working tree.  That order is
    deliberate: -00 described requirements that its published package did
@@ -3334,26 +3334,26 @@ Internet-Draft                   Cedulon                     August 2026
    still depart from its amount, currency or expiry, which is what MUST-
    T8-9 closes.  Both were unpublished when the previous revision was
    posted and both are in the published packages now, so a reader can
-   check either against an installed 0.6.0 rather than against this
+   check either against an installed 0.7.0 rather than against this
    tree.  MUST-T8-9 as published carries the two-branch form specified
    here: a departure under a usable issuer pin is a finding and fails
    the audit, and a departure with no usable pin is reported as a
    warning that does not by itself fail it.  The previous revision
    stated the single branch, and the difference is deliberate rather
    than a drafting slip; the reason is given where the requirement is
-   defined.  Two hardenings this revision's review rounds produced are
-   in this tree and not yet in a published package.  The MCP boundary
-   now refuses an amount spelling the grammar forbids instead of parsing
-   and reprinting it, which had let 01 through as 1 and erased the
-   octets MUST-T8-2 compares; and a decoder refusal now keeps its name
-   on the audit surface instead of surfacing as a signature failure,
-   which MUST-T4-19 requires.  A reader checking either against an
-   installed 0.6.0 will find the older behaviour; both are in the next
-   published version.
+   defined.  Four repairs this revision's review rounds produced are in
+   0.7.0 and were not in 0.6.0, so a reader comparing the two sees them.
+   The MCP boundary refuses an amount spelling the grammar forbids
+   instead of parsing and reprinting it, which had let 01 through as 1
+   and erased the octets MUST-T8-2 compares; signManifest holds the same
+   grammar its receipt counterpart always held; a decoder refusal keeps
+   its name on the audit surface instead of surfacing as a signature
+   failure, which MUST-T4-19 requires; and no verifier throws on input
+   it cannot read, in either the CBOR or the JSON path, after an interim
+   shape that rethrew those names left a single oversized checkpoint
+   able to end an audit by exception rather than by finding.
 
-   MUST-T12-4 is the one exception left in this revision.  It is
-   specified, not executed: the suite and the published server only
-   drive the in-process RailLedger.  There is no authenticated external-
+
 
 
 
@@ -3362,9 +3362,12 @@ Dogru                     Expires 3 March 2027                 [Page 60]
 Internet-Draft                   Cedulon                     August 2026
 
 
+   MUST-T12-4 is the one exception left in this revision.  It is
+   specified, not executed: the suite and the published server only
+   drive the in-process RailLedger.  There is no authenticated external-
    rail path in this tree, so the indeterminate outcome and the rule
    that forbids returning authority without evidence have no red-then-
-   green case.  A reader checking MUST-T12-4 against an installed 0.6.0
+   green case.  A reader checking MUST-T12-4 against an installed 0.7.0
    will not find it.
 
 18.1.  Changes from -03
@@ -3407,9 +3410,6 @@ Internet-Draft                   Cedulon                     August 2026
    they were missing: whether a settlement exactly at expiry is inside
    the manifest, and whether a currency may be case-folded before it is
    compared.  MUST-T10-1 says what an audit with nothing in it reports.
-
-
-
 
 
 

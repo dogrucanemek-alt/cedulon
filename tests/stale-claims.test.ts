@@ -200,7 +200,13 @@ function addPreparedPhrases(upgrading: string, status: string): {
     upgrading: upgrading
       .replace(/^(## \d+\.\d+\.\d+)(:)/m, "$1 (prepared, not published)$2")
       .replace("This one breaks. ", "This one breaks, and it is prepared in this tree, not a published npm\nrelease. "),
-    status: status.replace(" is published on npm.", " is prepared in this tree, not a published npm release."),
+    // Anchored on the claim rather than on one spelling of the sentence that
+    // carries it. The old fixture matched " is published on npm." exactly and
+    // stopped finding anything the day that sentence grew a subordinate
+    // clause, which made a fixture failure look like a guard failure.
+    status: status
+      .replace(/ is published on npm\b/, " is prepared in this tree, not a published npm release")
+      .replace(/ are published on npm at `\d+\.\d+\.\d+`/, " are not published yet"),
   };
 }
 
@@ -387,9 +393,28 @@ describe("claims that describe something outside their own file", () => {
     assert.equal(bundle[2], published, "STATUS bundle manifest version is not the published version");
     assert.equal(bundle[3], published, "STATUS bundle install range is not the published version");
 
+    // The MCP Registry is a second distribution channel and it moves on its
+    // own: release.yml sends the packages to npm from the tag and deliberately
+    // does not touch the registry, so the two numbers can differ and the
+    // difference is a fact about what a user receives, not a drift to forbid.
+    // Requiring them equal would push the document toward the tidier sentence
+    // rather than the true one. What must not happen is the lag going unsaid.
     const registry = status.match(/where `(\d+\.\d+\.\d+)` is the current version \(`isLatest`\)/);
     assert.ok(registry, "docs/STATUS.md no longer names the registry isLatest version");
-    assert.equal(registry[1], published, "STATUS registry isLatest is not the published version");
+    if (registry[1] !== published) {
+      assert.match(
+        status,
+        new RegExp(
+          `npm serves \`${published.replaceAll(".", "\\.")}\`, the MCP Registry\\s+still serves \`${registry[1]!.replaceAll(".", "\\.")}\``,
+        ),
+        `STATUS says the registry is at ${registry[1]} and npm at ${published} but never says the listing is behind; a reader installing from the registry has to be told which version they get`,
+      );
+      assert.match(
+        status,
+        /a release behind npm/,
+        "the lag between npm and the MCP Registry is named nowhere in STATUS",
+      );
+    }
   });
 
   it("the set of cases that skip on Windows is the one two living documents describe", () => {

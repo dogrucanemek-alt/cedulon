@@ -28,9 +28,10 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-`0.7.0` is prepared in this tree and is not a published npm release; npm still
-serves `0.6.0`, and a reader checking a claim against an installed package will
-find the older behaviour until this bump ships. What it changes: an amount is
+`0.7.0` is published on npm, and it is the first release with a provenance
+attestation: it was built and sent by the tagged `release.yml` run rather than
+from anyone's laptop, so a reader can check where the bytes came from as well
+as what they do. What it changes: an amount is
 checked as text at every boundary before anything parses it, so `"01"` is
 answered `malformed-amount` rather than reinterpreted as `1` and printed back
 as `"1"`, and `signManifest` holds the grammar `signReceipt` has always held.
@@ -44,7 +45,7 @@ without a pin the same departure is a warning that does not by itself fail the
 audit - and `requestHash` is the SHA-256 of the six-field canonical document in
 lowercase hex, the digest the posted `-03` named a hash for without naming.
 
-`0.6.0` is published on npm. It names
+`0.6.0` was the release before it. It names
 the CBOR refuse codes (`cbor-eof`, `cbor-too-deep`, `cbor-too-large`,
 `cbor-unsupported`, `cbor-duplicate-key`) and the audit input bound
 (`audit-too-large`) that used to surface as a `RangeError` or an
@@ -63,7 +64,7 @@ false` for a departure the pinned key does attest. A clean install of
 `@cedulon/core@0.6.0` returns a 64-character lowercase hex digest from
 `requestHashOf`, matching the value the conformance run records.
 
-Eight packages are published on npm at `0.6.0`, so the server runs without a
+Eight packages are published on npm at `0.7.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
 `MUST-T8-9`, and it breaks: an audit that used to return a clean
 unconditional result over a receipt carrying the hash of terms it departs from
@@ -87,7 +88,13 @@ external-rail path in this tree, so the indeterminate outcome and the
 That is a gap, not a pass.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.6.0` answers `initialize` reporting `0.6.0`. The same
+`@cedulon/mcp-server@0.7.0` answers `initialize` reporting `0.7.0`. A clean
+install of the same release was also asked the three things this version
+changed, from the installed package rather than the tree: an oversized
+checkpoint comes back as a finding naming `cbor-too-large` instead of taking
+the audit down, an extract carrying a non-finite number verifies false and
+leaves the guarantee conditional instead of throwing, and both `signManifest`
+and `signReceipt` refuse an amount spelled `01`. The same
 check against the 0.5.0 packages found that the
 installed `dist/session.js` refuses a lock it cannot take with a reason rather
 than an exception and checks the state path before reading its fingerprint, and
@@ -113,9 +120,9 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.6.0 bundle was built and unpacked: its manifest states
-`0.6.0` and the server inside it installs `@cedulon/mcp-server@^0.6.0`. Every
-`@cedulon` package inside it reads `0.6.0`, with no older copy left beside them. The builder installs the published version rather than the
+desktop install. The 0.7.0 bundle was built and unpacked: its manifest states
+`0.7.0` and the server inside it installs `@cedulon/mcp-server@^0.7.0`. Every
+`@cedulon` package inside it reads `0.7.0`, with no older copy left beside them. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -140,7 +147,19 @@ started, and listed five tools.
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
 where `0.6.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output. `server.json` is the entry
-it was published from. Earlier listings: `0.2.1` announced itself as `0.2.0`
+it was published from.
+
+That listing is a release behind npm, and it is worth saying plainly rather
+than leaving a reader to discover it: npm serves `0.7.0`, the MCP Registry
+still serves `0.6.0`, so a client that installs from the registry today gets
+the version without the two crash repairs 0.7.0 makes. The two move
+separately on purpose. `release.yml` publishes to npm from the tag with no
+long-lived credential, and it does not publish to the MCP Registry, because
+`mcp-publisher` authenticates through its own GitHub device flow and whether
+it accepts Actions OIDC has not been measured here; adding it untested would
+put a claim in that workflow nobody checked. Until it is measured, the
+registry entry is pushed by hand and can lag, so this paragraph names both
+numbers instead of one. Earlier listings: `0.2.1` announced itself as `0.2.0`
 over `initialize`, because the version was written out a second time in the
 source; `0.2.2` replaced that. `tests/release-manifest.test.ts` and the version
 check in `tests/mcp-server.test.ts` compare those declarations against each
