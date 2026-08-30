@@ -533,6 +533,27 @@ describe("claims that describe something outside their own file", () => {
     );
   });
 
+  it("the site spec page names the newest draft, and only that one", () => {
+    // The README got this guard a revision ago; the site page did not, and
+    // sat on -02 through two postings with every suite green. Same defect,
+    // same repair: compare the page to the tree instead of trusting a hand
+    // that edits both.
+    const newest = latestDraftRevision(join(root, "spec"));
+    const page = read("site/spec.html");
+    const named = [...page.matchAll(/draft-dogru-cedulon-(\d+)/g)].map((m) => m[1]);
+    assert.ok(
+      named.length > 0,
+      "site/spec.html no longer names the draft at all; the page and this check describe the same document",
+    );
+    for (const rev of named) {
+      assert.equal(
+        rev,
+        newest,
+        `site/spec.html names draft-dogru-cedulon-${rev}; the newest revision in spec/ is -${newest}`,
+      );
+    }
+  });
+
   it("no status page cites a requirement the draft does not define, or calls a closed gap open", () => {
     const draft = read(DRAFT);
     const defined = new Set(
