@@ -177,14 +177,56 @@ function verifiesOrRefusal(
   return { ok, refusal: ok ? null : coseDecodeRefusalHex(coseHex) };
 }
 
+/**
+ * Issuer order is the prevReceiptHash chain, not the order the receipts
+ * were presented. Presentation is a bag; the chain is rebuilt from the
+ * links, then walked.
+ */
+export function orderByIssuerChain(receipts: SignedReceipt[]): {
+  ordered: SignedReceipt[];
+  leftover: SignedReceipt[];
+} {
+  if (receipts.length === 0) {
+    return { ordered: [], leftover: [] };
+  }
+  const remaining = new Set(receipts);
+  const starts = receipts.filter((r) => r.claims.prevReceiptHash === null);
+  const ordered: SignedReceipt[] = [];
+  let current = starts.length === 1 ? starts[0] : null;
+  while (current && remaining.has(current)) {
+    remaining.delete(current);
+    ordered.push(current);
+    let nextHash: string | null = null;
+    try {
+      nextHash = receiptHash(current);
+    } catch {
+      break;
+    }
+    const nexts = [...remaining].filter((r) => r.claims.prevReceiptHash === nextHash);
+    if (nexts.length !== 1) {
+      break;
+    }
+    current = nexts[0];
+  }
+  return { ordered, leftover: [...remaining] };
+}
+
 export function findReceiptChainBreak(receipts: SignedReceipt[]): Finding | null {
-  for (let i = 0; i < receipts.length; i += 1) {
-    const v = verifiesOrRefusal(() => verifyReceipt(receipts[i]), receipts[i].coseHex);
-    const jcs = v.ok ? null : receiptEncodeRefusal(receipts[i]);
+  const { ordered, leftover } = orderByIssuerChain(receipts);
+  if (leftover.length > 0) {
+    return {
+      code: "receipt-chain-break",
+      id: leftover[0].claims.nonce,
+      detail: `receipt chain could not place nonce=${leftover[0].claims.nonce}; issuer order is the prevReceiptHash links, not presentation order`,
+    };
+  }
+  for (let i = 0; i < ordered.length; i += 1) {
+    const v = verifiesOrRefusal(() => verifyReceipt(ordered[i]), ordered[i].coseHex);
+    const jcs = v.ok ? null : receiptEncodeRefusal(ordered[i]);
     if (v.refusal !== null || jcs !== null) {
       return {
         code: "receipt-chain-break",
-        id: receipts[i].claims.nonce,
+        id: ordered[i].claims.nonce,
         detail:
           v.refusal !== null
             ? `receipt ${i} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`
@@ -194,27 +236,27 @@ export function findReceiptChainBreak(receipts: SignedReceipt[]): Finding | null
     if (!v.ok) {
       return {
         code: "receipt-chain-break",
-        id: receipts[i].claims.nonce,
+        id: ordered[i].claims.nonce,
         detail: `receipt ${i} signature failed`,
       };
     }
     let expected: string | null = null;
     if (i > 0) {
       try {
-        expected = receiptHash(receipts[i - 1]);
+        expected = receiptHash(ordered[i - 1]);
       } catch (err) {
         const name = err instanceof Error && err.message !== "" ? err.message : "unencodable";
         return {
           code: "receipt-chain-break",
-          id: receipts[i - 1].claims.nonce,
+          id: ordered[i - 1].claims.nonce,
           detail: `receipt ${i - 1} refused: ${name} - not a signature verdict`,
         };
       }
     }
-    if (receipts[i].claims.prevReceiptHash !== expected) {
+    if (ordered[i].claims.prevReceiptHash !== expected) {
       return {
         code: "receipt-chain-break",
-        id: receipts[i].claims.nonce,
+        id: ordered[i].claims.nonce,
         detail: `receipt ${i} prevReceiptHash does not match prior receipt`,
       };
     }
@@ -456,7 +498,8 @@ export function findWindowCoverage(
     }
   }
 
-  for (const r of receipts) {
+  const chained = orderByIssuerChain(receipts);
+  for (const r of [...chained.ordered, ...chained.leftover]) {
     const hits = checkpoints.filter((cp) => inCheckpointWindow(r.claims.timestampMs, cp));
     if (hits.length === 0) {
       findings.push({
@@ -494,6 +537,7 @@ export function findCheckpointTotalMismatches(
       continue;
     }
     const inWindow = receiptsInWindow(receipts, cp);
+    const inWindowOnChain = receiptsInWindow(orderByIssuerChain(receipts).ordered, cp);
     const expected = totalsFromReceipts(inWindow);
     if (cp.claims.totals !== null && JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
       findings.push({
@@ -510,9 +554,9 @@ export function findCheckpointTotalMismatches(
       });
     }
     let expectedHead: string | null = null;
-    if (inWindow.length > 0) {
+    if (inWindowOnChain.length > 0) {
       try {
-        expectedHead = receiptHash(inWindow[inWindow.length - 1]);
+        expectedHead = receiptHash(inWindowOnChain[inWindowOnChain.length - 1]);
       } catch (err) {
         const name = err instanceof Error && err.message !== "" ? err.message : "unencodable";
         findings.push({
@@ -1138,6 +1182,13 @@ export function audit(input: AuditInput): AuditReport {
       }
       attested = input.receipts.filter((r) => attests(r.publicKeyPem));
     }
+  }
+  // Presentation order carries no weight. Rebuild the attested bag from the
+  // prevReceiptHash links so every later walk (chain head, window coverage,
+  // settlement match order) sees the same issuer order.
+  {
+    const chained = orderByIssuerChain(attested);
+    attested = [...chained.ordered, ...chained.leftover];
   }
 
   // A terms mismatch is a charge: this receipt broke the terms it named.
