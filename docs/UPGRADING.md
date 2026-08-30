@@ -43,17 +43,22 @@ can invent. `requestHash` is still the SHA-256 of the six-field canonical
 document, lowercase hex; `-04` states the digest and the exact JSON shape that
 `-03` left to the reader.
 
-Both divergences from the posted draft are still open, unchanged, and still
-named here rather than left to be discovered. The published draft `-03`
-(MUST-T8-9) says an unpinned departure is reported as
-`manifest-terms-mismatch` and fails the audit; this tree reports it and does
-not fail. The difference will be closed in `-04`, with the reason.
+Both divergences from the posted draft are closed, and they closed by the
+draft moving rather than by the code being talked into agreeing. `-04` is
+posted. MUST-T8-9 now states the two-branch form this tree implements: with a
+usable issuer pin an unpinned departure fails the audit, without one it is
+reported and does not, because a charge no key stands behind is one a forged
+receipt can invent against an honest payer. MUST-T3-4 now names SHA-256, the
+RFC 8785 encoding, and the request document member by member, which is what
+this tree binds. A reader implementing the posted draft literally now matches
+a 0.7.0 token.
 
-The published draft `-03` (MUST-T3-4 / MUST-T6-1) says a Decision Token is
-bound to a hash of the six request fields without naming the octets or the
-digest; this tree binds SHA-256 of the six-field canonical JSON document in
-lowercase hex. A reader who implements `-03` literally will not match a 0.7.0
-token. The difference will be closed in `-04`, with the reason.
+The conformance runner records that: `conformance/counted-splits.ts` is empty,
+and the two vectors that carried the divergences are ordinary vectors now,
+checked against the draft instead of recorded as departing from it. The
+request-hash vector carries the expected digest, which the draft's silence
+used to forbid: writing one while `-03` named no digest would have recorded
+this implementation's answer as though it were the specification's.
 
 **What to change:** send canonical decimal amounts. Delete a `try/catch`
 written for a rethrown decoder refusal, and read the name from the bytes with

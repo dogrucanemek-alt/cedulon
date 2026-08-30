@@ -608,26 +608,42 @@ describe("claims that describe something outside their own file", () => {
     assertRequestHashSplitAligned(read("docs/UPGRADING.md"), read("docs/STATUS.md"));
   });
 
-  it("RED: a COUNTED_SPLITS entry removed while UPGRADING still names the MUST fails", () => {
-    const { "V-T3-4-request-hash": _removed, ...drifted } = COUNTED_SPLITS;
-    assert.ok(!drifted["V-T3-4-request-hash"], "fixture left the T3-4 counted split");
+  // Both directions used to be proved by drifting a live divergence. -04 is
+  // posted and both closed, so there is no live one to borrow - and a guard
+  // that can only be proved while it has something to catch is proved for
+  // exactly the period nobody needs it. The fixtures are synthetic now, and
+  // stay valid whether or not a divergence exists.
+  const syntheticSection = (body: string): string =>
+    `# Upgrading\n\n## ${workspaceVersion()}: fixture\n\n${body}\n`;
+
+  it("RED: an UPGRADING -03 split with no COUNTED_SPLITS entry fails", () => {
+    const upgrading = syntheticSection(
+      "The published draft `-03` (MUST-T99-1) says one thing and this tree does\n" +
+        "another. The difference will be closed in `-05`, with the reason.",
+    );
     assert.throws(
-      () => assertDraftSplitsAligned(read("docs/UPGRADING.md"), drifted),
-      /UPGRADING \d+\.\d+\.\d+ names MUST-T3-4 as a -03 split but COUNTED_SPLITS has no vector for it/,
+      () => assertDraftSplitsAligned(upgrading, {}),
+      /UPGRADING \d+\.\d+\.\d+ names MUST-T99-1 as a -03 split but COUNTED_SPLITS has no vector for it/,
     );
   });
 
-  it("RED: an UPGRADING -03 split removed while COUNTED_SPLITS still names the MUST fails", () => {
-    const upgrading = read("docs/UPGRADING.md");
-    const drifted = upgrading.replace(
-      /\nThe published draft `-03` \(MUST-T3-4 \/ MUST-T6-1\)[\s\S]*?with the reason\.\n/,
-      "\n",
-    );
-    assert.notEqual(drifted, upgrading, "fixture did not remove the T3-4 split from UPGRADING");
+  it("RED: a COUNTED_SPLITS entry no UPGRADING -03 split names fails", () => {
+    // A real vector id, because the check resolves the id to a vector before
+    // it reads the MUST identities out of it.
+    const counted = {
+      "V-T8-9-depart-unpinned":
+        "MUST-T8-9: fixture entry with no matching paragraph in UPGRADING.",
+    };
     assert.throws(
-      () => assertDraftSplitsAligned(drifted, COUNTED_SPLITS),
-      /COUNTED_SPLITS names MUST-T3-4 but UPGRADING \d+\.\d+\.\d+ does not name it as a -03 split/,
+      () => assertDraftSplitsAligned(syntheticSection("No divergence is named here."), counted),
+      /COUNTED_SPLITS names MUST-T8-9 but UPGRADING \d+\.\d+\.\d+ does not name it as a -03 split/,
     );
+  });
+
+  it("GREEN: an empty split list and an UPGRADING that names none agree", () => {
+    // The state the tree is in now, asserted rather than assumed.
+    assert.deepEqual(Object.keys(COUNTED_SPLITS), []);
+    assertDraftSplitsAligned(syntheticSection("No divergence is named here."), {});
   });
 
   it("GREEN: UPGRADING -03 splits and COUNTED_SPLITS name the same MUST identities", () => {

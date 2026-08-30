@@ -81,8 +81,14 @@ describe("conformance vectors run in the suite", () => {
   });
 
   it("RED: a request-hash vector that claims the draft named a digest, without carrying one, is an error", () => {
+    // The living vector now says the draft names the digest and carries the
+    // value, because -04 is posted and states it. The condition worth proving
+    // is the half-done one: the claim without the value. The fixture drifts
+    // toward that rather than toward the state the tree already has.
     const drifted = living().map((v) =>
-      v.id === "V-T3-4-request-hash" ? { ...v, draftNamesDigest: true } : v,
+      v.id === "V-T3-4-request-hash"
+        ? { ...v, draftNamesDigest: true, expectRequestHash: undefined }
+        : v,
     );
     const rows = evaluateVectors(drifted);
     const hit = rows.find((r) => r.id === "V-T3-4-request-hash");

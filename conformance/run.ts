@@ -36,6 +36,8 @@ export type Vector = {
   bindReceipt?: boolean;
   draftNamesDigest?: boolean;
   draftOpen?: boolean;
+  /** Only meaningful once draftNamesDigest is true; see the request-hash branch. */
+  expectRequestHash?: string;
 };
 
 export type Row = { id: string; status: "pass" | "split" | "error"; detail: string };
@@ -326,11 +328,32 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
       };
       const bound = requestHashOf(req);
       if (v.draftNamesDigest === true) {
+        // The posted draft now names the digest, the encoding and the exact
+        // member-by-member shape of the request document, so a reader can
+        // compute this value from the text alone. That is what licenses an
+        // expected digest here: while the draft was silent, writing one would
+        // have recorded the companion's answer as though it were the draft's.
+        if (typeof v.expectRequestHash !== "string") {
+          rows.push({
+            id: v.id,
+            status: "error",
+            detail:
+              "draftNamesDigest is true, so the posted draft names the digest and this vector must carry the expected value",
+          });
+          continue;
+        }
+        if (v.expectRequestHash !== bound) {
+          rows.push({
+            id: v.id,
+            status: "split",
+            detail: `draft-derived digest ${v.expectRequestHash}; companion binds ${bound}`,
+          });
+          continue;
+        }
         rows.push({
           id: v.id,
-          status: "error",
-          detail:
-            "draftNamesDigest is true but the vector still carries no expected digest; naming a digest here is not licensed until the posted draft names one",
+          status: "pass",
+          detail: `companion binds the digest the posted draft defines (${bound})`,
         });
         continue;
       }
