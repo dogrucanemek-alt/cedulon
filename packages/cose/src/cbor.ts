@@ -277,3 +277,19 @@ export function hexToBytes(hex: string): Uint8Array {
   }
   return Uint8Array.from(Buffer.from(hex, "hex"));
 }
+
+/**
+ * The refusals MUST-T4-18 and MUST-T4-19 require to stay named. A decoder
+ * bound that surfaces as "signature failed" has kept the bound and lost the
+ * name, and an operator can no longer tell a limit from a forgery.
+ */
+export const NAMED_DECODE_REFUSALS: ReadonlySet<string> = new Set([
+  "cbor-too-large",
+  "cbor-too-deep",
+  "cbor-duplicate-key",
+]);
+
+export function namedDecodeRefusal(err: unknown): string | null {
+  const msg = err instanceof Error ? err.message : "";
+  return NAMED_DECODE_REFUSALS.has(msg) ? msg : null;
+}

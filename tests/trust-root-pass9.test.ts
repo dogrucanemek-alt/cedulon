@@ -77,7 +77,7 @@ function manifestBody() {
     description: "one unit of work",
     amount: "1",
     currency: "USD",
-    acceptanceCriteriaHash: "criteria-hash",
+    acceptanceCriteriaHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     cancelCondition: "none",
     expiresAtMs: NOW + 60_000,
   };

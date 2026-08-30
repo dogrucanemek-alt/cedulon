@@ -20,3 +20,4 @@ export type {
   Policy,
   SpendRequest,
 } from "./types.ts";
+export { AMOUNT_RE, isValidAmountText } from "./types.ts";

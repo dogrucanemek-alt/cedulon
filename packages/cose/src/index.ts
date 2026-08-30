@@ -13,6 +13,8 @@ export {
   hexToBytes,
   isCborMap,
   mapGet,
+  NAMED_DECODE_REFUSALS,
+  namedDecodeRefusal,
   type CborMap,
   type CborVal,
 } from "./cbor.ts";

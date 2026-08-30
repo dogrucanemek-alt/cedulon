@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
-import { canonical } from "@cedulon/core";
+import { AMOUNT_RE, canonical } from "@cedulon/core";
 import {
   CTY_COUNTERSIGN,
   CTY_RECEIPT,
@@ -9,6 +9,7 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
+  namedDecodeRefusal,
   sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
@@ -37,7 +38,9 @@ export const COUNTERSIGN_CLAIM = {
   receiptCose: -70401,
 } as const;
 
-export const AMOUNT_RE = /^(0|[1-9][0-9]*)$/;
+// The grammar lives in @cedulon/core so every boundary checks one spelling
+// of the rule; re-exported here to keep this package's surface unchanged.
+export { AMOUNT_RE };
 export const NONCE_MIN_BYTES = 16;
 
 export type ReceiptEncoding = "cose" | "json";
@@ -226,7 +229,11 @@ export function verifyReceiptCose(signed: SignedReceipt, expectedIssuerKeyPem?: 
     const msg = decodeCoseSign1(bytes);
     const decoded = claimsFromCbor(msg.payload);
     return canonical(decoded) === canonical(signed.claims);
-  } catch {
+  } catch (err) {
+    // Named decoder refusals stay named (MUST-T4-18, MUST-T4-19).
+    if (namedDecodeRefusal(err) !== null) {
+      throw err;
+    }
     return false;
   }
 }

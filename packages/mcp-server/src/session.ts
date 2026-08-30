@@ -16,7 +16,7 @@ import {
   signCheckpoint,
   type SignedCheckpoint,
 } from "@cedulon/checkpoint";
-import { PolicyEngine, policyDocument, type Policy } from "@cedulon/core";
+import { PolicyEngine, isValidAmountText, policyDocument, type Policy } from "@cedulon/core";
 import type { SignedManifest } from "@cedulon/manifest";
 import { claimsFromCbor, generateReceiptKeys, receiptHash, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
 import { decodeCoseSign1 } from "@cedulon/cose";
@@ -228,6 +228,13 @@ export class CedulonSession {
   }
 
   spend(args: SpendArgs, nowMs = Date.now()): SpendOutcome {
+    // The grammar admits one spelling per number. BigInt() below would accept
+    // "01", " 1" and "0x10" and print them back as canonical decimals, erasing
+    // the octets MUST-T8-2 compares - so the text is checked before it is
+    // parsed, and a spelling the grammar forbids is refused by name.
+    if (!isValidAmountText(args.amount)) {
+      return { ok: false, reason: "malformed-amount" };
+    }
     // Settle first and save afterwards and a failed save leaves the rail holding
     // a settlement whose receipt exists only in memory. Restart, and it is a
     // settlement with no receipt - the one condition this project exists to make

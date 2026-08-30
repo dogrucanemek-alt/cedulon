@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
@@ -70,7 +70,9 @@ const FIXTURE_MANIFEST = {
   description: "fixture-goods",
   amount: "1",
   currency: "USD",
-  acceptanceCriteriaHash: "00",
+  // SHA-256 of an empty delivery: the spec defines this field as a digest
+  // of the exact delivery bytes, so the fixture carries a well-formed one.
+  acceptanceCriteriaHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   cancelCondition: "none",
   expiresAtMs: 1_700_000_000_000,
 };
@@ -85,7 +87,7 @@ const VECTOR_RECEIPT_COSE_HEX =
 
 /** Vector 2: same key + FIXTURE_MANIFEST → COSE_Sign1 hex. */
 const VECTOR_MANIFEST_COSE_HEX =
-  "845831a301320378216170706c69636174696f6e2f636564756c6f6e2d6d616e69666573742b63626f72044806e3fd8fda29bb60a0584aa73a000112386d666978747572652d676f6f64733a0001123961313a0001123a635553443a0001123b6230303a0001123c646e6f6e653a0001123d1b0000018bcfe568003a0001123ef65840898628b1524a44ca641b5058c7a47e71bd4ce1ca0782e03b511c23e0819c3771407d627216d0b104224ee82cacffbd21e66fe035ed5ce4ee85b7bcd9c560ad02";
+  "845831a301320378216170706c69636174696f6e2f636564756c6f6e2d6d616e69666573742b63626f72044806e3fd8fda29bb60a05889a73a000112386d666978747572652d676f6f64733a0001123961313a0001123a635553443a0001123b7840653362306334343239386663316331343961666266346338393936666239323432376165343165343634396239333463613439353939316237383532623835353a0001123c646e6f6e653a0001123d1b0000018bcfe568003a0001123ef65840599b5b1cc7bfd3fe8b8e65cdd876652aeca13660e6bdccc93afe12188a295b20fdfe8e6e48ae447dc74ccb0f13383f0f43f0f67f288d61a6395e95e2038e320d";
 
 describe("deterministic CBOR", () => {
   for (const v of RFC_VECTORS) {
@@ -226,10 +228,18 @@ describe("COSE_Sign1 receipts", () => {
   });
 
   it("spec appendix vectors are byte-identical to locked tests", () => {
-    const spec = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "..", "spec", "draft-dogru-cedulon-01.md"),
-      "utf8",
-    );
+    // The draft under guard is the newest revision in the tree: this test
+    // sat pinned to -01 while -04's appendix was being prepared, so a vector
+    // change would have compared against a frozen file and passed or failed
+    // for the wrong reason.
+    const specDir = join(dirname(fileURLToPath(import.meta.url)), "..", "spec");
+    const latest = readdirSync(specDir)
+      .map((f) => /^draft-dogru-cedulon-(\d+)\.md$/.exec(f))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map((m) => m[1])
+      .sort((a, b) => Number(a) - Number(b))
+      .at(-1);
+    const spec = readFileSync(join(specDir, `draft-dogru-cedulon-${latest}.md`), "utf8");
     const compact = spec.replace(/[\s`~]/g, "");
     assert.equal(compact.includes(VECTOR_RECEIPT_COSE_HEX), true);
     assert.equal(compact.includes(VECTOR_MANIFEST_COSE_HEX), true);

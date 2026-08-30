@@ -80,7 +80,7 @@ describe("which octets a Cedulon hash consumes", () => {
         description: "hash-octets",
         amount: "1",
         currency: "USD",
-        acceptanceCriteriaHash: "00",
+        acceptanceCriteriaHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         cancelCondition: "none",
         expiresAtMs: 1_700_000_000_000,
       },

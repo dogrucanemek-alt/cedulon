@@ -1,4 +1,4 @@
-import { sameSpkiKey, toSpkiDer } from "@cedulon/cose";
+import { namedDecodeRefusal, sameSpkiKey, toSpkiDer } from "@cedulon/cose";
 import {
   findCheckpointChainBreak,
   findEquivocation,
@@ -139,9 +139,35 @@ export function receiptsInWindow(receipts: SignedReceipt[], cp: SignedCheckpoint
   return receipts.filter((r) => inCheckpointWindow(r.claims.timestampMs, cp));
 }
 
+/**
+ * A verify call that hits a decoder bound or a duplicate key throws a named
+ * refusal (MUST-T4-18, MUST-T4-19). The name must survive to the report: an
+ * operator reading "signature failed" for an input the decoder refused cannot
+ * tell a limit from a forgery. Anything else thrown is a bug and stays thrown.
+ */
+function verifiesOrRefusal(check: () => boolean): { ok: boolean; refusal: string | null } {
+  try {
+    return { ok: check(), refusal: null };
+  } catch (err) {
+    const name = namedDecodeRefusal(err);
+    if (name === null) {
+      throw err;
+    }
+    return { ok: false, refusal: name };
+  }
+}
+
 export function findReceiptChainBreak(receipts: SignedReceipt[]): Finding | null {
   for (let i = 0; i < receipts.length; i += 1) {
-    if (!verifyReceipt(receipts[i])) {
+    const v = verifiesOrRefusal(() => verifyReceipt(receipts[i]));
+    if (v.refusal !== null) {
+      return {
+        code: "receipt-chain-break",
+        id: receipts[i].claims.nonce,
+        detail: `receipt ${i} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`,
+      };
+    }
+    if (!v.ok) {
       return {
         code: "receipt-chain-break",
         id: receipts[i].claims.nonce,
@@ -419,11 +445,15 @@ export function findCheckpointTotalMismatches(
 ): Finding[] {
   const findings: Finding[] = [];
   for (const cp of checkpoints) {
-    if (!verifyCheckpoint(cp)) {
+    const v = verifiesOrRefusal(() => verifyCheckpoint(cp));
+    if (!v.ok) {
       findings.push({
         code: "checkpoint-total-mismatch",
         id: `epoch-${cp.claims.epoch}`,
-        detail: `checkpoint epoch ${cp.claims.epoch} signature failed`,
+        detail:
+          v.refusal !== null
+            ? `checkpoint epoch ${cp.claims.epoch} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`
+            : `checkpoint epoch ${cp.claims.epoch} signature failed`,
       });
       continue;
     }
@@ -509,10 +539,11 @@ function verifiedWitnessCheckpoints(
     if (statementHashOfCheckpoint(rec.checkpoint) !== rec.statementHash) {
       continue;
     }
-    if (!verifyCheckpoint(rec.checkpoint)) {
+    const carried = rec.checkpoint;
+    if (!verifiesOrRefusal(() => verifyCheckpoint(carried)).ok) {
       continue;
     }
-    out.push(rec.checkpoint);
+    out.push(carried);
   }
   return out;
 }
@@ -866,7 +897,9 @@ export function audit(input: AuditInput): AuditReport {
           typeof input.manifestTrust.publicKeyPem === "string"
             ? [input.manifestTrust.publicKeyPem]
             : input.manifestTrust.publicKeyPem;
-        const answers = pems.some((pem) => toSpkiDer(pem) !== null && verifyManifest(input.manifest!, pem));
+        const answers = pems.some(
+          (pem) => toSpkiDer(pem) !== null && verifiesOrRefusal(() => verifyManifest(input.manifest!, pem)).ok,
+        );
         if (!answers) {
           findings.push({
             code: "manifest-key-mismatch",
@@ -1124,7 +1157,7 @@ export function audit(input: AuditInput): AuditReport {
   // conditional. Only a checkpoint that verifies gets to make this claim — an
   // unverifiable one has already been reported above.
   for (const cp of attestedCheckpoints) {
-    if (cp.claims.totals === null && verifyCheckpoint(cp)) {
+    if (cp.claims.totals === null && verifiesOrRefusal(() => verifyCheckpoint(cp)).ok) {
       warnings.push({
         code: "checkpoint-totals-redacted",
         id: `epoch-${cp.claims.epoch}`,

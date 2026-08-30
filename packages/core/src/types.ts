@@ -51,3 +51,15 @@ export type DenyDecision = {
 };
 
 export type Decision = AllowDecision | DenyDecision;
+
+/**
+ * The amount grammar. One number has one spelling: no leading zero, no sign,
+ * no whitespace, no base prefix. A boundary that parses an amount with
+ * BigInt() before checking this admits "01", " 1" and "0x10" and erases the
+ * octets MUST-T8-2 compares, so the check has to run on the text.
+ */
+export const AMOUNT_RE = /^(0|[1-9][0-9]*)$/;
+
+export function isValidAmountText(amount: unknown): amount is string {
+  return typeof amount === "string" && AMOUNT_RE.test(amount);
+}

@@ -1,4 +1,4 @@
-import type { PolicyEngine, SpendRequest } from "@cedulon/core";
+import { isValidAmountText, type PolicyEngine, type SpendRequest } from "@cedulon/core";
 import { gatedSettle, type AdapterKeys, type PayResult } from "@cedulon/x402-adapter";
 import type { SignedManifest } from "@cedulon/manifest";
 
@@ -40,6 +40,13 @@ export function wrapToolsCall(deps: GuardDeps): (call: ToolCall) => ToolResult {
       return {
         content: [{ type: "text", text: `ok:${call.name}` }],
         isError: false,
+      };
+    }
+    // Checked as text before BigInt() erases the spelling; see MUST-T8-2.
+    if (!isValidAmountText(call.arguments.amount)) {
+      return {
+        content: [{ type: "text", text: "denied:malformed-amount" }],
+        isError: true,
       };
     }
     const req = argsToRequest(call.arguments, deps.nowMs);

@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
-import { asArray, asMap, cborMap, decodeCbor, encodeCbor, mapGet } from "./cbor.ts";
+import { asArray, asMap, cborMap, decodeCbor, encodeCbor, mapGet, namedDecodeRefusal } from "./cbor.ts";
 
 /** RFC 9052 EdDSA. Deprecated for this profile; use Ed25519 (-19). */
 export const COSE_ALG_EDDSA = -8;
@@ -173,7 +173,13 @@ export function verifyCoseSign1(
     }
     const toBeSigned = sigStructure(msg.protectedHeader, msg.payload);
     return verify(null, Buffer.from(toBeSigned), publicKeyPem, Buffer.from(msg.signature));
-  } catch {
+  } catch (err) {
+    // A decoder bound or a duplicate key is a named refusal (MUST-T4-18,
+    // MUST-T4-19), not a signature verdict. Swallowing it here rebadged the
+    // refusal as "signature failed" by the time it reached an audit report.
+    if (namedDecodeRefusal(err) !== null) {
+      throw err;
+    }
     return false;
   }
 }
