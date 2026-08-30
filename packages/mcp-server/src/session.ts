@@ -274,8 +274,9 @@ export class CedulonSession {
       // decide what this server starts up believing. Refusing the path is the
       // only answer that does not depend on write ordering.
       this.assertNoSymlink();
-      this.load();
-      this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
+    }
+    this.load();
+    if (this.statePath) {
       this.lastSeenState = this.readStateFingerprint();
       this.recoverJournal();
     }
@@ -475,7 +476,6 @@ export class CedulonSession {
     this.ledger.restore([]);
     this.engine.store.reset();
     this.load();
-    this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
     this.lastSeenState = this.readStateFingerprint();
     this.recoverJournal();
     const now = new Set(this.receipts.map((r) => r.claims.nonce));
@@ -935,17 +935,7 @@ export class CedulonSession {
         this.save();
         return { ok: false, reason: "rail-failed" };
       }
-      const receipt = this.cutSettledReceipt(args, nowMs);
-      this.receipts.push(receipt);
-      this.ledger.record({
-        ref: receipt.claims.x402PaymentRef ?? `x402-${args.nonce}`,
-        amount: args.amount,
-        currency: args.currency,
-        timestampMs: nowMs,
-      });
-      this.rebuildCheckpoint(nowMs);
-      this.appendJournal({ ...row, phase: "settled", atMs: nowMs });
-      this.save();
+      const receipt = this.persistCutSettled(args, nowMs, nowMs);
       return { ok: true, receipt };
     } catch (err) {
       if (!durable) {
@@ -1009,7 +999,16 @@ export class CedulonSession {
     };
     this.appendJournal({ ...row, phase: "submitted", atMs: nowMs });
     this.save();
-    const result = rail.submit(row);
+    let result: "settled" | "failed";
+    try {
+      result = rail.submit(row);
+    } catch (err) {
+      const message = (err as Error)?.message ?? "";
+      if (message === "cedulon-rail-crash" || message === "cedulon-injected-crash") {
+        throw err;
+      }
+      return { ok: false, reason: "state-io" };
+    }
     if (result === "failed") {
       this.engine.release(folded.nonce, BigInt(folded.amount));
       this.appendJournal({ ...row, phase: "failed", atMs: nowMs });
@@ -1070,26 +1069,45 @@ export class CedulonSession {
     return { ok: true, released: true };
   }
 
+  private persistCutSettled(
+    args: SpendArgs,
+    nowMs: number,
+    receiptTimestampMs: number,
+  ): SignedReceipt {
+    const receipt = this.cutSettledReceipt(args, receiptTimestampMs);
+    this.receipts.push(receipt);
+    this.ledger.record({
+      ref: receipt.claims.x402PaymentRef ?? `x402-${args.nonce}`,
+      amount: args.amount,
+      currency: args.currency,
+      timestampMs: receiptTimestampMs,
+    });
+    this.rebuildCheckpoint(nowMs);
+    this.appendJournal({
+      nonce: args.nonce,
+      amount: args.amount,
+      currency: args.currency,
+      payee: args.payee,
+      phase: "settled",
+      atMs: nowMs,
+    });
+    this.save();
+    return receipt;
+  }
+
   private recordExternalSettled(
     row: { nonce: string; amount: string; currency: string; payee: string },
     nowMs: number,
     receiptTimestampMs: number,
   ): { ok: true; receipt: SignedReceipt } {
-    const receipt = this.cutSettledReceipt(
-      { amount: row.amount, currency: row.currency, payee: row.payee, nonce: row.nonce },
-      receiptTimestampMs,
-    );
-    this.receipts.push(receipt);
-    this.ledger.record({
-      ref: receipt.claims.x402PaymentRef ?? `x402-${row.nonce}`,
-      amount: row.amount,
-      currency: row.currency,
-      timestampMs: receiptTimestampMs,
-    });
-    this.rebuildCheckpoint(nowMs);
-    this.appendJournal({ ...row, phase: "settled", atMs: nowMs });
-    this.save();
-    return { ok: true, receipt };
+    return {
+      ok: true,
+      receipt: this.persistCutSettled(
+        { amount: row.amount, currency: row.currency, payee: row.payee, nonce: row.nonce },
+        nowMs,
+        receiptTimestampMs,
+      ),
+    };
   }
 
   private foldedIntent(nonce: string): FoldedIntent | undefined {
@@ -1158,12 +1176,14 @@ export class CedulonSession {
 
   private load(): void {
     if (!this.statePath) {
+      this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
       return;
     }
     let raw: string;
     try {
       raw = readFileSync(this.statePath, "utf8");
     } catch {
+      this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
       return;
     }
     let parsed: Persisted;
@@ -1212,6 +1232,7 @@ export class CedulonSession {
     };
     (this.engine as unknown as { nextDecision: number }).nextDecision = parsed.nextDecision;
     this.journal.splice(0, this.journal.length, ...(Array.isArray(parsed.journal) ? parsed.journal : []));
+    this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
   }
 
   private save(): void {

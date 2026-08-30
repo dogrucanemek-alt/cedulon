@@ -160,6 +160,27 @@ describe("external submit order and crash recovery", () => {
     assert.equal(session.spend(spendArgs(n), NOW + 1).ok, true);
   });
 
+  it("RED then GREEN: a generic rail throw on retry is state-io", () => {
+    const path = statePath();
+    const first = new CedulonSession({ statePath: path });
+    const n = nonce("io");
+    assert.throws(() => submitExternal(first, spendArgs(n), new MockExternalRail("crash"), NOW), /cedulon-rail-crash/);
+    const session = new CedulonSession({
+      statePath: path,
+      keys: first.keys,
+      policy: first.engine.policy,
+    });
+    const generic: ExternalRail = {
+      idempotentSubmit: true,
+      submit() {
+        throw new Error("rail-unavailable");
+      },
+    };
+    const out = session.retryIndeterminate(n, generic, NOW + 1);
+    assert.equal(out.ok, false);
+    assert.equal((out as { reason: string }).reason, "state-io");
+  });
+
   it("a rail that answers settled cuts a settled receipt on the existing wire", () => {
     const path = statePath();
     const session = new CedulonSession({ statePath: path });
