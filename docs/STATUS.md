@@ -147,21 +147,19 @@ checking before a build and not after. The 0.5.0 build ran against `5b080e6`,
 started, and listed five tools.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.6.0` is the current version (`isLatest`), read back from the registry
+where `0.7.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output. `server.json` is the entry
-it was published from.
+it was published from, so the registry and npm now serve the same release,
+including the two crash repairs 0.7.0 makes.
 
-That listing is a release behind npm, and it is worth saying plainly rather
-than leaving a reader to discover it: npm serves `0.7.0`, the MCP Registry
-still serves `0.6.0`, so a client that installs from the registry today gets
-the version without the two crash repairs 0.7.0 makes. The two move
-separately on purpose. `release.yml` publishes to npm from the tag with no
-long-lived credential, and it does not publish to the MCP Registry, because
-`mcp-publisher` authenticates through its own GitHub device flow and whether
-it accepts Actions OIDC has not been measured here; adding it untested would
-put a claim in that workflow nobody checked. Until it is measured, the
-registry entry is pushed by hand and can lag, so this paragraph names both
-numbers instead of one. Earlier listings: `0.2.1` announced itself as `0.2.0`
+The two still move separately on purpose. `release.yml` publishes to npm from
+the tag with no long-lived credential, and it does not publish to the MCP
+Registry, because `mcp-publisher` authenticates through its own GitHub device
+flow and whether it accepts Actions OIDC has not been measured here; adding it
+untested would put a claim in that workflow nobody checked. Until it is
+measured, the registry entry is pushed by hand and can lag behind npm - it
+spent half a day on `0.6.0` while npm served `0.7.0` - so when the numbers
+differ, this paragraph is where both get named. Earlier listings: `0.2.1` announced itself as `0.2.0`
 over `initialize`, because the version was written out a second time in the
 source; `0.2.2` replaced that. `tests/release-manifest.test.ts` and the version
 check in `tests/mcp-server.test.ts` compare those declarations against each
