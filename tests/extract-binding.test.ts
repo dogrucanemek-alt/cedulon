@@ -72,9 +72,18 @@ function engine(): PolicyEngine {
 describe("rail extract binding", () => {
   it("18 RED then GREEN: an off-book row inside a signed extract is reconciled, not skipped", () => {
     const rail = generateExtractKeys();
-    const extract = railExtract(rail, [
-      { ref: "off-book-1", amount: "7", currency: "USD", timestampMs: NOW },
-    ]);
+    const extract = signRailExtract(
+      {
+        accountId: "mock-account",
+        railId: "mock-rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+        clockSkewMs: 0,
+        settlements: [{ ref: "off-book-1", amount: "7", currency: "USD", timestampMs: NOW }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
 
     // RED before the fix: the caller could hand over an empty array and the
     // off-book row inside the extract was never examined.
@@ -273,7 +282,7 @@ describe("rail extract binding", () => {
       0,
     );
     assert.match(green, /guarantee=unconditional/);
-    assert.equal(/warn\t/.test(green), false);
+    assert.equal(/warn\t(?!counterparty-unbound)/.test(green), false);
   });
 
   it("26 RED then GREEN: the same rail key in another encoding still matches the pin", () => {

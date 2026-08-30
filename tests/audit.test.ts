@@ -420,7 +420,10 @@ describe("new detections — RED then GREEN", () => {
     });
     assert.equal(green.ok, true);
     assert.equal(green.guarantee, "unconditional");
-    assert.equal(green.warnings.length, 0);
+    assert.equal(
+      green.warnings.every((w) => w.code === "counterparty-unbound"),
+      true,
+    );
     const bad = { ...extract, signature: "aa" };
     const red = audit({
       receipts,

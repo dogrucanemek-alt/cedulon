@@ -175,14 +175,13 @@ describe("A — transparency witness on the audit path", () => {
       witnessTrust,
     });
     assert.equal(held.ok, true);
-    assert.equal(held.guarantee, "unconditional");
-    assert.equal(held.warnings.length, 0);
-    // A witness that holds it reads the same as no witness at all. The witness
-    // earns its place by what it reports when the chain is short, not here.
+    assert.equal(
+      held.warnings.some((w) => w.code === "witness-inclusion-not-exercised"),
+      true,
+      "layer-2 was not presented, so the report names that it was not exercised",
+    );
     const none = trustedExtract(receipts, [cp], { issuerTrust });
     assert.deepEqual(held.findings, none.findings);
-    assert.deepEqual(held.warnings, none.warnings);
-    assert.equal(held.guarantee, none.guarantee);
   });
 
   it("omitting inclusionReceipts keeps today's report (backward compatible)", () => {
@@ -196,7 +195,10 @@ describe("A — transparency witness on the audit path", () => {
     assert.equal(without.ok, true);
     assert.equal(without.guarantee, "unconditional");
     assert.deepEqual(without.findings, []);
-    assert.deepEqual(without.warnings, []);
+    assert.equal(
+      without.warnings.every((w) => w.code === "counterparty-unbound"),
+      true,
+    );
     assert.equal(without.summary, "audit: balanced");
   });
 

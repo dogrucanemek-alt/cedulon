@@ -69,6 +69,7 @@ function railWith(rail: Keys, settlements: Array<{ ref: string; amount: string; 
       railId: "rail",
       windowStartMs: NOW,
       windowEndMs: WINDOW_END,
+      clockSkewMs: 0,
       settlements,
     },
     rail.privateKeyPem,

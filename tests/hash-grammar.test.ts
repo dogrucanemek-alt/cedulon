@@ -48,6 +48,7 @@ describe("hash claim grammar (Table 3/5/7)", () => {
     assert.equal(malformedHashCode("requestHash"), "malformed-request-hash");
     assert.equal(malformedHashCode("receiptHash"), "malformed-receipt-hash");
     assert.equal(malformedHashCode("manifestHash"), "malformed-manifest-hash");
+    assert.equal(malformedHashCode("deliveredHash"), "malformed-delivered-hash");
   });
 
   it("RED then GREEN: the signer refuses uppercase, short, and non-hex by name", () => {

@@ -49,7 +49,7 @@ function railWith(rail: Keys, ref: string) {
       railId: "rail",
       windowStartMs: NOW,
       windowEndMs: WINDOW_END,
-      settlements: [{ ref, amount: "1", currency: "USD", timestampMs: NOW }],
+      settlements: [{ ref, amount: "1", currency: "USD", timestampMs: NOW + 600_000 }],
     },
     rail.privateKeyPem,
     rail.publicKeyPem,
@@ -88,11 +88,11 @@ function kidsEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /**
- * Measured 2×2: (carried SPKI vs pin) × (signature under the pin).
- * COSE kid is recorded beside each cell; attestation today follows the
- * carried PEM, which is the identity audit() filters on.
+ * Decided 2×2 (K2): kid × signature-under-pin. Carried PEM is not the
+ * identity source. Source: K2 matrix + break-6 mirror (appendable surface
+ * must not drop honest proof).
  */
-describe("issuer pin matrix (measured)", () => {
+describe("issuer pin matrix (decided)", () => {
   it("cell: PEM matches pin and signature verifies under the pin → attested", () => {
     const honest = generateReceiptKeys();
     const rail = generateExtractKeys();
@@ -204,11 +204,17 @@ describe("issuer pin matrix (measured)", () => {
     assert.equal(report.guarantee, "conditional");
   });
 
-  it("measured: swapping carried PEM off an honest COSE is issuer-key-mismatch (PEM filter, not kid)", () => {
+  it("decided: swapping carried PEM off an honest COSE stays attested (pin-under-signature)", () => {
     const honest = generateReceiptKeys();
     const attacker = generateReceiptKeys();
     const rail = generateExtractKeys();
     const honestReceipt = receiptFor(honest, "ref-ok", 0);
+    const honestReport = audit({
+      receipts: [honestReceipt],
+      checkpoints: [],
+      extract: railWith(rail, "ref-ok"),
+      ...pin(honest, rail),
+    });
     const swapped: SignedReceipt = { ...honestReceipt, publicKeyPem: attacker.publicKeyPem };
     assert.equal(
       kidsEqual(kidOf(swapped), kidFromPublicKeyPem(honest.publicKeyPem)),
@@ -221,10 +227,29 @@ describe("issuer pin matrix (measured)", () => {
       extract: railWith(rail, "ref-ok"),
       ...pin(honest, rail),
     });
+    const hard = (r: { findings: Finding[] }) =>
+      JSON.stringify(r.findings.map((f) => ({ code: f.code, id: f.id, detail: f.detail })));
+    assert.equal(hard(report), hard(honestReport), "findings other than warnings stay byte-identical");
+    assert.equal(report.ok, honestReport.ok);
+    assert.equal(named(report, "issuer-key-mismatch"), false);
     assert.equal(
-      named(report, "issuer-key-mismatch"),
+      report.warnings.some((w) => w.code === "carried-key-mismatch"),
       true,
-      "attestation today follows carried PEM, not COSE kid",
     );
+  });
+
+  it("decided: pin-invalid with a matching kid is still dropped", () => {
+    const honest = generateReceiptKeys();
+    const attacker = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const foreign = receiptFor(attacker, "ref-ok", 0);
+    const report = audit({
+      receipts: [foreign],
+      checkpoints: [],
+      extract: railWith(rail, "ref-ok"),
+      ...pin(honest, rail),
+    });
+    assert.equal(named(report, "issuer-key-mismatch"), true);
+    assert.equal(report.ok, false);
   });
 });

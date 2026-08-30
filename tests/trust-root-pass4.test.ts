@@ -63,7 +63,7 @@ function railWith(
   settlements: Array<{ ref: string; amount: string; currency: string; timestampMs: number }>,
 ) {
   return signRailExtract(
-    { accountId: "acct", railId: "rail", windowStartMs: NOW, windowEndMs: WINDOW_END, settlements },
+    { accountId: "acct", railId: "rail", windowStartMs: NOW, windowEndMs: WINDOW_END, clockSkewMs: 0, settlements },
     rail.privateKeyPem,
     rail.publicKeyPem,
   );
