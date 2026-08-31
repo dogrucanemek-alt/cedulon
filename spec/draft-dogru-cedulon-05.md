@@ -444,7 +444,11 @@ Manifest, the two digests are compared as exact octets:
 `delivery-mismatch`, and it is a finding rather than a warning,
 because both ends of the comparison are signed. A `deliveredHash`
 carried by an unattributable countersignature is discarded with it.
-A countersignature without the claim is valid exactly as before
+A countersigner MUST refuse to sign a `deliveredHash` that is not 32
+octets; a verifier that meets one anyway treats the countersignature
+as carrying no `deliveredHash`, so the delivery question narrows as
+it does when the claim is absent, and the signature verdict does not
+move. A countersignature without the claim is valid exactly as before
 this revision.
 
 A Dispute Evidence Bundle that includes a verified countersignature
@@ -752,7 +756,7 @@ signed body is one JSON document with exactly this shape:
 | railId | string |
 | windowStartMs | number (POSIX milliseconds, an integer) |
 | windowEndMs | number (POSIX milliseconds, an integer) |
-| clockSkewMs | number (optional; see {{reconciliation}}) |
+| clockSkewMs | number (milliseconds, an integer; optional; see {{reconciliation}}) |
 | settlements | array of settlement records (schema above) |
 
 All six named members except `clockSkewMs` MUST be present; a body
@@ -1410,7 +1414,11 @@ identifiers are not an interoperability surface.
    appear hardens into the step 8 finding; a deferred settlement
    record near the opening edge resolves through this step's ref
    binding, since the prior window's receipt that names its `ref` is
-   reconciled here regardless of timestamp. In a single-window audit
+   reconciled here regardless of timestamp. The following window's
+   extract closes or hardens closing-edge deferrals only; an
+   opening-edge record stays deferred until a receipt in the
+   presented bag names its `ref`, whether or not a following extract
+   is presented. In a single-window audit
    a deferred record keeps the guarantee conditional. Receipts remain
    subject to every other check regardless of window.
 6. Walk the attested receipts in issuer order. Issuer order is the
@@ -1933,7 +1941,7 @@ See {{reconciliation}}.
 | MUST-T10-14 | An implementation MUST surface the guarantee and any warnings in any human-readable audit report it produces, not only in a returned structure. |
 | MUST-T10-15 | A verifier that has not stated the period under audit MUST emit `unstated-audit-window` and MUST treat the guarantee as conditional, because an unstated period leaves the extract free to define its own. |
 | MUST-T10-16 | When an extract is supplied, a receipt whose `ref` appears on it is reconciled against it regardless of its own `timestampMs`; the window sieve applies only to receipts the extract does not name, and such a receipt outside the window MUST NOT be reported as a completeness failure against that extract. |
-| MUST-T10-17 | An unmatched settled receipt within the declared `clockSkewMs` of `windowEndMs`, and an unmatched settlement record within it of `windowStartMs`, MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure; the deferral resolves against the adjacent window's evidence and hardens into the completeness finding when that evidence is presented and does not match. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
+| MUST-T10-17 | An unmatched settled receipt within the declared `clockSkewMs` of `windowEndMs`, and an unmatched settlement record within it of `windowStartMs`, MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure. A closing-edge deferral resolves against the following window's extract and hardens into the completeness finding when that extract is presented and does not name the `ref`; an opening-edge deferral resolves only against a receipt in the presented bag that names its `ref`, and a following extract does not harden it. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
 
 In MUST-T10-4, a completeness finding that makes the audit fail is
 distinct from a warning that only makes the guarantee conditional.
@@ -2139,7 +2147,7 @@ Coverage:
   measured - on three hosted runners, each as a non-root user:
   Linux, macOS, and Windows; a fourth Linux job runs three cases
   only and is not a coverage claim. At the commit this revision
-  describes, all three assert every case, 382 of 382, with none
+  describes, all three assert every case, 423 of 423, with none
   skipped. A local Windows run without symbolic-link privilege skips
   four POSIX-mode cases with a stated reason rather than returning
   silently, so a green local suite names what it did not cover and is
@@ -2270,12 +2278,14 @@ that branch against an installed 0.7.0 will not find it.
 
 ## Changes from -04 {#changes-04}
 
-Every change in this revision but the last answers a first-failure
-list filed against the posted -04 by an independent reader who ran
-the Appendix A vectors against the exact archive bytes before reading
-the text: eight points where an implementation could no longer be
-built from the text alone, one question, and three mechanical
-defects. The
+All but the last three changes in this revision answer a
+first-failure list filed against the posted -04 by an independent
+reader who ran the Appendix A vectors against the exact archive
+bytes before reading the text: eight points where an implementation
+could no longer be built from the text alone, one question, and
+three mechanical defects. The last three answer a counter-reading of
+this revision, made from the text alone before it was posted, and a
+reply on the DISPATCH list. The
 repairs landed red-then-green in the companion implementation before
 the sentences below were written, and the shapes in the text are
 taken from what the implementation measurably does.
@@ -2339,6 +2349,18 @@ taken from what the implementation measurably does.
   permission contradicted {{RFC8785}} Section 3.2.2.2 and is
   removed: producers refuse by name, verifiers report rather than
   crash ({{canonical-json}}).
+- The extract's time fields are refused at the shape gate when they
+  are not integers, the way the tables already named them: a
+  counter-reading found that `1.5` and `NaN` passed a `number` check
+  and were signed. `windowStartMs`, `windowEndMs`, each record's
+  `timestampMs`, and `clockSkewMs` are now refused by name unless
+  they are safe integers; the canonical-encoding refusal for
+  non-finite numbers still guards members the rail adds.
+- An opening-edge deferral is closed only by a receipt in the
+  presented bag. The implementation had let a following window's
+  extract harden it into `settlement-without-receipt`; the text's
+  reason for the deferral, ref binding, never said so, and the seven
+  edge cases are locked as tests.
 - The abstract no longer says that payment rails and mandate
   protocols lack a fail-closed policy check; a mandate protocol has
   one, and returns signed receipts. It names the missing piece as
