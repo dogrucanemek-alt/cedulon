@@ -3,10 +3,15 @@
  * in each reason is what docs/UPGRADING.md is compared against.
  * This file is that list, not a second copy of it.
  *
- * One living split: Table 3 of posted -04 names lowercase hex SHA-256, and
- * Appendix A of the same draft still signs policyHash=aa. Companion enforces
- * the table. -05 in this tree regenerates the appendix vector with a computed digest; the split stands against the posted -04 and closes when -05 is posted.
- * The two -03 splits (request-hash octets, unpinned MUST-T8-9) are closed.
+ * Empty, and that is a state rather than an oversight. The last living split
+ * was against the posted -04: Table 3 named lowercase hex SHA-256 while
+ * Appendix A of the same draft still signed policyHash=aa, and the companion
+ * enforced the table. -05 is posted (31 August 2026) with the appendix vector
+ * regenerated from a computed digest, so the posted draft and the companion
+ * agree: a receipt carrying policyHash=aa is refused by name, and the vector
+ * that recorded the divergence is an ordinary vector now, checked against the
+ * draft rather than recorded as departing from it. The two -03 splits
+ * (request-hash octets, unpinned MUST-T8-9) closed when -04 was posted.
  *
  * The guard that reads this list fires when a split appears in the runner and
  * is not registered here, and when an entry here no longer corresponds to a
@@ -14,7 +19,4 @@
  * build a synthetic entry rather than borrowing a live one, so the proof does
  * not depend on a divergence existing.
  */
-export const COUNTED_SPLITS: Record<string, string> = {
-  "V-T4-appendix-a-policy-hash":
-    "Posted -04 Appendix A still signs policyHash=aa. Table 3 of the same draft names lowercase hex SHA-256. Companion enforces the table and refuses to produce that vector. -05 in this tree regenerates the appendix vector with a computed digest; the split stands against the posted -04 and closes when -05 is posted.",
-};
+export const COUNTED_SPLITS: Record<string, string> = {};
