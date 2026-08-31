@@ -31,17 +31,21 @@ otherwise. Network access to raw.githubusercontent.com is required.
   the digests must differ.
 - `MUST-FAIL under jcs-n`: the input is refused by the withdrawn
   algorithm's rules (floats, integers beyond 2^53, exponent form, the
-  `-0` token, duplicate keys, NFC deviation, escape form). Plain `jcs`
-  admits them and leaves any restriction to the payload profile; the
-  table shows what Cedulon's encoder does with each. Cedulon's own
-  profile restricts amounts to decimal strings and time fields to
-  integers within 2^53, and refuses a duplicate member name in extract
-  text before parsing (`json-duplicate-key`), which the last line of
-  the output measures directly on the raw vector files.
+  `-0` token, NFC deviation, escape form, duplicate keys). Plain `jcs`
+  admits the numeric, NFC and escape-form cases and leaves any
+  restriction to the payload profile; the table shows what Cedulon's
+  encoder does with each. Duplicate member names are different: RFC
+  8785 Section 3.1 takes I-JSON as input, and I-JSON objects carry no
+  duplicate names, so a conforming `jcs` implementation refuses them
+  before an object exists. The probe measures that on the raw vector
+  file text (`json-duplicate-key`), because an object handed to the
+  encoder has already lost the duplicate. Cedulon's own profile also
+  restricts amounts to decimal strings and time fields to integers
+  within 2^53.
 - `subject-binding-diff`: the vectors that discriminate `jcs` from
   `jcs-n`; each pins both digests.
 
-## Output at commit 42cd0fd, 31 August 2026
+## Output on 31 August 2026 (the probe as committed beside this file)
 
 ```
 jcs-n-kat-01                             | plain RFC 8785                                 | MATCH
@@ -80,7 +84,7 @@ jcs-n-kat-33                             | plain RFC 8785                       
 jcs-n-kat-34                             | plain RFC 8785                                 | MATCH
 jcs-n-kat-35                             | MUST-FAIL under jcs-n: invalid_wire_number_token | admitted under jcs: 618de7d9f46f
 jcs-n-kat-36                             | plain RFC 8785                                 | MATCH
-jcs-n-kat-37                             | MUST-FAIL under jcs-n: duplicate_key           | admitted under jcs: 7e8059f49558
+jcs-n-kat-37                             | MUST-FAIL under jcs-n: duplicate_key           | refused before parsing: json-duplicate-key ("a" repeats in the file text; RFC 8785 Section 3.1)
 jcs-n-kat-38                             | plain RFC 8785                                 | MATCH
 subject-binding-diff-01                  | subject-binding-diff                           | MATCH jcs; differs from jcs-n, as designed
 subject-binding-diff-02                  | subject-binding-diff                           | MATCH jcs; differs from jcs-n, as designed
@@ -94,7 +98,9 @@ raw vector files carrying a duplicate member name: 37-must-fail-duplicate-key ("
 The three escape and sort contrast vectors are admitted because the
 encoder produces the correct-form digest for each (they equal the
 digests pinned by kat-23, kat-24 and kat-26); the vectors exist to
-catch encoders that produce the wrong form. `jcs-n-kat-37` is admitted
-by `canonical()` only because the harness hands it an already-parsed
-object; the raw file is refused by `jsonDuplicateMemberName`, as the
-last line shows.
+catch encoders that produce the wrong form. `jcs-n-kat-37` is refused
+before parsing: the duplicate lives in the file text, and the I-JSON
+rule is measured there rather than on an object that has already lost
+it. An earlier run of this probe reported that vector as "admitted
+under jcs" because it parsed first; that reading was wrong under RFC
+8785 Section 3.1 and is corrected here.

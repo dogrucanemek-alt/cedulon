@@ -60,13 +60,16 @@ the draft's silence used to forbid: writing one while `-03` named no digest
 would have recorded this implementation's answer as though it were the
 specification's.
 
-A new living split stands against posted `-05`. A rail extract whose JSON
-text repeats a member name is refused as `json-duplicate-key`. RFC 8785
+A new living split stands against posted `-05`, and it lives in this tree
+after the `0.7.0` packages were published, not in them: `@cedulon/*@0.7.0`
+on npm still parses extract text with `JSON.parse`. A rail extract whose
+JSON text repeats a member name is refused as `json-duplicate-key`. RFC 8785
 takes I-JSON as input, and I-JSON objects carry no duplicate names;
 `JSON.parse` keeps the last value and drops the evidence. The posted draft
 does not state that refusal. The companion does. The difference is recorded
 in `conformance/counted-splits.ts` as `V-T4-19-json-duplicate-key` and
-closes when `-06` states the rule.
+closes when `-06` states the rule; the next published version carries the
+refusal.
 
 **What to change:** send canonical decimal amounts. Delete a `try/catch`
 written for a rethrown decoder refusal, and read the name from the bytes with

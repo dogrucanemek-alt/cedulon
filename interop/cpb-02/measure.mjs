@@ -61,6 +61,11 @@ for (const name of KATS) {
   const v = JSON.parse(text);
   if (v.input === undefined) { rows.push([v.id, "n/a: typed-reference representation vector", "-"]); continue; }
   const excl = v.exclusion_set ? (typeof v.exclusion_set === "string" ? JSON.parse(v.exclusion_set) : v.exclusion_set) : [];
+  // A duplicate member name is refused before any object exists: RFC 8785
+  // Section 3.1 takes I-JSON as input, and JSON.parse would keep the last
+  // value and lose the evidence. The vector file's own text carries the
+  // duplicate, so the file text is what the I-JSON rule is measured on.
+  if (v.must_fail && dup !== null) { rows.push([v.id, `MUST-FAIL under jcs-n: ${v.failure_reason}`, `refused before parsing: json-duplicate-key (${JSON.stringify(dup)} repeats in the file text; RFC 8785 Section 3.1)`]); continue; }
   const o = ours(v.input, excl);
   if (v.must_fail) { rows.push([v.id, `MUST-FAIL under jcs-n: ${v.failure_reason}`, o.refusal ? `refused: ${o.refusal}` : `admitted under jcs: ${o.digest.slice(0, 12)}`]); continue; }
   const base = v.after_exclusion !== undefined ? v.after_exclusion : v.input;

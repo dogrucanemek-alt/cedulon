@@ -1,17 +1,17 @@
 # Status
 
-`npm run test:all` is green on Linux and macOS, where CI runs the whole
-pre-release suite as a non-root user and asserts every case: 314 of 314, none
-skipped, on both. `npx tsc --noEmit` is silent; `npm run audit` exits 0 and the
-four bypass demos fail as designed. Windows runs the same suite in CI on a
-hosted runner and asserts 310 of the same 314: the four POSIX-mode cases
-used to skip because file and directory modes are not the access control
-on that platform; they now measure the DPAPI wrap of the issuer key on
-this host. The four symbolic-link cases assert in hosted CI because that
-runner may create symlinks; on a Windows machine without that privilege
-they skip too, with the same discipline. A green run on Windows is still
-a smaller claim than Linux. The CI sentence above is the last hosted
-count; it is not restated as a new total here. While the workspace
+`npm run test:pre-release` is green on three hosted runners, where CI
+runs the full pre-release suite as a non-root user and asserts every case:
+433 of 433, none skipped, on Linux, macOS and Windows alike, at commit
+448ef39 on 31 August 2026. `npx tsc --noEmit` is silent; `npm run audit`
+exits 0 and the four bypass demos fail as designed. The four POSIX-mode
+cases that used to skip on Windows now measure the DPAPI wrap of the
+issuer key on that host, and the hosted Windows runner may create
+symbolic links, so nothing skips there; on a Windows machine without that
+privilege the four symbolic-link cases skip with a stated reason rather
+than returning silently, so a local green run names what it did not
+cover. The CI sentence above is the last hosted count; it is not restated
+as a new total here. While the workspace
 version is ahead of npm, `npm run test:all` also carries one deliberate red -
 the gate that refuses to call a prepared version published; `npm run
 test:pre-release` is the green one until the publish. `docs/RUN_AS_VERIFIER.md`
@@ -26,7 +26,8 @@ one of the 128 came back as `settlement-without-receipt`, at
 operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 
-The three -00 drafts and `-02` (rev 02) are posted on the IETF datatracker.
+`draft-dogru-cedulon` is posted on the IETF datatracker through `-05`
+(31 August 2026), alongside the two companion `-00` drafts.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
