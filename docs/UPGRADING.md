@@ -4,6 +4,52 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.8.0: an audit says which settlement path it covered
+
+This one does not refuse anything new. It stops a result from being read as
+wider than it was measured.
+
+An extract covers one account on one rail over one window. Since 0.5.0 a
+verifier that stated no period got `unstated-audit-window` and a conditional
+guarantee, because otherwise the extract is free to define the period it
+reports on. The account and the rail are the same kind of axis and never got
+the same treatment. A verifier that pinned a rail key and named neither now
+gets `unstated-audit-scope`, also a warning, and the guarantee is conditional
+for the same reason. If you pin a key, name the account and the rail as well;
+`RailTrustPin` already carried both fields and they were only ever compared
+when you supplied them.
+
+`AuditReport` gained `scope` and so did the finding object: the account, rail
+and window the extract declared, present whenever an extract was, absent when
+none was presented. `formatAudit` prints it as a `scope=` line beside
+`guarantee=`. The JSON schema in `docs/finding-object.schema.json` allows the
+new member; a consumer that rejected unknown members against the old schema
+should take the new one. Nothing that was in the object moved or changed
+meaning.
+
+What this is for: an account able to settle on a second rail has a settlement
+path no presented extract covers. A spend that left that way is not an
+unmatched row, it is outside the declared population, which is the bypass T10
+is named after. A balanced audit under an unconditional guarantee has always
+been a statement about one account on one rail over one window, and until this
+release the report did not say so. Enumerating an account's rails is still the
+deployment's statement; no extract can be asked to prove that enumeration is
+complete.
+
+The behaviour carried into this release is unchanged and still current. An
+audit still reports `manifest-terms-mismatch` with the split 0.6.0 introduced:
+with a usable issuer pin the walk is the attested set and the departure is a
+finding that fails the audit; without a pin the same departure is a warning
+that does not by itself fail it. And `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted `-03`
+named a hash for without naming the octets.
+
+The posted `-06` states neither requirement, so this release runs ahead of the
+draft. `conformance/counted-splits.ts` carries one living split,
+`V-T10-18-unstated-audit-scope` for `MUST-T10-18` and `MUST-T10-19`: the
+companion warns and names its scope where the posted draft is silent. The
+difference closes when `-07` is posted, which states both.
+
 ## 0.7.0: the amount grammar at every boundary, and refusals that answer
 
 This one breaks, and it breaks two things that used to be accepted.

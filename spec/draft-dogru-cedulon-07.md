@@ -2590,15 +2590,20 @@ are in a published package are in the published `@cedulon` packages at version 0
 repository, with the exceptions named below. What -05 added -
 the hash-claim grammar, the countersignature attribution rule, the
 pin-under-signature attested set, the boundary allowance, the
-counterparty bindings, `deliveredHash`, and witness tier 2 - and what
-this revision adds - the refusal of a JSON text that repeats a member
-name (`MUST-T4-20`) and the refusal of a non-empty unprotected header
-(`MUST-T4-21`) - are implemented in the repository at the pinned
+counterparty bindings, `deliveredHash`, and witness tier 2 - what -06
+added - the refusal of a JSON text that repeats a member name
+(`MUST-T4-20`) and the refusal of a non-empty unprotected header
+(`MUST-T4-21`) - and what this revision adds - the conditional
+guarantee for an unstated account or rail (`MUST-T10-18`) and the
+report that names the settlement path it covered (`MUST-T10-19`) -
+are implemented in the repository at the pinned
 commit and are not in a published package at the time of posting:
 the 0.7.0 packages parse extract text with a parser that keeps the
-last of two values, and their decoder verifies a signature over a
-stuffed unprotected header without complaint. The next package
-release carries all of it, and this sentence is the discrepancy
+last of two values, their decoder verifies a signature over a
+stuffed unprotected header without complaint, and their reports name
+neither the account nor the rail they were computed over. 0.8.0 is
+prepared in the repository and carries all of it; it is not published
+as this is written, and this sentence is the discrepancy
 notice rather than a reader having to find one. A reader can check a claim against an installed package
 rather than against a working tree. That order is deliberate: -00
 described requirements that its published package did not yet carry,

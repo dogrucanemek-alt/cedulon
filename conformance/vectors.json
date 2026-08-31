@@ -134,6 +134,14 @@
       "text": "{\"settlements\":[{\"ref\":\"r1\",\"amount\":\"1\",\"amount\":\"99\",\"currency\":\"USD\",\"timestampMs\":1}]}",
       "expectRefuse": true,
       "note": "Was a counted split against posted -05; closed when -06 was posted with MUST-T4-20."
+    },
+    {
+      "id": "V-T10-18-unstated-audit-scope",
+      "must": "MUST-T10-18 (an unstated account or rail leaves the guarantee conditional)",
+      "draft": "Posted -06 makes an unstated period conditional (MUST-T10-15) and is silent on an unstated account or rail, and asks no report to name the path it covered. The companion warns unstated-audit-scope and carries the account, rail and window it was computed over.",
+      "kind": "scope-warning",
+      "expectWarning": "unstated-audit-scope",
+      "note": "Living split against posted -06. Closes when -07 is posted, which states MUST-T10-18 and MUST-T10-19."
     }
   ]
 }

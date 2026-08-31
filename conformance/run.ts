@@ -401,6 +401,51 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
       continue;
     }
 
+    if (v.kind === "scope-warning") {
+      const rail = generateExtractKeys();
+      const windowEndMs = NOW + 3_600_000;
+      const extract = signRailExtract(
+        {
+          accountId: "acct-1",
+          railId: "rail-a",
+          windowStartMs: NOW,
+          windowEndMs,
+          settlements: [],
+        },
+        rail.privateKeyPem,
+        rail.publicKeyPem,
+      );
+      // The pin carries everything the posted draft asks a verifier to state:
+      // the rail key and the period under audit. It says nothing about which
+      // account, or which of that account's rails, the result is about.
+      const report = audit({
+        receipts: [],
+        checkpoints: [],
+        extract,
+        trust: { publicKeyPem: rail.publicKeyPem, windowStartMs: NOW, windowEndMs },
+      });
+      const warned = report.warnings.some((w) => w.code === v.expectWarning);
+      const named = report.scope !== undefined;
+      if (!warned || !named) {
+        rows.push({
+          id: v.id,
+          status: "error",
+          detail: `companion warnings=${report.warnings.map((w) => w.code).join(",") || "none"}; scope=${named ? "named" : "absent"}`,
+        });
+        continue;
+      }
+      // Both are behaviour the posted -06 does not describe: it makes an
+      // unstated period conditional and is silent on an unstated account or
+      // rail, and it asks no report to name the path it covered. This becomes
+      // an ordinary pass when -07 is posted with MUST-T10-18 and MUST-T10-19.
+      rows.push({
+        id: v.id,
+        status: "split",
+        detail: `companion warns ${v.expectWarning} and names scope ${report.scope!.accountId}/${report.scope!.railId}; posted draft states neither`,
+      });
+      continue;
+    }
+
     if (v.kind === "json-text-refuse") {
       const refused = railExtractTextRefusal(v.text ?? "");
       const hit = refused === "json-duplicate-key";

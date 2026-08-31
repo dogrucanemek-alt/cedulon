@@ -725,11 +725,13 @@ describe("claims that describe something outside their own file", () => {
     );
   });
 
-  it("GREEN: no split is living, because -06 is posted and states the rule", () => {
+  it("GREEN: one split is living, because -06 does not state the scope rules", () => {
     // The state the tree is in now, asserted rather than assumed. The JSON
     // duplicate-member departure stood against posted -05 and closed when
-    // -06 was posted with MUST-T4-20.
-    assert.deepEqual(Object.keys(COUNTED_SPLITS), []);
+    // -06 was posted with MUST-T4-20; this one opened when the companion
+    // began warning `unstated-audit-scope` and naming the path it covered,
+    // and closes when -07 is posted with MUST-T10-18 and MUST-T10-19.
+    assert.deepEqual(Object.keys(COUNTED_SPLITS), ["V-T10-18-unstated-audit-scope"]);
   });
 
   it("GREEN: UPGRADING -03 splits and COUNTED_SPLITS name the same MUST identities", () => {

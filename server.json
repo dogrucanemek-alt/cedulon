@@ -3,7 +3,7 @@
   "name": "io.github.dogrucanemek-alt/cedulon",
   "title": "Cedulon",
   "description": "Policy-gated agent spend with signed receipts and rail-extract audit",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "websiteUrl": "https://github.com/dogrucanemek-alt/cedulon",
   "repository": {
     "url": "https://github.com/dogrucanemek-alt/cedulon",
@@ -15,7 +15,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@cedulon/mcp-server",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

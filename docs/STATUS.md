@@ -26,11 +26,31 @@ one of the 128 came back as `settlement-without-receipt`, at
 operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 
-`draft-dogru-cedulon` is posted on the IETF datatracker through `-05`
+`draft-dogru-cedulon` is posted on the IETF datatracker through `-06`
 (31 August 2026), alongside the two companion `-00` drafts.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
+
+`0.8.0` is prepared in this tree and is not a published npm release; npm still
+serves `0.7.0`, and a reader checking a claim against an installed package will
+find the older behaviour until this bump ships. What it changes: an audit
+declares the settlement path it was computed over, not only the period. A
+verifier that pins a rail key but names no account and no rail now gets
+`unstated-audit-scope` and a conditional guarantee, on the same reasoning that
+made an unstated period conditional; and every report names the account, rail
+and window the extract declared, in the operator-facing text and in the
+returned finding object both. An account that can settle on a second rail has a
+settlement path no presented extract covers, and until this bump a balanced
+line could not be told apart from one that covered every path. The posted `-06`
+states neither requirement: that is a living split, registered as
+`V-T10-18-unstated-audit-scope` in `conformance/counted-splits.ts`, and it
+closes when `-07` is posted. Behaviour carried forward unchanged:
+`manifest-terms-mismatch` keeps its split - with a usable issuer pin the walk
+is the attested set and the departure is a finding, without a pin the same
+departure is a warning that does not by itself fail the audit - and
+`requestHash` is the SHA-256 of the six-field canonical document in lowercase
+hex, the digest the posted `-03` named a hash for without naming.
 
 `0.7.0` is published on npm, and it is the first release with a provenance
 attestation: it was built and sent by the tagged `release.yml` run rather than
