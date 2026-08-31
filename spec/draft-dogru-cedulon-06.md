@@ -1706,7 +1706,7 @@ warning. Warnings MUST still appear in operator-facing output
 | checkpoint-head-mismatch | audit fails | `chainHeadHash` is not the last link, in issuer order, of the chain inside the window |
 | equivocation | audit fails | Two distinct hashes for one epoch |
 | window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows |
-| unauthenticated-extract | guarantee conditional | No rail key is pinned and the extract carries no signature the verifier could check; with a pinned key the extract fails closed as `extract-key-mismatch` instead |
+| unauthenticated-extract | guarantee conditional | No verifier-supplied rail key, whatever the extract carries: a signature that verifies establishes internal consistency and not that the named rail produced the extract, and one that fails or is refused is not a key verdict either. The same code is reported when a rail key is pinned and no extract was presented at all, because there is nothing to check the pin against. A presented extract that does not verify under a pinned key is `extract-key-mismatch` instead |
 | extract-key-mismatch | audit fails | Extract is signed by a key other than the pinned rail key, or does not verify against it |
 | trust-key-unreadable | audit fails | A pinned key - rail, issuer, or manifest publisher - could not be decoded; the verifier's configuration is at fault, and nothing falls back to the keys the objects carry |
 | issuer-key-mismatch | audit fails | An object is signed by a key other than the pinned issuer key, so it is not coverage for anything it names |
@@ -2661,7 +2661,14 @@ measurement found on the way is.
   broken signature is still named while two issuers cannot be told
   apart, and a presented Trade Manifest with no pinned publisher key
   is not checked at all. Neither statement is a new requirement; both
-  describe what {{verification}} already did.
+  describe what {{verification}} already did. Sweeping the rest of the
+  table the same way found one more row describing one branch of three:
+  unauthenticated-extract is reported for an extract whose signature
+  verifies under no pinned rail key, for one that does not, and for a
+  pinned rail key with no extract presented at all, where -05 named
+  only the unsigned case and sent the pinned case to
+  `extract-key-mismatch`, which is where a presented extract that fails
+  under a pin goes and the only one of the three that lands there.
 - {{presentation}} defines the carried key those statements turn on.
   Every presented receipt, checkpoint, Trade Manifest and Decision
   Token carries the signer's SubjectPublicKeyInfo PEM beside its
