@@ -129,11 +129,11 @@
     {
       "id": "V-T4-19-json-duplicate-key",
       "must": "RFC 8785 I-JSON input (JSON sibling of the CBOR duplicate-key rule)",
-      "draft": "RFC 8785 constrains its input to I-JSON, whose objects MUST NOT carry duplicate names. Posted -05 does not say a rail extract text that repeats a member name is refused.",
+      "draft": "RFC 8785 constrains its input to I-JSON, whose objects MUST NOT carry duplicate names. Posted -06 states the refusal as MUST-T4-20: a JSON text that repeats a member name is refused before parsing.",
       "kind": "json-text-refuse",
       "text": "{\"settlements\":[{\"ref\":\"r1\",\"amount\":\"1\",\"amount\":\"99\",\"currency\":\"USD\",\"timestampMs\":1}]}",
       "expectRefuse": true,
-      "note": "Living split: companion refuses json-duplicate-key; the posted draft is silent. Closes when -06 states the rule."
+      "note": "Was a counted split against posted -05; closed when -06 was posted with MUST-T4-20."
     }
   ]
 }

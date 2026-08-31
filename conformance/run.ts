@@ -411,12 +411,13 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
           detail: `companion refuse=${refused ?? "null"}; expected json-duplicate-key=${Boolean(v.expectRefuse)}`,
         });
       } else {
-        // Posted -05 does not state this rule. Companion refuses. That is
-        // a living split, not a pass, until -06 names it.
+        // Posted -06 states the rule (MUST-T4-20), so the companion and the
+        // draft now say the same thing and this is an ordinary pass. It was
+        // a counted split against posted -05, which was silent.
         rows.push({
           id: v.id,
-          status: "split",
-          detail: `companion refuses ${refused}; posted -05 does not state a JSON duplicate-member rule`,
+          status: "pass",
+          detail: `companion refuses ${refused}; posted -06 states the rule (MUST-T4-20)`,
         });
       }
       continue;

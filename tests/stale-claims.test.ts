@@ -725,10 +725,11 @@ describe("claims that describe something outside their own file", () => {
     );
   });
 
-  it("GREEN: the living split list is the JSON duplicate-member departure from posted -05", () => {
-    // The state the tree is in now, asserted rather than assumed. Posted -05
-    // is silent on extract-text duplicate names; the companion refuses.
-    assert.deepEqual(Object.keys(COUNTED_SPLITS), ["V-T4-19-json-duplicate-key"]);
+  it("GREEN: no split is living, because -06 is posted and states the rule", () => {
+    // The state the tree is in now, asserted rather than assumed. The JSON
+    // duplicate-member departure stood against posted -05 and closed when
+    // -06 was posted with MUST-T4-20.
+    assert.deepEqual(Object.keys(COUNTED_SPLITS), []);
   });
 
   it("GREEN: UPGRADING -03 splits and COUNTED_SPLITS name the same MUST identities", () => {
