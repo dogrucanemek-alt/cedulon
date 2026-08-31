@@ -2474,7 +2474,7 @@ Coverage:
   measured - on three hosted runners, each as a non-root user:
   Linux, macOS, and Windows; a fourth Linux job runs three cases
   only and is not a coverage claim. At the commit this revision
-  describes, all three assert every case, 435 of 435, with none
+  describes, all three assert every case, 437 of 437, with none
   skipped. A local Windows run without symbolic-link privilege skips
   four POSIX-mode cases with a stated reason rather than returning
   silently, so a green local suite names what it did not cover and is
