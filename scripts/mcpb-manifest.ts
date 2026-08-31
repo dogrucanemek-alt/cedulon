@@ -25,7 +25,7 @@ export function mcpbManifest() {
     description: server.description,
     long_description:
       "Cedulon puts a fail-closed policy gate in front of agent spending and issues a signed COSE receipt for every allowed payment. An audit reconciles the receipt chain against a rail extract and names what is missing, so a settlement with no receipt is caught rather than assumed. It settles on a mock rail: no wallet is held and no transaction is signed.",
-    author: { name: "Emek Can Dogru", url: "https://github.com/dogrucanemek-alt" },
+    author: { name: "Emek Can Doğru", url: "https://github.com/dogrucanemek-alt" },
     homepage: "https://github.com/dogrucanemek-alt/cedulon",
     documentation: "https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md",
     repository: { type: "git", url: "https://github.com/dogrucanemek-alt/cedulon" },
