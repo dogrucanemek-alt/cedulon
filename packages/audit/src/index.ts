@@ -1169,6 +1169,9 @@ export function audit(input: AuditInput): AuditReport {
 
   // A presented manifest is a fifth signed object. No-manifest is a deployment
   // choice and is silent here. Presented-but-unauthenticated is the bypass.
+  // Set where a stated publisher pin refuses the presented manifest; read
+  // where the body would otherwise be used as evidence.
+  let manifestRejected = false;
   if (input.manifest) {
     if (!input.manifestTrust) {
       warnings.push({
@@ -1199,6 +1202,12 @@ export function audit(input: AuditInput): AuditReport {
           (pem) => toSpkiDer(pem) !== null && verifiesOrRefusal(() => verifyManifest(input.manifest!, pem), input.manifest!.coseHex).ok,
         );
         if (!answers) {
+          // The verifier stated a publisher and this manifest is not from it.
+          // Everything downstream that reads the body reads evidence this
+          // audit has just refused, and a refused document must not be able
+          // to manufacture a finding against anyone (the same reasoning as
+          // the countersignature rule).
+          manifestRejected = true;
           const refusal = coseDecodeRefusalHex(input.manifest.coseHex);
           findings.push({
             code: "manifest-key-mismatch",
@@ -1356,7 +1365,11 @@ export function audit(input: AuditInput): AuditReport {
   // block would also move issuer-key-mismatch before cover and the
   // manifest-key checks; those checks do not need the pin, and their
   // order is the order they are asked.
-  if (input.manifest) {
+  // A manifest a stated publisher pin has refused is not terms: reading a
+  // charge out of its body writes a finding against an honest receipt from a
+  // document this audit rejected two hundred lines above. The refusal is
+  // already reported as `manifest-key-mismatch`; the body stops here.
+  if (input.manifest && !manifestRejected) {
     const presentedHash = manifestHash(input.manifest);
     const terms = input.manifest.body;
     for (const r of issuerPinUsable ? attested : input.receipts) {
@@ -1451,7 +1464,7 @@ export function audit(input: AuditInput): AuditReport {
       id: "counterparty",
       severity: "warn",
       detail:
-        "ref/amount/currency closed against the extract; counterparty identity was not bound",
+        "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
     });
   }
   // Every check below reasons about what the issuer published. Walking the whole
@@ -1464,7 +1477,7 @@ export function audit(input: AuditInput): AuditReport {
   const countersign = findCountersignFindings({
     receipts: issuerPinUsable ? attested : input.receipts,
     payeeTrust: input.payeeTrust,
-    manifest: input.manifest,
+    manifest: manifestRejected ? undefined : input.manifest,
   });
   warnings.push(...countersign.warnings);
   findings.push(...countersign.findings);
@@ -1558,7 +1571,8 @@ export function audit(input: AuditInput): AuditReport {
       code: "witness-inclusion-not-exercised",
       id: "witness-layer2",
       severity: "warn",
-      detail: "witness attested the statement hash; log membership was not proven",
+      detail:
+        "inclusion receipts were presented and no tier-2 pair was, so log membership was not proven; this says nothing about whether any of those receipts verified, which is the separate question a witness pin answers",
     });
   }
 

@@ -1703,7 +1703,7 @@ warning. Warnings MUST still appear in operator-facing output
 | settled-without-ref | audit fails | `outcome` is settled and `x402PaymentRef` is null |
 | receipt-chain-break | audit fails | Signature or `prevReceiptHash` failed, or the links cannot place a receipt (issuer order, step 6) |
 | checkpoint-total-mismatch | audit fails | Totals, count, signature, or checkpoint chain failed. The signature branch is reached where no issuer pin has already excluded the checkpoint: under a pin a checkpoint that does not verify is `issuer-key-mismatch` and never reaches the totals comparison |
-| checkpoint-head-mismatch | audit fails | `chainHeadHash` is not the last link, in issuer order, of the chain inside the window |
+| checkpoint-head-mismatch | audit fails | `chainHeadHash` is not the last link, in issuer order, of the chain inside the window, or the expected head could not be computed at all because the last receipt on the chain refused canonical encoding; the refusal is named and is not a signature verdict |
 | equivocation | audit fails | Two distinct hashes for one epoch |
 | window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows |
 | unauthenticated-extract | guarantee conditional | No verifier-supplied rail key, whatever the extract carries: a signature that verifies establishes internal consistency and not that the named rail produced the extract, and one that fails or is refused is not a key verdict either. The same code is reported when a rail key is pinned and no extract was presented at all, because there is nothing to check the pin against. A presented extract that does not verify under a pinned key is `extract-key-mismatch` instead |
@@ -1717,13 +1717,13 @@ warning. Warnings MUST still appear in operator-facing output
 | unauthenticated-countersigner | conditional | No verifier-supplied payee key; a countersignature is present but proves no approval |
 | unauthenticated-manifest | conditional | No verifier-supplied manifest key and a Trade Manifest was presented; its signature is not checked at all, because the check that exists under a pin (`manifest-key-mismatch`) has no key to run against and the key the manifest carries is not a fallback for one. An audit presented with no Trade Manifest is not this condition |
 | manifest-key-mismatch | audit fails | A presented Trade Manifest is signed by a key other than the pinned publisher key, or does not verify against it |
-| manifest-covers-no-receipt | conditional | A presented Trade Manifest is referenced by no presented receipt, including aborted ones and those outside the extract window; the terms were attributed but no receipt names them |
-| manifest-terms-mismatch | audit fails under a usable issuer pin; warning without one | A receipt names this Trade Manifest but its amount, currency or settlement time departs from the manifest; a gate applying `MUST-T8-2` and `MUST-T3-3` would have refused the payment. The two severities are the two branches of `MUST-T8-9` |
+| manifest-covers-no-receipt | conditional | A presented Trade Manifest is referenced by no presented receipt, including aborted ones and those outside the extract window; the manifest states terms no presented receipt names. It is reported on what was presented, not on whether the manifest was attributed, so it appears beside `manifest-key-mismatch` as well |
+| manifest-terms-mismatch | audit fails under a usable issuer pin; warning without one | A receipt names this Trade Manifest but departs from it in amount, currency, settlement time, or, where the manifest states one, payee. A manifest refused by a stated publisher pin is not compared at all; a gate applying `MUST-T8-2` and `MUST-T3-3` would have refused the payment. The two severities are the two branches of `MUST-T8-9` |
 | witness-entry-unattributable | conditional | The witness holds a statement this chain does not present, carrying no body to say whose it is |
 | extract-scope-mismatch | audit fails | A record falls outside the declared window, or the extract does not cover the expected account, rail, or window |
-| extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract; the extract is authoritative |
+| extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract on `ref`, amount, currency or timestamp, which are the fields compared; the extract is authoritative. A beneficiary that differs is not part of this comparison and is reached by `beneficiary-mismatch`, against the receipt payee |
 | malformed-amount | audit fails | An amount on a `ref` already reported as repeating that could not be parsed as an integer |
-| unstated-audit-window | guarantee conditional | The verifier stated no period, so the extract defined its own |
+| unstated-audit-window | guarantee conditional | A usable rail pin states no period, so the extract defined its own. Where no rail key is pinned at all the period is equally unstated, and `unauthenticated-extract` is the condition reported |
 | countersign-bad | conditional | Present payee countersignature failed verify (signature, content type, or payload binding); unattributable, discarded as approval evidence. One verifiable under another key is `countersign-key-mismatch` |
 | checkpoint-withheld | audit fails | A verified witness receipt binds a checkpoint the presented chain does not contain |
 | checkpoint-not-anchored | guarantee conditional | A witness was supplied and holds no verified receipt for this checkpoint |
@@ -1732,9 +1732,9 @@ warning. Warnings MUST still appear in operator-facing output
 | boundary-deferred | conditional | An unmatched item sits within the declared `clockSkewMs` of the window edge; deferred to the adjacent window rather than reported as a completeness failure (step 5) |
 | beneficiary-mismatch | audit fails | A settlement record declares a `beneficiary` and the matched receipt's `payee` differs |
 | counterparty-unbound | scope record; verdict and guarantee unchanged | Neither the manifest names a `payee` nor any settlement record declares a `beneficiary`: ref, amount and currency closed against the payer's account extract, and the counterparty's identity was not bound |
-| delivery-mismatch | audit fails | An attributable countersignature carries `deliveredHash` and it differs from the manifest `acceptanceCriteriaHash`; both ends are signed (`MAY-T8-11`) |
+| delivery-mismatch | audit fails | An attributable countersignature carries `deliveredHash` and it differs from the acceptance-criteria hash of a Trade Manifest the audit did not refuse; both ends are signed (`MAY-T8-11`). Where a stated publisher pin refuses the manifest, its acceptance hash founds nothing and this comparison is not made (`MUST-T8-9`) |
 | witness-inclusion-invalid | audit fails | The tier-2 candidate bytes and inclusion proof do not reproduce a witness-signed tree head, or a candidate was supplied without a proof (`MUST-T11-18`) |
-| witness-inclusion-not-exercised | conditional | Witness receipts were supplied and no tier-2 pair was; the witness attested the statement hash, and log membership was not proven (`MUST-T11-19`) |
+| witness-inclusion-not-exercised | conditional | Witness receipts were supplied and no tier-2 pair was, so log membership was not proven (`MUST-T11-19`). The code says nothing about whether any of those receipts verified: it is reported on presentation, and an unpinned or unverifiable inclusion receipt reaches it alongside `unauthenticated-witness` |
 | malformed-policy-hash (and its family: malformed-request-hash, malformed-acceptance-criteria-hash, malformed-manifest-hash, malformed-receipt-hash, malformed-prev-receipt-hash, malformed-chain-head-hash, malformed-prev-checkpoint-hash, malformed-ap-two-mandate-hash) | audit fails | A hash-shaped claim does not match the 64-lowercase-hex grammar of {{receipt-labels}}; the claim is named in the code |
 
 A finding that puts the extract itself in doubt (`extract-key-mismatch`,
@@ -2001,7 +2001,7 @@ requirement text those citations refer to.
 | MAY-T8-6 | Parties MAY add an optional escrow actor as a third-party role interface; this project MUST NOT implement custody. |
 | MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
 | MUST-T8-8 | If a payee countersignature is present, a verifier MUST reject it when the signature fails, when `kid` or content type does not match the configured payee key, or when the payload is not the issuer COSE_Sign1 bytes. |
-| MUST-T8-9 | A verifier presented with a Trade Manifest MUST compare the amount, currency and settlement time of every receipt that names it, aborted ones included, against the manifest amount, currency and expiry - amount and currency on the exact-octet terms of `MUST-T8-2`, time on the boundary of `MUST-T3-3`, and, where the manifest names a `payee`, the receipt payee on the same exact-octet terms - and MUST report a receipt that departs from them. Where a usable issuer key is pinned (a pinned issuer root at least one of whose keys the verifier can decode), the comparison is made over the receipts that verify under it and a departure MUST fail the audit. Where no usable issuer key is pinned, the departure MUST still be reported and MUST NOT by itself fail the audit: this requirement charges a party with departing from terms it signed, and a charge that no key stands behind is one a forged receipt can invent against an honest payer. This differs from `MUST-T4-17` on purpose. That requirement asks whether terms were named, which an unattributable document can answer; this one makes an accusation, which it cannot. `MUST-T8-2` and `MUST-T3-3` bind the gate; an audit reads the record after the gate is gone, so without this the receipt can carry the hash of terms it breaks. Receipts that do not name the manifest are not measured against it. |
+| MUST-T8-9 | A verifier presented with a Trade Manifest MUST compare the amount, currency and settlement time of every receipt that names it, aborted ones included, against the manifest amount, currency and expiry - amount and currency on the exact-octet terms of `MUST-T8-2`, time on the boundary of `MUST-T3-3`, and, where the manifest names a `payee`, the receipt payee on the same exact-octet terms - and MUST report a receipt that departs from them. Where a usable issuer key is pinned (a pinned issuer root at least one of whose keys the verifier can decode), the comparison is made over the receipts that verify under it and a departure MUST fail the audit. Where no usable issuer key is pinned, the departure MUST still be reported and MUST NOT by itself fail the audit: this requirement charges a party with departing from terms it signed, and a charge that no key stands behind is one a forged receipt can invent against an honest payer. This differs from `MUST-T4-17` on purpose. That requirement asks whether terms were named, which an unattributable document can answer; this one makes an accusation, which it cannot. `MUST-T8-2` and `MUST-T3-3` bind the gate; an audit reads the record after the gate is gone, so without this the receipt can carry the hash of terms it breaks. Receipts that do not name the manifest are not measured against it. A Trade Manifest that a stated publisher pin refuses is not terms for this purpose: where the verifier reports `manifest-key-mismatch`, it MUST NOT read a charge out of that document's body, neither this comparison nor the acceptance-hash comparison of {{countersign}}. The refusal is the finding; a document the audit has just rejected must not also be the evidence it convicts with, on the same reasoning that keeps an unattributable countersignature from turning a negative result. |
 | MAY-T8-10 | A payee MAY attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. The previous revision numbered this requirement MAY-T8-9, colliding with MUST-T8-9; the number is corrected and the requirement text is unchanged. |
 | MAY-T8-11 | An attributable countersignature MAY carry `deliveredHash`. When present and the verifier holds the Trade Manifest, the verifier MUST compare it against `acceptanceCriteriaHash` as exact octets and MUST report a mismatch as a failing finding (`delivery-mismatch`): both ends of that comparison are signed. A `deliveredHash` on an unattributable countersignature MUST be discarded with it. |
 
@@ -2690,6 +2690,26 @@ measurement found on the way is.
   unpinned cell
   names, presented-unattested, is likewise defined in the terminology
   rather than used once.
+- A Trade Manifest refused by a stated publisher pin no longer founds a
+  charge. Its body was still supplying the terms comparison of
+  `MUST-T8-9` and the acceptance-criteria hash behind `delivery-mismatch`,
+  so a manifest anyone could mint, presented beside an honest receipt,
+  produced two hard findings against the payee while the same report
+  refused the document as `manifest-key-mismatch`. That is the shape this
+  profile closes everywhere else: evidence nothing stands behind must not
+  manufacture a negative result. The requirement says so where the charge
+  is defined, and the companion stops reading the body at the refusal,
+  measured red before green.
+- Six more finding-code rows were swept the same way as the three above
+  and named the branch they were missing: the refused chain head under
+  `checkpoint-head-mismatch`, cover reported on presentation rather than
+  on attribution, the payee branch of the terms comparison, the four
+  fields `extract-settlement-mismatch` actually compares, the unpinned
+  half of `unstated-audit-window`, and what
+  `witness-inclusion-not-exercised` does and does not say about
+  verification. Two operator-facing messages stopped reporting states the
+  same report contradicted: a reconciliation that had not closed and a
+  witness attestation nothing had verified.
 - {{impl-status}} names what this revision adds as not yet in a
   published package, on the same terms -05 used for its own
   additions, carries the suite size measured at the commit it

@@ -13,6 +13,7 @@ import {
   type SignedManifest,
 } from "@cedulon/manifest";
 import {
+  counterSign,
   generateReceiptKeys,
   makeDisputeBundle,
   signReceipt,
@@ -198,6 +199,93 @@ describe("the manifest root", () => {
 });
 
 describe("pin optionality, measured rather than guessed", () => {
+  it("97 RED then GREEN: a manifest the pin rejects does not charge anyone", () => {
+    // The sharpest shape in this profile: evidence the verifier has explicitly
+    // refused must not be able to manufacture a negative result. A manifest
+    // that fails its pin still supplied the terms and the acceptance hash that
+    // two hard findings were written from.
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const merchant = generateManifestKeys();
+    const attacker = generateManifestKeys();
+    const forged = signManifest(
+      { ...manifestBody(), payee: "SOMEONE-ELSE" },
+      attacker.privateKeyPem,
+      attacker.publicKeyPem,
+    );
+    const bound = receiptFor(honest, "ref-ok", 0, manifestHash(forged));
+    const countersigned = counterSign(
+      bound,
+      merchant.privateKeyPem,
+      merchant.publicKeyPem,
+      undefined,
+      TEST_HASH_OTHER,
+    );
+    const report = audit({
+      receipts: [countersigned],
+      checkpoints: [checkpointFor(honest, [countersigned])],
+      settlements: [{ ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW }],
+      extract: railWith(rail),
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      payeeTrust: { payee: merchant.publicKeyPem },
+      manifest: forged,
+      manifestTrust: { publicKeyPem: merchant.publicKeyPem },
+    });
+
+    assert.ok(
+      report.findings.some((f) => f.code === "manifest-key-mismatch"),
+      `the pin must reject this manifest first, got ${report.findings.map((f) => f.code).join(",") || "none"}`,
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "delivery-mismatch"),
+      false,
+      "a rejected manifest's acceptanceCriteriaHash must not accuse the payee of a bad delivery",
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "manifest-terms-mismatch"),
+      false,
+      "a rejected manifest's terms must not charge the receipt with departing from them",
+    );
+  });
+
+  it("96 RED then GREEN: counterparty-unbound stops reporting a reconciliation that did not close", () => {
+    // The message asserted a state the same report contradicts: it said ref,
+    // amount and currency closed against the extract while a settlement on
+    // that extract had no receipt at all.
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const good = receiptFor(honest, "ref-ok", 0);
+    const settlements = [
+      { ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW },
+      { ref: "orphan-1", amount: "9", currency: "USD", timestampMs: NOW + 3_600_000 },
+    ];
+    const wide = { windowStartMs: NOW - 3_600_000, windowEndMs: NOW + 7_200_000 };
+    const extract = signRailExtract(
+      { accountId: "acct", railId: "rail", ...wide, settlements },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const open = audit({
+      receipts: [good],
+      checkpoints: [checkpointFor(honest, [good])],
+      settlements,
+      extract,
+      trust: { publicKeyPem: rail.publicKeyPem, accountId: "acct", railId: "rail", ...wide },
+    });
+    assert.ok(
+      open.findings.some((f) => f.code === "settlement-without-receipt"),
+      `expected an unmatched settlement, got ${open.findings.map((f) => f.code).join(",") || "none"}`,
+    );
+    const unbound = open.warnings.find((w) => w.code === "counterparty-unbound");
+    assert.ok(unbound, "expected counterparty-unbound beside it");
+    assert.doesNotMatch(
+      unbound.detail,
+      /closed against the extract/,
+      "a settlement with no receipt is not a closed reconciliation, so the message must not report one",
+    );
+  });
+
   it("95 RED then GREEN: the unpinned manifest warning does not report a check the audit never runs", () => {
     // Measured, not assumed: with no manifest pin nothing verifies the
     // manifest, so its own warning must not describe what a signature proved.
