@@ -138,3 +138,72 @@ npm run demo:live
 - The audit names `guarantee=` on the passing path.
 - The four bypass kinds fail.
 - The published MCP server still answers `initialize` (if you ran §6).
+
+## Runs by other people
+
+The sections above are the clean-clone procedure. This section records runs that
+other people actually performed, and states what each one does and does not
+establish. A run is listed here only with the runner's consent and in the terms
+they set.
+
+### Vectors, independent stack — Tiago Pinto, 30–31 August 2026
+
+Tiago Pinto (independent author and researcher, verifiable trust and AI
+governance, <https://donttrustverify.pt>) ran the Appendix A vectors of
+draft-dogru-cedulon-04 in his own Python environment, before reading the draft
+for failure points, and against the IETF archive bytes rather than any copy from
+this repository.
+
+His environment line, the archive digests he ran against, and the digest of the
+vector he rebuilt are recorded once, in the Implementation Status of the living
+draft under `spec/`. They are not repeated here: two hand-kept copies of one
+digest is one copy that goes stale, and the copy nobody posts is always that
+one. A test in `tests/interop-run.test.ts` fails if any of them reappears in
+this file.
+
+Result reported: both Ed25519 signatures verify, the SPKI-derived kid is the one
+Appendix A carries, and deterministic re-encoding reproduces both protected
+headers and payloads byte for byte.
+
+He then rebuilt the regenerated receipt vector **from the -05 text alone**, in
+the same Python environment and against the archive bytes: protected header from
+the profile rules, claim map with the policyHash computed as the SHA-256 of the
+UTF-8 octets of `cedulon/appendix-policy`, deterministic CBOR, signed with the
+RFC 8032 fixture key. The result is byte-identical to the published vector. Both
+published signatures verify, and neither object is tag-wrapped.
+
+**What this establishes, in the runner's own terms.** Consent to record it was
+given as follows, and the scope limit is his, not ours:
+
+> Yes, you have my consent to record the -04 vector run as the first independent
+> run of those vectors outside the codebase, **not as an independent
+> implementation**.
+
+So: the published vectors are reproducible on a materially different stack, by
+someone who did not run this code, from the archive bytes. That is what it says.
+It is not evidence that the draft is sufficient to build a verifier from — that
+question is open, and is the next contribution kind this file has no row for.
+
+### Clean-clone suite runs
+
+- Nicholas — macOS arm64, Node 22.22.3, lockfile.
+- Iman — Linux.
+
+These are runs of the procedure in §1–§5 above, from a clean clone of this
+repository. They establish that the tree builds and the suite is green off a
+fresh checkout on a host that is not the author's. They do not establish
+anything about the text, because the text is not their input.
+
+### Not yet recorded
+
+An **independent implementation with independent vectors** — a verifier written
+from the posted text, without reading this codebase, its repair commits or its
+test suite. Tiago Pinto has said he is willing to attempt this against -05, with
+the qualification that he has already seen parts of the public repository and
+repository metadata during the -04 review, so it would not be a clean-room
+implementation in the absolute sense. His stated method is to freeze his
+implementation and his first-failure record before comparing either with the
+codebase.
+
+Until such a run exists, this file should not claim that the specification is
+implementable from the text alone. Nothing above tests that.

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { latestDraftPath } from "../scripts/latest-draft.ts";
 import { documentedRuns, runDocumentedCommand } from "./doc-runs.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -24,6 +25,22 @@ describe("interop-run doc", () => {
     // already mailed-ready and unreachable. The SHA belongs in the thread.
     const sha = doc.match(/\b[0-9a-f]{7,40}\b/);
     assert.equal(sha, null, `remove the hard-coded SHA ${JSON.stringify(sha?.[0])}`);
+  });
+
+  it("does not restate a digest the living draft already carries", () => {
+    // The runner's environment line and the three archive digests are in the
+    // draft's Implementation Status. Written here as well they are two
+    // hand-kept copies of one fact, and the copy nobody posts is the one that
+    // goes stale. This file carries what only it has - who ran what, in whose
+    // words, and on what terms - and points at the draft for the numbers.
+    const draft = readFileSync(latestDraftPath(root), "utf8");
+    const inDraft = new Set(draft.match(/\b[0-9a-f]{64}\b/g) ?? []);
+    const restated = (doc.match(/\b[0-9a-f]{64}\b/g) ?? []).filter((d) => inDraft.has(d));
+    assert.deepEqual(
+      restated,
+      [],
+      `these digests are already in the draft; reference it instead: ${restated.join(", ")}`,
+    );
   });
 
   it("names the required commands", () => {
