@@ -38,9 +38,10 @@ find the older behaviour until this bump ships. What it changes: an audit
 declares the settlement path it was computed over, not only the period. A
 verifier that pins a rail key but names no account and no rail now gets
 `unstated-audit-scope` and a conditional guarantee, on the same reasoning that
-made an unstated period conditional; and every report names the account, rail
-and window the extract declared, in the operator-facing text and in the
-returned finding object both. An account that can settle on a second rail has a
+made an unstated period conditional; and a report computed over an extract
+names the account, rail and window that extract declared, in the
+operator-facing text and in the returned finding object both, while a report
+with no extract has no declared population to name. An account that can settle on a second rail has a
 settlement path no presented extract covers, and until this bump a balanced
 line could not be told apart from one that covered every path. The posted `-06`
 states neither requirement: that is a living split, registered as
