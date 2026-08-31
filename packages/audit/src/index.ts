@@ -504,6 +504,8 @@ export function findSettlementMatches(
     }
   }
 
+  // nextRefs closes the trailing edge only. An unmatched opening-edge row
+  // waits for a receipt in this bag; the following window does not harden it.
   const consecutive = Boolean(boundary?.nextRefs);
   const lowerCut = boundary ? boundary.windowStartMs + boundary.clockSkewMs : null;
   const upperCut = boundary ? boundary.windowEndMs - boundary.clockSkewMs : null;
@@ -512,7 +514,7 @@ export function findSettlementMatches(
     const r = receiptsByRef.get(ref);
     if (!r) {
       const nearStart = lowerCut !== null && s.timestampMs < lowerCut;
-      if (nearStart && !consecutive) {
+      if (nearStart) {
         findings.push({
           code: "boundary-deferred",
           id: ref,
