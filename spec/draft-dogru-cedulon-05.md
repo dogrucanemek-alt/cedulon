@@ -756,7 +756,7 @@ signed body is one JSON document with exactly this shape:
 | railId | string |
 | windowStartMs | number (POSIX milliseconds, an integer) |
 | windowEndMs | number (POSIX milliseconds, an integer) |
-| clockSkewMs | number (milliseconds, an integer; optional; see {{reconciliation}}) |
+| clockSkewMs | number (milliseconds, a non-negative integer; optional; see {{reconciliation}}) |
 | settlements | array of settlement records (schema above) |
 
 All six named members except `clockSkewMs` MUST be present; a body
@@ -765,6 +765,13 @@ name at both ends - by the signer before it signs and by the verifier
 before it checks a signature - so a malformed extract is the same
 refusal on both sides rather than a signature verdict. Additional
 members beyond these are the rail's to add, as with records.
+
+The integer-valued members - `windowStartMs`, `windowEndMs`, each
+record's `timestampMs`, and `clockSkewMs` - MUST be integers of
+magnitude at most 2^53 - 1, the range a JSON number carries exactly,
+and `clockSkewMs` MUST NOT be negative; a value outside those bounds,
+or a non-integer, is refused by name in the same way as a missing
+member.
 
 `clockSkewMs`, when present, declares the boundary allowance the
 verifier applies at this window's edges during reconciliation
@@ -2320,8 +2327,9 @@ taken from what the implementation measurably does.
 - The window boundary stopped manufacturing accusations out of two
   honest clocks: membership follows the ref binding first, and an
   unmatched item within the extract-declared `clockSkewMs` of the
-  edge is `boundary-deferred`, resolving against the adjacent
-  window (`MUST-T10-17`).
+  edge is `boundary-deferred`: a closing-edge item resolves against
+  the following window's extract, an opening-edge item only against
+  a receipt in the presented bag (`MUST-T10-17`).
 - An appended countersignature can no longer fail an honest audit.
   Attribution gates evidentiary weight; an unattributable
   countersignature is discarded with a warning, the pinned
@@ -2354,7 +2362,8 @@ taken from what the implementation measurably does.
   counter-reading found that `1.5` and `NaN` passed a `number` check
   and were signed. `windowStartMs`, `windowEndMs`, each record's
   `timestampMs`, and `clockSkewMs` are now refused by name unless
-  they are safe integers; the canonical-encoding refusal for
+  they are integers of magnitude at most 2^53 - 1, and `clockSkewMs`
+  unless it is also non-negative; the canonical-encoding refusal for
   non-finite numbers still guards members the rail adds.
 - An opening-edge deferral is closed only by a receipt in the
   presented bag. The implementation had let a following window's

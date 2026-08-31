@@ -81,7 +81,10 @@ export function railExtractShapeRefusal(body: unknown): string | null {
       return "malformed-settlement-beneficiary";
     }
   }
-  if ("clockSkewMs" in rec && !Number.isSafeInteger(rec.clockSkewMs)) {
+  if (
+    "clockSkewMs" in rec &&
+    (!Number.isSafeInteger(rec.clockSkewMs) || (rec.clockSkewMs as number) < 0)
+  ) {
     return "malformed-extract-clockSkewMs";
   }
   return null;

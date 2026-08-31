@@ -116,10 +116,11 @@ describe("rail extract POSIX millisecond fields are safe integers", () => {
     }
   }
 
-  it("negative safe integers stay accepted (measured, not a new rule)", () => {
-    // Current code accepted any typeof number. After Number.isSafeInteger the
-    // negative integers that already passed still pass. The sign is the
-    // operator's decision; this lock only says we did not flip it.
+  it("negative POSIX milliseconds stay accepted; a negative clockSkewMs is refused by name", () => {
+    // Negative POSIX milliseconds are dates before 1970; the text says
+    // "an integer" and the gate keeps them. A negative allowance is not a
+    // magnitude: the text says clockSkewMs MUST NOT be negative, so the
+    // gate refuses it by name. -0 is numerically 0 and stays accepted.
     assert.equal(railExtractShapeRefusal({ ...body, windowStartMs: -1 }), null);
     assert.equal(railExtractShapeRefusal({ ...body, windowEndMs: -1 }), null);
     assert.equal(
@@ -129,7 +130,9 @@ describe("rail extract POSIX millisecond fields are safe integers", () => {
       }),
       null,
     );
-    assert.equal(railExtractShapeRefusal({ ...body, clockSkewMs: -1 }), null);
+    assert.equal(railExtractShapeRefusal({ ...body, clockSkewMs: -1 }), "malformed-extract-clockSkewMs");
+    assert.equal(railExtractShapeRefusal({ ...body, clockSkewMs: -0 }), null);
+    assert.equal(railExtractShapeRefusal({ ...body, clockSkewMs: 0 }), null);
   });
 
   it("an extra non-finite member is still the JCS encode refusal, not the shape gate", () => {
