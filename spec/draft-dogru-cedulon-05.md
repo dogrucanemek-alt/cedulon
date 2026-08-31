@@ -134,9 +134,12 @@ informative:
 
 This document defines the Cedulon Protocol, an audit layer for
 agent-to-agent commerce. Payment rails such as HTTP 402 flows (x402) and
-mandate protocols (AP2) already move value. They do not, by themselves,
-produce a fail-closed policy check and a signed spend receipt that a
-verifier can reconcile against a rail extract. Cedulon specifies a Trade
+mandate protocols (AP2) already move value, and a mandate protocol can
+already refuse a spend before it happens and return signed receipts.
+What they do not, by themselves, give a party that is neither payer nor
+rail operator is a retrievable record of that decision and a signed
+spend receipt that reconciles against an authenticated extract of the
+rail. Cedulon specifies a Trade
 Manifest (signed offer before payment), a Policy Decision Point with
 default deny, a Spend Receipt (COSE/CWT claim set after a gated payment),
 epoch checkpoints, and rail-extract reconciliation. The reconciliation
@@ -2267,11 +2270,12 @@ that branch against an installed 0.7.0 will not find it.
 
 ## Changes from -04 {#changes-04}
 
-Every change in this revision answers a first-failure list filed
-against the posted -04 by an independent reader who ran the Appendix
-A vectors against the exact archive bytes before reading the text:
-eight points where an implementation could no longer be built from
-the text alone, one question, and three mechanical defects. The
+Every change in this revision but the last answers a first-failure
+list filed against the posted -04 by an independent reader who ran
+the Appendix A vectors against the exact archive bytes before reading
+the text: eight points where an implementation could no longer be
+built from the text alone, one question, and three mechanical
+defects. The
 repairs landed red-then-green in the companion implementation before
 the sentences below were written, and the shapes in the text are
 taken from what the implementation measurably does.
@@ -2335,6 +2339,12 @@ taken from what the implementation measurably does.
   permission contradicted {{RFC8785}} Section 3.2.2.2 and is
   removed: producers refuse by name, verifiers report rather than
   crash ({{canonical-json}}).
+- The abstract no longer says that payment rails and mandate
+  protocols lack a fail-closed policy check; a mandate protocol has
+  one, and returns signed receipts. It names the missing piece as
+  what a party that is neither payer nor rail operator can retrieve
+  and reconcile against an authenticated rail extract. A reply on
+  the DISPATCH list narrowed the claim, and the narrowing is right.
 
 ## Changes from -03 {#changes-03}
 

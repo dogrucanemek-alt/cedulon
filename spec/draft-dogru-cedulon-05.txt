@@ -15,39 +15,39 @@ Abstract
 
    This document defines the Cedulon Protocol, an audit layer for agent-
    to-agent commerce.  Payment rails such as HTTP 402 flows (x402) and
-   mandate protocols (AP2) already move value.  They do not, by
-   themselves, produce a fail-closed policy check and a signed spend
-   receipt that a verifier can reconcile against a rail extract.
-   Cedulon specifies a Trade Manifest (signed offer before payment), a
-   Policy Decision Point with default deny, a Spend Receipt (COSE/CWT
-   claim set after a gated payment), epoch checkpoints, and rail-extract
-   reconciliation.  The reconciliation shows that no settlement on the
-   extract lacks a receipt and no settled receipt is absent from the
-   extract.  That result is unconditional only when the verifier pins
-   the rail key out of band and states the period under audit; otherwise
-   the document requires it to be reported as conditional.  Checkpoints
-   carry the suppression guarantee, so the document profiles the
-   checkpoint as a Signed Statement, gives the verification algorithm a
-   step that consumes the witness receipts returned for checkpoints,
-   names what a witness holding a checkpoint the presented chain omits
-   reports, brings equivocation within reach by comparing recorded
-   copies against the presented chain, and states how checkpoint totals
-   may be withheld without withholding the fact that they were.  No
-   signed object may be verified against a key it carries itself, and a
-   presented Trade Manifest must be bound both to the receipts that name
-   it and to the terms those receipts claim.  The document also names a
-   threat no adversary causes, a settlement recorded on a rail with no
-   receipt behind it, and defines a Dispute Evidence Bundle (evidence,
-   not an award) and optional SCITT anchoring.  This revision defines
-   the encodings earlier revisions called canonical without defining
-   them, and states the exact input to every hash-valued field, so that
-   an independent verifier can be written from the text alone.  Cedulon
-   is not a competitor to x402 or AP2; it sits above them.
+   mandate protocols (AP2) already move value, and a mandate protocol
+   can already refuse a spend before it happens and return signed
+   receipts.  What they do not, by themselves, give a party that is
+   neither payer nor rail operator is a retrievable record of that
+   decision and a signed spend receipt that reconciles against an
+   authenticated extract of the rail.  Cedulon specifies a Trade
+   Manifest (signed offer before payment), a Policy Decision Point with
+   default deny, a Spend Receipt (COSE/CWT claim set after a gated
+   payment), epoch checkpoints, and rail-extract reconciliation.  The
+   reconciliation shows that no settlement on the extract lacks a
+   receipt and no settled receipt is absent from the extract.  That
+   result is unconditional only when the verifier pins the rail key out
+   of band and states the period under audit; otherwise the document
+   requires it to be reported as conditional.  Checkpoints carry the
+   suppression guarantee, so the document profiles the checkpoint as a
+   Signed Statement, gives the verification algorithm a step that
+   consumes the witness receipts returned for checkpoints, names what a
+   witness holding a checkpoint the presented chain omits reports,
+   brings equivocation within reach by comparing recorded copies against
+   the presented chain, and states how checkpoint totals may be withheld
+   without withholding the fact that they were.  No signed object may be
+   verified against a key it carries itself, and a presented Trade
+   Manifest must be bound both to the receipts that name it and to the
+   terms those receipts claim.  The document also names a threat no
+   adversary causes, a settlement recorded on a rail with no receipt
+   behind it, and defines a Dispute Evidence Bundle (evidence, not an
+   award) and optional SCITT anchoring.  This revision defines the
+   encodings earlier revisions called canonical without defining them,
+   and states the exact input to every hash-valued field, so that an
+   independent verifier can be written from the text alone.  Cedulon is
+   not a competitor to x402 or AP2; it sits above them.
 
-Status of This Memo
 
-   This Internet-Draft is submitted in full conformance with the
-   provisions of BCP 78 and BCP 79.
 
 
 
@@ -57,6 +57,11 @@ Dogru                     Expires 4 March 2027                  [Page 1]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
 
    Internet-Drafts are working documents of the Internet Engineering
    Task Force (IETF).  Note that other groups may also distribute
@@ -88,24 +93,19 @@ Table of Contents
 
    1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   4
    2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   5
-   3.  Architecture  . . . . . . . . . . . . . . . . . . . . . . . .   5
+   3.  Architecture  . . . . . . . . . . . . . . . . . . . . . . . .   6
      3.1.  Policy Decision Point . . . . . . . . . . . . . . . . . .   6
      3.2.  Receipt Issuer  . . . . . . . . . . . . . . . . . . . . .   6
      3.3.  Anchor / SCITT  . . . . . . . . . . . . . . . . . . . . .   6
-   4.  Trade Manifest  . . . . . . . . . . . . . . . . . . . . . . .   6
+   4.  Trade Manifest  . . . . . . . . . . . . . . . . . . . . . . .   7
    5.  Spend Receipt . . . . . . . . . . . . . . . . . . . . . . . .   8
-     5.1.  Optional payee countersignature . . . . . . . . . . . . .   9
-   6.  COSE Profile  . . . . . . . . . . . . . . . . . . . . . . . .  10
-     6.1.  Claim labels  . . . . . . . . . . . . . . . . . . . . . .  11
-     6.2.  COSE_Sign1 headers  . . . . . . . . . . . . . . . . . . .  14
-   7.  Canonical JSON encoding . . . . . . . . . . . . . . . . . . .  14
-     7.1.  Which octets are hashed . . . . . . . . . . . . . . . . .  15
-   8.  Decision Token  . . . . . . . . . . . . . . . . . . . . . . .  17
-   9.  Rail Extract Profile  . . . . . . . . . . . . . . . . . . . .  18
-     9.1.  Record schema . . . . . . . . . . . . . . . . . . . . . .  18
-     9.2.  Scope . . . . . . . . . . . . . . . . . . . . . . . . . .  19
-     9.3.  Authentication  . . . . . . . . . . . . . . . . . . . . .  20
-     9.4.  Scope agreement . . . . . . . . . . . . . . . . . . . . .  21
+     5.1.  Optional payee countersignature . . . . . . . . . . . . .  10
+   6.  COSE Profile  . . . . . . . . . . . . . . . . . . . . . . . .  11
+     6.1.  Claim labels  . . . . . . . . . . . . . . . . . . . . . .  12
+     6.2.  COSE_Sign1 headers  . . . . . . . . . . . . . . . . . . .  15
+   7.  Canonical JSON encoding . . . . . . . . . . . . . . . . . . .  15
+     7.1.  Which octets are hashed . . . . . . . . . . . . . . . . .  16
+   8.  Decision Token  . . . . . . . . . . . . . . . . . . . . . . .  18
 
 
 
@@ -114,54 +114,54 @@ Dogru                     Expires 4 March 2027                  [Page 2]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   10. Trust roots . . . . . . . . . . . . . . . . . . . . . . . . .  21
-     10.1.  The issuer root  . . . . . . . . . . . . . . . . . . . .  22
-     10.2.  The payee root . . . . . . . . . . . . . . . . . . . . .  25
-     10.3.  The witness root . . . . . . . . . . . . . . . . . . . .  25
-     10.4.  The decision root  . . . . . . . . . . . . . . . . . . .  26
-     10.5.  The manifest root  . . . . . . . . . . . . . . . . . . .  26
-     10.6.  What the roots do not cover  . . . . . . . . . . . . . .  29
-   11. Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  29
-     11.1.  Checkpoint claims  . . . . . . . . . . . . . . . . . . .  29
-     11.2.  Genesis and continuity . . . . . . . . . . . . . . . . .  30
-     11.3.  The transparency witness . . . . . . . . . . . . . . . .  31
-     11.4.  Verification algorithm . . . . . . . . . . . . . . . . .  33
-     11.5.  Finding codes  . . . . . . . . . . . . . . . . . . . . .  40
-   12. Lifecycle . . . . . . . . . . . . . . . . . . . . . . . . . .  47
-   13. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  47
-   14. SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  48
-   15. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  49
-   16. Security Considerations . . . . . . . . . . . . . . . . . . .  49
-     16.1.  T1: Prompt injection leads to unauthorized spend . . . .  50
-     16.2.  T2: Runaway agent (loop spend) . . . . . . . . . . . . .  50
-     16.3.  T3: Replay of payment authority  . . . . . . . . . . . .  51
-     16.4.  T4: Receipt forgery or repudiation . . . . . . . . . . .  51
-     16.5.  T5: Policy bypass via direct rail access . . . . . . . .  54
-     16.6.  T6: TOCTOU between policy check and payment  . . . . . .  55
-     16.7.  T7: Signing-key leakage  . . . . . . . . . . . . . . . .  56
-     16.8.  T8: Counterparty price gouging or defective delivery . .  56
-     16.9.  MUST-T8-custody  . . . . . . . . . . . . . . . . . . . .  58
-     16.10. T9: PII leakage into the transparency log  . . . . . . .  59
-     16.11. T10: Secret spend via rail bypass  . . . . . . . . . . .  59
-     16.12. T11: Checkpoint suppression or rollback  . . . . . . . .  62
-     16.13. Optional escrow role . . . . . . . . . . . . . . . . . .  65
-     16.14. T12: Settlement without a recorded receipt . . . . . . .  65
-   17. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  67
-   18. Implementation Status . . . . . . . . . . . . . . . . . . . .  68
-     18.1.  Changes from -04 . . . . . . . . . . . . . . . . . . . .  72
-     18.2.  Changes from -03 . . . . . . . . . . . . . . . . . . . .  74
-     18.3.  Changes from -02 . . . . . . . . . . . . . . . . . . . .  75
-     18.4.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  77
-   19. Evolution and Future Work (Informative) . . . . . . . . . . .  79
-     19.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  79
-     19.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  79
-     19.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  79
-   20. Informative Notes on Adjacent Protocols . . . . . . . . . . .  79
-   21. References  . . . . . . . . . . . . . . . . . . . . . . . . .  80
-     21.1.  Normative References . . . . . . . . . . . . . . . . . .  80
-     21.2.  Informative References . . . . . . . . . . . . . . . . .  81
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  83
-   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  84
+   9.  Rail Extract Profile  . . . . . . . . . . . . . . . . . . . .  19
+     9.1.  Record schema . . . . . . . . . . . . . . . . . . . . . .  19
+     9.2.  Scope . . . . . . . . . . . . . . . . . . . . . . . . . .  20
+     9.3.  Authentication  . . . . . . . . . . . . . . . . . . . . .  21
+     9.4.  Scope agreement . . . . . . . . . . . . . . . . . . . . .  22
+   10. Trust roots . . . . . . . . . . . . . . . . . . . . . . . . .  22
+     10.1.  The issuer root  . . . . . . . . . . . . . . . . . . . .  23
+     10.2.  The payee root . . . . . . . . . . . . . . . . . . . . .  26
+     10.3.  The witness root . . . . . . . . . . . . . . . . . . . .  26
+     10.4.  The decision root  . . . . . . . . . . . . . . . . . . .  27
+     10.5.  The manifest root  . . . . . . . . . . . . . . . . . . .  27
+     10.6.  What the roots do not cover  . . . . . . . . . . . . . .  30
+   11. Reconciliation and Epoch Checkpoints  . . . . . . . . . . . .  30
+     11.1.  Checkpoint claims  . . . . . . . . . . . . . . . . . . .  30
+     11.2.  Genesis and continuity . . . . . . . . . . . . . . . . .  31
+     11.3.  The transparency witness . . . . . . . . . . . . . . . .  32
+     11.4.  Verification algorithm . . . . . . . . . . . . . . . . .  34
+     11.5.  Finding codes  . . . . . . . . . . . . . . . . . . . . .  41
+   12. Lifecycle . . . . . . . . . . . . . . . . . . . . . . . . . .  48
+   13. Policy Semantics  . . . . . . . . . . . . . . . . . . . . . .  48
+   14. SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  49
+   15. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  50
+   16. Security Considerations . . . . . . . . . . . . . . . . . . .  50
+     16.1.  T1: Prompt injection leads to unauthorized spend . . . .  51
+     16.2.  T2: Runaway agent (loop spend) . . . . . . . . . . . . .  51
+     16.3.  T3: Replay of payment authority  . . . . . . . . . . . .  52
+     16.4.  T4: Receipt forgery or repudiation . . . . . . . . . . .  52
+     16.5.  T5: Policy bypass via direct rail access . . . . . . . .  55
+     16.6.  T6: TOCTOU between policy check and payment  . . . . . .  56
+     16.7.  T7: Signing-key leakage  . . . . . . . . . . . . . . . .  57
+     16.8.  T8: Counterparty price gouging or defective delivery . .  57
+     16.9.  MUST-T8-custody  . . . . . . . . . . . . . . . . . . . .  59
+     16.10. T9: PII leakage into the transparency log  . . . . . . .  60
+     16.11. T10: Secret spend via rail bypass  . . . . . . . . . . .  60
+     16.12. T11: Checkpoint suppression or rollback  . . . . . . . .  63
+     16.13. Optional escrow role . . . . . . . . . . . . . . . . . .  66
+     16.14. T12: Settlement without a recorded receipt . . . . . . .  66
+   17. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  68
+   18. Implementation Status . . . . . . . . . . . . . . . . . . . .  69
+     18.1.  Changes from -04 . . . . . . . . . . . . . . . . . . . .  73
+     18.2.  Changes from -03 . . . . . . . . . . . . . . . . . . . .  75
+     18.3.  Changes from -02 . . . . . . . . . . . . . . . . . . . .  76
+     18.4.  Changes from -01 . . . . . . . . . . . . . . . . . . . .  78
+   19. Evolution and Future Work (Informative) . . . . . . . . . . .  80
+     19.1.  Re-attestation profile . . . . . . . . . . . . . . . . .  80
+     19.2.  Streaming reconciliation . . . . . . . . . . . . . . . .  80
+     19.3.  Generalization . . . . . . . . . . . . . . . . . . . . .  80
+   20. Informative Notes on Adjacent Protocols . . . . . . . . . . .  80
 
 
 
@@ -170,7 +170,12 @@ Dogru                     Expires 4 March 2027                  [Page 3]
 Internet-Draft                   Cedulon                     August 2026
 
 
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  86
+   21. References  . . . . . . . . . . . . . . . . . . . . . . . . .  81
+     21.1.  Normative References . . . . . . . . . . . . . . . . . .  81
+     21.2.  Informative References . . . . . . . . . . . . . . . . .  82
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  84
+   Appendix A.  Test Vectors . . . . . . . . . . . . . . . . . . . .  85
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  87
 
 1.  Introduction
 
@@ -212,11 +217,6 @@ Internet-Draft                   Cedulon                     August 2026
    enough that two implementations reach the same finding on the same
    evidence.  The novelty is interoperability, not the idea.
 
-   Neighbor drafts are complementary, not substitutes. draft-bates-atp
-   [BATES-ATP] covers tamper-evident causal lineage as a signed DAG.
-   Cedulon is the completeness layer: a spend that never produced a
-   receipt is visible when an authenticated rail extract is reconciled
-   (MUST-T10-1).
 
 
 
@@ -225,6 +225,12 @@ Dogru                     Expires 4 March 2027                  [Page 4]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   Neighbor drafts are complementary, not substitutes. draft-bates-atp
+   [BATES-ATP] covers tamper-evident causal lineage as a signed DAG.
+   Cedulon is the completeness layer: a spend that never produced a
+   receipt is visible when an authenticated rail extract is reconciled
+   (MUST-T10-1).
 
 2.  Terminology
 
@@ -267,12 +273,6 @@ Internet-Draft                   Cedulon                     August 2026
    Rail Extract:  An authenticated list of settlement records for one
       account, one rail, and one time window.  See Section 9.
 
-3.  Architecture
-
-   Cedulon has three control-plane objects and one optional log:
-
-
-
 
 
 
@@ -281,6 +281,10 @@ Dogru                     Expires 4 March 2027                  [Page 5]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+3.  Architecture
+
+   Cedulon has three control-plane objects and one optional log:
 
      Principal --policy--> PDP --allow/deny--> x402/AP2 rail
                                  |
@@ -323,12 +327,8 @@ Internet-Draft                   Cedulon                     August 2026
    receipt (MAY-T4-6).  This document does not operate a Transparency
    Service.
 
-4.  Trade Manifest
 
-   A Trade Manifest is the commerce analogue of a promise: it is issued
-   *before* value moves.  It is conceptually symmetric to a later Spend
-   Receipt (promise then proof), and it MAY carry an AP2 mandate hash so
-   that user intent and the Cedulon offer stay linked (SHOULD-T8-5).
+
 
 
 
@@ -337,6 +337,13 @@ Dogru                     Expires 4 March 2027                  [Page 6]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+4.  Trade Manifest
+
+   A Trade Manifest is the commerce analogue of a promise: it is issued
+   *before* value moves.  It is conceptually symmetric to a later Spend
+   Receipt (promise then proof), and it MAY carry an AP2 mandate hash so
+   that user intent and the Cedulon offer stay linked (SHOULD-T8-5).
 
    A Trade Manifest MUST bind all of the following (MUST-T8-1):
 
@@ -377,13 +384,6 @@ Internet-Draft                   Cedulon                     August 2026
    the same bytes and keeps verifying; this is why the null convention
    above does not apply to it.
 
-   The manifest is COSE_Sign1 [RFC9052] over a deterministic CBOR claim
-   map (Section 6). manifestHash is the SHA-256 of the signed COSE bytes
-   (MUST-T8-7).  A spend bound to a manifest MUST be denied if the
-   requested amount or currency differs from the manifest (MUST-T8-2) or
-   if the manifest is expired (MUST-T3-3).
-
-
 
 
 
@@ -393,6 +393,12 @@ Dogru                     Expires 4 March 2027                  [Page 7]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   The manifest is COSE_Sign1 [RFC9052] over a deterministic CBOR claim
+   map (Section 6). manifestHash is the SHA-256 of the signed COSE bytes
+   (MUST-T8-7).  A spend bound to a manifest MUST be denied if the
+   requested amount or currency differs from the manifest (MUST-T8-2) or
+   if the manifest is expired (MUST-T3-3).
 
    A spend that is not bound to a verified manifest MUST be marked
    noManifest on the receipt and MUST still pass limit, velocity, and
@@ -406,6 +412,43 @@ Internet-Draft                   Cedulon                     August 2026
    COSE profile (Section 6).
 
    Claims (MUST-T4-3, MUST-T4-4, MUST-T4-7):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 4 March 2027                  [Page 8]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
     +=================+===============================================+
     | Claim           | Description                                   |
@@ -442,14 +485,6 @@ Internet-Draft                   Cedulon                     August 2026
 
                                   Table 1
 
-
-
-
-Dogru                     Expires 4 March 2027                  [Page 8]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    A receipt with outcome = settled MUST have a non-null x402PaymentRef
    (MUST-T4-7).  An aborted receipt MUST NOT be added into checkpoint
    totals.
@@ -462,6 +497,14 @@ Internet-Draft                   Cedulon                     August 2026
 
    Verifiers MUST reject a receipt if the signature fails or if the
    decoded claim map does not match the presented claims (MUST-T4-2).
+
+
+
+
+Dogru                     Expires 4 March 2027                  [Page 9]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
 5.1.  Optional payee countersignature
 
@@ -498,14 +541,6 @@ Internet-Draft                   Cedulon                     August 2026
    the signature fails, kid or content type does not match, label -70401
    is not the issuer COSE bytes (MUST-T8-8), or the signature is valid
    under some other key - MUST be rejected as approval evidence.  What
-
-
-
-Dogru                     Expires 4 March 2027                  [Page 9]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    is rejected is the countersignature, not the receipt: the verdict on
    the untouched issuer receipt MUST NOT change because an
    unattributable object was attached.  An appendable object the issuer
@@ -517,6 +552,15 @@ Internet-Draft                   Cedulon                     August 2026
    pinned a payee key and no attributable countersignature remains, the
    countersign-missing warning still applies: a discarded forgery is the
    absence of the payee's word, not a substitute for it.
+
+
+
+
+
+Dogru                     Expires 4 March 2027                 [Page 10]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
    The optional deliveredHash claim binds delivery to the receipt under
    the payee's key.  A payee who countersigns MAY include the SHA-256 of
@@ -552,16 +596,6 @@ Internet-Draft                   Cedulon                     August 2026
    which of the two values wins, which is a disagreement about what was
    signed.
 
-
-
-
-
-
-Dogru                     Expires 4 March 2027                 [Page 10]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    A decoder MUST also impose a bound on what it will attempt: on
    encoded size, on nesting depth, and on the number of elements it will
    decode from an audit input.  It MUST refuse an input that exceeds a
@@ -572,6 +606,17 @@ Internet-Draft                   Cedulon                     August 2026
    wrong for one of them within a year.  What a reader is entitled to is
    that the refusal is a refusal, named and reported, rather than a
    crash that an operator has to interpret.
+
+
+
+
+
+
+
+Dogru                     Expires 4 March 2027                 [Page 11]
+
+Internet-Draft                   Cedulon                     August 2026
+
 
 6.1.  Claim labels
 
@@ -613,7 +658,18 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 11]
+
+
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 4 March 2027                 [Page 12]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -669,7 +725,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 12]
+Dogru                     Expires 4 March 2027                 [Page 13]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -725,7 +781,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 13]
+Dogru                     Expires 4 March 2027                 [Page 14]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -781,7 +837,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 14]
+Dogru                     Expires 4 March 2027                 [Page 15]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -837,7 +893,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 15]
+Dogru                     Expires 4 March 2027                 [Page 16]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -893,7 +949,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 16]
+Dogru                     Expires 4 March 2027                 [Page 17]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -949,7 +1005,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 17]
+Dogru                     Expires 4 March 2027                 [Page 18]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1005,7 +1061,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 18]
+Dogru                     Expires 4 March 2027                 [Page 19]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1061,7 +1117,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 19]
+Dogru                     Expires 4 March 2027                 [Page 20]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1117,7 +1173,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 20]
+Dogru                     Expires 4 March 2027                 [Page 21]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1173,7 +1229,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 21]
+Dogru                     Expires 4 March 2027                 [Page 22]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1229,7 +1285,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 22]
+Dogru                     Expires 4 March 2027                 [Page 23]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1285,7 +1341,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 23]
+Dogru                     Expires 4 March 2027                 [Page 24]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1341,7 +1397,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 24]
+Dogru                     Expires 4 March 2027                 [Page 25]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1397,7 +1453,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 25]
+Dogru                     Expires 4 March 2027                 [Page 26]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1453,7 +1509,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 26]
+Dogru                     Expires 4 March 2027                 [Page 27]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1509,7 +1565,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 27]
+Dogru                     Expires 4 March 2027                 [Page 28]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1565,7 +1621,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 28]
+Dogru                     Expires 4 March 2027                 [Page 29]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1621,7 +1677,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 29]
+Dogru                     Expires 4 March 2027                 [Page 30]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1677,7 +1733,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 30]
+Dogru                     Expires 4 March 2027                 [Page 31]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1733,7 +1789,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 31]
+Dogru                     Expires 4 March 2027                 [Page 32]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1789,7 +1845,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 32]
+Dogru                     Expires 4 March 2027                 [Page 33]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1845,7 +1901,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 33]
+Dogru                     Expires 4 March 2027                 [Page 34]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1901,7 +1957,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 34]
+Dogru                     Expires 4 March 2027                 [Page 35]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -1957,7 +2013,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 35]
+Dogru                     Expires 4 March 2027                 [Page 36]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2013,7 +2069,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 36]
+Dogru                     Expires 4 March 2027                 [Page 37]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2069,7 +2125,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 37]
+Dogru                     Expires 4 March 2027                 [Page 38]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2125,7 +2181,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 38]
+Dogru                     Expires 4 March 2027                 [Page 39]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2181,7 +2237,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 39]
+Dogru                     Expires 4 March 2027                 [Page 40]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2237,7 +2293,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 40]
+Dogru                     Expires 4 March 2027                 [Page 41]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2293,7 +2349,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 41]
+Dogru                     Expires 4 March 2027                 [Page 42]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2349,7 +2405,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 42]
+Dogru                     Expires 4 March 2027                 [Page 43]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2405,7 +2461,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 43]
+Dogru                     Expires 4 March 2027                 [Page 44]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2461,7 +2517,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 44]
+Dogru                     Expires 4 March 2027                 [Page 45]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2517,7 +2573,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 45]
+Dogru                     Expires 4 March 2027                 [Page 46]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2573,7 +2629,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 46]
+Dogru                     Expires 4 March 2027                 [Page 47]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2629,7 +2685,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 47]
+Dogru                     Expires 4 March 2027                 [Page 48]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2685,7 +2741,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 48]
+Dogru                     Expires 4 March 2027                 [Page 49]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2741,7 +2797,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 49]
+Dogru                     Expires 4 March 2027                 [Page 50]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2797,7 +2853,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 50]
+Dogru                     Expires 4 March 2027                 [Page 51]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2853,7 +2909,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 51]
+Dogru                     Expires 4 March 2027                 [Page 52]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2909,7 +2965,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 52]
+Dogru                     Expires 4 March 2027                 [Page 53]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -2965,7 +3021,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 53]
+Dogru                     Expires 4 March 2027                 [Page 54]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3021,7 +3077,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 54]
+Dogru                     Expires 4 March 2027                 [Page 55]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3077,7 +3133,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 55]
+Dogru                     Expires 4 March 2027                 [Page 56]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3133,7 +3189,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 56]
+Dogru                     Expires 4 March 2027                 [Page 57]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3189,7 +3245,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 57]
+Dogru                     Expires 4 March 2027                 [Page 58]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3245,7 +3301,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 58]
+Dogru                     Expires 4 March 2027                 [Page 59]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3301,7 +3357,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 59]
+Dogru                     Expires 4 March 2027                 [Page 60]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3357,7 +3413,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 60]
+Dogru                     Expires 4 March 2027                 [Page 61]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3413,7 +3469,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 61]
+Dogru                     Expires 4 March 2027                 [Page 62]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3469,7 +3525,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 62]
+Dogru                     Expires 4 March 2027                 [Page 63]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3525,7 +3581,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 63]
+Dogru                     Expires 4 March 2027                 [Page 64]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3581,7 +3637,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 64]
+Dogru                     Expires 4 March 2027                 [Page 65]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3637,7 +3693,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 65]
+Dogru                     Expires 4 March 2027                 [Page 66]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3693,7 +3749,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 66]
+Dogru                     Expires 4 March 2027                 [Page 67]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3749,7 +3805,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 67]
+Dogru                     Expires 4 March 2027                 [Page 68]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3805,7 +3861,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 68]
+Dogru                     Expires 4 March 2027                 [Page 69]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3861,7 +3917,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 69]
+Dogru                     Expires 4 March 2027                 [Page 70]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3917,7 +3973,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 70]
+Dogru                     Expires 4 March 2027                 [Page 71]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3973,7 +4029,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 71]
+Dogru                     Expires 4 March 2027                 [Page 72]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -3990,14 +4046,15 @@ Internet-Draft                   Cedulon                     August 2026
 
 18.1.  Changes from -04
 
-   Every change in this revision answers a first-failure list filed
-   against the posted -04 by an independent reader who ran the
-   Appendix A vectors against the exact archive bytes before reading the
-   text: eight points where an implementation could no longer be built
-   from the text alone, one question, and three mechanical defects.  The
-   repairs landed red-then-green in the companion implementation before
-   the sentences below were written, and the shapes in the text are
-   taken from what the implementation measurably does.
+   Every change in this revision but the last answers a first-failure
+   list filed against the posted -04 by an independent reader who ran
+   the Appendix A vectors against the exact archive bytes before reading
+   the text: eight points where an implementation could no longer be
+   built from the text alone, one question, and three mechanical
+   defects.  The repairs landed red-then-green in the companion
+   implementation before the sentences below were written, and the
+   shapes in the text are taken from what the implementation measurably
+   does.
 
    *  The transparency receipt path stopped promising [RFC9942]
       mechanics it did not perform.  Section 11.3 now names two tiers:
@@ -4023,17 +4080,19 @@ Internet-Draft                   Cedulon                     August 2026
       types in JSON terms, and the signature representation - is stated
       in Section 9.
 
-   *  "Issuer order" is defined as the order induced by the
-      prevReceiptHash chain; presentation order carries no weight, and
-      chainHeadHash binds to the last link of the chain in the window.
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 72]
+
+
+Dogru                     Expires 4 March 2027                 [Page 73]
 
 Internet-Draft                   Cedulon                     August 2026
 
 
+   *  "Issuer order" is defined as the order induced by the
+      prevReceiptHash chain; presentation order carries no weight, and
+      chainHeadHash binds to the last link of the chain in the window.
       The window-coverage check is stated as fail-closed, zero
       checkpoints and the open epoch included.  The claim that no other
       step fed another is withdrawn for the maintained dependency list.
@@ -4082,13 +4141,17 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-
-
-
-Dogru                     Expires 4 March 2027                 [Page 73]
+Dogru                     Expires 4 March 2027                 [Page 74]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   *  The abstract no longer says that payment rails and mandate
+      protocols lack a fail-closed policy check; a mandate protocol has
+      one, and returns signed receipts.  It names the missing piece as
+      what a party that is neither payer nor rail operator can retrieve
+      and reconcile against an authenticated rail extract.  A reply on
+      the DISPATCH list narrowed the claim, and the narrowing is right.
 
 18.2.  Changes from -03
 
@@ -4131,20 +4194,18 @@ Internet-Draft                   Cedulon                     August 2026
    the manifest, and whether a currency may be case-folded before it is
    compared.  MUST-T10-1 says what an audit with nothing in it reports.
 
+
+
+
+Dogru                     Expires 4 March 2027                 [Page 75]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    The acceptance-criteria hash had two readings and no way to signal
    which one was used, so two implementations would have hashed the same
    delivery differently.  This revision defines one of them and puts the
    other out of scope until something can say which is meant.
-
-
-
-
-
-
-Dogru                     Expires 4 March 2027                 [Page 74]
-
-Internet-Draft                   Cedulon                     August 2026
-
 
    The verification algorithm now names its data dependencies. -03 named
    one and said nothing else fed another step, which stopped being true
@@ -4189,19 +4250,19 @@ Internet-Draft                   Cedulon                     August 2026
    second is T12, which no reader reported and which is not about an
    adversary at all.
 
+
+
+
+Dogru                     Expires 4 March 2027                 [Page 76]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    -02 Section 6.2 already required a verifier to obtain the public key
    from an authenticated channel (a preconfigured issuer set, a
    directory, or a transparency statement) and to reject a message whose
    kid does not match that key (MUST-T4-8).  That rule was general.
    What -02 did not carry was the verification algorithm that applies it
-
-
-
-Dogru                     Expires 4 March 2027                 [Page 75]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    to each signed object, the separate root inputs a verifier supplies
    out of band, and the error semantics that name a missing, unreadable,
    or mismatched pin.  A companion implementation that followed the
@@ -4245,19 +4306,19 @@ Internet-Draft                   Cedulon                     August 2026
    named so far, all of them stated in Section 10.  A pinned key that
    cannot be decoded MUST NOT fall back to the keys the objects carry
    (MUST-T4-11).  An issuer root may comprise more than one key, and a
+
+
+
+Dogru                     Expires 4 March 2027                 [Page 77]
+
+Internet-Draft                   Cedulon                     August 2026
+
+
    verifier must accept one that does, so a rotation inside the audited
    window does not force it to choose between findings against honest
    receipts and abandoning the pin (MUST-T4-12); the same set-of-keys
    acceptance applies to a publisher, witness, or rail pin.  The same
    out-of-band rule reaches the payee countersignature (MUST-T4-13), the
-
-
-
-Dogru                     Expires 4 March 2027                 [Page 76]
-
-Internet-Draft                   Cedulon                     August 2026
-
-
    transparency witness (MUST-T11-15 and MUST-T11-16), the Decision
    Token, whose consumer issued it and therefore already holds the key
    to check it with (MUST-T6-6), and a presented Trade Manifest (MUST-
@@ -4301,18 +4362,17 @@ Internet-Draft                   Cedulon                     August 2026
    were the presented ones, and MUST-T11-8 requires those to be
    consecutive, so no two of them can share an epoch.  A second copy is
    found in a witness, and nothing brought one in.  And the checkpoint
-   binds a per-currency total for a window while the privacy section
-   counted only receipt fields, so a window total could be published, or
-   withheld, with no stated rule either way.
 
 
 
-
-
-Dogru                     Expires 4 March 2027                 [Page 77]
+Dogru                     Expires 4 March 2027                 [Page 78]
 
 Internet-Draft                   Cedulon                     August 2026
 
+
+   binds a per-currency total for a window while the privacy section
+   counted only receipt fields, so a window total could be published, or
+   withheld, with no stated rule either way.
 
    The repairs are MUST-T11-10 through MUST-T11-14.  The transparency
    receipt is a new optional input; supplying none leaves the verifier
@@ -4361,11 +4421,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-
-
-
-
-Dogru                     Expires 4 March 2027                 [Page 78]
+Dogru                     Expires 4 March 2027                 [Page 79]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -4421,7 +4477,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 79]
+Dogru                     Expires 4 March 2027                 [Page 80]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -4477,7 +4533,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 80]
+Dogru                     Expires 4 March 2027                 [Page 81]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -4533,7 +4589,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 81]
+Dogru                     Expires 4 March 2027                 [Page 82]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -4589,7 +4645,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 82]
+Dogru                     Expires 4 March 2027                 [Page 83]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -4645,7 +4701,7 @@ Acknowledgments
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 83]
+Dogru                     Expires 4 March 2027                 [Page 84]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -4701,7 +4757,7 @@ Appendix A.  Test Vectors
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 84]
+Dogru                     Expires 4 March 2027                 [Page 85]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -4757,7 +4813,7 @@ Internet-Draft                   Cedulon                     August 2026
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 85]
+Dogru                     Expires 4 March 2027                 [Page 86]
 
 Internet-Draft                   Cedulon                     August 2026
 
@@ -4813,4 +4869,4 @@ Author's Address
 
 
 
-Dogru                     Expires 4 March 2027                 [Page 86]
+Dogru                     Expires 4 March 2027                 [Page 87]
