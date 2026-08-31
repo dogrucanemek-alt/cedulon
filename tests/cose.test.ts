@@ -241,6 +241,21 @@ describe("COSE_Sign1 receipts", () => {
     assert.equal(sameBytes, manifestHash(signed));
   });
 
+  it("RED then GREEN: a non-empty unprotected header is refused by name, not read past", () => {
+    // The profile says the unprotected header MUST be empty. Measured before
+    // this test: decodeCoseSign1 discarded whatever the second array element
+    // carried, so a receipt with a stuffed unprotected map still verified and
+    // still decoded, while its transport octets - the input to receiptHash -
+    // had changed under it. The refusal keeps the transport octets the
+    // profile hashes equal to the octets the profile allows.
+    const keys = fixtureEd25519Pems();
+    const arr = decodeCbor(hexToBytes(VECTOR_RECEIPT_COSE_HEX)) as unknown[];
+    const stuffed = encodeCbor([arr[0], cborMap([[1, "stuffed"]]), arr[2], arr[3]] as never);
+    assert.throws(() => decodeCoseSign1(stuffed), /cose-sign1-unprotected/);
+    assert.equal(verifyCoseSign1(stuffed, keys.publicKeyPem, CTY_RECEIPT), false);
+    assert.equal(verifyCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX), keys.publicKeyPem, CTY_RECEIPT), true);
+  });
+
   it("RED then GREEN: COSE byte tamper fails verify", () => {
     const keys = fixtureEd25519Pems();
     const signed = signReceipt(SIGNABLE_CLAIMS, keys.privateKeyPem, keys.publicKeyPem);

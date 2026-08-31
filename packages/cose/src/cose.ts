@@ -1,6 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, verify } from "node:crypto";
 import { asSigner, type Signer } from "./signer.ts";
-import { asArray, asMap, cborMap, decodeCbor, encodeCbor, hexToBytes, mapGet, namedDecodeRefusal } from "./cbor.ts";
+import { asArray, asMap, cborMap, decodeCbor, encodeCbor, hexToBytes, isCborMap, mapGet, namedDecodeRefusal } from "./cbor.ts";
 
 /** RFC 9052 EdDSA. Deprecated for this profile; use Ed25519 (-19). */
 export const COSE_ALG_EDDSA = -8;
@@ -140,6 +140,13 @@ export function decodeCoseSign1(bytes: Uint8Array): CoseSign1 {
   }
   if (!(arr[0] instanceof Uint8Array) || !(arr[2] instanceof Uint8Array) || !(arr[3] instanceof Uint8Array)) {
     throw new Error("cose-sign1-types");
+  }
+  // The profile's unprotected header MUST be empty. Anything else is refused
+  // by name rather than discarded: the transport octets are what the
+  // profile hashes, and a decoder that read past a stuffed map would verify
+  // a signature over one identity while the hash named another.
+  if (!isCborMap(arr[1]) || arr[1].$map.length !== 0) {
+    throw new Error("cose-sign1-unprotected");
   }
   return {
     protectedHeader: arr[0],
