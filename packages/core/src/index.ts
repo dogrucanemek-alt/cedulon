@@ -1,5 +1,5 @@
 export { PROTOCOL_LONG, PROTOCOL_SHORT, PACKAGE_SCOPE } from "./brand.ts";
-export { canonical, jcsEncodeRefusal } from "./canonical.ts";
+export { canonical, jcsEncodeRefusal, jsonDuplicateMemberName } from "./canonical.ts";
 export { MemoryStore } from "./store.ts";
 export { PolicyEngine, policyDocument, requestHashOf, type DecisionIssuerKeys } from "./policy.ts";
 export {

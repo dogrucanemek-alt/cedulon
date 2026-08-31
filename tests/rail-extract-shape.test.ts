@@ -3,12 +3,45 @@ import { describe, it } from "node:test";
 
 import {
   generateExtractKeys,
+  RailLedger,
   railExtractEncodeRefusal,
   railExtractShapeRefusal,
+  railExtractTextRefusal,
   signRailExtract,
   verifyRailExtract,
   type RailExtractBody,
 } from "@cedulon/x402-adapter";
+
+describe("rail extract text is I-JSON before it is JSON: duplicate member names are refused by name", () => {
+  // RFC 8785 takes I-JSON as input and I-JSON objects carry no duplicate
+  // names. JSON.parse keeps the last value; measured on the previous build,
+  // a row carrying amount twice parsed without refusal and read as the second
+  // value. Two verifiers with different parsers would disagree under one
+  // signature, so the text is refused before it is parsed.
+  const row = (extra: string) =>
+    `{"settlements":[{"ref":"r1","amount":"1",${extra}"currency":"USD","timestampMs":1}]}`;
+
+  it("a member name repeated inside one object is refused as json-duplicate-key", () => {
+    assert.equal(railExtractTextRefusal(row('"amount":"99",')), "json-duplicate-key");
+    assert.throws(() => RailLedger.fromJson(row('"amount":"99",')), /json-duplicate-key/);
+  });
+
+  it("the same name in sibling objects, or inside a string value, is not a duplicate", () => {
+    assert.equal(railExtractTextRefusal(row("")), null);
+    const twoRows =
+      '{"settlements":[{"ref":"r1","amount":"1","currency":"USD","timestampMs":1},' +
+      '{"ref":"r2","amount":"1","currency":"USD","timestampMs":2}]}';
+    assert.equal(railExtractTextRefusal(twoRows), null);
+    assert.equal(railExtractTextRefusal(row('"note":"{\\"amount\\": 1, \\"amount\\": 2}",')), null);
+    assert.equal(RailLedger.fromJson(twoRows).length, 2);
+  });
+
+  it("names are compared after unescaping: \\u0061 and a are the same member", () => {
+    assert.equal(railExtractTextRefusal('{"a":1,"\\u0061":2}'), "json-duplicate-key");
+    assert.equal(railExtractTextRefusal('{"a":1,"b":{"a":2}}'), null);
+    assert.equal(railExtractTextRefusal('{"a":[{"x":1},{"x":2}],"b":{"x":3,"x":4}}'), "json-duplicate-key");
+  });
+});
 
 const body: RailExtractBody = {
   accountId: "acct",

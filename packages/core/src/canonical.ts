@@ -64,3 +64,55 @@ export function canonical(value: unknown): string {
   }
   throw new Error("unencodable");
 }
+
+/**
+ * The first member name that repeats inside one JSON object of `text`, or
+ * null when none does. RFC 8785 constrains its input to I-JSON (RFC 7493),
+ * whose objects MUST NOT carry duplicate names, and says to verify that
+ * before canonicalizing; JSON.parse cannot, because it keeps the last value
+ * and drops the evidence. Two verifiers that parse the same octets with
+ * different parsers would then read different values under the same
+ * signature. This walks the raw text: strings are skipped with their
+ * escapes intact, a string that is followed by ':' inside an object is a
+ * member name, and names are compared after JSON unescaping, so "a" and
+ * "a" are the same name. Text that is not JSON at all is left to the
+ * parser: this reports duplicates, not syntax.
+ */
+export function jsonDuplicateMemberName(text: string): string | null {
+  type Frame = { names: Set<string> | null };
+  const stack: Frame[] = [];
+  let i = 0;
+  const n = text.length;
+  while (i < n) {
+    const c = text[i]!;
+    if (c === '"') {
+      const start = i;
+      i += 1;
+      while (i < n && text[i] !== '"') {
+        if (text[i] === "\\") i += 1;
+        i += 1;
+      }
+      const raw = text.slice(start, i + 1);
+      i += 1;
+      let j = i;
+      while (j < n && (text[j] === " " || text[j] === "\t" || text[j] === "\n" || text[j] === "\r")) j += 1;
+      const top = stack[stack.length - 1];
+      if (text[j] === ":" && top !== undefined && top.names !== null) {
+        let name: string;
+        try {
+          name = JSON.parse(raw) as string;
+        } catch {
+          return null;
+        }
+        if (top.names.has(name)) return name;
+        top.names.add(name);
+      }
+      continue;
+    }
+    if (c === "{") stack.push({ names: new Set() });
+    else if (c === "[") stack.push({ names: null });
+    else if (c === "}" || c === "]") stack.pop();
+    i += 1;
+  }
+  return null;
+}

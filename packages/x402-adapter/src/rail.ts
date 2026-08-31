@@ -1,6 +1,19 @@
 import { generateKeyPairSync, verify } from "node:crypto";
 import { pemSigner, sameSpkiKey } from "@cedulon/cose";
-import { canonical, isValidAmountText, jcsEncodeRefusal } from "@cedulon/core";
+import { canonical, isValidAmountText, jcsEncodeRefusal, jsonDuplicateMemberName } from "@cedulon/core";
+
+/**
+ * Why the JSON text of an extract would be refused before it is parsed, by
+ * name, or null when it would not. RFC 8785 takes I-JSON as its input, and
+ * I-JSON objects carry no duplicate member names; JSON.parse keeps the last
+ * value and loses the fact, so two verifiers with different parsers would
+ * read different amounts under one signature. The text is refused as
+ * `json-duplicate-key`, the sibling of the CBOR decoder's
+ * `cbor-duplicate-key` (`MUST-T4-18`), rather than parsed.
+ */
+export function railExtractTextRefusal(text: string): string | null {
+  return jsonDuplicateMemberName(text) === null ? null : "json-duplicate-key";
+}
 
 /** Table 8 settlement members. A rail may add members; it may not rename these. */
 export const SETTLEMENT_CORE_FIELDS = ["ref", "amount", "currency", "timestampMs"] as const;
@@ -227,6 +240,10 @@ export class RailLedger {
   }
 
   static fromJson(text: string): RailSettlement[] {
+    const refused = railExtractTextRefusal(text);
+    if (refused !== null) {
+      throw new Error(refused);
+    }
     const parsed = JSON.parse(text) as { settlements?: RailSettlement[] };
     if (!Array.isArray(parsed.settlements)) {
       throw new Error("rail-extract-shape");
