@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { canonical } from "@cedulon/core";
+import { canonical, parseIJson } from "@cedulon/core";
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "jcs-vectors");
 
@@ -65,5 +65,15 @@ describe("canonical() against RFC 8785", () => {
     // vectors and fixtures were measured to contain no lone surrogate
     // before this encoder changed.
     assert.throws(() => canonical("\uDEAD"), /lone-surrogate/);
+  });
+});
+
+describe("parseIJson is the single text-to-object gate", () => {
+  it("RED then GREEN: a repeated member name is refused as json-duplicate-key", () => {
+    assert.throws(() => parseIJson('{"amount":"1","amount":"99"}'), /json-duplicate-key/);
+  });
+
+  it("clean text parses as JSON.parse would", () => {
+    assert.deepEqual(parseIJson('{"amount":"1"}'), { amount: "1" });
   });
 });

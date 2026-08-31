@@ -21,6 +21,7 @@ import {
   canonical,
   hashClaimRefusal,
   isValidAmountText,
+  parseIJson,
   policyDocument,
   type Policy,
 } from "@cedulon/core";
@@ -586,7 +587,9 @@ export class CedulonSession {
       return "absent";
     }
     try {
-      const parsed = JSON.parse(readFileSync(this.statePath, "utf8")) as Persisted;
+      // Own file, not a wire ingress — still the same text-to-object gate,
+      // so a duplicate member name is the same refusal an extract file gets.
+      const parsed = parseIJson(readFileSync(this.statePath, "utf8")) as Persisted;
       const blob = parsed.keys?.receiptPrivateDpapi;
       const pem = parsed.keys?.receiptPrivatePem;
       if (
@@ -725,9 +728,10 @@ export class CedulonSession {
 
   private lockHolderPid(lockPath: string): number | null {
     try {
-      const pid = JSON.parse(readFileSync(lockPath, "utf8")).pid;
+      const pid = (parseIJson(readFileSync(lockPath, "utf8")) as { pid?: unknown }).pid;
       return typeof pid === "number" ? pid : null;
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message === "json-duplicate-key") throw err;
       return null;
     }
   }
@@ -773,8 +777,9 @@ export class CedulonSession {
   private lockHolderIsGone(lockPath: string): boolean {
     let pid: unknown;
     try {
-      pid = JSON.parse(readFileSync(lockPath, "utf8")).pid;
-    } catch {
+      pid = (parseIJson(readFileSync(lockPath, "utf8")) as { pid?: unknown }).pid;
+    } catch (err) {
+      if (err instanceof Error && err.message === "json-duplicate-key") throw err;
       // A lock we cannot read says nothing about who holds it.
       return true;
     }
@@ -1188,8 +1193,9 @@ export class CedulonSession {
     }
     let parsed: Persisted;
     try {
-      parsed = JSON.parse(raw) as Persisted;
-    } catch {
+      parsed = parseIJson(raw) as Persisted;
+    } catch (err) {
+      if (err instanceof Error && err.message === "json-duplicate-key") throw err;
       // A file that does not parse is not an empty ledger. Starting from zero
       // here would quietly drop every receipt the state was holding.
       throw new Error("cedulon-state-unreadable");

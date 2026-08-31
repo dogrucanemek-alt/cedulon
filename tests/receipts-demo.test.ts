@@ -1,7 +1,10 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
-import { canonical, PACKAGE_SCOPE, PROTOCOL_SHORT, PolicyEngine } from "@cedulon/core";
+import { fileURLToPath } from "node:url";
+import { canonical, parseIJson, PACKAGE_SCOPE, PROTOCOL_SHORT, PolicyEngine } from "@cedulon/core";
 import {
   assertNoPiiFields,
   generateReceiptKeys,
@@ -379,5 +382,23 @@ describe("brand", () => {
 
   it("canonical sorts object keys", () => {
     assert.equal(canonical({ b: 1, a: 2 }), '{"a":2,"b":1}');
+  });
+});
+
+describe("demo live-audit receipts file goes through parseIJson", () => {
+  const liveAudit = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "examples", "demo", "src", "live-audit.ts"),
+    "utf8",
+  );
+
+  it("RED then GREEN: the receipts file is not JSON.parse'd raw", () => {
+    assert.match(liveAudit, /parseIJson/);
+    assert.equal(/JSON\.parse\(readFileSync\(receiptsFile/.test(liveAudit), false);
+  });
+
+  it("RED then GREEN: a receipts document that repeats a member is json-duplicate-key", () => {
+    const text = '{"receipts":[],"receipts":[]}';
+    assert.throws(() => parseIJson(text), /json-duplicate-key/);
+    assert.deepEqual(parseIJson('{"receipts":[]}'), { receipts: [] });
   });
 });

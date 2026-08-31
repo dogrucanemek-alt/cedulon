@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 import { fetchUsdcExtract, makeRpc } from "@cedulon/base-extract";
 import { audit, formatAudit } from "@cedulon/audit";
+import { parseIJson } from "@cedulon/core";
 import type { SignedReceipt } from "@cedulon/receipts";
 
 function arg(name: string): string | undefined {
@@ -45,7 +46,7 @@ const extract = await fetchUsdcExtract({
 
 const receiptsFile = arg("--receipts");
 const receipts: SignedReceipt[] = receiptsFile
-  ? (JSON.parse(readFileSync(receiptsFile, "utf8")).receipts ?? [])
+  ? ((parseIJson(readFileSync(receiptsFile, "utf8")) as { receipts?: SignedReceipt[] }).receipts ?? [])
   : [];
 
 const total = extract.settlements.reduce((sum, s) => sum + BigInt(s.amount), 0n);

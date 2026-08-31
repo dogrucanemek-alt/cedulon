@@ -66,6 +66,23 @@ describe("session state file", () => {
     assert.throws(() => new CedulonSession({ statePath }), /state/i);
   });
 
+  it("RED then GREEN: a state file that repeats a member name is json-duplicate-key", () => {
+    const statePath = tempStatePath();
+    const session = new CedulonSession({ statePath });
+    assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
+    const honest = readFileSync(statePath, "utf8");
+    writeFileSync(statePath, honest.replace('"version":1', '"version":1,"version":1'));
+    assert.throws(() => new CedulonSession({ statePath }), /json-duplicate-key/);
+  });
+
+  it("RED then GREEN: a lock file that repeats a member name is json-duplicate-key", () => {
+    const statePath = tempStatePath();
+    const session = new CedulonSession({ statePath });
+    assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
+    writeFileSync(`${statePath}.lock`, '{"pid":1,"pid":1}');
+    assert.throws(() => spendOnce(session, "n1".padEnd(16, "-")), /json-duplicate-key/);
+  });
+
   it("42 RED then GREEN: a temp directory reached through a symlink is not an attacker path", (t) => {
     // macOS /var → /private/var, and a TMPDIR that is itself a link, put every
     // mkdtemp path behind a symlink the operator did not place. Walking every

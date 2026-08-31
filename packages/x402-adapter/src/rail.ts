@@ -1,6 +1,6 @@
 import { generateKeyPairSync, verify } from "node:crypto";
 import { pemSigner, sameSpkiKey } from "@cedulon/cose";
-import { canonical, isValidAmountText, jcsEncodeRefusal, jsonDuplicateMemberName } from "@cedulon/core";
+import { canonical, isValidAmountText, jcsEncodeRefusal, jsonDuplicateMemberName, parseIJson } from "@cedulon/core";
 
 /**
  * Why the JSON text of an extract would be refused before it is parsed, by
@@ -240,11 +240,7 @@ export class RailLedger {
   }
 
   static fromJson(text: string): RailSettlement[] {
-    const refused = railExtractTextRefusal(text);
-    if (refused !== null) {
-      throw new Error(refused);
-    }
-    const parsed = JSON.parse(text) as { settlements?: RailSettlement[] };
+    const parsed = parseIJson(text) as { settlements?: RailSettlement[] };
     if (!Array.isArray(parsed.settlements)) {
       throw new Error("rail-extract-shape");
     }
