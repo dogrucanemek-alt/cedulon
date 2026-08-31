@@ -4,10 +4,11 @@
 # posix-nonroot.yml still runs only 76|80|81, deliberately: it is the
 # uid-1001 case, not a coverage claim.
 #
-# Do not add a Windows runner as the only full-suite job. Eight cases
-# skip there (40 42 60 68 70 75 76 83), so a green Windows job alone
-# is a smaller claim than a green POSIX job. A Windows job is only
-# meaningful beside this one.
+# Do not add a Windows runner as the only full-suite job. The hosted
+# Windows job skips nothing at the time of writing, but a local Windows
+# run without symbolic-link privilege skips four POSIX-mode cases, so a
+# green Windows job alone is a smaller claim than a green POSIX job. A
+# Windows job is only meaningful beside this one.
 name: posix-full
 
 on:

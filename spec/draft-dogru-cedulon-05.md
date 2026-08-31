@@ -36,6 +36,7 @@ normative:
   RFC8032:
   RFC8174:
   RFC8392:
+  RFC8410:
   RFC8785:
   RFC8949:
   RFC9052:
@@ -560,7 +561,8 @@ The protected header MUST be a deterministic CBOR map containing
   `application/cedulon-countersign+cbor`
 - `4` (kid) = bstr, mandatory. The profile computes `kid` as the
   first eight bytes of SHA-256 over the issuer's SubjectPublicKeyInfo
-  DER. A verifier MUST obtain the public key from an authenticated
+  DER, in the Ed25519 SubjectPublicKeyInfo encoding of {{RFC8410}}. A
+  verifier MUST obtain the public key from an authenticated
   channel (preconfigured issuer set, directory, or transparency
   statement) and MUST reject a message whose `kid` does not match
   that key.
@@ -2131,9 +2133,10 @@ Coverage:
   Continuous integration runs the full pre-release suite - the
   post-release registry checks are a separate job, deliberately
   excluded from it, so "full suite" here names exactly what was
-  measured - on four hosted runners: Linux as root, Linux as a
-  non-root user, macOS, and Windows. At the commit this revision
-  describes, all four assert every case, 381 of 381, with none
+  measured - on three hosted runners, each as a non-root user:
+  Linux, macOS, and Windows; a fourth Linux job runs three cases
+  only and is not a coverage claim. At the commit this revision
+  describes, all three assert every case, 382 of 382, with none
   skipped. A local Windows run without symbolic-link privilege skips
   four POSIX-mode cases with a stated reason rather than returning
   silently, so a green local suite names what it did not cover and is
@@ -2720,7 +2723,7 @@ Table 3 - see {{changes-04}}), manifestHash=null,
 noManifest=true, x402PaymentRef=null, timestampMs=1700000000000,
 nonce=`n100000000000000`, prevReceiptHash=null, outcome=`aborted`.
 
-COSE_Sign1 hex (whitespace ignored; identical to the locked test):
+COSE_Sign1 hex (whitespace ignored):
 
 ~~~~
 845830a301320378206170706c69636174696f6e2f636564756c6f6e2d
@@ -2746,7 +2749,7 @@ delivery bytes, so the vector carries a well-formed one),
 cancelCondition=`none`,
 expiresAtMs=1700000000000, ap2MandateHash=null.
 
-COSE_Sign1 hex (whitespace ignored; identical to the locked test):
+COSE_Sign1 hex (whitespace ignored):
 
 ~~~~
 845831a301320378216170706c69636174696f6e2f636564756c6f6e2d
