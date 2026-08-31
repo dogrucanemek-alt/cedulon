@@ -270,6 +270,15 @@ Rail Extract:
 : An authenticated list of settlement records for one account, one
   rail, and one time window. See {{rail-extract}}.
 
+Presented-unattested:
+: The state of a receipt or checkpoint the verifier holds no pinned
+  issuer key for. Its signature is checked against the key the object
+  itself carries ({{presentation}}), which establishes internal
+  consistency only, so the object is neither attested nor rejected:
+  every presented object is weighed as one set and the completeness
+  guarantee is reported as conditional. It is a state of the report,
+  not a finding code. See {{issuer-root}}.
+
 # Architecture
 
 Cedulon has three control-plane objects and one optional log:
@@ -605,6 +614,37 @@ question of what the digest covers was measured. The payload MUST be
 the CBOR encoding of the claim map. The signature is Ed25519
 {{RFC8032}} over the COSE `Sig_structure`
 `["Signature1", protected, h'', payload]`.
+
+## How a signed object is presented {#presentation}
+
+The signed octets above are what this profile defines and what every
+digest in {{hash-inputs}} is taken over. An object handed to a
+verifier travels with a little more than that, and the previous
+revisions used one of those members - the key an object carries -
+without ever saying where it came from.
+
+A presented Spend Receipt, epoch checkpoint, Trade Manifest, or
+Decision Token carries, beside the signed octets, its claim set or
+body in decoded form and **the signer's public key as a
+SubjectPublicKeyInfo PEM**; a countersigned receipt carries the
+payee's key the same way, and an object presented in the JSON
+encoding of {{canonical-json}} repeats its signature there as
+base64. None of these is inside the signed octets, which is the
+whole point of naming them here: the signature
+covers the COSE message and nothing else, so every one of these
+members is a surface anyone holding the object can rewrite. This is
+the same shape the Rail Extract states in {{rail-extract}}, and it
+is stated once here for the COSE objects rather than left to be
+inferred from an implementation.
+
+A carried key is not an identity source and MUST NOT be used as one
+(`MUST-T4-11`). Under a pin it has exactly one effect: an object
+that verifies under the pinned key while carrying a different key is
+reported as `carried-key-mismatch`, a warning, and stays attested
+({{issuer-root}}). With no pin held it is the only key present, so
+the signature check that runs against it says the object is
+internally consistent and says nothing about who signed it; two
+issuers cannot be told apart in that state.
 
 # Canonical JSON encoding {#canonical-json}
 
@@ -980,7 +1020,7 @@ algorithm's):
 | yes | yes | attested; a carried key other than the verifying one is `carried-key-mismatch`, a warning, and does not move the receipt |
 | yes | no | excluded from the attested set; still walked and named in step 6 (`receipt-chain-break`, signature-failed detail); its settlement stays uncovered in step 8 |
 | no | no | `issuer-key-mismatch`; excluded; its settlement stays uncovered in step 8 (`MUST-T4-9`, `MUST-T4-10`) |
-| no pin held | not checked | no signature comparison happens at all - there is no key to check under, and the keys the objects carry are not a fallback (`MUST-T4-11`); receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and accusation-shaped findings take the two-branch severity of `MUST-T8-9` |
+| no pin held | no pin to verify under | no comparison against a key the verifier holds happens, and the keys the objects carry are not a fallback for one (`MUST-T4-11`); each signature is still checked against the key its own object carries ({{presentation}}), which establishes that the object is internally consistent and nothing about who signed it, so a broken signature is still named (`receipt-chain-break`, `checkpoint-total-mismatch`) while two different issuers cannot be told apart; receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and accusation-shaped findings take the two-branch severity of `MUST-T8-9` |
 
 A verifier MUST accept an issuer root that is a set of keys rather
 than a single key (`MUST-T4-12`). An issuer that rotates its key
@@ -1672,10 +1712,10 @@ warning. Warnings MUST still appear in operator-facing output
 | issuer-key-mismatch | audit fails | An object is signed by a key other than the pinned issuer key, so it is not coverage for anything it names |
 | countersign-key-mismatch | conditional | A countersignature verifies under a key other than the one pinned for that payee; unattributable, discarded as approval evidence, and the receipt it rode beside is unaffected ({{countersign}}) |
 | countersign-missing | conditional | A payee key is pinned and a settled receipt for that payee carries no attributable countersignature; a discarded garbage or foreign-key object leaves this open |
-| unauthenticated-issuer | conditional | No verifier-supplied issuer key and at least one receipt or checkpoint presented; those objects were checked against the keys they carry |
+| unauthenticated-issuer | conditional | No verifier-supplied issuer key and at least one receipt or checkpoint presented; their signatures are checked against the keys the objects carry ({{presentation}}), which establishes that each object is internally consistent and not that the named issuer produced it |
 | unauthenticated-witness | conditional | No verifier-supplied witness key; inclusion receipts were left out of the comparison |
 | unauthenticated-countersigner | conditional | No verifier-supplied payee key; a countersignature is present but proves no approval |
-| unauthenticated-manifest | conditional | No verifier-supplied manifest key and a Trade Manifest was presented; it was checked against the key it carries. An audit presented with no Trade Manifest is not this condition |
+| unauthenticated-manifest | conditional | No verifier-supplied manifest key and a Trade Manifest was presented; its signature is not checked at all, because the check that exists under a pin (`manifest-key-mismatch`) has no key to run against and the key the manifest carries is not a fallback for one. An audit presented with no Trade Manifest is not this condition |
 | manifest-key-mismatch | audit fails | A presented Trade Manifest is signed by a key other than the pinned publisher key, or does not verify against it |
 | manifest-covers-no-receipt | conditional | A presented Trade Manifest is referenced by no presented receipt, including aborted ones and those outside the extract window; the terms were attributed but no receipt names them |
 | manifest-terms-mismatch | audit fails under a usable issuer pin; warning without one | A receipt names this Trade Manifest but its amount, currency or settlement time departs from the manifest; a gate applying `MUST-T8-2` and `MUST-T3-3` would have refused the payment. The two severities are the two branches of `MUST-T8-9` |
@@ -2396,6 +2436,26 @@ Maturity:
   found a surface the companion decoder was ignoring
   ({{changes-05}}).
 
+: The conditions of that outside run, as its own log records them:
+  Linux x86_64, Python 3.14.4, cbor2 6.1.4, cryptography 50.0.1,
+  against the archive bytes of the posted -04, SHA-256
+  `661755c600aede25451ce3a67df4a45d0d964c7b9196dc725dd310723eb8a49f`.
+  Reading the posted -05, the same reader rebuilt the regenerated
+  receipt vector of {{vectors}} from the text alone - protected header
+  from the profile rules, `policyHash` as the SHA-256 over the UTF-8
+  octets of the policy identifier the appendix names, deterministic
+  CBOR, the {{RFC8032}} fixture key - and obtained the published 307
+  octets byte for byte, SHA-256
+  `0f1fe8859faf25de906b08142674f1270656d8ea7bfc00853c2fc6e9d3f5a10b`,
+  against archive bytes SHA-256
+  `fc8962b3daeed9f8e5b1c2b7d26d605c14873d9de1cbf35743ce59af2c7aa62e`.
+  Both published signatures verify and neither object is tag-wrapped.
+  That is this document's text producing a signed object without the
+  code that produced it, which is the narrow claim it supports: the
+  same reader has read parts of the public repository and its package
+  metadata, says so, and for that reason does not describe the pass as
+  a clean-room implementation.
+
 Coverage:
 : The receipt, checkpoint, extract, reconciliation, and verification
   algorithm are implemented, including the transparency witness input,
@@ -2550,7 +2610,9 @@ that branch against an installed 0.7.0 will not find it.
 
 ## Changes from -05 {#changes-05}
 
-This revision has one subject on the wire and one at the registry.
+This revision has one subject on the wire, one at the registry, and
+one repair to what the text claimed about verification without a
+pinned key.
 On the wire it adds two decoder rules, each the named refusal of a
 surface the posted -05 left implicit; at the registry it turns the
 placeholder table of -05's IANA section into the registration
@@ -2589,10 +2651,31 @@ measurement found on the way is.
   and says of the claim labels that they lie in the Private Use range
   of {{RFC8392}} and are not requested. -05 listed the names and said
   they should be registered if the work were taken up.
+- What a verifier holding no pinned issuer key does is now stated as
+  measured, in one wording rather than two. The verification path said
+  no signature comparison happened at all; the finding-code table said
+  the objects were checked against the keys they carry. Measurement
+  settled the two in opposite directions, so both were rewritten
+  rather than reconciled to either: a receipt or checkpoint signature
+  is checked against the key its own object carries, which is why a
+  broken signature is still named while two issuers cannot be told
+  apart, and a presented Trade Manifest with no pinned publisher key
+  is not checked at all. Neither statement is a new requirement; both
+  describe what {{verification}} already did.
+- {{presentation}} defines the carried key those statements turn on.
+  Every presented receipt, checkpoint, Trade Manifest and Decision
+  Token carries the signer's SubjectPublicKeyInfo PEM beside its
+  signed octets, and {{issuer-root}} has named a warning for that key
+  since -05 without any revision saying where the key came from: -05
+  defined such a member only for the Rail Extract. The state the
+  unpinned cell
+  names, presented-unattested, is likewise defined in the terminology
+  rather than used once.
 - {{impl-status}} names what this revision adds as not yet in a
   published package, on the same terms -05 used for its own
-  additions, and carries the suite size measured at the commit it
-  describes.
+  additions, carries the suite size measured at the commit it
+  describes, and records the conditions of the outside vector run and
+  of the regeneration of a vector from this text alone.
 
 ## Changes from -04 {#changes-04}
 
@@ -3040,6 +3123,20 @@ additionally reran the frozen -04 claims against the archive and the
 package registry, and corrected this document's description of what
 its continuous integration measures; that correction is recorded in
 {{impl-status}} where it landed.
+
+Reading the posted -05 against those dispositions, Tiago Pinto found
+that the repair of the key-resolution failure had left its own old
+description standing: the finding-code table still said that objects
+held under no pin were checked against the keys they carry, while the
+verification path said no signature comparison happened at all, and
+the carried key both sentences turn on had no defined source anywhere
+in this document. Measuring the two sentences against the companion
+implementation settled them in opposite directions, which is why
+neither was simply deleted, and {{presentation}} now defines the
+member they depend on. He also asked for the state named in the
+unpinned cell to be defined rather than used once, and consented to
+his -04 run being recorded as the first run of these vectors outside
+the companion codebase and not as an independent implementation.
 
 The two rules -06 adds came from reading rather than from a reader.
 Steven Mih and Anton Sokolov published the canonicalization vectors
