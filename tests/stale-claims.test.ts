@@ -661,12 +661,10 @@ describe("claims that describe something outside their own file", () => {
     assertDraftSplitsAligned(syntheticSection("No divergence is named here."), {});
   });
 
-  it("GREEN: the living split list is empty again: -05 is posted and Appendix A agrees with Table 3", () => {
-    // The state the tree is in now, asserted rather than assumed. The last
-    // split, V-T4-appendix-a-policy-hash, stood against the posted -04 and
-    // closed when -05 was posted on 31 August 2026; the vector is ordinary
-    // now and conformance/counted-splits.ts says why.
-    assert.deepEqual(Object.keys(COUNTED_SPLITS), []);
+  it("GREEN: the living split list is the JSON duplicate-member departure from posted -05", () => {
+    // The state the tree is in now, asserted rather than assumed. Posted -05
+    // is silent on extract-text duplicate names; the companion refuses.
+    assert.deepEqual(Object.keys(COUNTED_SPLITS), ["V-T4-19-json-duplicate-key"]);
   });
 
   it("GREEN: UPGRADING -03 splits and COUNTED_SPLITS name the same MUST identities", () => {

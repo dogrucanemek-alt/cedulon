@@ -11,7 +11,7 @@ import {
   signManifest,
 } from "@cedulon/manifest";
 import { generateReceiptKeys, receiptHash, signReceipt } from "@cedulon/receipts";
-import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
+import { generateExtractKeys, railExtractTextRefusal, signRailExtract } from "@cedulon/x402-adapter";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -38,6 +38,7 @@ export type Vector = {
   draftOpen?: boolean;
   /** Only meaningful once draftNamesDigest is true; see the request-hash branch. */
   expectRequestHash?: string;
+  text?: string;
 };
 
 export type Row = { id: string; status: "pass" | "split" | "error"; detail: string };
@@ -366,6 +367,27 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
         status: "split",
         detail: `companion binds SHA-256 of the six-field canonical JSON (lowercase hex ${bound}); posted draft names a hash of the request fields but not the octets or the digest`,
       });
+      continue;
+    }
+
+    if (v.kind === "json-text-refuse") {
+      const refused = railExtractTextRefusal(v.text ?? "");
+      const hit = refused === "json-duplicate-key";
+      if (hit !== Boolean(v.expectRefuse)) {
+        rows.push({
+          id: v.id,
+          status: "error",
+          detail: `companion refuse=${refused ?? "null"}; expected json-duplicate-key=${Boolean(v.expectRefuse)}`,
+        });
+      } else {
+        // Posted -05 does not state this rule. Companion refuses. That is
+        // a living split, not a pass, until -06 names it.
+        rows.push({
+          id: v.id,
+          status: "split",
+          detail: `companion refuses ${refused}; posted -05 does not state a JSON duplicate-member rule`,
+        });
+      }
       continue;
     }
 
