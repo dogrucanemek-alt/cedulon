@@ -32,9 +32,16 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-`0.8.0` is prepared in this tree and is not a published npm release; npm still
-serves `0.7.0`, and a reader checking a claim against an installed package will
-find the older behaviour until this bump ships. What it changes: an audit
+`0.8.0` is published on npm, with a provenance attestation, and it is what a
+reader now gets from an installed package. Checked from the published package
+rather than from this tree: a clean `npm pack @cedulon/audit@0.8.0` in an empty
+folder carries `unstated-audit-scope`, the `AuditScope` type, and the repaired
+unpinned-witness warning. The release step that verifies the registry answered
+red on the way out: six packages reported the new version and `audit` was still
+serving `0.7.0` two seconds after its own publish returned success. That was
+read-after-write propagation, not a failed publish - all eight answer `0.8.0`
+now - and the step it exposed asked once with no retry, so it now asks again
+with a bound. What it changes: an audit
 declares the settlement path it was computed over, not only the period. A
 verifier that pins a rail key but names no account and no rail now gets
 `unstated-audit-scope` and a conditional guarantee, on the same reasoning that
@@ -53,10 +60,10 @@ departure is a warning that does not by itself fail the audit - and
 `requestHash` is the SHA-256 of the six-field canonical document in lowercase
 hex, the digest the posted `-03` named a hash for without naming.
 
-`0.7.0` is published on npm, and it is the first release with a provenance
+`0.7.0` was the release before this one, and the first with a provenance
 attestation: it was built and sent by the tagged `release.yml` run rather than
 from anyone's laptop, so a reader can check where the bytes came from as well
-as what they do. What it changes: an amount is
+as what they do. `0.8.0` carries the same attestation. What it changes: an amount is
 checked as text at every boundary before anything parses it, so `"01"` is
 answered `malformed-amount` rather than reinterpreted as `1` and printed back
 as `"1"`, and `signManifest` holds the grammar `signReceipt` has always held.
@@ -89,7 +96,7 @@ false` for a departure the pinned key does attest. A clean install of
 `@cedulon/core@0.6.0` returns a 64-character lowercase hex digest from
 `requestHashOf`, matching the value the conformance run records.
 
-Eight packages are published on npm at `0.7.0`, so the server runs without a
+Eight packages are published on npm at `0.8.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
 `MUST-T8-9`, and it breaks: an audit that used to return a clean
 unconditional result over a receipt carrying the hash of terms it departs from
@@ -109,9 +116,12 @@ reports rather than refuses, and names the external-rail bound on T12 in the
 draft. The extract-evidence exits from `indeterminate` are built and red-then-green: authenticated presence settles late, authenticated full-window absence releases the authority. The reversing-entry branch of `MUST-T12-4` still has no evidence object, so T12-4 is executed for the extract branch and open for the reversal branch.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.7.0` answers `initialize` reporting `0.7.0`. A clean
-install of the same release was also asked the three things this version
-changed, from the installed package rather than the tree: an oversized
+`@cedulon/mcp-server@0.8.0` answers `initialize` reporting `0.8.0`. A clean
+pack of `@cedulon/audit@0.8.0` in an empty folder was asked what this version
+changed, from the published bytes rather than the tree: it carries
+`unstated-audit-scope`, the `AuditScope` type on the report and the finding
+object, and the unpinned-witness warning that no longer says a check ran on a
+branch that runs none. The release before it answered its own three: an oversized
 checkpoint comes back as a finding naming `cbor-too-large` instead of taking
 the audit down, an extract carrying a non-finite number verifies false and
 leaves the guarantee conditional instead of throwing, and both `signManifest`
@@ -164,9 +174,9 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.7.0 bundle was built and unpacked: its manifest states
-`0.7.0` and the server inside it installs `@cedulon/mcp-server@^0.7.0`. Every
-`@cedulon` package inside it reads `0.7.0`, with no older copy left beside them. The builder installs the published version rather than the
+desktop install. The 0.8.0 bundle was built and unpacked: its manifest states
+`0.8.0` and the server inside it installs `@cedulon/mcp-server@^0.8.0`. Every
+`@cedulon` package inside it reads `0.8.0`, with no older copy left beside them. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -191,8 +201,13 @@ started, and listed five tools.
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
 where `0.7.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output. `server.json` is the entry
-it was published from, so the registry and npm now serve the same release,
-including the two crash repairs 0.7.0 makes.
+it was published from. The two channels are not in step: npm serves `0.8.0`, the MCP Registry
+still serves `0.7.0`, so a reader installing from the listing gets
+a release behind npm and does not get the scope work. `release.yml` sends packages
+to npm from the tag and deliberately does not touch the registry, because whether
+`mcp-publisher` accepts Actions OIDC has not been measured here; the registry
+entry moves when someone runs it, and until then this sentence is the notice
+rather than a reader having to discover the gap.
 
 The two still move separately on purpose. `release.yml` publishes to npm from
 the tag with no long-lived credential, and it does not publish to the MCP

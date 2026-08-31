@@ -428,16 +428,22 @@ describe("claims that describe something outside their own file", () => {
     const registry = status.match(/where `(\d+\.\d+\.\d+)` is the current version \(`isLatest`\)/);
     assert.ok(registry, "docs/STATUS.md no longer names the registry isLatest version");
     if (registry[1] !== published) {
+      // Every space here is `\s+`, because the sentence is prose in a wrapped
+      // file and a line break falls wherever the paragraph happens to reach the
+      // margin. Matching literal spaces measured the layout: the notice was
+      // present and correct at 0.8.0 and failed twice, once because "the MCP
+      // Registry" straddled a line and once because "a release" did. What must
+      // stay strict is which sentence has to be there, not where it wraps.
+      const spaced = (phrase: string): RegExp =>
+        new RegExp(phrase.trim().split(/\s+/).map((w) => w.replaceAll(".", "\\.")).join("\\s+"));
       assert.match(
         status,
-        new RegExp(
-          `npm serves \`${published.replaceAll(".", "\\.")}\`, the MCP Registry\\s+still serves \`${registry[1]!.replaceAll(".", "\\.")}\``,
-        ),
+        spaced(`npm serves \`${published}\`, the MCP Registry still serves \`${registry[1]!}\``),
         `STATUS says the registry is at ${registry[1]} and npm at ${published} but never says the listing is behind; a reader installing from the registry has to be told which version they get`,
       );
       assert.match(
         status,
-        /a release behind npm/,
+        spaced("a release behind npm"),
         "the lag between npm and the MCP Registry is named nowhere in STATUS",
       );
     }

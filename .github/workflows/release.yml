@@ -81,13 +81,26 @@ jobs:
           done
 
       # Read back from the registry rather than from this checkout.
+      # The registry is read-after-write eventual, not immediate. 0.8.0 published
+      # cleanly and this step still failed: six packages answered with the new
+      # version and `audit` was still serving the old one two seconds after its
+      # own publish returned success. Asking once turns a propagation delay into
+      # a red release, and a red that means nothing is how a team learns to
+      # ignore reds. So it asks again, with a bound, and fails only when the
+      # registry has had time and still disagrees.
       - name: the registry answers with this version
         run: |
           tag="${GITHUB_REF_NAME#v}"
           for p in cose core receipts manifest checkpoint x402-adapter audit mcp-server; do
-            got=$(npm view "@cedulon/$p" version)
+            got=""
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              got=$(npm view "@cedulon/$p" version 2>/dev/null || echo "")
+              [ "$got" = "$tag" ] && break
+              echo "  @cedulon/$p -> ${got:-no answer} (attempt $attempt, waiting)"
+              sleep 15
+            done
             echo "  @cedulon/$p -> $got"
-            [ "$got" = "$tag" ] || { echo "registry says $got, tag says $tag"; exit 1; }
+            [ "$got" = "$tag" ] || { echo "registry still says ${got:-nothing} after 10 attempts, tag says $tag"; exit 1; }
           done
 
       - run: npm run test:post-release
