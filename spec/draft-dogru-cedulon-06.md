@@ -344,7 +344,7 @@ A Trade Manifest MUST bind all of the following (`MUST-T8-1`):
 - cancel condition (opaque string agreed by the parties)
 - expiry (POSIX milliseconds, `expiresAtMs`)
 
-The previous revision allowed this hash to be taken over "the exact
+-03 allowed this hash to be taken over "the exact
 delivery bytes or a declared schema instance" and gave a verifier no
 way to tell which one an issuer had used. Two implementations reading
 the same manifest would then compute different digests over the same
@@ -487,7 +487,7 @@ Implementations MUST encode only the types used by Cedulon claim maps:
 null, bool, unsigned and negative integers, UTF-8 text, byte strings,
 arrays, and maps (`MUST-T4-1`).
 
-The previous revision bound the encoder and said nothing about the
+-03 bound the encoder and said nothing about the
 decoder, which left the reading side free where the writing side was
 not. A decoder MUST refuse a CBOR map that carries a duplicate encoded
 key (`MUST-T4-18`). The encoding rules already forbid producing one, so
@@ -519,7 +519,7 @@ reject, a value that does not match that grammar, naming the claim in
 the refusal. A decoder that preserves unknown or foreign claims is a
 separate layer and keeps them unchanged; the grammar binds what a
 party signs and what a validator accepts, not what a decoder can
-carry. The previous revision stated the rendering in prose while its
+carry. -04 stated the rendering in prose while its
 own Appendix A vector violated it, which taught decoders to be
 lenient; the grammar is enforced and the vector was regenerated in
 -05.
@@ -650,7 +650,7 @@ issuers cannot be told apart in that state.
 
 Not everything this document hashes or signs is CBOR. The policy
 document, the six request fields bound by a Decision Token, and the
-scoped body of a Rail Extract are JSON, and the previous revision
+scoped body of a Rail Extract are JSON, and -03
 called each of them "canonical" without saying what that meant. Two
 implementations could therefore agree on every requirement in this
 document and still produce different bytes, which makes an independent
@@ -689,7 +689,7 @@ Three notes on the boundary of that reference:
   this reason reports the input as failing verification with the
   refusal named beside the verdict; it does not crash. No field defined
   by this document may contain a lone surrogate, so a conforming
-  document never reaches this rule. The previous revision permitted
+  document never reaches this rule. -04 permitted
   emitting the escaped form instead, which contradicted the RFC it
   cited; that permission is removed.
 
@@ -712,7 +712,7 @@ document carries the result opaquely rather than restating a rule it
 does not own. `deliveredHash` differs in its carrier: it is a claim in
 a CBOR map and is carried as the raw 32 digest bytes (bstr), not as
 hex; comparisons against `acceptanceCriteriaHash` are made over the
-digest value. The previous revision named the digest for some of
+digest value. -03 named the digest for some of
 these fields and not for others; the omissions were not a deliberate
 degree of freedom.
 
@@ -738,8 +738,8 @@ different digest for every object in this profile, so the choice is
 stated here once rather than left to be inferred from the vectors.
 
 The six fields of the request document are the ones `MUST-T6-1` names:
-amount, currency, payee, tool, nonce, and `manifestHash`. The previous
-revision described `requestHash` as "the six-field hash" while naming
+amount, currency, payee, tool, nonce, and `manifestHash`. -03 described
+`requestHash` as "the six-field hash" while naming
 SHA-256 for `policyHash` in the same sentence, which left a reader free
 to conclude that the request binding was not a digest at all. It is
 one.
@@ -778,7 +778,7 @@ labels in {{receipt-labels}}. All five labels are always present
 `requestHash` MUST be the SHA-256 of the canonical encoding of the six
 fields the PDP evaluated (`MUST-T6-1`), rendered as lowercase
 hexadecimal; {{canonical-json}} defines that encoding and
-{{hash-inputs}} states the octets. The previous revision called this
+{{hash-inputs}} states the octets. -03 called this
 "the six-field hash" in the same sentence that named SHA-256 for
 `policyHash`, which left the digest for one of them unstated.
 `policyHash` MUST be the SHA-256 of the canonical
@@ -814,12 +814,12 @@ contain the following members, under these names:
 | timestampMs | number (POSIX milliseconds, an integer) |
 
 These member names are normative. A rail MAY add members of its own
-to a record; it MUST NOT rename the four above. The previous revision
+to a record; it MUST NOT rename the four above. -04
 said the member names were the rail's to define, which contradicted
 this table and made the extract unconstructable from the text: a
 verifier reading `reference` where the table says `ref` has no rule
 telling it whether the two are the same member. The table wins, and
-the previous revision's sentence is withdrawn. The table also used
+-04's sentence is withdrawn. The table also used
 CBOR terms (`tstr`, `uint`) for what is a JSON body; the types above
 are stated in JSON terms.
 
@@ -1170,7 +1170,8 @@ least one key the verifier can decode. A pinned root none of whose
 keys decode is already `trust-key-unreadable` and attests nothing, so
 the comparison takes the unpinned branch while that finding stands;
 the audit has failed on the configuration fault, and the departure is
-still said out loud without becoming a charge no readable key backs. The previous revision stated the first case for both, and an
+still said out loud without becoming a charge no readable key backs. -03
+stated the first case for both, and an
 implementation showed why that is wrong: a receipt signed by any key at
 all, carrying the right manifest hash and the wrong amount, made the
 verifier report a breach that never happened, against a payment
@@ -1302,7 +1303,7 @@ A checkpoint registered with a Transparency Service {{RFC9943}} is a
 Signed Statement whose payload is the checkpoint COSE object and
 whose content type is `application/cedulon-checkpoint+cbor`
 ({{anchoring}}). What comes back, and what it proves, is stated as
-two named tiers, because the previous revision promised the
+two named tiers, because -04 promised the
 mechanics of one tier while describing the checks of the other.
 
 **Tier 1 - the witness receipt.** The witness returns a co-signature
@@ -1310,8 +1311,8 @@ over the statement hash of what it recorded: a COSE_Sign1 whose
 payload binds the statement hash, the entry index, and the witness's
 tree head. Verifying it establishes exactly one sentence - "the
 witness signed for this hash" - and nothing more; in particular it
-does not establish membership in an append-only log. The previous
-revision called this object a transparency receipt and cited the
+does not establish membership in an append-only log. -04 called this
+object a transparency receipt and cited the
 verification mechanics of {{RFC9942}} for it while describing a hash
 comparison; the admission in {{impl-status}}, that the receipt was a
 signature over a statement rather than a proof of log membership, was
@@ -1927,7 +1928,7 @@ requirement text those citations refer to.
 |---|---|
 | MUST-T3-1 | Every spend attempt that the PDP allows MUST include a nonce that the implementation has not accepted before. |
 | MUST-T3-2 | A second attempt that reuses a nonce MUST be denied. |
-| MUST-T3-3 | A Trade Manifest MUST carry an expiry; a spend against an expired manifest MUST be denied. The manifest is expired when the settlement time is strictly greater than `expiresAtMs`; a settlement at exactly `expiresAtMs` is within the manifest. The previous revision said "expired" without fixing the boundary, which two implementations can read two ways. |
+| MUST-T3-3 | A Trade Manifest MUST carry an expiry; a spend against an expired manifest MUST be denied. The manifest is expired when the settlement time is strictly greater than `expiresAtMs`; a settlement at exactly `expiresAtMs` is within the manifest. -03 said "expired" without fixing the boundary, which two implementations can read two ways. |
 | MUST-T3-4 | A PDP allow decision MUST be bound to the SHA-256 of the canonical encoding of the request fields it evaluated, as stated in {{hash-inputs}}, and MUST be single-use. |
 | SHOULD-T3-5 | Nonce stores SHOULD persist across process restart when the deployment is not a test fixture. |
 
@@ -1935,7 +1936,7 @@ requirement text those citations refer to.
 
 | ID | Requirement |
 |---|---|
-| MUST-T4-1 | A Spend Receipt MUST be signed by the Receipt Issuer over the deterministic CBOR encoding of its claims, as profiled in {{cose-profile}}. The phrase "canonical encoding" is reserved for JSON documents ({{canonical-json}}); the previous revision used it for both and left a reader to work out which was meant. |
+| MUST-T4-1 | A Spend Receipt MUST be signed by the Receipt Issuer over the deterministic CBOR encoding of its claims, as profiled in {{cose-profile}}. The phrase "canonical encoding" is reserved for JSON documents ({{canonical-json}}); -03 used it for both and left a reader to work out which was meant. |
 | MUST-T4-2 | Verifiers MUST reject a receipt whose signature does not validate or whose canonical bytes do not match the signed payload. |
 | MUST-T4-3 | A Spend Receipt MUST include `payer`, `payee`, `amount`, `currency`, `policyHash`, `timestampMs`, and `nonce`. |
 | MUST-T4-4 | A Spend Receipt MUST include `manifestHash` or an explicit `noManifest` flag, never an ambiguous empty hash. Empty optional values are CBOR null; labels are never absent. |
@@ -2002,7 +2003,7 @@ requirement text those citations refer to.
 | MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
 | MUST-T8-8 | If a payee countersignature is present, a verifier MUST reject it when the signature fails, when `kid` or content type does not match the configured payee key, or when the payload is not the issuer COSE_Sign1 bytes. |
 | MUST-T8-9 | A verifier presented with a Trade Manifest MUST compare the amount, currency and settlement time of every receipt that names it, aborted ones included, against the manifest amount, currency and expiry - amount and currency on the exact-octet terms of `MUST-T8-2`, time on the boundary of `MUST-T3-3`, and, where the manifest names a `payee`, the receipt payee on the same exact-octet terms - and MUST report a receipt that departs from them. Where a usable issuer key is pinned (a pinned issuer root at least one of whose keys the verifier can decode), the comparison is made over the receipts that verify under it and a departure MUST fail the audit. Where no usable issuer key is pinned, the departure MUST still be reported and MUST NOT by itself fail the audit: this requirement charges a party with departing from terms it signed, and a charge that no key stands behind is one a forged receipt can invent against an honest payer. This differs from `MUST-T4-17` on purpose. That requirement asks whether terms were named, which an unattributable document can answer; this one makes an accusation, which it cannot. `MUST-T8-2` and `MUST-T3-3` bind the gate; an audit reads the record after the gate is gone, so without this the receipt can carry the hash of terms it breaks. Receipts that do not name the manifest are not measured against it. A Trade Manifest that a stated publisher pin refuses is not terms for this purpose: where the verifier reports `manifest-key-mismatch`, it MUST NOT read a charge out of that document's body, neither this comparison nor the acceptance-hash comparison of {{countersign}}. The refusal is the finding; a document the audit has just rejected must not also be the evidence it convicts with, on the same reasoning that keeps an unattributable countersignature from turning a negative result. |
-| MAY-T8-10 | A payee MAY attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. The previous revision numbered this requirement MAY-T8-9, colliding with MUST-T8-9; the number is corrected and the requirement text is unchanged. |
+| MAY-T8-10 | A payee MAY attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. -04 numbered this requirement MAY-T8-9, colliding with MUST-T8-9; the number is corrected and the requirement text is unchanged. |
 | MAY-T8-11 | An attributable countersignature MAY carry `deliveredHash`. When present and the verifier holds the Trade Manifest, the verifier MUST compare it against `acceptanceCriteriaHash` as exact octets and MUST report a mismatch as a failing finding (`delivery-mismatch`): both ends of that comparison are signed. A `deliveredHash` on an unattributable countersignature MUST be discarded with it. |
 
 ## MUST-T8-custody
@@ -2467,7 +2468,7 @@ Coverage:
   branch is specified and not executed. `MUST-T4-17` and `MUST-T8-9`
   are in the published packages (see the note on distribution below);
   `MUST-T8-9` is published in the two-branch form specified since the
-  previous revision.
+  -04.
   Continuous integration runs the full pre-release suite - the
   post-release registry checks are a separate job, deliberately
   excluded from it, so "full suite" here names exactly what was
@@ -2569,21 +2570,21 @@ gate had been answering 200 to an unattributable manifest and writing
 that manifest's hash into the receipt, and refusing it is a change in
 behaviour that a version number ought to announce.
 
-`MUST-T4-17` and `MUST-T8-9` were the exceptions in the previous
-revision and are no longer; `MUST-T12-4`'s reversal branch still is. The same independent
+`MUST-T4-17` and `MUST-T8-9` were the exceptions in -04 and are no
+longer; `MUST-T12-4`'s reversal branch still is. The same independent
 runner who took up the invitation against 0.4.0 reported that
 attributing a manifest was not the same as establishing that anything
 in the window was spent under it, which is the distinction that
 `MUST-T4-17` now draws. A reader of this document then observed that
 the distinction survives one step further out: a receipt can name the
 manifest and still depart from its amount, currency or expiry, which
-is what `MUST-T8-9` closes. Both were unpublished when the previous
-revision was posted and both are in the published packages now, so a
+is what `MUST-T8-9` closes. Both were unpublished when -03 was posted
+and both are in the published packages now, so a
 reader can check either against an installed 0.7.0 rather than against
 this tree. `MUST-T8-9` as published carries the two-branch form
 specified here: a departure under a usable issuer pin is a finding and
 fails the audit, and a departure with no usable pin is reported as a
-warning that does not by itself fail it. The previous revision stated
+warning that does not by itself fail it. -03 stated
 the single branch, and the difference is deliberate rather than a
 drafting slip; the reason is given where the requirement is defined.
 Four repairs -05's review rounds produced are in 0.7.0 and
@@ -3198,7 +3199,7 @@ here. Those identifiers are defined in {{security}}.
 These vectors use RFC 8032 Ed25519 secret scalar #1 (fixture only;
 never a production key). Hex is lowercase.
 
-The previous revision said these vectors "MUST match the locked tests
+-03 said these vectors "MUST match the locked tests
 in the companion implementation", which pointed the reader at code
 rather than at this document. A specification that defers to an
 implementation cannot be implemented from its own text, and that is the
@@ -3215,7 +3216,7 @@ currency=`USD`, policyHash=
 (the SHA-256 of the UTF-8 octets of the ASCII string
 `cedulon/appendix-policy`, standing in for a canonical policy
 document; the field's input rule is in {{hash-inputs}}, and the
-previous revision's vector carried `aa` here, violating its own
+-04's vector carried `aa` here, violating its own
 Table 3 - see {{changes-04}}), manifestHash=null,
 noManifest=true, x402PaymentRef=null, timestampMs=1700000000000,
 nonce=`n100000000000000`, prevReceiptHash=null, outcome=`aborted`.
