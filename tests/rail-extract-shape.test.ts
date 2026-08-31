@@ -61,3 +61,82 @@ describe("rail extract single normative shape", () => {
     assert.equal(railExtractShapeRefusal(noAccount), "missing-extract-accountId");
   });
 });
+
+const SAFE_INTEGER_FIELDS = [
+  {
+    field: "windowStartMs",
+    refusal: "malformed-extract-windowStartMs",
+    apply: (base: RailExtractBody, value: number): unknown => ({ ...base, windowStartMs: value }),
+  },
+  {
+    field: "windowEndMs",
+    refusal: "malformed-extract-windowEndMs",
+    apply: (base: RailExtractBody, value: number): unknown => ({ ...base, windowEndMs: value }),
+  },
+  {
+    field: "timestampMs",
+    refusal: "malformed-settlement-timestampMs",
+    apply: (base: RailExtractBody, value: number): unknown => ({
+      ...base,
+      settlements: [{ ...base.settlements[0], timestampMs: value }],
+    }),
+  },
+  {
+    field: "clockSkewMs",
+    refusal: "malformed-extract-clockSkewMs",
+    apply: (base: RailExtractBody, value: number): unknown => ({ ...base, clockSkewMs: value }),
+  },
+] as const;
+
+const NOT_SAFE_INTEGERS: ReadonlyArray<readonly [string, number]> = [
+  ["1.5", 1.5],
+  ["NaN", Number.NaN],
+  ["Infinity", Number.POSITIVE_INFINITY],
+  ["-Infinity", Number.NEGATIVE_INFINITY],
+  ["1e309", 1e309],
+  ["2**53", 2 ** 53],
+];
+
+const SAFE_INTEGERS: ReadonlyArray<readonly [string, number]> = [
+  ["1700000000000", 1_700_000_000_000],
+  ["0", 0],
+];
+
+describe("rail extract POSIX millisecond fields are safe integers", () => {
+  for (const { field, refusal, apply } of SAFE_INTEGER_FIELDS) {
+    for (const [label, value] of NOT_SAFE_INTEGERS) {
+      it(`RED then GREEN: ${field}=${label} is ${refusal}`, () => {
+        assert.equal(railExtractShapeRefusal(apply(body, value)), refusal);
+      });
+    }
+    for (const [label, value] of SAFE_INTEGERS) {
+      it(`${field}=${label} is in shape`, () => {
+        assert.equal(railExtractShapeRefusal(apply(body, value)), null);
+      });
+    }
+  }
+
+  it("negative safe integers stay accepted (measured, not a new rule)", () => {
+    // Current code accepted any typeof number. After Number.isSafeInteger the
+    // negative integers that already passed still pass. The sign is the
+    // operator's decision; this lock only says we did not flip it.
+    assert.equal(railExtractShapeRefusal({ ...body, windowStartMs: -1 }), null);
+    assert.equal(railExtractShapeRefusal({ ...body, windowEndMs: -1 }), null);
+    assert.equal(
+      railExtractShapeRefusal({
+        ...body,
+        settlements: [{ ...body.settlements[0], timestampMs: -1 }],
+      }),
+      null,
+    );
+    assert.equal(railExtractShapeRefusal({ ...body, clockSkewMs: -1 }), null);
+  });
+
+  it("an extra non-finite member is still the JCS encode refusal, not the shape gate", () => {
+    const extra = { ...body, publishedAt: Number.POSITIVE_INFINITY };
+    assert.equal(railExtractShapeRefusal(extra), null);
+    const keys = generateExtractKeys();
+    const signed = signRailExtract(body, keys.privateKeyPem, keys.publicKeyPem);
+    assert.equal(railExtractEncodeRefusal({ ...signed, body: extra as RailExtractBody }), "non-finite number");
+  });
+});

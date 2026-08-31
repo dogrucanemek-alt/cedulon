@@ -40,8 +40,14 @@ export function railExtractShapeRefusal(body: unknown): string | null {
   if (typeof rec.windowStartMs !== "number") {
     return "missing-extract-windowStartMs";
   }
+  if (!Number.isSafeInteger(rec.windowStartMs)) {
+    return "malformed-extract-windowStartMs";
+  }
   if (typeof rec.windowEndMs !== "number") {
     return "missing-extract-windowEndMs";
+  }
+  if (!Number.isSafeInteger(rec.windowEndMs)) {
+    return "malformed-extract-windowEndMs";
   }
   if (!Array.isArray(rec.settlements)) {
     return "missing-extract-settlements";
@@ -68,14 +74,14 @@ export function railExtractShapeRefusal(body: unknown): string | null {
     if (typeof s.timestampMs !== "number") {
       return "renamed-settlement-timestampMs";
     }
+    if (!Number.isSafeInteger(s.timestampMs)) {
+      return "malformed-settlement-timestampMs";
+    }
     if ("beneficiary" in s && typeof s.beneficiary !== "string") {
       return "malformed-settlement-beneficiary";
     }
   }
-  if (
-    "clockSkewMs" in rec &&
-    (typeof rec.clockSkewMs !== "number" || !Number.isFinite(rec.clockSkewMs))
-  ) {
+  if ("clockSkewMs" in rec && !Number.isSafeInteger(rec.clockSkewMs)) {
     return "malformed-extract-clockSkewMs";
   }
   return null;

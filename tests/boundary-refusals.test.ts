@@ -348,25 +348,45 @@ describe("the JSON verifiers answer on input RFC 8785 cannot encode", () => {
     // failed" for a body the encoder refused, and an operator could not tell
     // a limit from a forgery - the same rule the COSE side keeps by asking
     // coseDecodeRefusal beside every false verdict.
-    const extract = {
+    // A window field that is not a safe integer is now named at the shape
+    // gate. The JCS "non-finite number" name still appears when the same
+    // value sits on an extra member the shape gate does not walk.
+    const windowInf = {
       body: { accountId: "a", railId: "r", windowStartMs: INF, windowEndMs: 2, settlements: [] },
       signature: "AA",
       publicKeyPem: k.publicKeyPem,
     };
-    const unpinned = audit({ receipts: [], checkpoints: [], extract: extract as never });
+    const extraInf = {
+      body: {
+        accountId: "a",
+        railId: "r",
+        windowStartMs: 1,
+        windowEndMs: 2,
+        settlements: [],
+        publishedAt: INF,
+      },
+      signature: "AA",
+      publicKeyPem: k.publicKeyPem,
+    };
+    const unpinned = audit({ receipts: [], checkpoints: [], extract: windowInf as never });
     const warn = unpinned.warnings.find((f) => f.code === "unauthenticated-extract");
     assert.ok(warn, "the unauthenticated-extract warning must be present");
-    assert.match(warn.detail, /non-finite number/);
+    assert.match(warn.detail, /malformed-extract-windowStartMs/);
 
     const pinned = audit({
       receipts: [],
       checkpoints: [],
-      extract: extract as never,
+      extract: windowInf as never,
       trust: { publicKeyPem: k.publicKeyPem },
     });
     const mismatch = pinned.findings.find((f) => f.code === "extract-key-mismatch");
     assert.ok(mismatch, "the pinned path must still fail closed");
-    assert.match(mismatch.detail, /non-finite number/);
+    assert.match(mismatch.detail, /malformed-extract-windowStartMs/);
+
+    const jcs = audit({ receipts: [], checkpoints: [], extract: extraInf as never });
+    const jcsWarn = jcs.warnings.find((f) => f.code === "unauthenticated-extract");
+    assert.ok(jcsWarn, "an extra non-finite member still reaches the encode refusal");
+    assert.match(jcsWarn.detail, /non-finite number/);
   });
 
   it("RED then GREEN: a JSON receipt carrying a non-finite number is unverified, not thrown", () => {
