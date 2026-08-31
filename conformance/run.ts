@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { audit } from "@cedulon/audit";
-import { requestHashOf } from "@cedulon/core";
+import { parseIJson, requestHashOf } from "@cedulon/core";
 import {
   generateManifestKeys,
   manifestHash,
@@ -60,7 +60,10 @@ export type Row = { id: string; status: "pass" | "split" | "error"; detail: stri
 const NOW = 1_700_000_000_000;
 
 export function loadVectors(): Vector[] {
-  const spec = JSON.parse(readFileSync(join(root, "conformance", "vectors.json"), "utf8")) as {
+  // The vector file is evidence about the draft, so it goes through the same
+  // I-JSON gate as protocol text: a duplicated member in it would otherwise
+  // pick the last value silently and the runner would measure the wrong bytes.
+  const spec = parseIJson(readFileSync(join(root, "conformance", "vectors.json"), "utf8")) as {
     vectors: Vector[];
   };
   return spec.vectors;

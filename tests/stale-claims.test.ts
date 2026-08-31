@@ -150,11 +150,23 @@ function countedMustIds(counted: Record<string, string>): Set<string> {
   return out;
 }
 
-function upgrading03SplitMustIds(section: string): Set<string> {
+/**
+ * The UPGRADING blocks that document a living split against a posted draft:
+ * they name a revision and say the difference closes. This used to match
+ * only "-03" and the exact phrase "difference will be closed", so the -05
+ * split written as "closes when -06 states the rule" never entered the set
+ * and the alignment below passed with nothing on either side. A guard that
+ * matches one revision's wording is a guard for exactly one revision.
+ */
+function upgradingSplitBlocks(section: string): string[] {
+  return section
+    .split(/\n\n/)
+    .filter((block) => /-0\d/.test(block) && /(difference will be closed|closes when|will be closed)/i.test(block));
+}
+
+function upgradingSplitMustIds(section: string): Set<string> {
   const out = new Set<string>();
-  for (const block of section.split(/\n\n/)) {
-    if (!/-03/.test(block)) continue;
-    if (!/difference will be closed/i.test(block)) continue;
+  for (const block of upgradingSplitBlocks(section)) {
     for (const m of mustIdsIn(block)) out.add(m);
   }
   return out;
@@ -166,7 +178,8 @@ function assertDraftSplitsAligned(
 ): void {
   const version = workspaceVersion();
   const section = upgradeSectionFor(upgrading, version);
-  const documented = upgrading03SplitMustIds(section);
+  const blocks = upgradingSplitBlocks(section);
+  const documented = upgradingSplitMustIds(section);
   const countedIds = countedMustIds(counted);
   for (const must of documented) {
     assert.ok(
@@ -179,6 +192,23 @@ function assertDraftSplitsAligned(
       documented.has(must),
       `COUNTED_SPLITS names ${must} but UPGRADING ${version} does not name it as a -03 split`,
     );
+  }
+  // A split whose vector carries no MUST identity yet (a rule the posted
+  // draft does not state) is bound by its vector id instead: the UPGRADING
+  // block must name the id, and every named id must be a counted split.
+  for (const id of Object.keys(counted)) {
+    assert.ok(
+      blocks.some((b) => b.includes(id)),
+      `COUNTED_SPLITS names ${id} but no UPGRADING ${version} split block names that vector id`,
+    );
+  }
+  for (const block of blocks) {
+    for (const id of block.match(/V-T\d+-[A-Za-z0-9-]+/g) ?? []) {
+      assert.ok(
+        Object.hasOwn(counted, id),
+        `UPGRADING ${version} names ${id} as a living split but COUNTED_SPLITS does not carry it`,
+      );
+    }
   }
 }
 
@@ -659,6 +689,40 @@ describe("claims that describe something outside their own file", () => {
 
   it("GREEN: an empty split list and an UPGRADING that names none agree", () => {
     assertDraftSplitsAligned(syntheticSection("No divergence is named here."), {});
+  });
+
+  it("RED: a counted split with no MUST identity is bound by its vector id, and an UPGRADING that omits the id fails", () => {
+    // Measured before this fixture: the living -05 split carries no MUST
+    // identity, the alignment compared two empty sets, and an UPGRADING that
+    // never mentioned the split passed. The id is the binding now.
+    const counted = {
+      "V-T4-19-json-duplicate-key":
+        "posted -05 says nothing about duplicate member names; companion refuses; closes when -06 states the rule",
+    };
+    assert.throws(
+      () =>
+        assertDraftSplitsAligned(
+          syntheticSection("A living split stands against posted `-05` and closes when `-06` states the rule."),
+          counted,
+        ),
+      /COUNTED_SPLITS names V-T4-19-json-duplicate-key but no UPGRADING \d+\.\d+\.\d+ split block names that vector id/,
+    );
+    assert.throws(
+      () =>
+        assertDraftSplitsAligned(
+          syntheticSection(
+            "A living split stands against posted `-05`: `V-T4-19-json-duplicate-key` closes when `-06` states the rule, and so does `V-T9-9-not-counted`.",
+          ),
+          counted,
+        ),
+      /UPGRADING \d+\.\d+\.\d+ names V-T9-9-not-counted as a living split but COUNTED_SPLITS does not carry it/,
+    );
+    assertDraftSplitsAligned(
+      syntheticSection(
+        "A living split stands against posted `-05`: `V-T4-19-json-duplicate-key` closes when `-06` states the rule.",
+      ),
+      counted,
+    );
   });
 
   it("GREEN: the living split list is the JSON duplicate-member departure from posted -05", () => {

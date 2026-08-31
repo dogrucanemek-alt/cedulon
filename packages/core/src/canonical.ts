@@ -120,7 +120,9 @@ export function jsonDuplicateMemberName(text: string): string | null {
 /**
  * Parse JSON text after refusing a duplicate member name. RFC 8785 takes
  * I-JSON as input; JSON.parse keeps the last value and drops the evidence.
- * Every text-to-object ingress in this tree asks this, so a rail extract
+ * Every protocol and evidence text ingress in this tree asks this (the
+ * build scripts that read the repository's own package.json and lock file
+ * do not, and are not inputs anyone else writes), so a rail extract
  * file, a demo receipts file, and a session state file give the same name
  * (`json-duplicate-key`) for the same defect. Syntax errors stay the
  * parser's; this only names the I-JSON rule the parser cannot see.

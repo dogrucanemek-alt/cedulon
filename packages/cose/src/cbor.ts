@@ -287,6 +287,11 @@ export const NAMED_DECODE_REFUSALS: ReadonlySet<string> = new Set([
   "cbor-too-large",
   "cbor-too-deep",
   "cbor-duplicate-key",
+  // A non-empty unprotected header is a shape refusal of the profile, not a
+  // signature verdict; without this entry the decoder named it and the
+  // public name path returned null, which is the "kept the bound, lost the
+  // name" failure the path exists to prevent.
+  "cose-sign1-unprotected",
 ]);
 
 export function namedDecodeRefusal(err: unknown): string | null {

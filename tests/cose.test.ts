@@ -12,6 +12,7 @@ import {
   bytesToHex,
   cborMap,
   compareEncodedKeys,
+  coseDecodeRefusalHex,
   decodeCbor,
   decodeCoseSign1,
   decodeProtectedHeader,
@@ -253,6 +254,10 @@ describe("COSE_Sign1 receipts", () => {
     const stuffed = encodeCbor([arr[0], cborMap([[1, "stuffed"]]), arr[2], arr[3]] as never);
     assert.throws(() => decodeCoseSign1(stuffed), /cose-sign1-unprotected/);
     assert.equal(verifyCoseSign1(stuffed, keys.publicKeyPem, CTY_RECEIPT), false);
+    // The name has to survive the public path too: a caller that reports
+    // refusals by name reads them from here, and null would say "not a
+    // bound this profile names" about a bound this profile names.
+    assert.equal(coseDecodeRefusalHex(bytesToHex(stuffed)), "cose-sign1-unprotected");
     assert.equal(verifyCoseSign1(hexToBytes(VECTOR_RECEIPT_COSE_HEX), keys.publicKeyPem, CTY_RECEIPT), true);
   });
 
