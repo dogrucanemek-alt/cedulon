@@ -12,8 +12,22 @@ import {
 } from "@cedulon/manifest";
 import { generateReceiptKeys, receiptHash, signReceipt } from "@cedulon/receipts";
 import { generateExtractKeys, railExtractTextRefusal, signRailExtract } from "@cedulon/x402-adapter";
+import { latestDraftPath } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * The COSE_Sign1 hex blocks of the living draft's Appendix A, whitespace
+ * removed, in document order. A sha256-of-hex vector must carry one of them:
+ * the draft is the source of the bytes, and the vector file is not allowed
+ * to become a second, drifting copy of it.
+ */
+function appendixCoseHexBlocks(): string[] {
+  const md = readFileSync(latestDraftPath(root), "utf8");
+  return [...md.matchAll(/COSE_Sign1 hex \(whitespace ignored\):\s*~~~~\s*([0-9a-f\s]+?)~~~~/g)].map((m) =>
+    m[1]!.replace(/\s+/g, ""),
+  );
+}
 
 export type Vector = {
   id: string;
@@ -82,6 +96,20 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
   for (const v of vectors) {
     try {
     if (v.kind === "sha256-of-hex") {
+      // The check used to hash whatever hex the vector carried and compare it
+      // with the companion hashing the same octets: a tautology that stayed
+      // green while the vector bytes drifted two revisions behind the draft.
+      // The octets are only evidence when they are the posted draft's own
+      // Appendix A bytes, so that is asserted first, against the draft text.
+      const appendix = appendixCoseHexBlocks();
+      if (!appendix.includes(v.hex!)) {
+        rows.push({
+          id: v.id,
+          status: "error",
+          detail: `vector hex (${v.hex!.length} chars) is not one of the ${appendix.length} COSE_Sign1 hex blocks in the draft's Appendix A`,
+        });
+        continue;
+      }
       const bytes = Buffer.from(v.hex!, "hex");
       const digest = sha256Hex(bytes);
       const ours =
