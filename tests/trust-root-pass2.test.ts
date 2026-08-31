@@ -151,7 +151,18 @@ describe("issuer trust root, second pass", () => {
       [],
       "a log the verifier never named cannot produce findings",
     );
-    assert.ok(framed.warnings.some((w) => w.code === "unauthenticated-witness"));
+    const unattributed = framed.warnings.find((w) => w.code === "unauthenticated-witness");
+    assert.ok(unattributed);
+    // The warning is the report of what this branch did, and this branch
+    // verifies nothing: the receipt is left out of the comparison. Saying a
+    // check ran against the carried key describes a call that is not made,
+    // which is the same overclaim the guarantee line exists to prevent.
+    assert.doesNotMatch(
+      unattributed.detail,
+      /\bis checked\b/,
+      `the unpinned witness branch runs no check; detail must not say one ran: ${unattributed.detail}`,
+    );
+    assert.match(unattributed.detail, /left out/);
     assert.equal(framed.guarantee, "conditional");
   });
 

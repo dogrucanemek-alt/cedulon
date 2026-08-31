@@ -1552,7 +1552,7 @@ export function audit(input: AuditInput): AuditReport {
         code: "unauthenticated-witness",
         id: "witness",
         detail:
-          "no verifier-supplied witness key; an inclusion receipt is checked against the key it carries, so it says a log exists rather than that the named log anchored anything, and it was left out of the comparison",
+          "no verifier-supplied witness key; an inclusion receipt verified against the key it carries would say a log exists rather than that the named log anchored anything, so none was verified here and the receipt was left out of the comparison",
         severity: "warn",
       });
     }
