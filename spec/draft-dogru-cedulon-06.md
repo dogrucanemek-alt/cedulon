@@ -1018,7 +1018,7 @@ algorithm's):
 | Claims the pin (carried key or `kid`) | Verifies under the pin | Result |
 |---|---|---|
 | yes | yes | attested; a carried key other than the verifying one is `carried-key-mismatch`, a warning, and does not move the receipt |
-| yes | no | excluded from the attested set; still walked and named in step 6 (`receipt-chain-break`, signature-failed detail); its settlement stays uncovered in step 8 |
+| yes | no | excluded from the attested set; still walked and named in step 6 (`receipt-chain-break`, signature-failed detail); its settlement stays uncovered in step 8. A checkpoint has no chain walk to be named in, so it is reported as `issuer-key-mismatch` on this row as well as the next, and the window it would have covered is reported uncovered |
 | no | no | `issuer-key-mismatch`; excluded; its settlement stays uncovered in step 8 (`MUST-T4-9`, `MUST-T4-10`) |
 | no pin held | no pin to verify under | no comparison against a key the verifier holds happens, and the keys the objects carry are not a fallback for one (`MUST-T4-11`); each signature is still checked against the key its own object carries ({{presentation}}), which establishes that the object is internally consistent and nothing about who signed it, so a broken signature is still named (`receipt-chain-break`, `checkpoint-total-mismatch`) while two different issuers cannot be told apart; receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and accusation-shaped findings take the two-branch severity of `MUST-T8-9` |
 
@@ -1702,14 +1702,14 @@ warning. Warnings MUST still appear in operator-facing output
 | duplicate-ref | audit fails | Ref appears more than once on one side |
 | settled-without-ref | audit fails | `outcome` is settled and `x402PaymentRef` is null |
 | receipt-chain-break | audit fails | Signature or `prevReceiptHash` failed, or the links cannot place a receipt (issuer order, step 6) |
-| checkpoint-total-mismatch | audit fails | Totals, count, signature, or checkpoint chain failed |
+| checkpoint-total-mismatch | audit fails | Totals, count, signature, or checkpoint chain failed. The signature branch is reached where no issuer pin has already excluded the checkpoint: under a pin a checkpoint that does not verify is `issuer-key-mismatch` and never reaches the totals comparison |
 | checkpoint-head-mismatch | audit fails | `chainHeadHash` is not the last link, in issuer order, of the chain inside the window |
 | equivocation | audit fails | Two distinct hashes for one epoch |
 | window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows |
 | unauthenticated-extract | guarantee conditional | No verifier-supplied rail key, whatever the extract carries: a signature that verifies establishes internal consistency and not that the named rail produced the extract, and one that fails or is refused is not a key verdict either. The same code is reported when a rail key is pinned and no extract was presented at all, because there is nothing to check the pin against. A presented extract that does not verify under a pinned key is `extract-key-mismatch` instead |
 | extract-key-mismatch | audit fails | Extract is signed by a key other than the pinned rail key, or does not verify against it |
 | trust-key-unreadable | audit fails | A pinned key - rail, issuer, or manifest publisher - could not be decoded; the verifier's configuration is at fault, and nothing falls back to the keys the objects carry |
-| issuer-key-mismatch | audit fails | An object is signed by a key other than the pinned issuer key, so it is not coverage for anything it names |
+| issuer-key-mismatch | audit fails | An object is signed by a key other than the pinned issuer key, or does not verify under it at all, so it is not coverage for anything it names. A checkpoint reaches this code by either route: unlike a receipt, which is named in the chain walk as `receipt-chain-break` when it claims the pin and fails, a checkpoint that claims the pin and fails is reported here and leaves its window uncovered |
 | countersign-key-mismatch | conditional | A countersignature verifies under a key other than the one pinned for that payee; unattributable, discarded as approval evidence, and the receipt it rode beside is unaffected ({{countersign}}) |
 | countersign-missing | conditional | A payee key is pinned and a settled receipt for that payee carries no attributable countersignature; a discarded garbage or foreign-key object leaves this open |
 | unauthenticated-issuer | conditional | No verifier-supplied issuer key and at least one receipt or checkpoint presented; their signatures are checked against the keys the objects carry ({{presentation}}), which establishes that each object is internally consistent and not that the named issuer produced it |
@@ -2669,6 +2669,18 @@ measurement found on the way is.
   only the unsigned case and sent the pinned case to
   `extract-key-mismatch`, which is where a presented extract that fails
   under a pin goes and the only one of the three that lands there.
+- Two more rows say what a pinned issuer key does to a checkpoint. A
+  checkpoint that does not verify under the pin, whether because it was
+  signed by another key or because its bytes were altered, is
+  `issuer-key-mismatch` and leaves its window uncovered; it never
+  reaches the totals comparison, so the signature branch of
+  `checkpoint-total-mismatch` belongs to the unpinned path. The pin
+  table in {{issuer-root}} described only the receipt outcome for that
+  cell, because a checkpoint has no chain walk to be named in. The
+  companion also carried an operator-facing message asserting that an
+  unpinned manifest's signature proved internal consistency, which the
+  same measurement shows it never checks; the message now says so, red
+  before green.
 - {{presentation}} defines the carried key those statements turn on.
   Every presented receipt, checkpoint, Trade Manifest and Decision
   Token carries the signer's SubjectPublicKeyInfo PEM beside its

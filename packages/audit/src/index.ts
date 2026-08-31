@@ -1175,7 +1175,7 @@ export function audit(input: AuditInput): AuditReport {
         code: "unauthenticated-manifest",
         id: "manifest",
         detail:
-          "no verifier-supplied manifest key; the signature proves internal consistency, not that the named party published the terms, so the completeness guarantee is conditional",
+          "no verifier-supplied manifest key; the manifest signature is not checked at all here, so nothing in this report says the named party published the terms, and the completeness guarantee is conditional",
         severity: "warn",
       });
     } else {

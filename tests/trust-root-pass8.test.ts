@@ -198,6 +198,36 @@ describe("the manifest root", () => {
 });
 
 describe("pin optionality, measured rather than guessed", () => {
+  it("95 RED then GREEN: the unpinned manifest warning does not report a check the audit never runs", () => {
+    // Measured, not assumed: with no manifest pin nothing verifies the
+    // manifest, so its own warning must not describe what a signature proved.
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const merchant = generateManifestKeys();
+    const manifest = signManifest(manifestBody(), merchant.privateKeyPem, merchant.publicKeyPem);
+    const hex = manifest.coseHex;
+    const tampered = {
+      ...manifest,
+      coseHex: hex.slice(0, hex.length - 2) + (hex.slice(-2) === "00" ? "01" : "00"),
+    };
+
+    const intact = audit(withManifest(balancedUnder(honest, rail, manifest), manifest));
+    const broken = audit(withManifest(balancedUnder(honest, rail, tampered), tampered));
+    assert.deepEqual(
+      broken.findings.map((f) => f.code),
+      intact.findings.map((f) => f.code),
+      "no manifest pin: an altered signature is indistinguishable from an intact one",
+    );
+
+    const warning = intact.warnings.find((w) => w.code === "unauthenticated-manifest");
+    assert.ok(warning, "expected unauthenticated-manifest on a presented, unpinned manifest");
+    assert.doesNotMatch(
+      warning.detail,
+      /proves internal consistency/,
+      "the audit runs no signature check on an unpinned manifest, so its message must not report one",
+    );
+  });
+
   it("94 measures what each verify function does without a pin", () => {
     const honest = generateReceiptKeys();
     const attacker = generateReceiptKeys();
