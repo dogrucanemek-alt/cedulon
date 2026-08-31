@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { createPublicKey } from "node:crypto";
 import { describe, it } from "node:test";
 
-import { audit, formatAudit } from "@cedulon/audit";
+import { audit, formatAudit, toFindingObject } from "@cedulon/audit";
 import { receiptHash } from "@cedulon/receipts";
 import { PolicyEngine } from "@cedulon/core";
 import { fixtureEd25519Pems } from "@cedulon/cose";
@@ -43,10 +43,17 @@ function railExtract(
   );
 }
 
-/** A pin that states the period under audit, not only who signed. */
+/**
+ * A pin that states the scope under audit, not only who signed: the account and
+ * rail the report is about, and the period it covers. `railExtract` defaults to
+ * the same account and rail, so a test that means to show a clean audit states
+ * all three axes, the same way a verifier does.
+ */
 function pin(rail: RailKeys, overrides: Record<string, unknown> = {}) {
   return {
     publicKeyPem: rail.publicKeyPem,
+    accountId: "mock-account",
+    railId: "mock-rail",
     windowStartMs: NOW,
     windowEndMs: WINDOW_END,
     ...overrides,
@@ -609,5 +616,99 @@ describe("rail extract binding", () => {
     clean.record({ ref: "solo", amount: "2", currency: "USD", timestampMs: NOW });
     const green = audit({ receipts: [], checkpoints: [], settlements: clean.extract() });
     assert.equal(green.findings.some((f) => f.code === "malformed-amount"), false);
+  });
+
+  it("32 RED then GREEN: without a stated account and rail the extract picks which path it reports on", () => {
+    const rail = generateExtractKeys();
+    // An extract covers one account on one rail. An account that can settle on
+    // a second rail therefore has a path this extract never reported on, and a
+    // balanced result over the first one says nothing about it. Pinning the key
+    // and stating the period does not close that axis: neither of them says
+    // which account, or which rail, the audit was over.
+    const oneRail = signRailExtract(
+      {
+        accountId: "acct-1",
+        railId: "rail-a",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+        settlements: [],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+
+    const unstated = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: oneRail,
+      trust: { publicKeyPem: rail.publicKeyPem, windowStartMs: NOW, windowEndMs: WINDOW_END },
+    });
+    assert.equal(unstated.ok, true, "nothing is wrong with the rows it carries");
+    assert.equal(
+      unstated.warnings.some((w) => w.code === "unstated-audit-scope"),
+      true,
+    );
+    assert.equal(
+      unstated.guarantee,
+      "conditional",
+      "a verifier that named no account and no rail cannot call the result unconditional",
+    );
+
+    // Naming both closes the axis, the same way stating a period closes the
+    // window one.
+    const green = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: oneRail,
+      trust: pin(rail, { accountId: "acct-1", railId: "rail-a" }),
+    });
+    assert.equal(green.warnings.some((w) => w.code === "unstated-audit-scope"), false);
+    assert.equal(green.guarantee, "unconditional");
+  });
+
+  it("33 RED then GREEN: a balanced report names the settlement path it covered", () => {
+    const rail = generateExtractKeys();
+    const report = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: railExtract(rail),
+      trust: pin(rail),
+    });
+    assert.equal(report.guarantee, "unconditional");
+
+    // "audit: balanced" with an unconditional guarantee is the strongest line
+    // this tool prints, and it is true of one account on one rail over one
+    // period. An operator reading it as an account-wide statement is reading
+    // something the report never measured, so the report says what it covered.
+    const printed = formatAudit(report, 0);
+    assert.ok(
+      printed.includes("scope=mock-account/mock-rail"),
+      `expected the covered account and rail in the output, got:\n${printed}`,
+    );
+    assert.ok(
+      printed.includes(`[${NOW},${WINDOW_END})`),
+      `expected the covered period in the output, got:\n${printed}`,
+    );
+  });
+
+  it("34 RED then GREEN: the returned finding object carries the scope the printed report names", () => {
+    const rail = generateExtractKeys();
+    // A caller reading the JSON is making the same judgement as the operator
+    // reading the text, off the same run. If only one of the two surfaces says
+    // which path was covered, the other one is the misreading that survives.
+    const covered = toFindingObject(
+      audit({ receipts: [], checkpoints: [], extract: railExtract(rail), trust: pin(rail) }),
+      0,
+    );
+    assert.deepEqual(covered.scope, {
+      accountId: "mock-account",
+      railId: "mock-rail",
+      windowStartMs: NOW,
+      windowEndMs: WINDOW_END,
+    });
+
+    // No extract, no declared population, nothing to name.
+    const noExtract = toFindingObject(audit({ receipts: [], checkpoints: [] }), 0);
+    assert.equal(noExtract.scope, undefined);
   });
 });

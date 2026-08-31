@@ -71,6 +71,7 @@ export const FINDING_CODES = [
   "extract-settlement-mismatch",
   "trust-key-unreadable",
   "unstated-audit-window",
+  "unstated-audit-scope",
   "malformed-amount",
   "malformed-policy-hash",
   "malformed-request-hash",
@@ -188,12 +189,25 @@ export type Finding = {
   severity?: "fail" | "warn";
 };
 
+/**
+ * The account, rail and period the report was actually computed over, read from
+ * the extract that supplied the population. Absent when no extract was
+ * presented, because then there is no declared settlement path to name.
+ */
+export type AuditScope = {
+  accountId: string;
+  railId: string;
+  windowStartMs: number;
+  windowEndMs: number;
+};
+
 export type AuditReport = {
   ok: boolean;
   findings: Finding[];
   warnings: Finding[];
   guarantee: "unconditional" | "conditional";
   summary: string;
+  scope?: AuditScope;
 };
 
 function receiptRef(r: SignedReceipt): string | null {
@@ -1155,6 +1169,23 @@ export function audit(input: AuditInput): AuditReport {
           severity: "warn",
         });
       }
+      if (t.accountId === undefined || t.railId === undefined) {
+        // The window is one axis of the scope; the account and the rail are the
+        // other two. An extract covers one account on one rail, so an account
+        // that can settle on a second rail has a path this report never looked
+        // at. A verifier that names neither leaves the extract to say whose
+        // money it accounted for and which way out it watched.
+        const unstated = [
+          t.accountId === undefined ? "account" : undefined,
+          t.railId === undefined ? "rail" : undefined,
+        ].filter((axis) => axis !== undefined);
+        warnings.push({
+          code: "unstated-audit-scope",
+          id: "extract",
+          detail: `no audit ${unstated.join(" or ")} was stated, so the extract defines the settlement path it reports on; completeness guarantee is conditional`,
+          severity: "warn",
+        });
+      }
     }
   } else {
     warnings.push({
@@ -1623,6 +1654,16 @@ export function audit(input: AuditInput): AuditReport {
     warnings,
     guarantee: guaranteeWarnings.length === 0 && !doubtedEvidence ? "unconditional" : "conditional",
     summary,
+    ...(input.extract
+      ? {
+          scope: {
+            accountId: input.extract.body.accountId,
+            railId: input.extract.body.railId,
+            windowStartMs: input.extract.body.windowStartMs,
+            windowEndMs: input.extract.body.windowEndMs,
+          },
+        }
+      : {}),
   };
 }
 
@@ -1634,6 +1675,7 @@ export type FindingObject = {
   receipts: number;
   findings: Finding[];
   warnings: Finding[];
+  scope?: AuditScope;
 };
 
 export function toFindingObject(report: AuditReport, receiptCount = 0): FindingObject {
@@ -1645,6 +1687,10 @@ export function toFindingObject(report: AuditReport, receiptCount = 0): FindingO
     receipts: receiptCount,
     findings: report.findings,
     warnings: report.warnings,
+    // A caller reading this object makes the same judgement as an operator
+    // reading the text, so it carries the same scope. Absent when no extract
+    // declared one.
+    ...(report.scope ? { scope: report.scope } : {}),
   };
 }
 
@@ -1655,6 +1701,13 @@ export function formatAudit(report: AuditReport, receiptCount = 0): string {
   // Warnings decide whether the balance means anything, so an operator has to
   // see them on the passing path too, not only in the returned object.
   lines.push(`guarantee=${report.guarantee}`);
+  // And a guarantee is over something. The extract that supplied the population
+  // covers one account on one rail, so the line that carries the strongest
+  // claim also carries the path it was measured on.
+  if (report.scope) {
+    const s = report.scope;
+    lines.push(`scope=${s.accountId}/${s.railId} [${s.windowStartMs},${s.windowEndMs})`);
+  }
   for (const w of report.warnings) {
     lines.push(`warn\t${w.code}\t${w.detail}`);
   }

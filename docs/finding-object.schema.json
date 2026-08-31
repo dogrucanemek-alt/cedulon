@@ -26,9 +26,21 @@
     "warnings": {
       "type": "array",
       "items": { "$ref": "#/$defs/finding" }
-    }
+    },
+    "scope": { "$ref": "#/$defs/scope" }
   },
   "$defs": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accountId", "railId", "windowStartMs", "windowEndMs"],
+      "properties": {
+        "accountId": { "type": "string", "minLength": 1 },
+        "railId": { "type": "string", "minLength": 1 },
+        "windowStartMs": { "type": "integer" },
+        "windowEndMs": { "type": "integer" }
+      }
+    },
     "finding": {
       "type": "object",
       "additionalProperties": true,

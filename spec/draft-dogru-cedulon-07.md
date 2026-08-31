@@ -115,6 +115,13 @@ informative:
         name: Christopher Hopley
     date: 2026-05
     target: https://datatracker.ietf.org/doc/draft-hopley-x402-compliance-receipt/
+  ABAK:
+    title: "Evidence Requirements for Agent Control Delivery and Outcome Reconciliation"
+    author:
+      - ins: A. T. Abak
+        name: Ali Toygar Abak
+    date: 2026-08
+    target: https://datatracker.ietf.org/doc/draft-abak-agent-control-delivery-evidence/
   CPB:
     title: "Canonical Payload Binding: A Signed Statement Construction Profile"
     author:
@@ -941,6 +948,28 @@ verifier that has not stated the period under audit therefore MUST
 emit `unstated-audit-window` and MUST treat the guarantee as
 conditional (`MUST-T10-15`), whatever else verifies.
 
+The period is one axis of that scope. The account and the rail are
+the other two, and they behave the same way: an extract names one of
+each, so a verifier that has not stated them leaves the extract to
+say whose settlements were accounted for and which way out was
+watched. A verifier that has not stated the account or the rail under
+audit therefore MUST emit `unstated-audit-scope` and MUST treat the
+guarantee as conditional (`MUST-T10-18`). Where no rail key is pinned
+at all, all three axes are equally unstated and
+`unauthenticated-extract` is the condition reported.
+
+Stating them does not widen the population; it names it. One account
+settling on two rails has two settlement paths, and an extract for
+the first reports nothing about the second: a spend that left that
+way is not an unmatched row, it is outside the population the extract
+declared. Because the strongest line this profile prints - a balanced
+audit under an unconditional guarantee - is true of one account, on
+one rail, over one window, a report that carries it MUST also carry
+that account, rail and window (`MUST-T10-19`). A completeness claim
+about an account is the conjunction of one such report per rail that
+account can settle on, and enumerating those rails is the deployment's
+statement, not something an extract can be asked to prove.
+
 # Trust roots {#trust-roots}
 
 {{rail-extract}} states the rule for one object: a signature proves
@@ -1237,6 +1266,15 @@ checkpoint hash chains verify, and checkpoint totals equal the sum of
 without a receipt, the missing receipt is itself the evidence
 (`MUST-T10-2`).
 
+The property is stated over a population, and the extract is what
+declares it: one account, on one rail, over one window
+({{rail-extract}}). "Every settlement" means every settlement that
+extract carried. A settlement path no presented extract covers is not
+reconciled and not found missing - it is outside the population - so
+the report names the account, rail and window it was computed over
+(`MUST-T10-19`), and a verifier that stated none of them says so
+instead (`MUST-T10-18`).
+
 A checkpoint published with its totals withheld ({{redaction}}) cannot
 contribute the last of those to the property. It is not a violation of
 completeness and it is not a demonstration of it either: the
@@ -1469,7 +1507,12 @@ identifiers are not an interoperability surface.
    `extract-scope-mismatch` SHOULD be used for both conditions. If
    the verifier stated no period, it MUST treat the guarantee as
    conditional (`MUST-T10-15`). The identifier
-   `unstated-audit-window` SHOULD be used for this condition.
+   `unstated-audit-window` SHOULD be used for this condition. If it
+   stated no account or no rail, it MUST treat the guarantee as
+   conditional for the same reason (`MUST-T10-18`); the identifier
+   `unstated-audit-scope` SHOULD be used. Whatever the verdict, the
+   report MUST name the account, rail and window the extract declared
+   (`MUST-T10-19`).
 4. Resolve each Spend Receipt against the issuer root
    ({{issuer-root}}) in one pass. Decode the COSE_Sign1; a content
    type that is not the receipt type, a decoder bound, or a decoded
@@ -1732,6 +1775,7 @@ warning. Warnings MUST still appear in operator-facing output
 | extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract on `ref`, amount, currency or timestamp, which are the fields compared; the extract is authoritative. A beneficiary that differs is not part of this comparison and is reached by `beneficiary-mismatch`, against the receipt payee |
 | malformed-amount | audit fails | An amount on a `ref` already reported as repeating that could not be parsed as an integer |
 | unstated-audit-window | guarantee conditional | A usable rail pin states no period, so the extract defined its own. Where no rail key is pinned at all the period is equally unstated, and `unauthenticated-extract` is the condition reported |
+| unstated-audit-scope | guarantee conditional | A usable rail pin states no account or no rail, so the extract defined the settlement path it reported on. The same "no pin at all" case is `unauthenticated-extract` |
 | countersign-bad | conditional | Present payee countersignature failed verify (signature, content type, or payload binding); unattributable, discarded as approval evidence. One verifiable under another key is `countersign-key-mismatch` |
 | checkpoint-withheld | audit fails | A verified witness receipt binds a checkpoint the presented chain does not contain |
 | checkpoint-not-anchored | guarantee conditional | A witness was supplied and holds no verified receipt for this checkpoint |
@@ -2053,6 +2097,8 @@ See {{reconciliation}}.
 | MUST-T10-15 | A verifier that has not stated the period under audit MUST emit `unstated-audit-window` and MUST treat the guarantee as conditional, because an unstated period leaves the extract free to define its own. |
 | MUST-T10-16 | When an extract is supplied, a receipt whose `ref` appears on it is reconciled against it regardless of its own `timestampMs`; the window sieve applies only to receipts the extract does not name, and such a receipt outside the window MUST NOT be reported as a completeness failure against that extract. |
 | MUST-T10-17 | An unmatched settled receipt within the declared `clockSkewMs` of `windowEndMs`, and an unmatched settlement record within it of `windowStartMs`, MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure. A closing-edge deferral resolves against the following window's extract and hardens into the completeness finding when that extract is presented and does not name the `ref`; an opening-edge deferral resolves only against a receipt in the presented bag that names its `ref`, and a following extract does not harden it. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
+| MUST-T10-18 | A verifier that has not stated the account or the rail under audit MUST emit `unstated-audit-scope` and MUST treat the guarantee as conditional, because an unstated account or rail leaves the extract free to define the settlement path it reports on, exactly as an unstated period leaves it free to define the period (`MUST-T10-15`). |
+| MUST-T10-19 | A report MUST name the account, rail and window the extract declared, in any human-readable output it produces and in any structure it returns. A balanced result under an unconditional guarantee is a statement about one account on one rail over one window; an account that can settle on a second rail has a settlement path outside that population, and a report that does not name its own scope cannot be distinguished from one that covers every path. |
 
 In MUST-T10-4, a completeness finding that makes the audit fail is
 distinct from a warning that only makes the guarantee conditional.
@@ -2618,9 +2664,11 @@ that branch against an installed 0.7.0 will not find it.
 
 ## Changes from -06 {#changes-06}
 
-This revision changes no behaviour and adds no requirement. It repairs
-a wording residue that -06's own repair created, reported by the reader
-who implemented -06 from the posted text.
+This revision has two subjects. The first repairs a wording residue
+that -06's own repair created, reported by the reader who implemented
+-06 from the posted text; it changes no behaviour. The second adds two
+requirements on one axis of the audit's declared scope that every
+earlier revision left unstated.
 
 -06 stated, for the first time, what a verifier does when it holds no
 pinned issuer key: the signature is still checked against the key the
@@ -2650,6 +2698,32 @@ evidence.
 
 The witness root already stated the distinction correctly and is
 unchanged; it is where the wording for the other four came from.
+
+The second subject is the scope a completeness result is over. -05
+established that a verifier which states no period cannot call its
+result unconditional, because the extract then defines the period it
+reports on (`MUST-T10-15`). The account and the rail are the same kind
+of axis and were never given the same treatment: an extract names one
+account and one rail ({{rail-extract}}), so a verifier that states
+neither leaves the extract to define whose settlements were accounted
+for and which way out was watched. `MUST-T10-18` closes that axis the
+way -05 closed the period.
+
+`MUST-T10-19` states the consequence the earlier revisions left to the
+reader. A balanced audit under an unconditional guarantee is true of
+one account, on one rail, over one window. An account that can settle
+on a second rail has a settlement path no presented extract covers,
+and a spend that left that way is not an unmatched row - it is outside
+the declared population, which is precisely the bypass {{security}}
+names in T10. The report now carries the account, rail and window it
+was computed over, so the strongest line it prints cannot be read as a
+statement about paths it never looked at. Enumerating an account's
+rails remains the deployment's statement; no extract can be asked to
+prove that the enumeration is complete.
+
+This distinction is the one {{ABAK}} draws for control instructions,
+where a receiver-side observation at one enforcement point does not
+establish that another required path was reached.
 
 ## Changes from -05 {#changes-05}
 
@@ -3140,6 +3214,21 @@ access-control action receipts (the broader Acta family includes
 draft-hopley-x402-compliance-receipt {{HOPLEY}} records an
 admission-time compliance decision; it does not define rail-extract
 completeness.
+draft-abak-agent-control-delivery-evidence {{ABAK}} states evidence
+requirements for a governance control - stop, suspend, revoke -
+travelling toward the component expected to constrain a runtime, and
+keeps emission, receiver-side observation, enforcement outcome and
+observed control effect as separate results. Its object moves the
+other way from this one: Cedulon reconciles a spend that already
+happened against what the rail reported, and evidences neither the
+delivery of a control instruction nor its enforcement. A denied spend
+leaves no portable artifact here at all - a Decision Token encodes an
+allow ({{decision-token}}) - so what a Cedulon audit says about a
+refusal it says through the settlement that did not appear on the
+extract, which is an effect observation over a declared population and
+not an acknowledgement from an enforcement point. Its bounded-population
+rule and this document's `MUST-T10-18` and `MUST-T10-19` are the same
+discipline on two different objects.
 
 --- back
 
