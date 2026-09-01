@@ -294,3 +294,68 @@ escape permission removed: encoder refuses by name, verify surfaces
 report rather than throw (`d58594b`, `09959af`), and a guard scans
 the tree's vectors and fixtures for lone surrogates before the rule
 can move again.
+
+## Round 5 - accounting rules from a neighbouring draft, 2026-09-01
+
+Not a reading of this code by an outside reviewer. The rules are the outside
+part: draft-abak-agent-control-delivery-evidence-00 defines per-instruction
+dispositions, a selection requirement, two population-conservation identities,
+and conditions on any aggregate result. Its author asked for a mapping from this
+profile's finding codes onto that vocabulary. Writing the mapping ran his rules
+over this reconciler, and two of them did not pass.
+
+The mapping and the checks are one runnable file. It is pinned here rather than
+copied into this tree, so the bytes he holds and the bytes described here cannot
+drift apart: `cedulon-abak-population-probe.mjs`, SHA-256
+`84763271fafe050daf6277d398885685cb75216b6cf4d0ac65afc67d52e4c083`. It resolves
+`@cedulon/*@0.8.0` from npm and needs no clone.
+
+### 1. One exclusion is published and the other is not - open
+
+Section 6.3 requires that records excluded before population construction be
+reported with the exclusion rule and count, or the completeness claim is not
+reproducible.
+
+Two rows can leave a window's accounting here. A settlement left unmatched
+inside the opening clock-skew boundary is reported as `boundary-deferred`, and
+the warning names both the row and the rule, so the receiver-record side stays
+reconstructible. A receipt left unmatched inside the closing boundary, whose ref
+appears in `nextExtract`, is dropped with no finding and no warning (the
+`nextRefs` branch in `packages/audit/src/index.ts`), and the summary is `audit:
+balanced`. A reader holding that report cannot tell whether the issuer
+population held one instruction or none.
+
+The behaviour is right in both cases: the row belongs to the neighbouring
+window, and charging it here would be a false positive. The probe runs a control
+for each - move the settlement away from the boundary, or give the receipt a
+next window that does not name its ref, and both harden into findings - so
+neither is a row that was never counted in the first place. What is wrong is
+only that the exclusion on the instruction side is unreportable, and that is the
+side the completeness claim is about.
+
+### 2. A receipt that positively did not settle receives no class - open
+
+An `aborted` receipt is correct to have no row on the extract, and the audit
+returns `balanced` with no finding. It is also absent from the report
+altogether, so nothing distinguishes a window holding one refused spend from a
+window holding none. Section 6.1's EXPLICIT_FAILURE exists to keep exactly that
+visible.
+
+### What would close both
+
+The report publishes findings and an aggregate; it does not publish class
+counts. Section 6.4's last requirement is the one it does not meet, and the two
+findings above are that single gap seen from two sides. Closing it means
+`AuditReport` carrying counts it already computes - how many rows were matched,
+deferred, carried into the next window, unmatched, and refused - rather than any
+new check.
+
+### What the mapping showed about the codes themselves
+
+Of the 49 codes `@cedulon/audit` exports, 18 speak to an instruction, 5 to a
+record, and 1 names an exclusion. The remaining 25 are not dispositions at all:
+they say the declared population does not stand, or the evidence does not, or
+they belong to the transparency or terms layer. The codes are also many-to-one
+against instructions - one malformed receipt emits seven of them, one twice,
+across five layers - so a disposition mapping needs a precedence rule and a
+record of what it discarded, which is what Section 6.2 already asks for.
