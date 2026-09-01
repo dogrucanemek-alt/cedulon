@@ -32,8 +32,13 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-`0.9.0` is prepared in this tree and is not a published npm release; the
-sentences below about installed artifacts stay on `0.8.0` until npm moves. What it changes: an
+`0.9.0` is published on npm, with a provenance attestation, and it is what a
+reader now gets from an installed package. Checked from the published package
+rather than from this tree: a clean `npm pack @cedulon/audit@0.9.0` in an empty
+folder carries the `extractRejected` gate and the `settlement-comparison-skipped`
+warning. All eight packages answer `0.9.0`, each with a SLSA v1 attestation whose
+build definition names `refs/tags/v0.9.0`, and each reporting `gitHead`
+`9228b6e`. What it changes: an
 extract a stated rail pin refuses no longer supplies a settlement finding.
 Until this version the audit reported `extract-key-mismatch` and then
 reconciled that refused document's rows anyway, so a body the verifier had
@@ -53,8 +58,8 @@ added, so `conformance/counted-splits.ts` carries two living splits,
 `V-T10-18-unstated-audit-scope` and `V-T10-20-refused-extract-charges`; each
 closes when `-07` is posted.
 
-`0.8.0` is published on npm, with a provenance attestation, and it is what a
-reader now gets from an installed package. Checked from the published package
+`0.8.0` was the release before it, published on npm with a provenance
+attestation. Checked from the published package
 rather than from this tree: a clean `npm pack @cedulon/audit@0.8.0` in an empty
 folder carries `unstated-audit-scope`, the `AuditScope` type, and the repaired
 unpinned-witness warning. The release step that verifies the registry answered
@@ -117,7 +122,7 @@ false` for a departure the pinned key does attest. A clean install of
 `@cedulon/core@0.6.0` returns a 64-character lowercase hex digest from
 `requestHashOf`, matching the value the conformance run records.
 
-Eight packages are published on npm at `0.8.0`, so the server runs without a
+Eight packages are published on npm at `0.9.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
 `MUST-T8-9`, and it breaks: an audit that used to return a clean
 unconditional result over a receipt carrying the hash of terms it departs from
@@ -137,12 +142,15 @@ reports rather than refuses, and names the external-rail bound on T12 in the
 draft. The extract-evidence exits from `indeterminate` are built and red-then-green: authenticated presence settles late, authenticated full-window absence releases the authority. The reversing-entry branch of `MUST-T12-4` still has no evidence object, so T12-4 is executed for the extract branch and open for the reversal branch.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.8.0` answers `initialize` reporting `0.8.0`. A clean
-pack of `@cedulon/audit@0.8.0` in an empty folder was asked what this version
-changed, from the published bytes rather than the tree: it carries
+`@cedulon/mcp-server@0.9.0` answers `initialize` reporting `0.9.0`. A clean
+pack of `@cedulon/audit@0.9.0` in an empty folder was asked what this version
+changed, from the published bytes rather than the tree: it carries the
+`extractRejected` gate that stops a refused extract supplying a settlement
+finding, and the `settlement-comparison-skipped` warning that says the
+reconciliation did not run. The release before that carried
 `unstated-audit-scope`, the `AuditScope` type on the report and the finding
 object, and the unpinned-witness warning that no longer says a check ran on a
-branch that runs none. The release before it answered its own three: an oversized
+branch that runs none. The one before those answered its own three: an oversized
 checkpoint comes back as a finding naming `cbor-too-large` instead of taking
 the audit down, an extract carrying a non-finite number verifies false and
 leaves the guarantee conditional instead of throwing, and both `signManifest`
@@ -195,9 +203,9 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.8.0 bundle was built and unpacked: its manifest states
-`0.8.0` and the server inside it installs `@cedulon/mcp-server@^0.8.0`. Every
-`@cedulon` package inside it reads `0.8.0`, with no older copy left beside them. The builder installs the published version rather than the
+desktop install. The 0.9.0 bundle was built and unpacked: its manifest states
+`0.9.0` and the server inside it installs `@cedulon/mcp-server@^0.9.0`. Every
+`@cedulon` package inside it reads `0.9.0`, with no older copy left beside them. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -221,10 +229,15 @@ started, and listed five tools.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
 where `0.7.0` is the current version (`isLatest`), read back from the registry
-API rather than from the publish command's own output. `server.json` is the entry
-it was published from. The two channels are not in step: npm serves `0.8.0`, the MCP Registry
+API rather than from the publish command's own output on 1 September. The
+registry host did not answer when that reading was attempted again later the
+same day, so the version here is the one last read rather than one read now;
+it cannot have moved in between, because the only thing that moves it is
+someone running `mcp-publisher`. `server.json` is the entry
+it was published from. The two channels are not in step: npm serves `0.9.0`, the MCP Registry
 still serves `0.7.0`, so a reader installing from the listing gets
-a release behind npm and does not get the scope work. `release.yml` sends packages
+two releases behind npm: neither the scope work 0.8.0 added nor the refused-extract
+gate 0.9.0 added. `release.yml` sends packages
 to npm from the tag and deliberately does not touch the registry, because whether
 `mcp-publisher` accepts Actions OIDC has not been measured here; the registry
 entry moves when someone runs it, and until then this sentence is the notice

@@ -441,11 +441,28 @@ describe("claims that describe something outside their own file", () => {
         spaced(`npm serves \`${published}\`, the MCP Registry still serves \`${registry[1]!}\``),
         `STATUS says the registry is at ${registry[1]} and npm at ${published} but never says the listing is behind; a reader installing from the registry has to be told which version they get`,
       );
+      // The lag has to be named, and named correctly. This used to demand the
+      // literal "a release behind npm", which was true only while the gap was
+      // one release: at npm 0.9.0 against a 0.7.0 listing the guard was asking
+      // for a sentence that had become false. Every release in this project
+      // bumps the minor, so the gap is the minor difference, and the count the
+      // prose claims is measured against it rather than assumed.
       assert.match(
         status,
-        spaced("a release behind npm"),
+        spaced("behind npm"),
         "the lag between npm and the MCP Registry is named nowhere in STATUS",
       );
+      const gap = Number(published.split(".")[1]) - Number(registry[1]!.split(".")[1]);
+      const words: Record<string, number> = { a: 1, one: 1, two: 2, three: 3, four: 4, five: 5 };
+      const claimed = status.match(/(\w+)\s+releases?\s+behind\s+npm/);
+      if (claimed) {
+        const n = words[claimed[1]!.toLowerCase()] ?? Number(claimed[1]);
+        assert.equal(
+          n,
+          gap,
+          `STATUS says ${claimed[1]} release(s) behind npm; npm is ${published} and the listing is ${registry[1]}, a gap of ${gap}`,
+        );
+      }
     }
   });
 
