@@ -188,6 +188,35 @@ describe("published-as claims", () => {
     );
     assertStatusPublishedMatchesNpm(living, npmLatest);
   });
+
+  it("the MCP Registry version STATUS names is the one the registry serves", async (t) => {
+    // The npm floor above has a sibling that was missing. Offline
+    // stale-claims.ts reads the registry number out of STATUS with
+    // `where \`X\` is the current version (\`isLatest\`)` and then
+    // measures the npm/registry gap from it. Both sides of that
+    // comparison come from the same file, so STATUS could say the
+    // listing is two releases behind while the listing had caught
+    // up, and the suite stayed green. It did: the listing moved to
+    // 0.9.0 on 1 September and every sentence here about the gap
+    // became false with nothing red. This test is the third thing
+    // that has to agree, and it asks the registry.
+    const live = await registryLatestVersion();
+    if (typeof live !== "string") {
+      // The registry host has failed to answer before, and a check
+      // that goes red when someone else's service is down measures
+      // their uptime rather than our claim.
+      t.skip(`MCP Registry did not answer: ${live.skipped}`);
+      return;
+    }
+    const status = readFileSync(join(root, "docs", "STATUS.md"), "utf8");
+    const named = status.match(/where `(\d+\.\d+\.\d+)` is the current version \(`isLatest`\)/);
+    assert.ok(named, "docs/STATUS.md no longer names the registry isLatest version");
+    assert.equal(
+      named[1],
+      live,
+      `docs/STATUS.md says the MCP Registry serves ${named[1]}; the registry serves ${live}`,
+    );
+  });
 });
 
 function publicPackageNames(): string[] {
@@ -222,6 +251,35 @@ function npmViewVersion(pkg: string): string | { skipped: string } {
     const offline = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|network|ECONNREFUSED|registry\.npmjs/i.test(msg);
     if (offline) return { skipped: msg };
     throw err;
+  }
+}
+
+async function registryLatestVersion(): Promise<string | { skipped: string }> {
+  // The listing is a second distribution channel with its own host.
+  // Same shape as npmViewVersion: answer, or a skip reason, never a
+  // silent pass.
+  try {
+    const url =
+      "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.dogrucanemek-alt/cedulon";
+    const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) return { skipped: `HTTP ${res.status}` };
+    const body = (await res.json()) as {
+      servers?: { server?: { name?: string; version?: string }; _meta?: Record<string, unknown> }[];
+    };
+    const ours = (body.servers ?? []).filter(
+      (s) => s.server?.name === "io.github.dogrucanemek-alt/cedulon",
+    );
+    const latest = ours.find((s) => {
+      const official = s._meta?.["io.modelcontextprotocol.registry/official"] as
+        | { isLatest?: boolean }
+        | undefined;
+      return official?.isLatest === true;
+    });
+    const version = latest?.server?.version;
+    if (!version) return { skipped: "no isLatest entry for this server in the registry response" };
+    return version;
+  } catch (err) {
+    return { skipped: err instanceof Error ? err.message : String(err) };
   }
 }
 

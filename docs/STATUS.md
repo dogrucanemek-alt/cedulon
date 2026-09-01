@@ -228,20 +228,25 @@ checking before a build and not after. The 0.5.0 build ran against `5b080e6`,
 started, and listed five tools.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.7.0` is the current version (`isLatest`), read back from the registry
-API rather than from the publish command's own output on 1 September. The
-registry host did not answer when that reading was attempted again later the
-same day, so the version here is the one last read rather than one read now;
-it cannot have moved in between, because the only thing that moves it is
-someone running `mcp-publisher`. `server.json` is the entry
-it was published from. The two channels are not in step: npm serves `0.9.0`, the MCP Registry
-still serves `0.7.0`, so a reader installing from the listing gets
-two releases behind npm: neither the scope work 0.8.0 added nor the refused-extract
-gate 0.9.0 added. `release.yml` sends packages
-to npm from the tag and deliberately does not touch the registry, because whether
+where `0.9.0` is the current version (`isLatest`), read back from the registry
+API rather than from the publish command's own output, on 1 September after the
+entry was pushed by hand. `server.json` is the entry it was published from, and
+the listing names `@cedulon/mcp-server` at the same `0.9.0`. On that reading the
+two channels are in step.
+
+That is a dated observation and not a claim about now. The listing moves whenever
+someone runs `mcp-publisher`, this page is not notified when they do, and an
+earlier revision of this paragraph asserted the listing could not have moved
+between two readings. It could, and it did: the entry sat at `0.7.0` for two
+releases and then caught up in one push. What is stated here is the reading and
+its date; whether the numbers still agree is a question for the registry, and
+`tests/published-as.test.ts` asks it rather than trusting this sentence.
+
+`release.yml` sends packages to npm from the tag and deliberately does not touch
+the registry, because whether
 `mcp-publisher` accepts Actions OIDC has not been measured here; the registry
-entry moves when someone runs it, and until then this sentence is the notice
-rather than a reader having to discover the gap.
+entry moves when someone runs it, and until then this paragraph is the notice
+rather than a reader having to discover the state.
 
 The two still move separately on purpose. `release.yml` publishes to npm from
 the tag with no long-lived credential, and it does not publish to the MCP
