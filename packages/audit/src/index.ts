@@ -69,6 +69,7 @@ export const FINDING_CODES = [
   "manifest-terms-mismatch",
   "extract-scope-mismatch",
   "extract-settlement-mismatch",
+  "settlement-comparison-skipped",
   "trust-key-unreadable",
   "unstated-audit-window",
   "unstated-audit-scope",
@@ -1046,6 +1047,10 @@ export function audit(input: AuditInput): AuditReport {
   // rows it actually carries, never a separate array the caller hands over.
   const reconciled = input.extract ? input.extract.body.settlements : (input.settlements ?? []);
 
+  // Set where a stated rail pin refuses the presented extract; read where the
+  // extract's rows would otherwise be compared. A pin that cannot be read is
+  // not a refusal - the same distinction the manifest branch draws.
+  let extractRejected = false;
   if (input.extract) {
     if (input.settlements && !sameSettlements(input.settlements, input.extract.body.settlements)) {
       findings.push({
@@ -1110,6 +1115,7 @@ export function audit(input: AuditInput): AuditReport {
           detail: "the pinned rail key could not be read as a public key; supply PEM or base64 SPKI",
         });
       } else if (!signatureVerifies) {
+        extractRejected = true;
         findings.push({
           code: "extract-key-mismatch",
           id: "extract",
@@ -1121,6 +1127,7 @@ export function audit(input: AuditInput): AuditReport {
       } else {
         const carriedDer = toSpkiDer(input.extract.publicKeyPem);
         if (carriedDer === null || !carriedDer.equals(pinnedDer)) {
+          extractRejected = true;
           findings.push({
             code: "extract-key-mismatch",
             id: "extract",
@@ -1486,7 +1493,22 @@ export function audit(input: AuditInput): AuditReport {
           : {}),
       }
     : undefined;
-  findings.push(...findSettlementMatches(inScope, reconciled, settlementBoundary));
+  // A document the audit has just refused must not also be the evidence it
+  // convicts with (MUST-T8-9 says this of a manifest; the rows of a refused
+  // extract are the same shape on the money axis). The refusal is the finding.
+  // Saying nothing at all would be the other failure: a reader cannot tell a
+  // comparison that found nothing from one that never ran.
+  if (extractRejected) {
+    warnings.push({
+      code: "settlement-comparison-skipped",
+      id: "extract",
+      severity: "warn",
+      detail:
+        "the presented extract was refused by the pinned rail key, so its rows were not reconciled against the receipts; no settlement finding in this report was read out of that document",
+    });
+  } else {
+    findings.push(...findSettlementMatches(inScope, reconciled, settlementBoundary));
+  }
   const manifestPayeeBound = Boolean(input.manifest && typeof input.manifest.body.payee === "string");
   const beneficiaryBound = reconciled.some((s) => typeof s.beneficiary === "string");
   if (input.extract && !manifestPayeeBound && !beneficiaryBound) {

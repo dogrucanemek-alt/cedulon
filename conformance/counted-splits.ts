@@ -3,10 +3,14 @@
  * in each reason is what docs/UPGRADING.md is compared against.
  * This file is that list, not a second copy of it.
  *
- * One living split, against posted -06: the companion warns
+ * Two living splits, both against posted -06. The companion warns
  * `unstated-audit-scope` and names the account, rail and window it computed
- * over, and the posted draft states neither rule. It closes when -07 is
- * posted with MUST-T10-18 and MUST-T10-19.
+ * over, and the posted draft states neither rule; that one closes when -07 is
+ * posted with MUST-T10-18 and MUST-T10-19. The companion also refuses to read
+ * a settlement charge out of an extract its pin has just refused, and says so
+ * with `settlement-comparison-skipped`; the posted draft reports the refusal
+ * and is silent on what the refused body may still be used for. That one
+ * closes when -07 is posted with MUST-T10-20.
  *
  * The previous one was against posted -05, which said nothing about duplicate
  * member names in the extract text while the companion refused
@@ -22,6 +26,8 @@
  * not depend on a divergence existing.
  */
 export const COUNTED_SPLITS: Record<string, string> = {
+  "V-T10-20-refused-extract-charges":
+    "Posted -06 reports extract-key-mismatch when a stated rail pin refuses the presented extract, and says nothing about whether that refused document's rows may still produce a settlement finding. The companion reads no charge out of the refused body and reports settlement-comparison-skipped so the skipped comparison is not silent. Closes when -07 is posted with MUST-T10-20.",
   "V-T10-18-unstated-audit-scope":
     "Posted -06 makes an unstated period conditional and is silent on an unstated account or rail, and asks no report to name the settlement path it covered. The companion warns unstated-audit-scope and carries the scope in both the printed report and the finding object. Closes when -07 is posted with MUST-T10-18 and MUST-T10-19.",
 };

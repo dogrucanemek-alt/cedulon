@@ -446,6 +446,83 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
       continue;
     }
 
+    if (v.kind === "refused-extract") {
+      const rail = generateExtractKeys();
+      const attacker = generateExtractKeys();
+      const windowEndMs = NOW + 3_600_000;
+      const honest = generateReceiptKeys();
+      const receipt = signReceipt(
+        {
+          payer: "payer",
+          payee: "payee",
+          amount: "1",
+          currency: "USD",
+          policyHash: TEST_POLICY_HASH,
+          manifestHash: null,
+          noManifest: true,
+          x402PaymentRef: "ref-ok",
+          timestampMs: NOW,
+          nonce: "n0".padEnd(16, "-"),
+          prevReceiptHash: null,
+          outcome: "settled",
+        },
+        honest.privateKeyPem,
+        honest.publicKeyPem,
+      );
+      // The attacker signs their own extract and puts a different amount on the
+      // honest receipt's ref. The pin refuses the document; the question this
+      // vector asks is whether the refused body can still convict the receipt.
+      const forged = signRailExtract(
+        {
+          accountId: "acct-1",
+          railId: "rail-a",
+          windowStartMs: NOW,
+          windowEndMs,
+          settlements: [{ ref: "ref-ok", amount: "2", currency: "USD", timestampMs: NOW }],
+        },
+        attacker.privateKeyPem,
+        attacker.publicKeyPem,
+      );
+      const report = audit({
+        receipts: [receipt],
+        checkpoints: [],
+        extract: forged,
+        trust: {
+          publicKeyPem: rail.publicKeyPem,
+          accountId: "acct-1",
+          railId: "rail-a",
+          windowStartMs: NOW,
+          windowEndMs,
+        },
+        issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      });
+      const refused = report.findings.some((f) => f.code === "extract-key-mismatch");
+      const charged = report.findings.some(
+        (f) =>
+          f.code === "settlement-mismatch" ||
+          f.code === "settlement-without-receipt" ||
+          f.code === "receipt-without-settlement",
+      );
+      const said = report.warnings.some((w) => w.code === v.expectWarning);
+      if (!refused || charged || !said) {
+        rows.push({
+          id: v.id,
+          status: "error",
+          detail: `refused=${refused}; charged=${charged}; findings=${report.findings.map((f) => f.code).join(",") || "none"}; warnings=${report.warnings.map((w) => w.code).join(",") || "none"}`,
+        });
+        continue;
+      }
+      // Posted -06 reports the refusal and says nothing about the rows of the
+      // document it refused. This becomes an ordinary pass when -07 is posted
+      // with MUST-T10-20.
+      rows.push({
+        id: v.id,
+        status: "split",
+        detail: `companion reports extract-key-mismatch, reads no charge from the refused body, and warns ${v.expectWarning}; posted draft states neither`,
+      });
+      continue;
+    }
+
     if (v.kind === "json-text-refuse") {
       const refused = railExtractTextRefusal(v.text ?? "");
       const hit = refused === "json-duplicate-key";

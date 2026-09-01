@@ -32,6 +32,27 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.9.0` is prepared in this tree and is not a published npm release; the
+sentences below about installed artifacts stay on `0.8.0` until npm moves. What it changes: an
+extract a stated rail pin refuses no longer supplies a settlement finding.
+Until this version the audit reported `extract-key-mismatch` and then
+reconciled that refused document's rows anyway, so a body the verifier had
+rejected could still name `settlement-mismatch` against an honest receipt or
+report money as unaccounted for. `MUST-T10-20` closes it on the reasoning
+`MUST-T8-9` already gives for a refused Trade Manifest: a charge that no key
+stands behind is one a forged document can invent. The skipped comparison is
+reported rather than silent, as `settlement-comparison-skipped`, the one new
+member of `FINDING_CODES`. The behaviour carried forward is unchanged: an audit
+still reports `manifest-terms-mismatch` with the split 0.6.0 introduced, where
+with a usable issuer pin the departure is a finding that fails the audit and
+without a pin the same departure is a warning that does not by itself fail it;
+and `requestHash` is still the SHA-256 of the six-field canonical document in
+lowercase hex, the digest the posted `-03` named a hash for without naming the
+octets. The posted `-06` states neither this rule nor the scope rules 0.8.0
+added, so `conformance/counted-splits.ts` carries two living splits,
+`V-T10-18-unstated-audit-scope` and `V-T10-20-refused-extract-charges`; each
+closes when `-07` is posted.
+
 `0.8.0` is published on npm, with a provenance attestation, and it is what a
 reader now gets from an installed package. Checked from the published package
 rather than from this tree: a clean `npm pack @cedulon/audit@0.8.0` in an empty

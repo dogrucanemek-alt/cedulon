@@ -142,6 +142,14 @@
       "kind": "scope-warning",
       "expectWarning": "unstated-audit-scope",
       "note": "Living split against posted -06. Closes when -07 is posted, which states MUST-T10-18 and MUST-T10-19."
+    },
+    {
+      "id": "V-T10-20-refused-extract-charges",
+      "must": "MUST-T10-20 (a refused extract supplies no charge, and the skip is reported)",
+      "draft": "Posted -06 has the verifier report extract-key-mismatch when a pinned rail key refuses the presented extract, and says nothing about whether that refused document's rows may still produce a settlement finding. The companion refuses to read a charge out of it and reports settlement-comparison-skipped instead.",
+      "kind": "refused-extract",
+      "expectWarning": "settlement-comparison-skipped",
+      "note": "Living split against posted -06. Closes when -07 is posted, which states MUST-T10-20."
     }
   ]
 }

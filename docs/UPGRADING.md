@@ -4,6 +4,57 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.9.0: a refused extract stops being evidence
+
+This one changes what a report says about an extract the verifier has already
+refused, and a caller reading individual findings will see the difference.
+
+Since 0.5.0 a verifier that pins a rail key and is handed an extract signed by
+some other key gets `extract-key-mismatch` and a failed audit. Until this
+release the audit then went on to reconcile that document's rows anyway, so the
+same report could name `settlement-mismatch` against an honest receipt, or
+report money as unaccounted for, out of a body it had just rejected. An
+attacker who can present an extract signs their own and chooses the amounts the
+accusation is written from. The audit still failed either way; what they could
+choose was who it appeared to accuse.
+
+`MUST-T10-20` closes it. Where a stated rail pin refuses the extract, no
+settlement finding is read out of that document: not a mismatch, not an
+unaccounted settlement, and not a receipt left unmatched by rows the refused
+document omits. This is `MUST-T8-9`'s rule for a refused Trade Manifest applied
+on the money axis, for the reason that requirement already gives: a charge that
+no key stands behind is one a forged document can invent against an honest
+payer.
+
+Saying nothing would have been the other failure, and this release does not
+make it. A reader cannot tell a comparison that found nothing from one that
+never ran, so the report carries a new warning, `settlement-comparison-skipped`,
+naming what did not happen. It makes the guarantee conditional, which
+`extract-key-mismatch` already did. A pinned key the verifier cannot decode is
+`trust-key-unreadable`, is the verifier's own configuration fault rather than a
+refusal of the document, and does not reach this rule.
+
+What breaks: an integration that read `settlement-mismatch` from a report
+whose extract failed its pin will stop seeing it. That finding was never
+attributable and should not have been acted on, but code that counted findings
+will count fewer. `FINDING_CODES` gains one member, so a consumer that
+enumerates it exhaustively should take the new list.
+
+The behaviour carried into this release is unchanged and still current. An
+audit still reports `manifest-terms-mismatch` with the split 0.6.0 introduced:
+with a usable issuer pin the walk is the attested set and the departure is a
+finding that fails the audit; without a pin the same departure is a warning
+that does not by itself fail it. And `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted `-03`
+named a hash for without naming the octets.
+
+The posted `-06` states neither this rule nor the scope rules 0.8.0 added, so
+this release runs two rules ahead of the draft.
+`conformance/counted-splits.ts` carries two living splits:
+`V-T10-18-unstated-audit-scope` for `MUST-T10-18` and `MUST-T10-19`, and
+`V-T10-20-refused-extract-charges` for `MUST-T10-20`. Each closes when `-07`
+is posted, which states all three.
+
 ## 0.8.0: an audit says which settlement path it covered
 
 This one does not refuse anything new. It stops a result from being read as
@@ -45,10 +96,11 @@ six-field canonical document in lowercase hex, the digest the posted `-03`
 named a hash for without naming the octets.
 
 The posted `-06` states neither requirement, so this release runs ahead of the
-draft. `conformance/counted-splits.ts` carries one living split,
-`V-T10-18-unstated-audit-scope` for `MUST-T10-18` and `MUST-T10-19`: the
+draft. It opened the living split `V-T10-18-unstated-audit-scope`, registered
+in `conformance/counted-splits.ts` for `MUST-T10-18` and `MUST-T10-19`: the
 companion warns and names its scope where the posted draft is silent. The
-difference closes when `-07` is posted, which states both.
+difference closes when `-07` is posted, which states both. For what that file
+carries now, read the current release's section rather than this one.
 
 ## 0.7.0: the amount grammar at every boundary, and refusals that answer
 

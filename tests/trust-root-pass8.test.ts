@@ -249,6 +249,63 @@ describe("pin optionality, measured rather than guessed", () => {
     );
   });
 
+  it("98 RED then GREEN: a rail extract the pin rejects does not charge anyone", () => {
+    // Case 97's twin on the money axis. A rejected Trade Manifest may not
+    // supply the terms a charge is written from; a rejected rail extract may
+    // not supply the settlement rows one is written from either. Here the
+    // attacker signs an extract with their own key and puts a different amount
+    // on an honest receipt's ref: without the gate the report names
+    // extract-key-mismatch and then convicts that receipt out of the same
+    // refused document.
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const attacker = generateExtractKeys();
+    const good = receiptFor(honest, "ref-ok", 0);
+    const forged = signRailExtract(
+      {
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+        settlements: [{ ref: "ref-ok", amount: "2", currency: "USD", timestampMs: NOW }],
+      },
+      attacker.privateKeyPem,
+      attacker.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [good],
+      checkpoints: [checkpointFor(honest, [good])],
+      extract: forged,
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+
+    assert.ok(
+      report.findings.some((f) => f.code === "extract-key-mismatch"),
+      `the pin must reject this extract first, got ${report.findings.map((f) => f.code).join(",") || "none"}`,
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "settlement-mismatch"),
+      false,
+      "a rejected extract's rows must not charge a receipt with a mismatched settlement",
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "settlement-without-receipt"),
+      false,
+      "a rejected extract's rows must not report money as unaccounted for",
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "receipt-without-settlement"),
+      false,
+      "a rejected extract's silence must not leave an honest receipt unmatched",
+    );
+    assert.ok(
+      report.warnings.some((w) => w.code === "settlement-comparison-skipped"),
+      "the report must say the reconciliation did not run rather than omitting it in silence",
+    );
+    assert.equal(report.guarantee, "conditional", "a refused extract cannot support an unconditional guarantee");
+  });
+
   it("96 RED then GREEN: counterparty-unbound stops reporting a reconciliation that did not close", () => {
     // The message asserted a state the same report contradicts: it said ref,
     // amount and currency closed against the extract while a settlement on
