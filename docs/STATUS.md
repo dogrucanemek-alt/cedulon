@@ -259,15 +259,14 @@ checking before a build and not after. The 0.5.0 build ran against `5b080e6`,
 started, and listed five tools.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.9.0` is the current version (`isLatest`), read back from the registry
-API rather than from the publish command's own output, on 1 September after the
-entry was pushed by hand. `server.json` is the entry it was published from, and
-the listing names `@cedulon/mcp-server` at the same `0.9.0`. On that reading the
-two channels were in step. Since `0.10.0` went to npm on 2 September, npm
-serves `0.10.0`, the MCP Registry still serves `0.9.0`, and a reader installing
-from the listing gets a release behind npm until `mcp-publisher` is run again;
-the publish attempt on 2 September was refused with an expired login and is
-waiting on a fresh one.
+where `0.10.0` is the current version (`isLatest`), read back from the registry
+API rather than from the publish command's own output, on 2 September at
+21:02 UTC after the entry was pushed by hand. `server.json` is the entry it was
+published from, and the listing names `@cedulon/mcp-server` at the same
+`0.10.0`. On that reading the two channels are in step. The search endpoint
+still answered `0.9.0` for a short while after the publish command returned;
+the versions endpoint is what settled it, and a reader checking the listing
+right after a publish should ask that one.
 
 That is a dated observation and not a claim about now. The listing moves whenever
 someone runs `mcp-publisher`, this page is not notified when they do, and an
