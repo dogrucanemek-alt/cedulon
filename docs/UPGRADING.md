@@ -4,12 +4,11 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
-## 0.11.0 (prepared, not published): the report counts what it classed
+## 0.11.0: the report counts what it classed
 
 This one adds a member and prints two lines. It refuses nothing that used to
 pass, and it changes the findings on one input only, a receipt object
-presented twice in one array (under "What breaks"). It is prepared in this
-tree, not a published npm release.
+presented twice in one array (under "What breaks").
 
 `AuditReport` gains `counts`: how many receipts were submitted, attested, in
 scope, aborted and settled, and of the settled ones how many were matched,

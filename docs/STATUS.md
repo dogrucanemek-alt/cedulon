@@ -32,11 +32,23 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-`0.11.0` is prepared in this tree and is not a published npm release: it adds
-a `counts` member to `AuditReport`, the finding object, the `cedulon_audit`
-result and the ledger export, and two `counts` lines to the printed report,
-which a clean install of 0.10.0 does not have. Publishing is a separate step.
-What it changes: the report now publishes the class every receipt and row
+`0.11.0` is published on npm, with a provenance attestation, and it is what a
+reader now gets from an installed package. Checked from the published packages
+rather than from this tree: a clean install of `@cedulon/mcp-server@0.11.0` in
+an empty folder answers `initialize` reporting `0.11.0`, lists five tools, and
+names `counts` in the descriptions of `cedulon_audit` and
+`cedulon_export_ledger`; a clean `npm pack @cedulon/audit@0.11.0` carries the
+`unreconciled` and `carried` classes and the gate that keeps a refused
+extract's window from sieving the population. All eight packages answer
+`0.11.0`, each with a SLSA v1 attestation whose build definition names
+`refs/tags/v0.11.0` and `.github/workflows/release.yml`, and each reporting
+`gitHead` `bad56de`. The tagged run published all eight and then failed its
+own post-release check, because this file still named `0.10.0` as the
+published version; this is the repair, and nothing was republished. What it
+adds: a `counts` member on `AuditReport`, the finding object, the
+`cedulon_audit` result and the ledger export, and two `counts` lines on the
+printed report, which a clean install of 0.10.0 does not have. What it
+changes: the report now publishes the class every receipt and row
 landed in (submitted, attested, in scope, aborted, settled; matched, deferred,
 carried into the next window, unmatched, repeated, unreconciled), numbers the
 reconciliation already computed on its way to the findings. It refuses
@@ -60,8 +72,8 @@ itself fail it; and `requestHash` is still the SHA-256 of the six-field
 canonical document in lowercase hex, the digest the posted `-03` named a hash
 for without naming the octets.
 
-`0.10.0` is published on npm, with a provenance attestation, and it is what a
-reader now gets from an installed package. Checked from the published packages
+`0.10.0` was the release before it, published on npm with a provenance
+attestation. Checked from the published packages
 rather than from this tree: a clean install of `@cedulon/mcp-server@0.10.0` in
 an empty folder answers `initialize` reporting `0.10.0` and lists `extract` on
 `cedulon_audit`, and a clean `npm pack @cedulon/x402-adapter@0.10.0` carries
@@ -180,7 +192,7 @@ false` for a departure the pinned key does attest. A clean install of
 `@cedulon/core@0.6.0` returns a 64-character lowercase hex digest from
 `requestHashOf`, matching the value the conformance run records.
 
-Eight packages are published on npm at `0.10.0`, so the server runs without a
+Eight packages are published on npm at `0.11.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
 `MUST-T8-9`, and it breaks: an audit that used to return a clean
 unconditional result over a receipt carrying the hash of terms it departs from
@@ -200,14 +212,17 @@ reports rather than refuses, and names the external-rail bound on T12 in the
 draft. The extract-evidence exits from `indeterminate` are built and red-then-green: authenticated presence settles late, authenticated full-window absence releases the authority. The reversing-entry branch of `MUST-T12-4` still has no evidence object, so T12-4 is executed for the extract branch and open for the reversal branch.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.10.0` answers `initialize` reporting `0.10.0`, lists
-five tools, and carries `extract` on `cedulon_audit`. A clean pack of
-`@cedulon/x402-adapter@0.10.0` in an empty folder carries the
-`malformed-extract-window` refusal this version adds, and a clean pack of
-`@cedulon/audit@0.10.0` still carries the
+`@cedulon/mcp-server@0.11.0` answers `initialize` reporting `0.11.0`, lists
+five tools, and names `counts` on `cedulon_audit` and `cedulon_export_ledger`.
+A clean pack of `@cedulon/audit@0.11.0` in an empty folder carries the
+`unreconciled` and `carried` classes this version adds and the gate that keeps
+a refused extract's window from sieving the population, and still carries the
 `extractRejected` gate that stops a refused extract supplying a settlement
-finding, and the `settlement-comparison-skipped` warning that says the
-reconciliation did not run, which 0.9.0 added. The release before that carried
+finding and the `settlement-comparison-skipped` warning that says the
+reconciliation did not run, which 0.9.0 added. The release before this one,
+0.10.0, added `extract` on `cedulon_audit` and the `malformed-extract-window`
+refusal, which a clean pack of `@cedulon/x402-adapter@0.11.0` still carries.
+The release before that carried
 `unstated-audit-scope`, the `AuditScope` type on the report and the finding
 object, and the unpinned-witness warning that no longer says a check ran on a
 branch that runs none. The one before those answered its own three: an oversized
@@ -263,9 +278,9 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.10.0 bundle was built and unpacked: its manifest states
-`0.10.0` and the server inside it installs `@cedulon/mcp-server@^0.10.0`. Every
-`@cedulon` package inside it reads `0.10.0`, with no older copy left beside them. The builder installs the published version rather than the
+desktop install. The 0.11.0 bundle was built and unpacked: its manifest states
+`0.11.0` and the server inside it installs `@cedulon/mcp-server@^0.11.0`. Every
+`@cedulon` package inside it reads `0.11.0`, with no older copy left beside them. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -290,12 +305,16 @@ started, and listed five tools.
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
 where `0.10.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output, on 2 September at
-21:02 UTC after the entry was pushed by hand. `server.json` is the entry it was
-published from, and the listing names `@cedulon/mcp-server` at the same
-`0.10.0`. On that reading the two channels are in step. The search endpoint
-still answered `0.9.0` for a short while after the publish command returned;
-the versions endpoint is what settled it, and a reader checking the listing
-right after a publish should ask that one.
+23:34 UTC, after `0.11.0` had gone to npm. `server.json` in this tree names
+`0.11.0`; the listing still names `@cedulon/mcp-server` at `0.10.0`. Since
+`0.11.0` went to npm on 2 September, npm serves `0.11.0`, the MCP Registry
+still serves `0.10.0`, and a reader installing from the listing gets a release
+behind npm until `mcp-publisher` is run again; the publish attempt on
+2 September at 23:32 UTC was refused with an expired login and is waiting on
+a fresh one. The search
+endpoint answered a stale version for a short while after the previous
+publish returned; the versions endpoint is what settles it, and a reader
+checking the listing right after a publish should ask that one.
 
 That is a dated observation and not a claim about now. The listing moves whenever
 someone runs `mcp-publisher`, this page is not notified when they do, and an

@@ -352,7 +352,7 @@ new check.
 
 ### What closed both, 2026-09-03
 
-`AuditReport.counts`, prepared as 0.11.0 in this tree and not yet published.
+`AuditReport.counts`, published as 0.11.0 on 2 September 2026 (23:28 UTC).
 On the receipt side: submitted, attested, in scope, aborted, settled, and of
 the settled ones matched, deferred, carried, unmatched, repeated,
 unreconciled. On the settlement side: rows, matched, deferred, unmatched,
