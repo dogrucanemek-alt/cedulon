@@ -134,6 +134,29 @@ function driftStatusParagraph(status: string, phrase: string): string {
   return status.replace(paragraph, drifted);
 }
 
+/**
+ * The records list on the front page names the deposit made for a posted
+ * revision, and that line must name the newest posted one. Kept as a function
+ * of the page text so the red fixtures below can hand it a drifted page.
+ */
+function assertDepositLineNamesPosted(page: string, newest: string): void {
+  const named = [
+    ...page.matchAll(
+      /the deposit for the posted -(\d+) revision is <a href="https:\/\/doi\.org\/10\.5281\/zenodo\.\d+">/g,
+    ),
+  ].map((m) => m[1]);
+  assert.equal(
+    named.length,
+    1,
+    "site/index.html no longer names the deposit of a posted revision; the page and this check describe the same line",
+  );
+  assert.equal(
+    named[0],
+    newest,
+    `site/index.html names the deposit for -${named[0]}; the newest posted revision in spec/ is -${newest}`,
+  );
+}
+
 function mustIdsIn(text: string): Set<string> {
   return new Set([...text.matchAll(/MUST-T\d+-\d+/g)].map((m) => m[0]));
 }
@@ -612,23 +635,26 @@ describe("claims that describe something outside their own file", () => {
     // in spec/, not the newest source: a revision opened for the next posting
     // has no deposit yet, and this line is not about it. Keyed on the source,
     // this check went red the moment -08 was opened, with the line still true.
+    assertDepositLineNamesPosted(read("site/index.html"), latestPostedRevision(join(root, "spec")));
+  });
+
+  it("RED: a deposit line left on the previous posted revision fails, and a page with no deposit line fails", () => {
+    // The two ways this line goes wrong, shown to fire before the green run
+    // above is trusted: the line is true of the revision before the newest
+    // posted one, or the line is gone. Both are built from the live page so
+    // the fixture drifts with it rather than pinning a revision number.
     const newest = latestPostedRevision(join(root, "spec"));
     const page = read("site/index.html");
-    const named = [
-      ...page.matchAll(
-        /the deposit for the posted -(\d+) revision is <a href="https:\/\/doi\.org\/10\.5281\/zenodo\.\d+">/g,
-      ),
-    ].map((m) => m[1]);
-    assert.equal(
-      named.length,
-      1,
-      "site/index.html no longer names the deposit of a posted revision; the page and this check describe the same line",
+    const previous = String(Number(newest) - 1).padStart(newest.length, "0");
+    const stale = page.replace(`the deposit for the posted -${newest} revision`, `the deposit for the posted -${previous} revision`);
+    assert.notEqual(stale, page, "fixture did not move the deposit line to the previous revision");
+    assert.throws(
+      () => assertDepositLineNamesPosted(stale, newest),
+      new RegExp(`names the deposit for -${previous}; the newest posted revision in spec/ is -${newest}`),
     );
-    assert.equal(
-      named[0],
-      newest,
-      `site/index.html names the deposit for -${named[0]}; the newest posted revision in spec/ is -${newest}`,
-    );
+    const gone = page.replace(/the deposit for the posted -\d+ revision is <a href="https:\/\/doi\.org\/10\.5281\/zenodo\.\d+">[^<]*<\/a>/, "");
+    assert.notEqual(gone, page, "fixture did not remove the deposit line");
+    assert.throws(() => assertDepositLineNamesPosted(gone, newest), /no longer names the deposit of a posted revision/);
   });
 
   it("no status page cites a requirement the draft does not define, or calls a closed gap open", () => {

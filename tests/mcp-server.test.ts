@@ -400,6 +400,57 @@ describe("mcp-server stdio JSON-RPC", () => {
       });
       assert.equal(malformed.isError, true);
       assert.match(String((malformed.body as { reason?: string }).reason), /^extract:/);
+
+      // The same for a body the library itself would refuse to sign, and for
+      // the three shapes the boundary refuses on top of that rule. Each of
+      // these once walked through the gate and came back as a balanced audit
+      // under a warning; the gate now names what is wrong with the document.
+      const refused: Array<[string, Record<string, unknown>, RegExp]> = [
+        [
+          "negative clock skew",
+          { body: { ...body, clockSkewMs: -1 }, signature: extract.signature, publicKeyPem: keys.publicKeyPem },
+          /^extract: malformed-extract-clockSkewMs/,
+        ],
+        [
+          "amount outside the grammar",
+          {
+            body: { ...body, settlements: [{ ...body.settlements[0], amount: "01" }] },
+            signature: extract.signature,
+            publicKeyPem: keys.publicKeyPem,
+          },
+          /^extract: renamed-settlement-amount/,
+        ],
+        [
+          "empty account",
+          { body: { ...body, accountId: "" }, signature: extract.signature, publicKeyPem: keys.publicKeyPem },
+          /^extract: body\.accountId and body\.railId must be non-empty/,
+        ],
+        [
+          "empty signature",
+          { body, signature: "", publicKeyPem: keys.publicKeyPem },
+          /^extract: signature must be non-empty/,
+        ],
+        [
+          "public key that is not a PEM",
+          { body, signature: extract.signature, publicKeyPem: "not-a-pem" },
+          /^extract: publicKeyPem must be an SPKI PEM public key/,
+        ],
+        [
+          "window that ends before it starts",
+          {
+            body: { ...body, windowStartMs: body.windowEndMs, windowEndMs: body.windowStartMs },
+            signature: extract.signature,
+            publicKeyPem: keys.publicKeyPem,
+          },
+          /^extract: body\.windowEndMs must be later than body\.windowStartMs/,
+        ],
+      ];
+      for (const [name, hostile, reason] of refused) {
+        const res = await rpc.callTool("cedulon_audit", { extract: hostile, trust });
+        assert.equal(res.isError, true, `${name}: the gate let the extract through`);
+        assert.match(String((res.body as { reason?: string }).reason), reason, name);
+        assert.equal("scope" in (res.body as object), false, `${name}: a refused extract named a scope`);
+      }
     } finally {
       rpc.close();
     }

@@ -20,9 +20,17 @@ simulation of a rail does not, and the two cannot both be the population.
 `extra-settlements-with-extract` rather than reconciled with a warning, on the
 reasoning `MUST-T10-20` gives from the other side: a row added beside the
 signed document is a charge no rail key stands behind. A malformed `extract`
-is refused as `extract: ...` before anything is reconciled, and a missing
-member is not coerced into an empty string, because an audit would then name
-an account nobody declared.
+is refused as `extract: ...` before anything is reconciled: the gate applies
+the rule the library itself applies before it signs or verifies an extract
+(`railExtractShapeRefusal`: safe-integer window and timestamps, the amount
+grammar on every row, a non-negative clock skew), and on top of it refuses an
+empty account or rail, an empty signature, a public key that is not a PEM, and
+a window that does not end after it starts. A missing member is not coerced
+into an empty string, and an empty one is not accepted, because an audit
+would then name an account nobody declared. A review pass over the first cut
+of this release found that a negative clock skew and an empty signature
+walked through a type-only gate and came back as a balanced audit under a
+warning; the gate now names what is wrong with the document instead.
 
 The result gains `scope`: the account, rail and window the audit was computed
 over, present exactly when it ran over a presented extract and absent when it

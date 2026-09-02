@@ -3,7 +3,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { CedulonSession, MCP_SERVER_VERSION, type SpendArgs, type VerifyArgs } from "./session.ts";
-import type { RailSettlement, SignedRailExtract } from "@cedulon/x402-adapter";
+import { railExtractShapeRefusal, type RailSettlement, type SignedRailExtract } from "@cedulon/x402-adapter";
 
 const session = new CedulonSession();
 
@@ -208,6 +208,37 @@ function asExtract(value: unknown): SignedRailExtract | undefined {
   }
   if (b.clockSkewMs !== undefined && typeof b.clockSkewMs !== "number") {
     throw new Error("extract: body.clockSkewMs must be a number when present");
+  }
+  // The rule the library applies before it signs or verifies an extract:
+  // safe-integer window and timestamps, the amount grammar on every row, a
+  // non-negative clock skew. A body the library would refuse to sign is
+  // refused here by the same name, before the audit is asked anything. A
+  // review pass over the first cut of this gate found that a negative
+  // clockSkewMs and an empty signature walked through the typeof checks above
+  // and came back as a balanced audit under a warning, which is exactly the
+  // silent acceptance this gate exists to prevent.
+  const shape = railExtractShapeRefusal(v.body);
+  if (shape !== null) {
+    throw new Error(`extract: ${shape}`);
+  }
+  // Three refusals the boundary adds on top of the library's shape rule. An
+  // empty account or rail is an unstated one written as a string, and the
+  // audit would otherwise name "" as the population it covered. An empty
+  // signature or a public key that is not a PEM cannot verify, so the audit
+  // would only ever report them as an unauthenticated extract; refusing them
+  // here says what is wrong with the document rather than what it fails to
+  // prove. A window that does not end after it starts declares no population.
+  if (b.accountId.length === 0 || b.railId.length === 0) {
+    throw new Error("extract: body.accountId and body.railId must be non-empty");
+  }
+  if (v.signature.length === 0) {
+    throw new Error("extract: signature must be non-empty");
+  }
+  if (!v.publicKeyPem.includes("-----BEGIN PUBLIC KEY-----")) {
+    throw new Error("extract: publicKeyPem must be an SPKI PEM public key");
+  }
+  if (b.windowEndMs <= b.windowStartMs) {
+    throw new Error("extract: body.windowEndMs must be later than body.windowStartMs");
   }
   // The body is passed through as presented rather than rebuilt, so the bytes
   // the signature covers are the bytes the audit canonicalises.
