@@ -12,7 +12,7 @@ only on those workspace packages plus `@modelcontextprotocol/sdk`.
 | Name | What it does |
 | --- | --- |
 | `cedulon_spend` | Policy-gated spend. Args: `amount`, `currency`, `payee`, `nonce`, `tool`. Allow → signed receipt JSON. Deny → `{ ok: false, reason }`. |
-| `cedulon_audit` | Reconcile the in-process ledger with the rail extract. Optional `extraSettlements` injects extract rows (bypass demo). |
+| `cedulon_audit` | Reconcile the receipt chain against the rail extract: the in-process ledger, or a signed extract you present as `extract`. Optional `extraSettlements` injects extract rows (bypass demo; refused beside `extract`). The result carries `scope` when it ran over a presented extract. |
 | `cedulon_verify_receipt` | Verify receipt COSE bytes (`receipt` object or `coseHex` + `publicKeyPem`). Checks countersignature when present. |
 | `cedulon_export_ledger` | Receipts + checkpoint + extract in the `demo:export` JSON shape. |
 | `cedulon_status` | Version, policy summary, receipt count, chain head. |

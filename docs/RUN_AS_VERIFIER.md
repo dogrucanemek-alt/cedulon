@@ -392,7 +392,10 @@ fails the audit.
 `manifestTrust`.
 Without them the tool was auditing this server's records against this server's
 own key, so every answer it could give was conditional and no caller could change
-that.
+that. Since 0.10.0 it also takes `extract`, a signed rail extract the caller
+was presented with: the audit then runs over that document rather than this
+server's own ledger, refuses `extraSettlements` beside it, and names the
+account, rail and window it covered as `scope`.
 
 The settle and the save happen under one lock, and the write is proven possible
 before any money moves. The other order - settle, append, save - leaves the rail

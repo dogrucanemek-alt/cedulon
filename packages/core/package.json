@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/core",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Fail-closed spend policy engine and decision tokens for Cedulon.",
   "license": "Apache-2.0",
   "type": "module",
@@ -41,6 +41,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/cose": "^0.9.0"
+    "@cedulon/cose": "^0.10.0"
   }
 }

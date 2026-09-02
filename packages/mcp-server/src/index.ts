@@ -3,7 +3,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { CedulonSession, MCP_SERVER_VERSION, type SpendArgs, type VerifyArgs } from "./session.ts";
-import type { RailSettlement } from "@cedulon/x402-adapter";
+import type { RailSettlement, SignedRailExtract } from "@cedulon/x402-adapter";
 
 const session = new CedulonSession();
 
@@ -38,7 +38,7 @@ const TOOLS = [
   {
     name: "cedulon_audit",
     description:
-      "Reconcile the in-process receipt chain and checkpoint against the rail extract. Returns audit: balanced or findings.",
+      "Reconcile the in-process receipt chain and checkpoint against the rail extract: this server's own ledger, or a signed extract you present. Returns audit: balanced or findings, and names the account, rail and window it was computed over (scope) when an extract declared one.",
     annotations: {
       title: "Audit the receipt chain",
       readOnlyHint: true,
@@ -48,6 +48,11 @@ const TOOLS = [
       type: "object",
       additionalProperties: false,
       properties: {
+        extract: {
+          type: "object",
+          description:
+            "A signed rail extract you were presented with: { body: { accountId, railId, windowStartMs, windowEndMs, settlements: [{ ref, amount, currency, timestampMs }], clockSkewMs? }, signature, publicKeyPem }. Present, it is the settlement side of the audit: this server's in-process ledger is not consulted, extraSettlements is refused beside it, and the result carries scope. Absent, the audit runs over this server's own ledger and declares no scope.",
+        },
         trust: {
           type: "object",
           description: "Rail key you hold out of band: { publicKeyPem, accountId?, railId?, windowStartMs?, windowEndMs? }",
@@ -158,6 +163,57 @@ function asSpendArgs(args: Record<string, unknown>): SpendArgs {
   };
 }
 
+/**
+ * A presented extract is taken as the caller shaped it and refused when it is
+ * not the shape a signed extract has, before anything is reconciled. Coercing
+ * a missing member into an empty string would let a document with no declared
+ * account read as one that declared "", and the audit would name that.
+ */
+function asExtract(value: unknown): SignedRailExtract | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("extract: expected an object { body, signature, publicKeyPem }");
+  }
+  const v = value as Record<string, unknown>;
+  if (typeof v.signature !== "string" || typeof v.publicKeyPem !== "string") {
+    throw new Error("extract: signature and publicKeyPem must be strings");
+  }
+  if (typeof v.body !== "object" || v.body === null || Array.isArray(v.body)) {
+    throw new Error("extract: body must be an object");
+  }
+  const b = v.body as Record<string, unknown>;
+  if (typeof b.accountId !== "string" || typeof b.railId !== "string") {
+    throw new Error("extract: body.accountId and body.railId must be strings");
+  }
+  if (typeof b.windowStartMs !== "number" || typeof b.windowEndMs !== "number") {
+    throw new Error("extract: body.windowStartMs and body.windowEndMs must be numbers");
+  }
+  if (!Array.isArray(b.settlements)) {
+    throw new Error("extract: body.settlements must be an array");
+  }
+  for (const row of b.settlements) {
+    const r = row as Record<string, unknown> | null;
+    if (
+      r === null ||
+      typeof r !== "object" ||
+      typeof r.ref !== "string" ||
+      typeof r.amount !== "string" ||
+      typeof r.currency !== "string" ||
+      typeof r.timestampMs !== "number"
+    ) {
+      throw new Error("extract: each settlement must be { ref: string, amount: string, currency: string, timestampMs: number }");
+    }
+  }
+  if (b.clockSkewMs !== undefined && typeof b.clockSkewMs !== "number") {
+    throw new Error("extract: body.clockSkewMs must be a number when present");
+  }
+  // The body is passed through as presented rather than rebuilt, so the bytes
+  // the signature covers are the bytes the audit canonicalises.
+  return { body: v.body as SignedRailExtract["body"], signature: v.signature, publicKeyPem: v.publicKeyPem };
+}
+
 function asExtraSettlements(value: unknown): RailSettlement[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -186,8 +242,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return textResult(outcome, !outcome.ok);
       }
       case "cedulon_audit": {
+        const extract = asExtract(args.extract);
+        const extraSettlements = asExtraSettlements(args.extraSettlements);
+        if (extract && extraSettlements) {
+          // A presented extract is the population the audit is over. A row added
+          // beside it would be a charge no rail key stands behind (MUST-T10-20's
+          // reasoning from the other side), so the call is refused rather than
+          // reconciled with a warning.
+          return textResult(
+            {
+              ok: false,
+              reason: "extra-settlements-with-extract",
+              detail: "a presented extract is the settlement side of the audit; rows cannot be added beside it",
+            },
+            true,
+          );
+        }
         const report = session.audit({
-          extraSettlements: asExtraSettlements(args.extraSettlements),
+          extract,
+          extraSettlements,
           trust: args.trust as never,
           issuerTrust: args.issuerTrust as never,
           witnessTrust: args.witnessTrust as never,
@@ -201,6 +274,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           findings: report.findings,
           warnings: report.warnings,
           guarantee: report.guarantee,
+          // The account, rail and window the result was computed over, present
+          // exactly when the audit ran over a presented extract (MUST-T10-19 on
+          // this surface). Absent, the audit was over this server's own ledger,
+          // which declares no population.
+          ...(report.scope ? { scope: report.scope } : {}),
         });
       }
       case "cedulon_verify_receipt": {

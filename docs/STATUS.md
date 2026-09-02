@@ -32,6 +32,27 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.10.0` is prepared in this tree and is not a published npm release: it adds
+an `extract` input to `cedulon_audit` on the MCP server and a `scope` member
+to that tool's result, which a clean install of 0.9.0 does not have.
+Publishing is a separate step. What it changes: an audit asked over a rail
+extract the caller presents runs over that document rather than the server's
+own ledger, refuses rows added beside it as `extra-settlements-with-extract`,
+and names the account, rail and window it was computed over, the member
+`AuditReport` and the finding object have carried since 0.8.0; over the
+server's own ledger the result names no scope, because none was declared.
+`cedulon_export_ledger` is unchanged. Posted `-07` describes the MCP result as
+carrying no scope field and says the widening ships with the package that
+carries it; this is that package, and the next revision widens `MUST-T10-19`
+to name it, so no split is registered in `conformance/counted-splits.ts`. The
+behaviour carried forward is unchanged: an audit still reports
+`manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
+usable issuer pin the departure is a finding that fails the audit and
+without a pin the same departure is a warning that does not by itself fail
+it; and `requestHash` is still the SHA-256 of the six-field canonical
+document in lowercase hex, the digest the posted `-03` named a hash for
+without naming the octets.
+
 `0.9.0` is published on npm, with a provenance attestation, and it is what a
 reader now gets from an installed package. Checked from the published package
 rather than from this tree: a clean `npm pack @cedulon/audit@0.9.0` in an empty

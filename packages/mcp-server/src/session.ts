@@ -81,6 +81,13 @@ export type SpendDeny = { ok: false; reason: string };
 export type SpendOutcome = SpendOk | SpendDeny;
 
 export type AuditArgs = {
+  /**
+   * A rail extract the caller was presented with. Present, it is the
+   * settlement side of the audit and the in-process ledger is not consulted:
+   * the rail operator's signed document has standing this server's own
+   * simulation of a rail does not, and the two cannot both be the population.
+   */
+  extract?: SignedRailExtract;
   extraSettlements?: RailSettlement[];
   /**
    * Trust roots the caller holds out of band. Without them the audit is checking
@@ -540,11 +547,18 @@ export class CedulonSession {
   }
 
   audit(args: AuditArgs = {}) {
-    const settlements = [...this.ledger.extract(), ...(args.extraSettlements ?? [])];
+    // Over a presented extract, that document is the population and its
+    // declared account, rail and window come back as the report's scope.
+    // Over this server's own ledger there is no declared population and the
+    // report names none; the caller who wants the audit to say what it
+    // covered presents the extract that says so.
+    const side = args.extract
+      ? { extract: args.extract }
+      : { settlements: [...this.ledger.extract(), ...(args.extraSettlements ?? [])] };
     return audit({
       receipts: this.receipts,
       checkpoints: this.checkpoints,
-      settlements,
+      ...side,
       trust: args.trust,
       issuerTrust: args.issuerTrust,
       witnessTrust: args.witnessTrust,

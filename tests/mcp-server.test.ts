@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const serverEntry = join(root, "packages", "mcp-server", "src", "index.ts");
@@ -313,6 +314,92 @@ describe("mcp-server stdio JSON-RPC", () => {
         bypassBody.findings?.some((f) => f.code === "settlement-without-receipt" && f.id === "bypass-hidden"),
         true,
       );
+    } finally {
+      rpc.close();
+    }
+  });
+
+  it("audit over a presented extract names the scope it was computed over, and refuses rows added beside it", async () => {
+    const rpc = new StdioRpc();
+    try {
+      await rpc.handshake();
+      const paid = await rpc.callTool("cedulon_spend", {
+        amount: "1",
+        currency: "USD",
+        payee: "payee-1",
+        nonce: "scope-nonce-0001",
+        tool: "spend",
+      });
+      assert.equal(paid.isError, false);
+      const claims = (
+        paid.body as {
+          receipt?: { claims?: { amount?: string; currency?: string; timestampMs?: number; x402PaymentRef?: string } };
+        }
+      ).receipt?.claims;
+      assert.equal(typeof claims?.timestampMs, "number");
+      assert.equal(typeof claims?.x402PaymentRef, "string");
+      const paidAt = claims!.timestampMs as number;
+
+      // The in-process audit declares no population, so it names none.
+      const own = await rpc.callTool("cedulon_audit", {});
+      assert.equal(own.isError, false);
+      assert.equal("scope" in (own.body as object), false);
+
+      // A rail extract presented to the audit is the settlement side, and the
+      // result names the account, rail and window that extract declared.
+      const keys = generateExtractKeys();
+      const body = {
+        accountId: "acct-scope-0001",
+        railId: "rail-scope-0001",
+        windowStartMs: paidAt - 3_600_000,
+        windowEndMs: paidAt + 3_600_000,
+        settlements: [
+          {
+            ref: claims!.x402PaymentRef as string,
+            amount: claims!.amount as string,
+            currency: claims!.currency as string,
+            timestampMs: paidAt,
+          },
+        ],
+      };
+      const extract = signRailExtract(body, keys.privateKeyPem, keys.publicKeyPem);
+      const trust = {
+        publicKeyPem: keys.publicKeyPem,
+        accountId: body.accountId,
+        railId: body.railId,
+        windowStartMs: body.windowStartMs,
+        windowEndMs: body.windowEndMs,
+      };
+      const over = await rpc.callTool("cedulon_audit", { extract, trust });
+      assert.equal(over.isError, false);
+      const overBody = over.body as { ok?: boolean; summary?: string; scope?: unknown };
+      assert.equal(overBody.ok, true);
+      assert.equal(overBody.summary, "audit: balanced");
+      assert.deepEqual(overBody.scope, {
+        accountId: body.accountId,
+        railId: body.railId,
+        windowStartMs: body.windowStartMs,
+        windowEndMs: body.windowEndMs,
+      });
+
+      // Rows cannot be added beside a presented extract: the extract is the
+      // population, and a row outside it would be a charge no key stands behind.
+      const beside = await rpc.callTool("cedulon_audit", {
+        extract,
+        trust,
+        extraSettlements: [
+          { ref: "bypass-beside-extract", amount: "7", currency: "USD", timestampMs: paidAt + 1 },
+        ],
+      });
+      assert.equal(beside.isError, true);
+      assert.equal((beside.body as { reason?: string }).reason, "extra-settlements-with-extract");
+
+      // A malformed extract is refused before anything is reconciled.
+      const malformed = await rpc.callTool("cedulon_audit", {
+        extract: { body: { accountId: "acct-scope-0001" }, signature: "", publicKeyPem: keys.publicKeyPem },
+      });
+      assert.equal(malformed.isError, true);
+      assert.match(String((malformed.body as { reason?: string }).reason), /^extract:/);
     } finally {
       rpc.close();
     }

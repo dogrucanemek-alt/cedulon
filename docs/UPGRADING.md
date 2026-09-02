@@ -4,6 +4,53 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.10.0: an audit over a presented extract says what it covered
+
+This one adds an input and a member. It refuses nothing that used to pass and
+changes no finding.
+
+`cedulon_audit` on the MCP server now takes `extract`: a signed rail extract
+the caller was presented with, in the shape `signRailExtract` produces
+(`{ body: { accountId, railId, windowStartMs, windowEndMs, settlements,
+clockSkewMs? }, signature, publicKeyPem }`). Present, that document is the
+settlement side of the audit and this server's in-process ledger is not
+consulted: the rail operator's signed statement has standing the server's own
+simulation of a rail does not, and the two cannot both be the population.
+`extraSettlements` beside an `extract` is refused as
+`extra-settlements-with-extract` rather than reconciled with a warning, on the
+reasoning `MUST-T10-20` gives from the other side: a row added beside the
+signed document is a charge no rail key stands behind. A malformed `extract`
+is refused as `extract: ...` before anything is reconciled, and a missing
+member is not coerced into an empty string, because an audit would then name
+an account nobody declared.
+
+The result gains `scope`: the account, rail and window the audit was computed
+over, present exactly when it ran over a presented extract and absent when it
+ran over the server's own ledger, which declares no population. That is the
+member `AuditReport` and the finding object have carried since 0.8.0, on one
+more surface. `cedulon_export_ledger` is unchanged: its audit is always over
+the in-process ledger, so it has no declared scope to name, and a member that
+is always absent would say nothing.
+
+Where this stands against the posted draft. `-07` states `MUST-T10-19` for the
+printed report and the finding object, and says in its own change note that
+the MCP result and the ledger export return the finding list and the guarantee
+without a scope field, and that a revision widening the requirement to every
+returned structure will ship with the package that carries it. This is that
+package: the MCP result now carries the member, and the next revision widens
+the requirement to name it. No rule in `-07` is unmet by this release and none
+is stated by it that the companion lacks, so `conformance/counted-splits.ts`
+registers no split for it; what runs ahead of the posted text is a
+description, not a requirement.
+
+The behaviour carried into this release is unchanged and still current. An
+audit still reports `manifest-terms-mismatch` with the split 0.6.0 introduced:
+with a usable issuer pin the walk is the attested set and the departure is a
+finding that fails the audit; without a pin the same departure is a warning
+that does not by itself fail it. And `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted `-03`
+named a hash for without naming the octets.
+
 ## 0.9.0: a refused extract stops being evidence
 
 This one changes what a report says about an extract the verifier has already
