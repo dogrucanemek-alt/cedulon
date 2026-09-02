@@ -434,14 +434,13 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
         });
         continue;
       }
-      // Both are behaviour the posted -06 does not describe: it makes an
-      // unstated period conditional and is silent on an unstated account or
-      // rail, and it asks no report to name the path it covered. This becomes
-      // an ordinary pass when -07 is posted with MUST-T10-18 and MUST-T10-19.
+      // Both were behaviour the posted -06 did not describe; -07, posted on
+      // 2 September 2026, states them as MUST-T10-18 and MUST-T10-19, so this
+      // is an ordinary pass.
       rows.push({
         id: v.id,
-        status: "split",
-        detail: `companion warns ${v.expectWarning} and names scope ${report.scope!.accountId}/${report.scope!.railId}; posted draft states neither`,
+        status: "pass",
+        detail: `companion warns ${v.expectWarning} and names scope ${report.scope!.accountId}/${report.scope!.railId}, as MUST-T10-18 and MUST-T10-19 require`,
       });
       continue;
     }
@@ -512,13 +511,13 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
         });
         continue;
       }
-      // Posted -06 reports the refusal and says nothing about the rows of the
-      // document it refused. This becomes an ordinary pass when -07 is posted
-      // with MUST-T10-20.
+      // Posted -06 reported the refusal and said nothing about the rows of the
+      // document it refused; -07, posted on 2 September 2026, states the rule
+      // as MUST-T10-20, so this is an ordinary pass.
       rows.push({
         id: v.id,
-        status: "split",
-        detail: `companion reports extract-key-mismatch, reads no charge from the refused body, and warns ${v.expectWarning}; posted draft states neither`,
+        status: "pass",
+        detail: `companion reports extract-key-mismatch, reads no charge from the refused body, and warns ${v.expectWarning}, as MUST-T10-20 requires`,
       });
       continue;
     }

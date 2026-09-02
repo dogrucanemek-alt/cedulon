@@ -138,18 +138,18 @@
     {
       "id": "V-T10-18-unstated-audit-scope",
       "must": "MUST-T10-18 (an unstated account or rail leaves the guarantee conditional)",
-      "draft": "Posted -06 makes an unstated period conditional (MUST-T10-15) and is silent on an unstated account or rail, and asks no report to name the path it covered. The companion warns unstated-audit-scope and carries the account, rail and window it was computed over.",
+      "draft": "Posted -07 makes an unstated account or rail conditional the way -05 made an unstated period conditional (MUST-T10-18), and has the report name the account, rail and window it was computed over (MUST-T10-19). The companion warns unstated-audit-scope and carries that scope in the printed report and in the finding object.",
       "kind": "scope-warning",
       "expectWarning": "unstated-audit-scope",
-      "note": "Living split against posted -06. Closes when -07 is posted, which states MUST-T10-18 and MUST-T10-19."
+      "note": "Was a living split against posted -06; closed on 2 September 2026 when -07 was posted, which states MUST-T10-18 and MUST-T10-19."
     },
     {
       "id": "V-T10-20-refused-extract-charges",
       "must": "MUST-T10-20 (a refused extract supplies no charge, and the skip is reported)",
-      "draft": "Posted -06 has the verifier report extract-key-mismatch when a pinned rail key refuses the presented extract, and says nothing about whether that refused document's rows may still produce a settlement finding. The companion refuses to read a charge out of it and reports settlement-comparison-skipped instead.",
+      "draft": "Posted -07 has the verifier report extract-key-mismatch when a pinned rail key refuses the presented extract, forbids reading a settlement finding out of that document's body, and has the verifier report settlement-comparison-skipped in the same result (MUST-T10-20). The companion does exactly that.",
       "kind": "refused-extract",
       "expectWarning": "settlement-comparison-skipped",
-      "note": "Living split against posted -06. Closes when -07 is posted, which states MUST-T10-20."
+      "note": "Was a living split against posted -06; closed on 2 September 2026 when -07 was posted, which states MUST-T10-20."
     }
   ]
 }

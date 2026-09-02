@@ -748,19 +748,16 @@ describe("claims that describe something outside their own file", () => {
     );
   });
 
-  it("GREEN: two splits are living, because -06 states neither rule", () => {
+  it("GREEN: no split is living, because -07 states all three rules", () => {
     // The state the tree is in now, asserted rather than assumed. The JSON
     // duplicate-member departure stood against posted -05 and closed when
-    // -06 was posted with MUST-T4-20. The first of these opened when the
-    // companion began warning `unstated-audit-scope` and naming the path it
-    // covered; the second opened when it stopped reading a settlement charge
-    // out of an extract its pin had refused. Both close when -07 is posted,
-    // with MUST-T10-18 and MUST-T10-19 for the first and MUST-T10-20 for the
-    // second.
-    assert.deepEqual(Object.keys(COUNTED_SPLITS).sort(), [
-      "V-T10-18-unstated-audit-scope",
-      "V-T10-20-refused-extract-charges",
-    ]);
+    // -06 was posted with MUST-T4-20. Two splits then stood against posted
+    // -06: the companion warned `unstated-audit-scope` and named the path it
+    // covered, and it stopped reading a settlement charge out of an extract
+    // its pin had refused. Both closed on 2 September 2026 when -07 was
+    // posted, with MUST-T10-18 and MUST-T10-19 for the first and MUST-T10-20
+    // for the second.
+    assert.deepEqual(Object.keys(COUNTED_SPLITS), []);
   });
 
   it("GREEN: UPGRADING -03 splits and COUNTED_SPLITS name the same MUST identities", () => {

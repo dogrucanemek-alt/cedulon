@@ -48,12 +48,11 @@ that does not by itself fail it. And `requestHash` is still the SHA-256 of the
 six-field canonical document in lowercase hex, the digest the posted `-03`
 named a hash for without naming the octets.
 
-The posted `-06` states neither this rule nor the scope rules 0.8.0 added, so
-this release runs two rules ahead of the draft.
-`conformance/counted-splits.ts` carries two living splits:
-`V-T10-18-unstated-audit-scope` for `MUST-T10-18` and `MUST-T10-19`, and
-`V-T10-20-refused-extract-charges` for `MUST-T10-20`. Each closes when `-07`
-is posted, which states all three.
+The two splits that stood against posted `-06` are closed: `-07`, posted on
+2 September 2026, states this rule and the scope rules 0.8.0 added
+(`MUST-T10-18`, `MUST-T10-19`, `MUST-T10-20`), so
+`conformance/counted-splits.ts` carries no living split and the published
+0.9.0 packages and the posted draft agree on all three.
 
 ## 0.8.0: an audit says which settlement path it covered
 
@@ -98,9 +97,9 @@ named a hash for without naming the octets.
 The posted `-06` states neither requirement, so this release runs ahead of the
 draft. It opened the living split `V-T10-18-unstated-audit-scope`, registered
 in `conformance/counted-splits.ts` for `MUST-T10-18` and `MUST-T10-19`: the
-companion warns and names its scope where the posted draft is silent. The
-difference closes when `-07` is posted, which states both. For what that file
-carries now, read the current release's section rather than this one.
+companion warned and named its scope where the posted draft was silent. The
+difference closed on 2 September 2026, when `-07` was posted stating both. For
+what that file carries now, read the current release's section rather than this one.
 
 ## 0.7.0: the amount grammar at every boundary, and refusals that answer
 

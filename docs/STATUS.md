@@ -26,8 +26,8 @@ one of the 128 came back as `settlement-without-receipt`, at
 operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 
-`draft-dogru-cedulon` is posted on the IETF datatracker through `-06`
-(31 August 2026), alongside the two companion `-00` drafts.
+`draft-dogru-cedulon` is posted on the IETF datatracker through `-07`
+(2 September 2026), alongside the two companion `-00` drafts.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
@@ -53,10 +53,9 @@ with a usable issuer pin the departure is a finding that fails the audit and
 without a pin the same departure is a warning that does not by itself fail it;
 and `requestHash` is still the SHA-256 of the six-field canonical document in
 lowercase hex, the digest the posted `-03` named a hash for without naming the
-octets. The posted `-06` states neither this rule nor the scope rules 0.8.0
-added, so `conformance/counted-splits.ts` carries two living splits,
-`V-T10-18-unstated-audit-scope` and `V-T10-20-refused-extract-charges`; each
-closes when `-07` is posted.
+octets. `-07`, posted on 2 September 2026, states this rule and the scope
+rules 0.8.0 added, so `conformance/counted-splits.ts` carries no living
+split: the two that stood against posted `-06` closed with it.
 
 `0.8.0` was the release before it, published on npm with a provenance
 attestation. Checked from the published package
@@ -77,9 +76,9 @@ operator-facing text and in the returned finding object both, while a report
 with no extract has no declared population to name. An account that can settle on a second rail has a
 settlement path no presented extract covers, and until this bump a balanced
 line could not be told apart from one that covered every path. The posted `-06`
-states neither requirement: that is a living split, registered as
-`V-T10-18-unstated-audit-scope` in `conformance/counted-splits.ts`, and it
-closes when `-07` is posted. Behaviour carried forward unchanged:
+stated neither requirement: that was a living split, registered as
+`V-T10-18-unstated-audit-scope` in `conformance/counted-splits.ts` until
+`-07`, posted on 2 September 2026, stated both. Behaviour carried forward unchanged:
 `manifest-terms-mismatch` keeps its split - with a usable issuer pin the walk
 is the attested set and the departure is a finding, without a pin the same
 departure is a warning that does not by itself fail the audit - and
