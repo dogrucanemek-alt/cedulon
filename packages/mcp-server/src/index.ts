@@ -38,7 +38,7 @@ const TOOLS = [
   {
     name: "cedulon_audit",
     description:
-      "Reconcile the in-process receipt chain and checkpoint against the rail extract: this server's own ledger, or a signed extract you present. Returns audit: balanced or findings, and names the account, rail and window it was computed over (scope) when an extract declared one.",
+      "Reconcile the in-process receipt chain and checkpoint against the rail extract: this server's own ledger, or a signed extract you present. Returns audit: balanced or findings, names the account, rail and window it was computed over (scope) when an extract declared one, and counts the class every receipt and row landed in (counts).",
     annotations: {
       title: "Audit the receipt chain",
       readOnlyHint: true,
@@ -311,6 +311,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // this surface). Absent, the audit was over this server's own ledger,
           // which declares no population.
           ...(report.scope ? { scope: report.scope } : {}),
+          // The classes every row landed in, on this surface as on the printed
+          // report and the finding object: a row rightly excluded without a
+          // finding is otherwise invisible here.
+          counts: report.counts,
         });
       }
       case "cedulon_verify_receipt": {

@@ -92,6 +92,8 @@ audit: balanced
 receipts=2
 findings=0
 guarantee=conditional
+counts	receipts	submitted=2 attested=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
+counts	settlements	rows=2 matched=2 deferred=0 unmatched=0 repeated=0 unreconciled=0
 warn	unauthenticated-extract	rail extract is unsigned; completeness guarantee is conditional
 warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional
 ```
@@ -395,7 +397,9 @@ own key, so every answer it could give was conditional and no caller could chang
 that. Since 0.10.0 it also takes `extract`, a signed rail extract the caller
 was presented with: the audit then runs over that document rather than this
 server's own ledger, refuses `extraSettlements` beside it, and names the
-account, rail and window it covered as `scope`.
+account, rail and window it covered as `scope`. Since 0.11.0 the result also
+carries `counts`, the class every receipt and row landed in, so a row the
+audit rightly left without a finding is still on the record.
 
 The settle and the save happen under one lock, and the write is proven possible
 before any money moves. The other order - settle, append, save - leaves the rail

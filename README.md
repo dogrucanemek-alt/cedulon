@@ -58,7 +58,7 @@ packages; they do not reimplement policy, receipts, or audit.
 | Tool | Arguments | Result |
 | --- | --- | --- |
 | `cedulon_spend` | `amount` (string), `currency`, `payee`, `nonce`, optional `tool` | Allow → signed receipt JSON. Deny → `{ ok: false, reason }` (for example `limit-amount`). |
-| `cedulon_audit` | optional `extract` (a signed rail extract you were presented with: `body`, `signature`, `publicKeyPem`), the trust roots (`trust`, `issuerTrust`, `witnessTrust`, `payeeTrust`, `manifest`, `manifestTrust`), optional `extraSettlements[]` (`ref`, `amount`, `currency`, `timestampMs`; refused beside `extract`) | `{ ok, summary, findings, warnings, guarantee }`, plus `scope` when the audit ran over a presented extract. Balanced books print `audit: balanced`. |
+| `cedulon_audit` | optional `extract` (a signed rail extract you were presented with: `body`, `signature`, `publicKeyPem`), the trust roots (`trust`, `issuerTrust`, `witnessTrust`, `payeeTrust`, `manifest`, `manifestTrust`), optional `extraSettlements[]` (`ref`, `amount`, `currency`, `timestampMs`; refused beside `extract`) | `{ ok, summary, findings, warnings, guarantee, counts }`, plus `scope` when the audit ran over a presented extract; `counts` is the class every receipt and row landed in. Balanced books print `audit: balanced`. |
 | `cedulon_verify_receipt` | `receipt` object, or `coseHex` + `publicKeyPem`, optional countersignature fields | `{ ok, receipt, countersignature }` |
 | `cedulon_export_ledger` | none | Receipts + checkpoint + extract in the `demo:export` JSON shape |
 | `cedulon_status` | none | `{ version, policy, receiptCount, chainHead }` |

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import {
   audit,
+  type AuditCounts,
   type Finding,
   type IssuerTrustPin,
   type PayeeTrustPins,
@@ -160,6 +161,9 @@ export type LedgerExport = {
   // the export carries them rather than leaving the reader to assume.
   guarantee: "unconditional" | "conditional";
   warnings: Finding[];
+  // And the classes every row landed in: the export is a structure returned
+  // for this audit, so it carries the same counts the report does.
+  counts: AuditCounts;
 };
 
 export type VerifyArgs = {
@@ -840,6 +844,7 @@ export class CedulonSession {
       findings: report.findings,
       guarantee: report.guarantee,
       warnings: report.warnings,
+      counts: report.counts,
     };
   }
 

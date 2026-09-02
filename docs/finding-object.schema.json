@@ -27,9 +27,61 @@
       "type": "array",
       "items": { "$ref": "#/$defs/finding" }
     },
-    "scope": { "$ref": "#/$defs/scope" }
+    "scope": { "$ref": "#/$defs/scope" },
+    "counts": { "$ref": "#/$defs/counts" }
   },
   "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipts", "settlements"],
+      "properties": {
+        "receipts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "submitted",
+            "attested",
+            "inScope",
+            "aborted",
+            "settled",
+            "matched",
+            "deferred",
+            "carried",
+            "unmatched",
+            "repeated",
+            "unreconciled"
+          ],
+          "properties": {
+            "submitted": { "$ref": "#/$defs/count" },
+            "attested": { "$ref": "#/$defs/count" },
+            "inScope": { "$ref": "#/$defs/count" },
+            "aborted": { "$ref": "#/$defs/count" },
+            "settled": { "$ref": "#/$defs/count" },
+            "matched": { "$ref": "#/$defs/count" },
+            "deferred": { "$ref": "#/$defs/count" },
+            "carried": { "$ref": "#/$defs/count" },
+            "unmatched": { "$ref": "#/$defs/count" },
+            "repeated": { "$ref": "#/$defs/count" },
+            "unreconciled": { "$ref": "#/$defs/count" }
+          }
+        },
+        "settlements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rows", "matched", "deferred", "unmatched", "repeated", "unreconciled"],
+          "properties": {
+            "rows": { "$ref": "#/$defs/count" },
+            "matched": { "$ref": "#/$defs/count" },
+            "deferred": { "$ref": "#/$defs/count" },
+            "unmatched": { "$ref": "#/$defs/count" },
+            "repeated": { "$ref": "#/$defs/count" },
+            "unreconciled": { "$ref": "#/$defs/count" }
+          }
+        }
+      }
+    },
     "scope": {
       "type": "object",
       "additionalProperties": false,

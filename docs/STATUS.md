@@ -32,6 +32,29 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.11.0` is prepared in this tree and is not a published npm release: it adds
+a `counts` member to `AuditReport`, the finding object, the `cedulon_audit`
+result and the ledger export, and two `counts` lines to the printed report,
+which a clean install of 0.10.0 does not have. Publishing is a separate step.
+What it changes: the report now publishes the class every receipt and row
+landed in (submitted, attested, in scope, aborted, settled; matched, deferred,
+carried into the next window, unmatched, repeated, unreconciled), numbers the
+reconciliation already computed on its way to the findings. It refuses
+nothing that used to pass and changes no finding. Round 5 of
+`docs/EXTERNAL_REVIEW.md` found that two rows rightly leave a window's
+accounting without a finding, a closing-edge receipt the next window names
+and an aborted receipt, and that a reader could not tell such a window from
+one that held none; both are closed by the member. No requirement in posted
+`-08` asks for class counts, so no split is registered in
+`conformance/counted-splits.ts`; the posted text lacks a rule the code has,
+not the other way round. The behaviour carried forward is unchanged: an audit
+still reports `manifest-terms-mismatch` with the split 0.6.0 introduced,
+where with a usable issuer pin the departure is a finding that fails the
+audit and without a pin the same departure is a warning that does not by
+itself fail it; and `requestHash` is still the SHA-256 of the six-field
+canonical document in lowercase hex, the digest the posted `-03` named a hash
+for without naming the octets.
+
 `0.10.0` is published on npm, with a provenance attestation, and it is what a
 reader now gets from an installed package. Checked from the published packages
 rather than from this tree: a clean install of `@cedulon/mcp-server@0.10.0` in

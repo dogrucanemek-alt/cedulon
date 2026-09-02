@@ -310,7 +310,7 @@ drift apart: `cedulon-abak-population-probe.mjs`, SHA-256
 `84763271fafe050daf6277d398885685cb75216b6cf4d0ac65afc67d52e4c083`. It resolves
 `@cedulon/*@0.8.0` from npm and needs no clone.
 
-### 1. One exclusion is published and the other is not - open
+### 1. One exclusion is published and the other is not - closed, 0.11.0
 
 Section 6.3 requires that records excluded before population construction be
 reported with the exclusion rule and count, or the completeness claim is not
@@ -333,7 +333,7 @@ neither is a row that was never counted in the first place. What is wrong is
 only that the exclusion on the instruction side is unreportable, and that is the
 side the completeness claim is about.
 
-### 2. A receipt that positively did not settle receives no class - open
+### 2. A receipt that positively did not settle receives no class - closed, 0.11.0
 
 An `aborted` receipt is correct to have no row on the extract, and the audit
 returns `balanced` with no finding. It is also absent from the report
@@ -349,6 +349,23 @@ findings above are that single gap seen from two sides. Closing it means
 `AuditReport` carrying counts it already computes - how many rows were matched,
 deferred, carried into the next window, unmatched, and refused - rather than any
 new check.
+
+### What closed both, 2026-09-03
+
+`AuditReport.counts`, prepared as 0.11.0 in this tree and not yet published.
+On the receipt side: submitted, attested, in scope, aborted, settled, and of
+the settled ones matched, deferred, carried, unmatched, repeated,
+unreconciled. On the settlement side: rows, matched, deferred, unmatched,
+repeated, unreconciled. Every settled receipt and every row lands in exactly
+one class, `matched` is the same number on each side, and the identities are
+asserted by `tests/audit-counts.test.ts` on every report it builds, including
+the one where the pinned rail key refuses the extract and every row is
+`unreconciled`. Finding 1's dropped receipt is `carried`; finding 2's aborted
+receipt is `aborted`. The member is on the finding object (schema updated,
+object version unchanged), the printed report (two `counts` lines), the
+`cedulon_audit` result and the ledger export. No exclusion rule changed; the
+exclusions are now reported. The mapping's precedence question in the
+paragraph below is not addressed by this and stays open on its own terms.
 
 ### What the mapping showed about the codes themselves
 

@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/base-extract",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "description": "Read-only Base Sepolia USDC Transfer logs as a Cedulon rail extract.",
   "license": "Apache-2.0",
@@ -42,6 +42,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/x402-adapter": "^0.10.0"
+    "@cedulon/x402-adapter": "^0.11.0"
   }
 }

@@ -202,6 +202,64 @@ export type AuditScope = {
   windowEndMs: number;
 };
 
+/**
+ * How many rows landed in each class. The reconciliation computes every one
+ * of these on its way to the findings; publishing them is what lets a reader
+ * tell a window that excluded one row from a window that held none, which the
+ * findings alone cannot say for a row that was rightly excluded without one
+ * (docs/EXTERNAL_REVIEW.md, Round 5). Three identities hold on every report:
+ *
+ *   receipts.inScope = receipts.aborted + receipts.settled
+ *   receipts.settled = matched + deferred + carried + unmatched + repeated + unreconciled
+ *   settlements.rows = matched + deferred + unmatched + repeated + unreconciled
+ *
+ * and `receipts.matched` equals `settlements.matched`, a match being one
+ * receipt against one row.
+ */
+export type AuditCounts = {
+  receipts: {
+    /** Every receipt presented. */
+    submitted: number;
+    /** Receipts the issuer pin attests; every submitted receipt when no usable pin was stated. */
+    attested: number;
+    /**
+     * Attested receipts the population admits: ref on the extract, or timestamp
+     * inside its window; every attested receipt when no extract was presented.
+     */
+    inScope: number;
+    /** In-scope receipts whose outcome is `aborted`: a spend that positively did not settle. A class, not a finding. */
+    aborted: number;
+    /** In-scope receipts whose outcome is `settled`: the ones the reconciliation walks. */
+    settled: number;
+    /** Paired by ref with one settlement row; the pair may still carry a mismatch finding. */
+    matched: number;
+    /** Unmatched inside the closing δ with no following window presented: `boundary-deferred`. */
+    deferred: number;
+    /**
+     * Unmatched inside the closing δ and named by the following window: the row
+     * belongs to that window's report, so this one has no finding for it.
+     */
+    carried: number;
+    /** `receipt-without-settlement`; also a settled receipt that names no ref, which `settled-without-ref` reports. */
+    unmatched: number;
+    /** Its ref repeats on one side, so it was compared in aggregate rather than by name. */
+    repeated: number;
+    /** Not walked, because the presented extract was refused (`settlement-comparison-skipped`). */
+    unreconciled: number;
+  };
+  settlements: {
+    /** Every row the population carries. */
+    rows: number;
+    matched: number;
+    /** Unmatched inside the opening δ: `boundary-deferred`. */
+    deferred: number;
+    /** `settlement-without-receipt`. */
+    unmatched: number;
+    repeated: number;
+    unreconciled: number;
+  };
+};
+
 export type AuditReport = {
   ok: boolean;
   findings: Finding[];
@@ -209,6 +267,7 @@ export type AuditReport = {
   guarantee: "unconditional" | "conditional";
   summary: string;
   scope?: AuditScope;
+  counts: AuditCounts;
 };
 
 function receiptRef(r: SignedReceipt): string | null {
@@ -428,6 +487,48 @@ export function findSettlementMatches(
   settlements: RailSettlement[],
   boundary?: SettlementBoundary,
 ): Finding[] {
+  return classifySettlementMatches(receipts, settlements, boundary).findings;
+}
+
+/** The classes the reconciliation itself assigns; the population above them is the caller's to count. */
+type MatchCounts = {
+  receipts: Omit<AuditCounts["receipts"], "submitted" | "attested" | "inScope">;
+  settlements: AuditCounts["settlements"];
+};
+
+/**
+ * The counts for a reconciliation that did not run: every settled receipt and
+ * every row is `unreconciled`, and no other class is claimed.
+ */
+function unreconciledCounts(receipts: SignedReceipt[], settlements: RailSettlement[]): MatchCounts {
+  const settled = receipts.filter(isSettled).length;
+  return {
+    receipts: {
+      aborted: receipts.length - settled,
+      settled,
+      matched: 0,
+      deferred: 0,
+      carried: 0,
+      unmatched: 0,
+      repeated: 0,
+      unreconciled: settled,
+    },
+    settlements: {
+      rows: settlements.length,
+      matched: 0,
+      deferred: 0,
+      unmatched: 0,
+      repeated: 0,
+      unreconciled: settlements.length,
+    },
+  };
+}
+
+function classifySettlementMatches(
+  receipts: SignedReceipt[],
+  settlements: RailSettlement[],
+  boundary?: SettlementBoundary,
+): { findings: Finding[]; counts: MatchCounts } {
   const findings: Finding[] = [];
   const settled = receipts.filter(isSettled);
 
@@ -446,6 +547,30 @@ export function findSettlementMatches(
   const dupeReceipt = pushDuplicateRefs(receiptItems, []);
   const dupeSettlement = pushDuplicateRefs(settlementItems, findings);
   const skip = new Set<string>([...dupeReceipt, ...dupeSettlement]);
+
+  const counts: MatchCounts = {
+    receipts: {
+      aborted: receipts.length - settled.length,
+      settled: settled.length,
+      matched: 0,
+      deferred: 0,
+      carried: 0,
+      // A settled receipt naming no ref has nothing on the rail side it could
+      // pair with; `settled-without-ref` names it, and the class keeps the
+      // identity whole.
+      unmatched: settled.length - receiptItems.length,
+      repeated: receiptItems.filter((item) => skip.has(item.ref)).length,
+      unreconciled: 0,
+    },
+    settlements: {
+      rows: settlements.length,
+      matched: 0,
+      deferred: 0,
+      unmatched: 0,
+      repeated: settlementItems.filter((item) => skip.has(item.ref)).length,
+      unreconciled: 0,
+    },
+  };
 
   // A ref that repeats is skipped by the ref-keyed match below, so compare the
   // aggregate settled amount against the aggregate receipted amount instead.
@@ -530,6 +655,7 @@ export function findSettlementMatches(
     if (!r) {
       const nearStart = lowerCut !== null && s.timestampMs < lowerCut;
       if (nearStart) {
+        counts.settlements.deferred += 1;
         findings.push({
           code: "boundary-deferred",
           id: ref,
@@ -537,6 +663,7 @@ export function findSettlementMatches(
           detail: `settlement ${s.ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than settlement-without-receipt`,
         });
       } else {
+        counts.settlements.unmatched += 1;
         findings.push({
           code: "settlement-without-receipt",
           id: ref,
@@ -545,6 +672,8 @@ export function findSettlementMatches(
       }
       continue;
     }
+    counts.settlements.matched += 1;
+    counts.receipts.matched += 1;
     if (r.claims.amount !== s.amount || r.claims.currency !== s.currency) {
       findings.push({
         code: "settlement-mismatch",
@@ -565,9 +694,14 @@ export function findSettlementMatches(
     if (!settlementsByRef.has(ref)) {
       const nearEnd = upperCut !== null && r.claims.timestampMs >= upperCut;
       if (nearEnd && consecutive && boundary!.nextRefs!.has(ref)) {
+        // The following window carries this ref, so the row is that report's
+        // to reconcile. No finding here; the count is how a reader learns the
+        // row existed at all.
+        counts.receipts.carried += 1;
         continue;
       }
       if (nearEnd && !consecutive) {
+        counts.receipts.deferred += 1;
         findings.push({
           code: "boundary-deferred",
           id: r.claims.nonce,
@@ -575,6 +709,7 @@ export function findSettlementMatches(
           detail: `receipt nonce=${r.claims.nonce} ref=${ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than receipt-without-settlement`,
         });
       } else {
+        counts.receipts.unmatched += 1;
         findings.push({
           code: "receipt-without-settlement",
           id: r.claims.nonce,
@@ -584,7 +719,7 @@ export function findSettlementMatches(
     }
   }
 
-  return findings;
+  return { findings, counts };
 }
 
 /** @deprecated use findSettlementMatches */
@@ -1498,6 +1633,7 @@ export function audit(input: AuditInput): AuditReport {
   // extract are the same shape on the money axis). The refusal is the finding.
   // Saying nothing at all would be the other failure: a reader cannot tell a
   // comparison that found nothing from one that never ran.
+  let matchCounts: MatchCounts;
   if (extractRejected) {
     warnings.push({
       code: "settlement-comparison-skipped",
@@ -1506,9 +1642,21 @@ export function audit(input: AuditInput): AuditReport {
       detail:
         "the presented extract was refused by the pinned rail key, so its rows were not reconciled against the receipts; no settlement finding in this report was read out of that document",
     });
+    matchCounts = unreconciledCounts(inScope, reconciled);
   } else {
-    findings.push(...findSettlementMatches(inScope, reconciled, settlementBoundary));
+    const classified = classifySettlementMatches(inScope, reconciled, settlementBoundary);
+    findings.push(...classified.findings);
+    matchCounts = classified.counts;
   }
+  const counts: AuditCounts = {
+    receipts: {
+      submitted: input.receipts.length,
+      attested: attested.length,
+      inScope: inScope.length,
+      ...matchCounts.receipts,
+    },
+    settlements: matchCounts.settlements,
+  };
   const manifestPayeeBound = Boolean(input.manifest && typeof input.manifest.body.payee === "string");
   const beneficiaryBound = reconciled.some((s) => typeof s.beneficiary === "string");
   if (input.extract && !manifestPayeeBound && !beneficiaryBound) {
@@ -1676,6 +1824,7 @@ export function audit(input: AuditInput): AuditReport {
     warnings,
     guarantee: guaranteeWarnings.length === 0 && !doubtedEvidence ? "unconditional" : "conditional",
     summary,
+    counts,
     ...(input.extract
       ? {
           scope: {
@@ -1698,6 +1847,7 @@ export type FindingObject = {
   findings: Finding[];
   warnings: Finding[];
   scope?: AuditScope;
+  counts: AuditCounts;
 };
 
 export function toFindingObject(report: AuditReport, receiptCount = 0): FindingObject {
@@ -1713,7 +1863,20 @@ export function toFindingObject(report: AuditReport, receiptCount = 0): FindingO
     // reading the text, so it carries the same scope. Absent when no extract
     // declared one.
     ...(report.scope ? { scope: report.scope } : {}),
+    // And the same population: the classes every row landed in, so a row
+    // rightly excluded without a finding is still on the record.
+    counts: report.counts,
   };
+}
+
+/** The two lines `formatAudit` prints for the counts; one per side. */
+function formatCounts(counts: AuditCounts): string[] {
+  const r = counts.receipts;
+  const s = counts.settlements;
+  return [
+    `counts\treceipts\tsubmitted=${r.submitted} attested=${r.attested} in-scope=${r.inScope} aborted=${r.aborted} settled=${r.settled} matched=${r.matched} deferred=${r.deferred} carried=${r.carried} unmatched=${r.unmatched} repeated=${r.repeated} unreconciled=${r.unreconciled}`,
+    `counts\tsettlements\trows=${s.rows} matched=${s.matched} deferred=${s.deferred} unmatched=${s.unmatched} repeated=${s.repeated} unreconciled=${s.unreconciled}`,
+  ];
 }
 
 export function formatAudit(report: AuditReport, receiptCount = 0): string {
@@ -1730,6 +1893,10 @@ export function formatAudit(report: AuditReport, receiptCount = 0): string {
     const s = report.scope;
     lines.push(`scope=${s.accountId}/${s.railId} [${s.windowStartMs},${s.windowEndMs})`);
   }
+  // The classes every row landed in. A balanced line over a window that
+  // carried one row into the next window and a balanced line over a window
+  // that held none read the same without these.
+  lines.push(...formatCounts(report.counts));
   for (const w of report.warnings) {
     lines.push(`warn\t${w.code}\t${w.detail}`);
   }

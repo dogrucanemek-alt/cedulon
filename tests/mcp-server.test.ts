@@ -528,6 +528,93 @@ describe("mcp-server stdio JSON-RPC", () => {
     }
   });
 
+  it("RED then GREEN: audit results and the ledger export carry the class counts", async () => {
+    type Counts = {
+      receipts: Record<string, number>;
+      settlements: Record<string, number>;
+    };
+    const conserved = (counts: unknown, label: string): Counts => {
+      assert.ok(counts && typeof counts === "object", `${label} carries counts`);
+      const c = counts as Counts;
+      const r = c.receipts;
+      const s = c.settlements;
+      assert.equal(r.inScope, r.aborted + r.settled, `${label}: in-scope receipts split into aborted and settled`);
+      assert.equal(
+        r.settled,
+        r.matched + r.deferred + r.carried + r.unmatched + r.repeated + r.unreconciled,
+        `${label}: every settled receipt lands in one class`,
+      );
+      assert.equal(
+        s.rows,
+        s.matched + s.deferred + s.unmatched + s.repeated + s.unreconciled,
+        `${label}: every row lands in one class`,
+      );
+      assert.equal(r.matched, s.matched, `${label}: a match is one receipt against one row`);
+      return c;
+    };
+    const rpc = new StdioRpc();
+    try {
+      await rpc.handshake();
+      const paid = await rpc.callTool("cedulon_spend", {
+        amount: "1",
+        currency: "USD",
+        payee: "payee-1",
+        nonce: "count-nonce-0001",
+        tool: "spend",
+      });
+      assert.equal(paid.isError, false);
+      const claims = (
+        paid.body as {
+          receipt?: { claims?: { amount?: string; currency?: string; timestampMs?: number; x402PaymentRef?: string } };
+        }
+      ).receipt?.claims;
+      const paidAt = claims!.timestampMs as number;
+
+      // Over the server's own ledger: one receipt, one row, matched.
+      const own = await rpc.callTool("cedulon_audit", {});
+      assert.equal(own.isError, false);
+      const ownCounts = conserved((own.body as { counts?: unknown }).counts, "own-ledger audit");
+      assert.equal(ownCounts.receipts.submitted, 1);
+      assert.equal(ownCounts.receipts.matched, 1);
+      assert.equal(ownCounts.settlements.rows, 1);
+
+      // Over a presented extract that does not name the receipt: the receipt
+      // is unmatched and the row is unmatched, and the counts say so beside
+      // the findings.
+      const keys = generateExtractKeys();
+      const body = {
+        accountId: "acct-count-0001",
+        railId: "rail-count-0001",
+        windowStartMs: paidAt - 3_600_000,
+        windowEndMs: paidAt + 3_600_000,
+        settlements: [{ ref: "someone-else", amount: "1", currency: "USD", timestampMs: paidAt }],
+      };
+      const extract = signRailExtract(body, keys.privateKeyPem, keys.publicKeyPem);
+      const over = await rpc.callTool("cedulon_audit", {
+        extract,
+        trust: {
+          publicKeyPem: keys.publicKeyPem,
+          accountId: body.accountId,
+          railId: body.railId,
+          windowStartMs: body.windowStartMs,
+          windowEndMs: body.windowEndMs,
+        },
+      });
+      assert.equal(over.isError, false);
+      const overCounts = conserved((over.body as { counts?: unknown }).counts, "extract audit");
+      assert.equal(overCounts.receipts.unmatched, 1);
+      assert.equal(overCounts.settlements.unmatched, 1);
+      assert.equal(overCounts.receipts.matched, 0);
+
+      // The export is over the in-process ledger, so it carries that audit's counts.
+      const exported = await rpc.callTool("cedulon_export_ledger", {});
+      assert.equal(exported.isError, false);
+      assert.deepEqual((exported.body as { counts?: unknown }).counts, ownCounts);
+    } finally {
+      rpc.close();
+    }
+  });
+
   it("status reports version, policy, receipt count, and chain head", async () => {
     const rpc = new StdioRpc();
     try {

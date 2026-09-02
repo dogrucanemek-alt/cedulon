@@ -23,7 +23,9 @@ call; the recommendation at the end is the one this tree would make.
   summary: string,          // same text formatAudit prints first
   receipts: number,
   findings: Finding[],      // severity is fail or omitted
-  warnings: Finding[]
+  warnings: Finding[],
+  scope?: AuditScope,       // the account, rail and window an extract declared
+  counts: AuditCounts       // the class every row landed in
 }
 ```
 
@@ -31,6 +33,17 @@ call; the recommendation at the end is the one this tree would make.
 `unconditional` only when there are no warnings and the extract itself
 was not doubted. Those two fields are the ones a consumer can act on
 without understanding every code.
+
+`counts` is the population the findings were drawn from: on the
+receipt side how many were submitted, attested, in scope, aborted and
+settled, and of the settled ones how many were matched, deferred,
+carried into the next window, unmatched, repeated or left unreconciled;
+on the settlement side the rows and the same classes less `carried`.
+Every settled receipt and every row lands in exactly one class, so the
+totals add up on both sides, and `matched` is the same number on each.
+A row the audit rightly excluded without a finding, a receipt the next
+window names or a spend that was aborted, is on the record here and
+nowhere else (`EXTERNAL_REVIEW.md`, Round 5).
 
 ## Finding
 

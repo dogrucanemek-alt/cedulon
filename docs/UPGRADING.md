@@ -4,6 +4,73 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.11.0 (prepared, not published): the report counts what it classed
+
+This one adds a member and prints two lines. It refuses nothing that used to
+pass and changes no finding. It is prepared in this tree, not a published npm
+release.
+
+`AuditReport` gains `counts`: how many receipts were submitted, attested, in
+scope, aborted and settled, and of the settled ones how many were matched,
+deferred, carried into the next window, unmatched, repeated or left
+unreconciled; and on the settlement side the rows and the same classes less
+`carried`. The reconciliation computed every one of these on its way to the
+findings; what changes is that the report now publishes them. Every settled
+receipt and every row lands in exactly one class, so the totals add up on
+both sides, `matched` is the same number on each, and a reader can check the
+population against the findings rather than take the summary's word for it.
+
+Why. Round 5 of `docs/EXTERNAL_REVIEW.md` ran the accounting rules of a
+neighbouring draft over this reconciler and two did not pass, for one reason:
+two rows leave a window's accounting correctly and without a finding, and the
+report gave a reader no way to tell such a window from one that held no such
+row. A settled receipt inside the closing clock-skew boundary whose ref the
+following window carries belongs to that window's report; it was dropped here
+with no finding and no warning, and `audit: balanced` read the same whether
+the row existed or not. It is now `carried`. An `aborted` receipt is right to
+have no row on the extract and no finding; it was absent from the report
+altogether, and a window holding one refused spend read the same as a window
+holding none. It is now `aborted`. Neither is a new check. The behaviour that
+excluded the rows was right and is unchanged; the exclusion is now reported.
+
+The member is on every surface the report reaches. The finding object carries
+`counts` (`docs/finding-object.schema.json` names the shape; adding an envelope
+member is not a version bump under `docs/FINDING_OBJECT.md`, and the object
+version stays 1). `formatAudit` prints two `counts` lines, one per side, after
+the guarantee and scope lines and before the warnings, so the documented
+`npm run audit` output in `docs/RUN_AS_VERIFIER.md` and `docs/INTEROP_RUN.md`
+grew those two lines. The `cedulon_audit` result on the MCP server carries
+`counts` beside `scope`, and `cedulon_export_ledger` carries the counts of the
+in-process audit it exports, because an export is a structure returned for
+that audit and the counts are never absent the way a scope can be.
+
+When the pinned rail key refuses the presented extract the comparison does
+not run (`settlement-comparison-skipped`, 0.9.0). The counts say so in their
+own terms: every settled receipt and every row is `unreconciled`, no other
+class is claimed, and the identities still hold. Painting zeros into
+`matched` and `unmatched` there would have read as a comparison that found
+nothing.
+
+What breaks: nothing at the boundary. A consumer of the finding object that
+validates against the version-1 schema from an older tree will see an
+unknown envelope member; the schema in this tree names it. A type that
+constructs `AuditReport` or `FindingObject` literals now needs `counts`.
+
+Where this stands against the posted draft. No requirement in `-08` asks for
+class counts; `MUST-T10-19` asks the report to name its population, and this
+member says what became of every row in it. The two Round 5 findings are
+closed by it, and `conformance/counted-splits.ts` registers no split, because
+the posted text lacks a rule the code has, not the other way round; the next
+revision can state one if the neighbouring draft's vocabulary settles.
+
+The behaviour carried into this release is unchanged and still current. An
+audit still reports `manifest-terms-mismatch` with the split 0.6.0 introduced:
+with a usable issuer pin the walk is the attested set and the departure is a
+finding that fails the audit; without a pin the same departure is a warning
+that does not by itself fail it. And `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted `-03`
+named a hash for without naming the octets.
+
 ## 0.10.0: an audit over a presented extract says what it covered
 
 This one adds an input and a member, and it refuses one shape that used to
