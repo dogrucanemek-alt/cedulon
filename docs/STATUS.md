@@ -26,7 +26,7 @@ one of the 128 came back as `settlement-without-receipt`, at
 operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 
-`draft-dogru-cedulon` is posted on the IETF datatracker through `-07`
+`draft-dogru-cedulon` is posted on the IETF datatracker through `-08`
 (2 September 2026), alongside the two companion `-00` drafts.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
@@ -50,10 +50,11 @@ own ledger, refuses rows added beside it as `extra-settlements-with-extract`,
 and names the account, rail and window it was computed over, the member
 `AuditReport` and the finding object have carried since 0.8.0; over the
 server's own ledger the result names no scope, because none was declared.
-`cedulon_export_ledger` is unchanged. Posted `-07` describes the MCP result as
-carrying no scope field and says the widening ships with the package that
-carries it; this is that package, and the next revision widens `MUST-T10-19`
-to name it, so no split is registered in `conformance/counted-splits.ts`. The
+`cedulon_export_ledger` is unchanged. Posted `-07` described the MCP result as
+carrying no scope field and said the widening ships with the package that
+carries it; this is that package, and `-08`, posted on 2 September 2026 after
+it, widens `MUST-T10-19` to name it and states the window rule, so no split is
+registered in `conformance/counted-splits.ts`. The
 behaviour carried forward is unchanged: an audit still reports
 `manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
 usable issuer pin the departure is a finding that fails the audit and
