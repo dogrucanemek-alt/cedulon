@@ -40,7 +40,12 @@ What it changes: the report now publishes the class every receipt and row
 landed in (submitted, attested, in scope, aborted, settled; matched, deferred,
 carried into the next window, unmatched, repeated, unreconciled), numbers the
 reconciliation already computed on its way to the findings. It refuses
-nothing that used to pass and changes no finding. Round 5 of
+nothing that used to pass; one input reads differently, a receipt object
+presented twice in one array, which the issuer-chain walk used to fold into
+one occurrence and now counts as two, so its findings name the duplicate. A
+refused extract no longer sieves the receipts with the window it declared:
+on that path every attested receipt is in the population and every settled
+one is `unreconciled`. Round 5 of
 `docs/EXTERNAL_REVIEW.md` found that two rows rightly leave a window's
 accounting without a finding, a closing-edge receipt the next window names
 and an aborted receipt, and that a reader could not tell such a window from

@@ -126,7 +126,7 @@ const TOOLS = [
   {
     name: "cedulon_export_ledger",
     description:
-      "Export receipts, checkpoint, and rail extract in the same JSON shape as npm run demo:export.",
+      "Export receipts, checkpoint, and rail extract in the same JSON shape as npm run demo:export, with the findings, guarantee and counts of the audit over this server's own ledger.",
     annotations: {
       title: "Export the ledger",
       readOnlyHint: true,

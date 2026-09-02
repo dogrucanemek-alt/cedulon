@@ -4,7 +4,13 @@ import { describe, it } from "node:test";
 
 import { audit, formatAudit, toFindingObject, type AuditCounts, type AuditReport } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint, type SignedCheckpoint } from "@cedulon/checkpoint";
-import { generateReceiptKeys, receiptHash, signReceipt, type SignedReceipt } from "@cedulon/receipts";
+import {
+  generateReceiptKeys,
+  receiptHash,
+  signReceipt,
+  signReceiptUnchecked,
+  type SignedReceipt,
+} from "@cedulon/receipts";
 import {
   generateExtractKeys,
   signRailExtract,
@@ -328,12 +334,115 @@ describe("Round 5: the report publishes the class counts it already computes", (
       settlements: [row("ref-a", MIDDLE), row("ref-b", MIDDLE + 1)],
       issuerTrust: { publicKeyPem: honest.publicKeyPem },
     });
-    assert.equal(report.counts.receipts.submitted, 2);
+    const c = counted(report);
+    assert.equal(c.receipts.submitted, 2);
     // One fact, one source. A caller that passes a different number does not
     // get a report that disagrees with its own counts.
     assert.equal(toFindingObject(report, 99).receipts, 2);
     assert.equal(toFindingObject(report).receipts, 2);
     assert.match(formatAudit(report, 99), /^receipts=2$/m);
     assert.match(formatAudit(report), /^receipts=2$/m);
+  });
+
+  it("9 RED then GREEN: a refused extract does not get to sieve the population with the window it declared", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const otherRail = generateExtractKeys();
+    const receipts = chain(honest, [{ ref: "ref-a", at: MIDDLE, nonce: "n-a" }]);
+    // Signed by a key the pin refuses, declaring a window the honest receipt is
+    // not in. Nothing in a refused document is evidence, its window included.
+    const foreign = signRailExtract(
+      { accountId: "acct", railId: "rail", windowStartMs: WINDOW_END + 1, windowEndMs: WINDOW_END + 3_600_000, settlements: [] },
+      otherRail.privateKeyPem,
+      otherRail.publicKeyPem,
+    );
+    const report = audit({
+      receipts,
+      checkpoints: [checkpointOver(honest, receipts)],
+      extract: foreign,
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      trust: trustFor(rail),
+    });
+    assert.equal(report.findings.some((f) => f.code === "extract-key-mismatch"), true);
+    assert.equal(report.warnings.some((w) => w.code === "settlement-comparison-skipped"), true);
+    const c = counted(report);
+    assert.equal(c.receipts.attested, 1);
+    assert.equal(c.receipts.inScope, 1, "the attested receipt stays in the population");
+    assert.equal(c.receipts.settled, 1);
+    assert.equal(c.receipts.unreconciled, 1);
+    // The scope line still names what the presented document declared; the
+    // finding beside it says the document was refused.
+    assert.equal(report.scope?.windowStartMs, WINDOW_END + 1);
+  });
+
+  it("10 RED then GREEN: one receipt object presented twice is two occurrences, not one", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const [one] = chain(honest, [{ ref: "ref-a", at: MIDDLE, nonce: "n-a" }]);
+    const report = audit({
+      receipts: [one, one],
+      checkpoints: [checkpointOver(honest, [one])],
+      extract: extract(rail, [row("ref-a", MIDDLE)]),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      trust: trustFor(rail),
+    });
+    const c = counted(report);
+    assert.equal(c.receipts.submitted, 2);
+    assert.equal(c.receipts.attested, 2, "the pin accepts both occurrences; the count says so");
+    // And the rest of the audit sees the duplicate it used to collapse.
+    assert.equal(report.findings.some((f) => f.code === "duplicate-ref"), true);
+  });
+
+  it("11: a settled receipt that names no ref lands in unmatched, beside settled-without-ref", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const bad = signReceiptUnchecked(
+      {
+        payer: "payer",
+        payee: "payee-1",
+        amount: "1",
+        currency: "USD",
+        policyHash: TEST_HASH,
+        manifestHash: null,
+        noManifest: true,
+        x402PaymentRef: null,
+        timestampMs: MIDDLE,
+        nonce: "n-noref".padEnd(16, "-"),
+        prevReceiptHash: null,
+        outcome: "settled",
+      },
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [bad],
+      checkpoints: [checkpointOver(honest, [bad])],
+      extract: extract(rail, []),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      trust: trustFor(rail),
+    });
+    assert.equal(report.findings.some((f) => f.code === "settled-without-ref"), true);
+    const c = counted(report);
+    assert.equal(c.receipts.settled, 1);
+    assert.equal(c.receipts.unmatched, 1);
+  });
+
+  it("12: an issuer pin that cannot be read attests nothing, and the counts say so", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const receipts = chain(honest, [{ ref: "ref-a", at: MIDDLE, nonce: "n-a" }]);
+    const report = audit({
+      receipts,
+      checkpoints: [checkpointOver(honest, receipts)],
+      extract: extract(rail, [row("ref-a", MIDDLE)]),
+      issuerTrust: { publicKeyPem: "not-a-key" },
+      trust: trustFor(rail),
+    });
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable" && f.id === "issuer"), true);
+    const c = counted(report);
+    assert.equal(c.receipts.submitted, 1);
+    assert.equal(c.receipts.attested, 0);
+    assert.equal(c.receipts.inScope, 0);
+    assert.equal(c.settlements.unmatched, 1);
   });
 });

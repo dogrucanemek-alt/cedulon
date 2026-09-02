@@ -7,8 +7,9 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 ## 0.11.0 (prepared, not published): the report counts what it classed
 
 This one adds a member and prints two lines. It refuses nothing that used to
-pass and changes no finding. It is prepared in this tree, not a published npm
-release.
+pass, and it changes the findings on one input only, a receipt object
+presented twice in one array (under "What breaks"). It is prepared in this
+tree, not a published npm release.
 
 `AuditReport` gains `counts`: how many receipts were submitted, attested, in
 scope, aborted and settled, and of the settled ones how many were matched,
@@ -36,7 +37,10 @@ excluded the rows was right and is unchanged; the exclusion is now reported.
 The member is on every surface the report reaches. The finding object carries
 `counts` (`docs/finding-object.schema.json` names the shape as an optional
 envelope member; `docs/FINDING_OBJECT.md` counts that among the changes that
-are not a version bump, and the object version stays 1). `formatAudit` prints
+are not a version bump, and the object version stays 1). Optional in the
+portable object because the posted draft asks no implementation for class
+counts and another producer may not compute them; this implementation always
+emits it, and that is a promise of this package, not of the schema. `formatAudit` prints
 two `counts` lines, one per side, after the guarantee and scope lines and
 before the warnings, so the documented `npm run audit` output in
 `docs/RUN_AS_VERIFIER.md` and `docs/INTEROP_RUN.md` grew those two lines. The
@@ -50,18 +54,37 @@ that audit and the counts are never absent the way a scope can be.
 
 When the pinned rail key refuses the presented extract the comparison does
 not run (`settlement-comparison-skipped`, 0.9.0). The counts say so in their
-own terms: every settled receipt and every row is `unreconciled`, no other
-class is claimed, and the identities still hold. Painting zeros into
+own terms: every attested settled receipt and every row is `unreconciled`, no
+other class is claimed, and the identities still hold. Painting zeros into
 `matched` and `unmatched` there would have read as a comparison that found
-nothing.
+nothing. The refused document does not get to sieve that population either:
+its declared window is no more evidence than its rows, so on that path
+`inScope` is every attested receipt, as it is when no extract was presented.
+The scope line still names what the presented document declared, refused or
+not, and the finding beside it says it was refused.
+
+A review pass over the first cut of this release found two defects the
+identities could not see. A refused extract still sieved the receipts with
+the window it declared, so a forged document declaring a far-off window
+emptied the population and every count came back zero with the identities
+intact. And the issuer-chain walk tracked receipts by object identity, so one
+receipt object presented twice counted as one attested receipt while every
+other check counted two. Both are fixed in this tree; the tests that watched
+them fail are numbers 9 and 10 in `tests/audit-counts.test.ts`.
 
 What breaks: nothing at the boundary. A consumer of the finding object that
 validates against the version-1 schema from an older tree will see an
 unknown envelope member; the schema in this tree names it. A type that
 constructs `AuditReport` or `FindingObject` literals now needs `counts`. A
 caller that passed something other than the submitted count as the receipt
-total gets the measured number instead; every caller in this tree passed the
-submitted count, and the documented output did not move.
+total gets the measured number instead; every caller in this tree outside the
+test that exercises the change passed the submitted count, and the documented
+output did not move. One input reads differently: a receipt object presented
+twice in one array was folded into a single occurrence by the issuer-chain
+walk, which tracked receipts by object identity, while every other check
+already counted two. The walk now tracks positions, so the findings name the
+duplicate (`duplicate-ref`, the checkpoint totals and head) where they used to
+be silent, and `attested` counts both occurrences.
 
 Where this stands against the posted draft. No requirement in `-08` asks for
 class counts; `MUST-T10-19` asks the report to name its population, and this

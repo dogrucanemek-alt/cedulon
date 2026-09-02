@@ -364,8 +364,15 @@ the one where the pinned rail key refuses the extract and every row is
 receipt is `aborted`. The member is on the finding object (schema updated,
 object version unchanged), the printed report (two `counts` lines), the
 `cedulon_audit` result and the ledger export. No exclusion rule changed; the
-exclusions are now reported. The mapping's precedence question in the
-paragraph below is not addressed by this and stays open on its own terms.
+exclusions are now reported. A review of the first cut by two independent
+readers, the same day, found two defects the identities could not see: a
+refused extract still sieved the receipts with the window it declared, so a
+forged document could empty the population and leave every count at zero
+with the identities intact; and the issuer-chain walk tracked receipts by
+object identity, so one receipt object presented twice counted as one. Both
+are fixed in the same tree, each with a test that failed first. The mapping's
+precedence question in the paragraph below is not addressed by this and
+stays open on its own terms.
 
 ### What the mapping showed about the codes themselves
 

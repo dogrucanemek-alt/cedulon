@@ -43,7 +43,11 @@ Every settled receipt and every row lands in exactly one class, so the
 totals add up on both sides, and `matched` is the same number on each.
 A row the audit rightly excluded without a finding, a receipt the next
 window names or a spend that was aborted, is on the record here and
-nowhere else (`EXTERNAL_REVIEW.md`, Round 5).
+nowhere else (`EXTERNAL_REVIEW.md`, Round 5). `counts` is optional in
+this object, because the posted draft asks no implementation for class
+counts and another producer may not compute them; a producer that emits
+it emits the whole shape. This implementation always emits it, and that
+is a promise of the package, not of the schema.
 
 ## Finding
 

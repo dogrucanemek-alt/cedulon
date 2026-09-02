@@ -224,7 +224,9 @@ export type AuditCounts = {
     attested: number;
     /**
      * Attested receipts the population admits: ref on the extract, or timestamp
-     * inside its window; every attested receipt when no extract was presented.
+     * inside its window; every attested receipt when no extract was presented,
+     * and every attested receipt when the presented one was refused, because a
+     * refused document's window is not evidence either.
      */
     inScope: number;
     /** In-scope receipts whose outcome is `aborted`: a spend that positively did not settle. A class, not a finding. */
@@ -242,7 +244,11 @@ export type AuditCounts = {
     carried: number;
     /** `receipt-without-settlement`; also a settled receipt that names no ref, which `settled-without-ref` reports. */
     unmatched: number;
-    /** Its ref repeats on one side, so it was compared in aggregate rather than by name. */
+    /**
+     * Its ref repeats on one side, so it was taken to the aggregate comparison
+     * rather than matched by name; `malformed-amount` on that ref says the
+     * comparison could not finish.
+     */
     repeated: number;
     /** Not walked, because the presented extract was refused (`settlement-comparison-skipped`). */
     unreconciled: number;
@@ -319,26 +325,30 @@ export function orderByIssuerChain(receipts: SignedReceipt[]): {
   if (receipts.length === 0) {
     return { ordered: [], leftover: [] };
   }
-  const remaining = new Set(receipts);
-  const starts = receipts.filter((r) => r.claims.prevReceiptHash === null);
+  // Tracked by position, not by object identity: one receipt object presented
+  // twice is two occurrences to every other check in this file, and a Set of
+  // objects folded them into one here, so the walk and the counts that read
+  // it saw fewer receipts than were submitted.
+  const remaining = new Set<number>(receipts.map((_, i) => i));
+  const starts = receipts.map((r, i) => i).filter((i) => receipts[i].claims.prevReceiptHash === null);
   const ordered: SignedReceipt[] = [];
-  let current = starts.length === 1 ? starts[0] : null;
-  while (current && remaining.has(current)) {
+  let current: number | null = starts.length === 1 ? starts[0] : null;
+  while (current !== null && remaining.has(current)) {
     remaining.delete(current);
-    ordered.push(current);
+    ordered.push(receipts[current]);
     let nextHash: string | null = null;
     try {
-      nextHash = receiptHash(current);
+      nextHash = receiptHash(receipts[current]);
     } catch {
       break;
     }
-    const nexts = [...remaining].filter((r) => r.claims.prevReceiptHash === nextHash);
+    const nexts = [...remaining].filter((i) => receipts[i].claims.prevReceiptHash === nextHash);
     if (nexts.length !== 1) {
       break;
     }
     current = nexts[0];
   }
-  return { ordered, leftover: [...remaining] };
+  return { ordered, leftover: [...remaining].map((i) => receipts[i]) };
 }
 
 function receiptVerifiesForChain(receipt: SignedReceipt, pinPems?: readonly string[]): boolean {
@@ -1577,8 +1587,13 @@ export function audit(input: AuditInput): AuditReport {
   // window. The timestamp sieve applies only to receipts the extract does
   // not name (K5).
   const extractRefs = new Set(reconciled.map((s) => s.ref));
-  const inScope = input.extract
-    ? attested.filter((r) => {
+  // A document the pinned rail key refused is not evidence of anything, its
+  // declared window included: letting it sieve the receipts would let a
+  // forged extract declaring a far-off window drop every honest receipt out
+  // of the population it is about to be counted in.
+  const inScope =
+    input.extract && !extractRejected
+      ? attested.filter((r) => {
         const ref = receiptRef(r);
         if (ref !== null && extractRefs.has(ref)) {
           return true;
