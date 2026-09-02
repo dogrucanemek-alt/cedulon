@@ -202,11 +202,15 @@ export function railExtractEncodeRefusal(signed: SignedRailExtract): string | nu
 
 function extractBodyOf(rows: RailSettlement[], accountId: string, railId: string): RailExtractBody {
   const times = rows.map((r) => r.timestampMs);
+  // An empty ledger still declares a window, and the window is half-open, so
+  // the empty one is [0, 1): one millisecond at the epoch with no rows in
+  // it. [0, 0) declares no population at all and is refused as
+  // malformed-extract-window by the shape rule.
   return {
     accountId,
     railId,
     windowStartMs: times.length === 0 ? 0 : Math.min(...times),
-    windowEndMs: times.length === 0 ? 0 : Math.max(...times) + 1,
+    windowEndMs: times.length === 0 ? 1 : Math.max(...times) + 1,
     settlements: rows.map((r) => ({ ...r })),
   };
 }
