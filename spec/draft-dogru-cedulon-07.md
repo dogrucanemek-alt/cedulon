@@ -2,7 +2,7 @@
 title: "Cedulon: An Audit Layer for Agent-to-Agent Commerce"
 abbrev: Cedulon
 docname: draft-dogru-cedulon-07
-date: 2026-08-31
+date: 2026-09-02
 category: info
 submissiontype: IETF
 ipr: trust200902
@@ -180,13 +180,16 @@ Evidence Bundle (evidence, not an award) and optional SCITT anchoring.
 The encodings earlier revisions called canonical are defined, and the
 exact input to every hash-valued field is stated, so that an
 independent verifier can be written from the text alone. This
-revision states one distinction in the four places that had kept its
+revision states one distinction in the five places that had kept its
 older absolute form: a key an object carries is never the signer's
 identity and never a substitute for a key the verifier did not obtain,
 while a signature checked against it where no key is held establishes
-internal consistency and attests nothing. Cedulon is not a competitor
-to x402 or AP2; it
-sits above them.
+internal consistency and attests nothing. It also brings the account
+and the rail under audit into the declared scope on the terms the
+period already had, forbids reading a settlement finding out of an
+extract the pinned rail key refused, and states the wire form of the
+witness receipt, whose media type it registers beside the other five.
+Cedulon is not a competitor to x402 or AP2; it sits above them.
 
 --- middle
 
@@ -1376,17 +1379,22 @@ actually performed.
 On the wire the witness receipt is a COSE_Sign1 under {{cose-profile}},
 signed by the witness key, with content type
 `application/cedulon-inclusion+cbor` ({{iana-inclusion}}). Its payload
-is a deterministic CBOR map of three entries and is not a CWT claim
-set: label `1` is the statement hash, label `2` the entry index, label
-`3` the tree head. The two hashes are text strings holding the
+is a deterministic CBOR map carrying three entries and is not a CWT
+claim set: label `1` is the statement hash, label `2` the entry index,
+label `3` the tree head. The two hashes are text strings holding the
 lowercase hexadecimal of a 32-octet SHA-256, the statement hash taken
 over the octets of the statement the witness recorded; the entry index
-is an unsigned integer. The map carries no statement body: a receipt
-that travels with the body carries it beside the COSE object, not
-inside it ({{witness-root}}, `MUST-T11-17`). A receipt whose content
-type is another value, or whose payload lacks one of the three entries
-or carries one of another type, does not verify (`MUST-T4-8`,
-`MUST-T11-10`).
+is an unsigned integer. The hash strings are compared as issued and are
+not passed through the hash-claim grammar the claim sets use; the
+revision that moves them to byte strings will close that difference.
+Entries under other labels are not defined, and a verifier of this
+revision does not refuse them. The map carries no statement body: a
+receipt that travels with the body carries it beside the COSE object,
+not inside it ({{witness-root}}, `MUST-T11-17`). A receipt whose
+content type is another value, or whose payload lacks one of the three
+entries or carries one of another type, does not verify: the content
+type is the check {{cose-profile}} makes on every object of this
+profile, and the payload map is the one this paragraph states.
 
 A verifier MAY be given witness receipts for the period under audit.
 It is a distinct input from the presented checkpoint chain, and
@@ -1524,7 +1532,11 @@ identifiers are not an interoperability surface.
    signature does not verify against it, or verifies against a
    different key, the verifier MUST report that the extract is not
    signed by the pinned key. The identifier `extract-key-mismatch`
-   SHOULD be used for this condition. A finding that puts the
+   SHOULD be used for this condition. The rows of an extract the pin
+   refused are not reconciled against the receipts, and no settlement
+   finding is read out of that document (`MUST-T10-20`); the
+   identifier `settlement-comparison-skipped` SHOULD be used to say
+   that the comparison did not run. A finding that puts the
    extract itself in doubt MUST prevent an unconditional guarantee.
 3. Check scope. The verifier MUST report each settlement record
    whose `timestampMs` falls outside the declared window, identified
@@ -2126,7 +2138,7 @@ See {{reconciliation}}.
 | MUST-T10-16 | When an extract is supplied, a receipt whose `ref` appears on it is reconciled against it regardless of its own `timestampMs`; the window sieve applies only to receipts the extract does not name, and such a receipt outside the window MUST NOT be reported as a completeness failure against that extract. |
 | MUST-T10-17 | An unmatched settled receipt within the declared `clockSkewMs` of `windowEndMs`, and an unmatched settlement record within it of `windowStartMs`, MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure. A closing-edge deferral resolves against the following window's extract and hardens into the completeness finding when that extract is presented and does not name the `ref`; an opening-edge deferral resolves only against a receipt in the presented bag that names its `ref`, and a following extract does not harden it. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
 | MUST-T10-18 | A verifier that has not stated the account or the rail under audit MUST emit `unstated-audit-scope` and MUST treat the guarantee as conditional, because an unstated account or rail leaves the extract free to define the settlement path it reports on, exactly as an unstated period leaves it free to define the period (`MUST-T10-15`). |
-| MUST-T10-19 | A report MUST name the account, rail and window the extract declared, in any human-readable output it produces and in any structure it returns. A balanced result under an unconditional guarantee is a statement about one account on one rail over one window; an account that can settle on a second rail has a settlement path outside that population, and a report that does not name its own scope cannot be distinguished from one that covers every path. |
+| MUST-T10-19 | A report MUST name the account, rail and window the extract declared, in the printed report and in the finding object it returns. A balanced result under an unconditional guarantee is a statement about one account on one rail over one window; an account that can settle on a second rail has a settlement path outside that population, and a report that does not name its own scope cannot be distinguished from one that covers every path. |
 | MUST-T10-20 | Where a stated rail pin refuses the presented extract and the verifier reports `extract-key-mismatch`, the verifier MUST NOT read a settlement finding out of that document's body: not a mismatch against a receipt, not money reported as unaccounted for, and not a receipt left unmatched by rows the refused document omits. The refusal is the finding. This is `MUST-T8-9`'s rule for a refused Trade Manifest, on the money axis and for the same reason: a charge that no key stands behind is one a forged extract can invent against an honest payer, and a document the audit has just rejected must not also be the evidence it convicts with. Because a reader cannot otherwise tell a comparison that found nothing from one that never ran, the verifier MUST report `settlement-comparison-skipped` in the same result. A pinned key the verifier cannot decode is `trust-key-unreadable` and is not a refusal of the document, so it does not reach this requirement. |
 
 In MUST-T10-4, a completeness finding that makes the audit fail is
@@ -2654,30 +2666,30 @@ Experience:
   produced against the issuer the one condition this document exists
   to make detectable.
 
-Note on distribution: the requirements -03 and -04 add that
-are in a published package are in the published `@cedulon` packages at version 0.7.0, not only in the
-repository, with the exceptions named below. What -05 added -
-the hash-claim grammar, the countersignature attribution rule, the
-pin-under-signature attested set, the boundary allowance, the
-counterparty bindings, `deliveredHash`, and witness tier 2 - what -06
-added - the refusal of a JSON text that repeats a member name
-(`MUST-T4-20`) and the refusal of a non-empty unprotected header
-(`MUST-T4-21`) - and what this revision adds - the conditional
-guarantee for an unstated account or rail (`MUST-T10-18`) and the
-report that names the settlement path it covered (`MUST-T10-19`) -
-are implemented in the repository at the pinned
-commit and are not in a published package at the time of posting:
-the 0.7.0 packages parse extract text with a parser that keeps the
-last of two values, their decoder verifies a signature over a
-stuffed unprotected header without complaint, and their reports name
-neither the account nor the rail they were computed over. 0.8.0 is
-prepared in the repository and carries all of it; it is not published
-as this is written, and this sentence is the discrepancy
-notice rather than a reader having to find one. A reader can check a claim against an installed package
-rather than against a working tree. That order is deliberate: -00
-described requirements that its published package did not yet carry,
-a reader found the discrepancy, and this document does not repeat it.
-Versions 0.2.x and earlier predate everything in this revision.
+Note on distribution: everything -03 and -04 added is in the
+published `@cedulon` packages from 0.7.0 on, with the exceptions
+named below. What -05 added - the hash-claim grammar, the
+countersignature attribution rule, the pin-under-signature attested
+set, the boundary allowance, the counterparty bindings,
+`deliveredHash`, and witness tier 2 - what -06 added - the refusal of
+a JSON text that repeats a member name (`MUST-T4-20`) and the refusal
+of a non-empty unprotected header (`MUST-T4-21`) - and what this
+revision adds - the conditional guarantee for an unstated account or
+rail (`MUST-T10-18`), the report that names the settlement path it
+covered (`MUST-T10-19`), and the refusal to read a settlement finding
+out of an extract the pinned rail key rejected (`MUST-T10-20`) - are
+in the published packages at version 0.9.0, the version on npm as this
+is posted. -06 was posted while those were in the repository and in no
+package, and said so; 0.8.0 and 0.9.0 were published after it. The
+0.7.0 packages a reader may still hold parse extract text with a
+parser that keeps the last of two values, verify a signature over a
+stuffed unprotected header without complaint, and name neither the
+account nor the rail their reports were computed over. A reader can
+check a claim against an installed package rather than against a
+working tree. That order is deliberate: -00 described requirements
+that its published package did not yet carry, a reader found the
+discrepancy, and this document does not repeat it. Versions 0.2.x and
+earlier predate everything in this revision.
 
 0.3.0 predated the manifest root and the T12 bound. It carried three
 defects that only appear
@@ -2707,8 +2719,8 @@ the distinction survives one step further out: a receipt can name the
 manifest and still depart from its amount, currency or expiry, which
 is what `MUST-T8-9` closes. Both were unpublished when -03 was posted
 and both are in the published packages now, so a
-reader can check either against an installed 0.7.0 rather than against
-this tree. `MUST-T8-9` as published carries the two-branch form
+reader can check either against an installed 0.7.0 or later rather
+than against this tree. `MUST-T8-9` as published carries the two-branch form
 specified here: a departure under a usable issuer pin is a finding and
 fails the audit, and a departure with no usable pin is reported as a
 warning that does not by itself fail it. -03 stated
@@ -2729,30 +2741,32 @@ to end an audit by exception rather than by finding.
 `MUST-T12-4` is the one exception left in this revision, and it is
 now half an exception. Its extract branch - authenticated rail
 evidence resolving an indeterminate outcome - is executed
-red-then-green against the in-process `RailLedger` and ships in
-0.7.0. Its reversal branch is specified and not executed: there is
+red-then-green against the in-process `RailLedger` and ships from
+0.7.0 on. Its reversal branch is specified and not executed: there is
 no authenticated external-rail path in this tree, so the rule that
 forbids returning authority without evidence of a completed
 reversing entry has no red-then-green case, and a reader checking
-that branch against an installed 0.7.0 will not find it.
+that branch against an installed 0.9.0 will not find it either.
 
 ## Changes from -06 {#changes-06}
 
 This revision has three subjects. The first repairs a wording residue
 that -06's own repair created, reported by the reader who implemented
--06 from the posted text; it changes no behaviour. The second adds two
-requirements on one axis of the audit's declared scope that every
-earlier revision left unstated. The third states the wire form of the
-witness receipt, which every earlier revision described and none
-encoded, and registers its media type.
+-06 from the posted text; it changes no behaviour. The second adds
+three requirements on the rail path: two on an axis of the audit's
+declared scope that every earlier revision left unstated, and one on
+what a verifier may read out of an extract its pinned key refused.
+The third states the wire form of the witness receipt, which every
+earlier revision described and none encoded, and registers its media
+type.
 
 -06 stated, for the first time, what a verifier does when it holds no
 pinned issuer key: the signature is still checked against the key the
 object itself carries, which establishes internal consistency and
-nothing about who signed it ({{presentation}}, {{issuer-root}}). Four
+nothing about who signed it ({{presentation}}, {{issuer-root}}). Five
 places in the same document still carried the older absolute
 formulation, under which no signed object may be verified against a key
-it carries at all. Read literally, those four forbade the check the
+it carries at all. Read literally, those five forbade the check the
 other two had just defined, and two implementations following different
 halves of the document would produce different findings from the same
 evidence.
@@ -2770,10 +2784,19 @@ evidence.
   verified against the key it carries, and the implementation says so in
   its own warning. The requirement now separates identity from internal
   consistency the same way, and names `unauthenticated-extract` as the
-  condition.
+  condition; `MUST-T10-7`, step 2 of the verification algorithm and the
+  `unauthenticated-extract` row of the finding table say the same.
+- The `application/cedulon-checkpoint+cbor` template in {{iana}} said a
+  checkpoint is verified only against a pinned issuer key. It now states
+  the same split as {{issuer-root}}.
 
 The witness root already stated the distinction correctly and is
-unchanged; it is where the wording for the other four came from.
+unchanged; it is where the wording for the other five came from. The
+manifest root ({{manifest-root}}) and `MUST-T4-15` keep their absolute
+wording on purpose: a Trade Manifest presented under no publisher pin
+is not checked against the key it carries at all, so there is no
+internal-consistency check to describe there, and
+`unauthenticated-manifest` says so.
 
 The second subject is the scope a completeness result is over. -05
 established that a verifier which states no period cannot call its
@@ -2792,18 +2815,36 @@ on a second rail has a settlement path no presented extract covers,
 and a spend that left that way is not an unmatched row - it is outside
 the declared population, which is precisely the bypass {{security}}
 names in T10. The report now carries the account, rail and window it
-was computed over, so the strongest line it prints cannot be read as a
-statement about paths it never looked at. Enumerating an account's
-rails remains the deployment's statement; no extract can be asked to
-prove that the enumeration is complete.
+was computed over, in the printed report and in the finding object, so
+the strongest line it prints cannot be read as a statement about paths
+it never looked at. Those two surfaces are the ones the requirement
+names; the companion's MCP result and ledger export return the finding
+list and the guarantee without a scope field, and a revision that
+widens the requirement to every returned structure will ship with the
+package that carries it. Enumerating an account's rails remains the
+deployment's statement; no extract can be asked to prove that the
+enumeration is complete.
 
 This distinction is the one {{ABAK}} draws for control instructions,
 where a receiver-side observation at one enforcement point does not
 establish that another required path was reached.
 
+`MUST-T10-20` closes the other gap on the same path. -06 reported an
+extract that a stated rail pin refused as `extract-key-mismatch` and
+said nothing about what that document's rows could still be used for,
+so a verifier could reject the extract and then convict with it: a
+mismatch against a receipt, money reported as unaccounted for, a
+receipt left unmatched by rows the refused document omits. The refusal
+is now the finding, no settlement finding is read out of that body,
+and the verifier reports `settlement-comparison-skipped` in the same
+result, so that a comparison which never ran cannot be mistaken for
+one that found nothing. It is `MUST-T8-9`'s rule for a refused Trade
+Manifest, on the money axis and for the same reason.
+
 The witness receipt of {{witness}} has been described since -02 as a
-COSE_Sign1 binding a statement hash, an entry index and a tree head,
-and every revision left its encoding to the reader. The companion
+receipt binding the statement the witness recorded, and since -05 as a
+COSE_Sign1 binding a statement hash, an entry index and a tree head;
+every revision left its encoding to the reader. The companion
 implementation, at its published 0.9.0, issues and verifies that
 object under the content type `application/cedulon-inclusion+cbor`, a
 name no revision registered over a payload no revision stated, while
@@ -2817,6 +2858,13 @@ positive labels that are local to the map rather than CWT claims. A
 later revision may move the hashes to byte strings and the labels into
 the private-use range the other objects use; it will do so in step
 with a package release, and will say so here.
+
+Also in this revision: the note on distribution in {{impl-status}} now
+says that what -05, -06 and this revision add is in the published
+packages at 0.9.0, where -06 said those items were in the repository
+and in no package, 0.8.0 and 0.9.0 having been published after it was
+posted; Related Work cites {{ABAK}}; and {{evolution}} points at -08 or
+later.
 
 ## Changes from -05 {#changes-05}
 
@@ -3321,7 +3369,7 @@ refusal it says through the settlement that did not appear on the
 extract, which is an effect observation over a declared population and
 not an acknowledgement from an enforcement point. Its bounded-population
 rule and this document's `MUST-T10-18` and `MUST-T10-19` are the same
-discipline on two different objects.
+kind of bound on two different objects.
 
 --- back
 

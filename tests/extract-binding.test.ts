@@ -666,6 +666,39 @@ describe("rail extract binding", () => {
     assert.equal(green.guarantee, "unconditional");
   });
 
+  it("32b: stating only the account, or only the rail, leaves the other axis to the extract", () => {
+    // MUST-T10-18 says "account or rail". Test 32 omits both and then names
+    // both, so an implementation that warned only when both were unstated
+    // would pass it and fail the requirement. Each axis alone must warn.
+    const rail = generateExtractKeys();
+    const oneRail = signRailExtract(
+      {
+        accountId: "acct-1",
+        railId: "rail-a",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+        settlements: [],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const base = { publicKeyPem: rail.publicKeyPem, windowStartMs: NOW, windowEndMs: WINDOW_END };
+    for (const stated of [{ accountId: "acct-1" }, { railId: "rail-a" }]) {
+      const report = audit({
+        receipts: [],
+        checkpoints: [],
+        extract: oneRail,
+        trust: { ...base, ...stated },
+      });
+      assert.equal(
+        report.warnings.some((w) => w.code === "unstated-audit-scope"),
+        true,
+        `stated only ${Object.keys(stated)[0]}`,
+      );
+      assert.equal(report.guarantee, "conditional", `stated only ${Object.keys(stated)[0]}`);
+    }
+  });
+
   it("33 RED then GREEN: a balanced report names the settlement path it covered", () => {
     const rail = generateExtractKeys();
     const report = audit({
