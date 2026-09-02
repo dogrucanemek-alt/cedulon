@@ -180,7 +180,7 @@ Evidence Bundle (evidence, not an award) and optional SCITT anchoring.
 The encodings earlier revisions called canonical are defined, and the
 exact input to every hash-valued field is stated, so that an
 independent verifier can be written from the text alone. This
-revision states one distinction in the five places that had kept its
+revision states one distinction in the seven places that had kept its
 older absolute form: a key an object carries is never the signer's
 identity and never a substitute for a key the verifier did not obtain,
 while a signature checked against it where no key is held establishes
@@ -2763,10 +2763,10 @@ type.
 -06 stated, for the first time, what a verifier does when it holds no
 pinned issuer key: the signature is still checked against the key the
 object itself carries, which establishes internal consistency and
-nothing about who signed it ({{presentation}}, {{issuer-root}}). Five
+nothing about who signed it ({{presentation}}, {{issuer-root}}). Seven
 places in the same document still carried the older absolute
 formulation, under which no signed object may be verified against a key
-it carries at all. Read literally, those five forbade the check the
+it carries at all. Read literally, those seven forbade the check the
 other two had just defined, and two implementations following different
 halves of the document would produce different findings from the same
 evidence.
@@ -2779,11 +2779,13 @@ evidence.
   `MUST-T4-11`), and where no key is held the check that runs
   establishes internal consistency only.
 - `MUST-T4-9` carries the same split, in the requirement's own words.
-- `MUST-T10-8` carried the identical residue on the rail path, where it
-  was not reported: an extract presented under no pinned rail key is
-  verified against the key it carries, and the implementation says so in
-  its own warning. The requirement now separates identity from internal
-  consistency the same way, and names `unauthenticated-extract` as the
+- `MUST-T10-8`, the paragraph of {{rail-extract}} that introduces it,
+  and the opening of {{trust-roots}} carried the identical residue on
+  the rail path, in three places, where it was not reported: an extract
+  presented under no pinned rail key is verified against the key it
+  carries, and the implementation says so in its own warning. The
+  requirement and both paragraphs now separate identity from internal
+  consistency the same way, and name `unauthenticated-extract` as the
   condition; `MUST-T10-7`, step 2 of the verification algorithm and the
   `unauthenticated-extract` row of the finding table say the same.
 - The `application/cedulon-checkpoint+cbor` template in {{iana}} said a
@@ -2791,7 +2793,7 @@ evidence.
   the same split as {{issuer-root}}.
 
 The witness root already stated the distinction correctly and is
-unchanged; it is where the wording for the other five came from. The
+unchanged; it is where the wording for the other seven came from. The
 manifest root ({{manifest-root}}) and `MUST-T4-15` keep their absolute
 wording on purpose: a Trade Manifest presented under no publisher pin
 is not checked against the key it carries at all, so there is no
