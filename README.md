@@ -134,8 +134,8 @@ packages/mcp-server     stdio MCP server (official SDK)
 packages/x402-adapter   HTTP 402 adapter + mock rail extract
 packages/base-extract   read-only Base Sepolia USDC → RailExtract
 examples/demo           runaway, dispute, bypass, audit CLI
-spec/                   draft-dogru-cedulon-07 (latest here; in preparation,
-                        not posted), -06 (posted 31 August 2026),
+spec/                   draft-dogru-cedulon-08 (latest here; in preparation,
+                        not posted), -07 (posted 2 September 2026), -06,
                         -05, -04, -03, -02, -01, -00,
                         plus the reattestation and streaming drafts
 THREAT_MODEL.md

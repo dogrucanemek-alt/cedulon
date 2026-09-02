@@ -31,3 +31,24 @@ export function latestDraftPath(root: string): string {
   const specDir = join(root, "spec");
   return join(specDir, `draft-dogru-cedulon-${latestDraftRevision(specDir)}.md`);
 }
+
+/**
+ * The newest revision that has been posted. Every posted revision's archive
+ * text is carried in the tree beside its source, so the newest `.txt` is the
+ * newest posted revision, and a revision that has been opened but not posted
+ * has a `.md` and no `.txt`. A check about something done for a posted
+ * revision - the deposit made for it, the archive bytes it has - reads this,
+ * not `latestDraftRevision`, or it fires the moment the next revision is
+ * opened and stays red until that revision is posted.
+ */
+export function latestPostedRevision(specDir: string): string {
+  const revisions = readdirSync(specDir)
+    .map((f) => /^draft-dogru-cedulon-(\d+)\.txt$/.exec(f))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => m[1])
+    .sort((a, b) => Number(a) - Number(b));
+  if (revisions.length === 0) {
+    throw new Error("no draft-dogru-cedulon-NN.txt under spec/");
+  }
+  return revisions[revisions.length - 1]!;
+}

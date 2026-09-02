@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import { loadVectors } from "../conformance/run.ts";
-import { latestDraftRevision } from "../scripts/latest-draft.ts";
+import { latestDraftRevision, latestPostedRevision } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p: string): string => readFileSync(join(root, p), "utf8");
@@ -603,13 +603,16 @@ describe("claims that describe something outside their own file", () => {
     }
   });
 
-  it("the site names the Zenodo deposit of the newest draft, not an older one", () => {
+  it("the site names the Zenodo deposit of the newest posted draft, not an older one", () => {
     // The records list on the front page names the deposit made for a posted
     // revision. Each revision gets its own deposit, so the line naming the
     // previous one stays true and goes stale in the same moment. Compare the
     // revision the line names to the tree instead of trusting the hand that
-    // edits both.
-    const newest = latestDraftRevision(join(root, "spec"));
+    // edits both - to the newest posted revision, the one with archive text
+    // in spec/, not the newest source: a revision opened for the next posting
+    // has no deposit yet, and this line is not about it. Keyed on the source,
+    // this check went red the moment -08 was opened, with the line still true.
+    const newest = latestPostedRevision(join(root, "spec"));
     const page = read("site/index.html");
     const named = [
       ...page.matchAll(
@@ -624,7 +627,7 @@ describe("claims that describe something outside their own file", () => {
     assert.equal(
       named[0],
       newest,
-      `site/index.html names the deposit for -${named[0]}; the newest revision in spec/ is -${newest}`,
+      `site/index.html names the deposit for -${named[0]}; the newest posted revision in spec/ is -${newest}`,
     );
   });
 
