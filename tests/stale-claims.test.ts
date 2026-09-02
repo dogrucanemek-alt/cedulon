@@ -603,6 +603,31 @@ describe("claims that describe something outside their own file", () => {
     }
   });
 
+  it("the site names the Zenodo deposit of the newest draft, not an older one", () => {
+    // The records list on the front page names the deposit made for a posted
+    // revision. Each revision gets its own deposit, so the line naming the
+    // previous one stays true and goes stale in the same moment. Compare the
+    // revision the line names to the tree instead of trusting the hand that
+    // edits both.
+    const newest = latestDraftRevision(join(root, "spec"));
+    const page = read("site/index.html");
+    const named = [
+      ...page.matchAll(
+        /the deposit for the posted -(\d+) revision is <a href="https:\/\/doi\.org\/10\.5281\/zenodo\.\d+">/g,
+      ),
+    ].map((m) => m[1]);
+    assert.equal(
+      named.length,
+      1,
+      "site/index.html no longer names the deposit of a posted revision; the page and this check describe the same line",
+    );
+    assert.equal(
+      named[0],
+      newest,
+      `site/index.html names the deposit for -${named[0]}; the newest revision in spec/ is -${newest}`,
+    );
+  });
+
   it("no status page cites a requirement the draft does not define, or calls a closed gap open", () => {
     const draft = read(DRAFT);
     const defined = new Set(
