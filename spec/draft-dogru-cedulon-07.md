@@ -596,8 +596,9 @@ The protected header MUST be a deterministic CBOR map containing
   `application/cedulon-receipt+cbor`,
   `application/cedulon-checkpoint+cbor`,
   `application/cedulon-manifest+cbor`,
-  `application/cedulon-decision+cbor`, or
-  `application/cedulon-countersign+cbor`
+  `application/cedulon-decision+cbor`,
+  `application/cedulon-countersign+cbor`, or
+  `application/cedulon-inclusion+cbor`
 - `4` (kid) = bstr, mandatory. The profile computes `kid` as the
   first eight bytes of SHA-256 over the issuer's SubjectPublicKeyInfo
   DER, in the Ed25519 SubjectPublicKeyInfo encoding of {{RFC8410}}. A
@@ -1371,6 +1372,21 @@ signature over a statement rather than a proof of log membership, was
 correct, and the protocol text now says the same thing. The
 {{RFC9942}} citation applies in tier 2, where its mechanics are
 actually performed.
+
+On the wire the witness receipt is a COSE_Sign1 under {{cose-profile}},
+signed by the witness key, with content type
+`application/cedulon-inclusion+cbor` ({{iana-inclusion}}). Its payload
+is a deterministic CBOR map of three entries and is not a CWT claim
+set: label `1` is the statement hash, label `2` the entry index, label
+`3` the tree head. The two hashes are text strings holding the
+lowercase hexadecimal of a 32-octet SHA-256, the statement hash taken
+over the octets of the statement the witness recorded; the entry index
+is an unsigned integer. The map carries no statement body: a receipt
+that travels with the body carries it beside the COSE object, not
+inside it ({{witness-root}}, `MUST-T11-17`). A receipt whose content
+type is another value, or whose payload lacks one of the three entries
+or carries one of another type, does not verify (`MUST-T4-8`,
+`MUST-T11-10`).
 
 A verifier MAY be given witness receipts for the period under audit.
 It is a distinct input from the presented checkpoint chain, and
@@ -2237,7 +2253,7 @@ Observability:
 
 # IANA Considerations {#iana}
 
-This document requests the registration of five media types in the
+This document requests the registration of six media types in the
 "Media Types" registry {{RFC6838}}, in the standards tree, each
 carrying the `+cbor` structured syntax suffix that {{RFC8949}}
 registers. Each names one of the COSE_Sign1 objects this document
@@ -2262,7 +2278,7 @@ labels then, without reinterpreting these.
 
 No other IANA action is requested.
 
-The five templates follow. Fields that are the same for every one
+The six templates follow. Fields that are the same for every one
 are stated once, in the first, and the others say so.
 
 ## application/cedulon-receipt+cbor {#iana-receipt}
@@ -2458,6 +2474,43 @@ Published specification:
 Applications that use this media type:
 : Payees that acknowledge a receipt and, optionally, bind the bytes
   they delivered.
+
+Required parameters, optional parameters, fragment identifier considerations, additional information, contact, intended usage, restrictions on usage, author, change controller:
+: As for application/cedulon-receipt+cbor.
+
+## application/cedulon-inclusion+cbor {#iana-inclusion}
+
+Type name:
+: application
+
+Subtype name:
+: cedulon-inclusion+cbor
+
+Encoding considerations:
+: binary. A COSE_Sign1 structure in deterministic CBOR, untagged, as
+  profiled in {{cose-profile}}, whose payload is the three-entry map
+  {{witness}} states: statement hash, entry index, tree head.
+
+Security considerations:
+: See {{security}} of this document. A witness receipt verified under
+  the key it carries establishes that some log is internally
+  consistent and nothing about which log; it carries evidentiary
+  weight only under a witness key held out of band ({{witness-root}},
+  `MUST-T11-15`). It attests a statement hash, not membership in an
+  append-only log; membership is tier 2 of {{witness}} and needs the
+  candidate statement and an inclusion proof beside the receipt.
+
+Interoperability considerations:
+: As for application/cedulon-receipt+cbor, except that the payload is
+  not a CWT claim set: its three labels are local to the map and are
+  stated, with their types, in {{witness}}.
+
+Published specification:
+: This document, {{witness}}.
+
+Applications that use this media type:
+: Transparency witnesses that co-sign the statements they record, and
+  verifiers that hold witness receipts for a period under audit.
 
 Required parameters, optional parameters, fragment identifier considerations, additional information, contact, intended usage, restrictions on usage, author, change controller:
 : As for application/cedulon-receipt+cbor.
@@ -2685,11 +2738,13 @@ that branch against an installed 0.7.0 will not find it.
 
 ## Changes from -06 {#changes-06}
 
-This revision has two subjects. The first repairs a wording residue
+This revision has three subjects. The first repairs a wording residue
 that -06's own repair created, reported by the reader who implemented
 -06 from the posted text; it changes no behaviour. The second adds two
 requirements on one axis of the audit's declared scope that every
-earlier revision left unstated.
+earlier revision left unstated. The third states the wire form of the
+witness receipt, which every earlier revision described and none
+encoded, and registers its media type.
 
 -06 stated, for the first time, what a verifier does when it holds no
 pinned issuer key: the signature is still checked against the key the
@@ -2745,6 +2800,23 @@ prove that the enumeration is complete.
 This distinction is the one {{ABAK}} draws for control instructions,
 where a receiver-side observation at one enforcement point does not
 establish that another required path was reached.
+
+The witness receipt of {{witness}} has been described since -02 as a
+COSE_Sign1 binding a statement hash, an entry index and a tree head,
+and every revision left its encoding to the reader. The companion
+implementation, at its published 0.9.0, issues and verifies that
+object under the content type `application/cedulon-inclusion+cbor`, a
+name no revision registered over a payload no revision stated, while
+{{cose-profile}} makes the content type a normative check inside a
+protected header (`MUST-T4-8`). {{witness}} now states the payload as
+issued, {{cose-profile}} lists the name beside the other five, and
+{{iana}} requests its registration as the sixth template. No
+behaviour changes for objects already issued. The encoding is stated
+as it ships: hashes as hexadecimal text strings, and three small
+positive labels that are local to the map rather than CWT claims. A
+later revision may move the hashes to byte strings and the labels into
+the private-use range the other objects use; it will do so in step
+with a package release, and will say so here.
 
 ## Changes from -05 {#changes-05}
 
