@@ -6,8 +6,9 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## 0.10.0: an audit over a presented extract says what it covered
 
-This one adds an input and a member. It refuses nothing that used to pass and
-changes no finding.
+This one adds an input and a member, and it refuses one shape that used to
+pass: an extract whose window does not end after it starts. It changes no
+finding.
 
 `cedulon_audit` on the MCP server now takes `extract`: a signed rail extract
 the caller was presented with, in the shape `signRailExtract` produces
@@ -16,21 +17,36 @@ clockSkewMs? }, signature, publicKeyPem }`). Present, that document is the
 settlement side of the audit and this server's in-process ledger is not
 consulted: the rail operator's signed statement has standing the server's own
 simulation of a rail does not, and the two cannot both be the population.
-`extraSettlements` beside an `extract` is refused as
-`extra-settlements-with-extract` rather than reconciled with a warning, on the
-reasoning `MUST-T10-20` gives from the other side: a row added beside the
-signed document is a charge no rail key stands behind. A malformed `extract`
-is refused as `extract: ...` before anything is reconciled: the gate applies
-the rule the library itself applies before it signs or verifies an extract
-(`railExtractShapeRefusal`: safe-integer window and timestamps, the amount
-grammar on every row, a non-negative clock skew), and on top of it refuses an
-empty account or rail, an empty signature, a public key that is not a PEM, and
-a window that does not end after it starts. A missing member is not coerced
-into an empty string, and an empty one is not accepted, because an audit
-would then name an account nobody declared. A review pass over the first cut
-of this release found that a negative clock skew and an empty signature
-walked through a type-only gate and came back as a balanced audit under a
-warning; the gate now names what is wrong with the document instead.
+The receipt side is still this server's own receipt chain and checkpoints, so
+an extract for an account or rail this server did not settle on reports this
+server's receipts as unmatched; that is the correct reading of that pairing,
+and the tool description says so. Rows added through `extraSettlements`
+beside an `extract` are refused as `extra-settlements-with-extract` rather
+than reconciled with a warning, on the reasoning `MUST-T10-20` gives from the
+other side: a row added beside the signed document is a charge no rail key
+stands behind. An empty list adds no row and is accepted. A malformed
+`extract` is refused as `extract: ...` before anything is reconciled: the gate
+applies the rule the library itself applies before it signs or verifies an
+extract (`railExtractShapeRefusal`: safe-integer window and timestamps, the
+amount grammar on every row, a non-negative clock skew, and from this release
+a window that ends after it starts), and on top of it refuses an empty
+account or rail, an empty signature, and a public key that is not a PEM. A
+missing member is not coerced into an empty string, an empty one is not
+accepted, and `null` is a presented value that is refused rather than read as
+"no extract", because an audit would otherwise name an account nobody
+declared or answer a question the caller did not ask. A review pass over the
+first cut of this release found that a negative clock skew, an empty
+signature and an inverted window walked through a type-only gate and came
+back as a balanced audit, the inverted window under an unconditional
+guarantee; the gate now names what is wrong with the document instead.
+
+What breaks: `railExtractShapeRefusal` gains one clause,
+`malformed-extract-window`, for a body whose `windowEndMs` is not greater
+than its `windowStartMs`. `signRailExtract` refuses to sign such a body and
+`verifyRailExtract` refuses it before the signature, so an integration that
+produced one will see a named refusal where it used to see a signature. The
+window is half-open and nothing honest produces an empty or inverted one; the
+posted draft states the rule from `-08`.
 
 The result gains `scope`: the account, rail and window the audit was computed
 over, present exactly when it ran over a presented extract and absent when it

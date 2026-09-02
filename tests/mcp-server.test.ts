@@ -442,7 +442,16 @@ describe("mcp-server stdio JSON-RPC", () => {
             signature: extract.signature,
             publicKeyPem: keys.publicKeyPem,
           },
-          /^extract: body\.windowEndMs must be later than body\.windowStartMs/,
+          /^extract: malformed-extract-window/,
+        ],
+        [
+          "window start written as 1e309, which JSON-RPC carries as null",
+          {
+            body: { ...body, windowStartMs: 1e309 },
+            signature: extract.signature,
+            publicKeyPem: keys.publicKeyPem,
+          },
+          /^extract: /,
         ],
       ];
       for (const [name, hostile, reason] of refused) {
@@ -451,6 +460,69 @@ describe("mcp-server stdio JSON-RPC", () => {
         assert.match(String((res.body as { reason?: string }).reason), reason, name);
         assert.equal("scope" in (res.body as object), false, `${name}: a refused extract named a scope`);
       }
+
+      // null is a presented value, not an absent one: it is refused, not read
+      // as "audit the in-process ledger".
+      const nul = await rpc.callTool("cedulon_audit", { extract: null });
+      assert.equal(nul.isError, true);
+      assert.match(String((nul.body as { reason?: string }).reason), /^extract: expected an object/);
+
+      // An empty extraSettlements list adds no row, so it is not refused, and
+      // the result still names its scope.
+      const emptyBeside = await rpc.callTool("cedulon_audit", { extract, trust, extraSettlements: [] });
+      assert.equal(emptyBeside.isError, false);
+      assert.equal((emptyBeside.body as { ok?: boolean }).ok, true);
+      assert.deepEqual((emptyBeside.body as { scope?: unknown }).scope, overBody.scope);
+
+      // Without a trust pin the extract is checked against the key it carries,
+      // which establishes internal consistency and attests nothing: the audit
+      // says so, the guarantee is conditional, and the scope is still named,
+      // because an extract was presented and the population is known.
+      const unpinned = await rpc.callTool("cedulon_audit", { extract });
+      assert.equal(unpinned.isError, false);
+      const unpinnedBody = unpinned.body as { guarantee?: string; warnings?: Array<{ code: string }>; scope?: unknown };
+      assert.equal(unpinnedBody.guarantee, "conditional");
+      assert.equal(unpinnedBody.warnings?.some((w) => w.code === "unauthenticated-extract"), true);
+      assert.deepEqual(unpinnedBody.scope, overBody.scope);
+
+      // An extract for an account this server did not settle on: the receipt
+      // side is still this server's chain, so its receipt comes back unmatched
+      // against that population. The in-process settlement rows are not in
+      // the comparison at all - if they were, the audit would report that the
+      // caller-supplied rows differ from the signed extract.
+      const foreignKeys = generateExtractKeys();
+      const foreignBody = {
+        accountId: "acct-elsewhere-0001",
+        railId: "rail-elsewhere-0001",
+        windowStartMs: paidAt - 3_600_000,
+        windowEndMs: paidAt + 3_600_000,
+        settlements: [],
+      };
+      const foreign = signRailExtract(foreignBody, foreignKeys.privateKeyPem, foreignKeys.publicKeyPem);
+      const elsewhere = await rpc.callTool("cedulon_audit", {
+        extract: foreign,
+        trust: { publicKeyPem: foreignKeys.publicKeyPem, accountId: foreignBody.accountId, railId: foreignBody.railId },
+      });
+      assert.equal(elsewhere.isError, false);
+      const elsewhereBody = elsewhere.body as { ok?: boolean; findings?: Array<{ code: string; id: string }>; scope?: { accountId?: string } };
+      assert.equal(elsewhereBody.ok, false);
+      assert.equal(elsewhereBody.findings?.some((f) => f.code === "receipt-without-settlement"), true);
+      assert.equal(elsewhereBody.findings?.some((f) => f.code === "extract-settlement-mismatch"), false);
+      assert.equal(elsewhereBody.scope?.accountId, foreignBody.accountId);
+
+      // A member the rail added to the body travels through the gate as
+      // signed: the signature covers it, so it is neither stripped nor
+      // rebuilt.
+      const extended = signRailExtract({ ...body, vendorField: "signed-too" } as typeof body, keys.privateKeyPem, keys.publicKeyPem);
+      const withExtra = await rpc.callTool("cedulon_audit", { extract: extended, trust });
+      assert.equal(withExtra.isError, false);
+      assert.equal((withExtra.body as { ok?: boolean }).ok, true);
+
+      // The ledger export is over the in-process ledger and names no scope,
+      // whatever extract the last audit call was over.
+      const exported = await rpc.callTool("cedulon_export_ledger", {});
+      assert.equal(exported.isError, false);
+      assert.equal("scope" in (exported.body as object), false);
     } finally {
       rpc.close();
     }

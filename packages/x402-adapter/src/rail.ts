@@ -62,6 +62,15 @@ export function railExtractShapeRefusal(body: unknown): string | null {
   if (!Number.isSafeInteger(rec.windowEndMs)) {
     return "malformed-extract-windowEndMs";
   }
+  // The window is half-open, [windowStartMs, windowEndMs). One that does not
+  // end after it starts declares no population, and a signed extract over no
+  // population read as a balanced audit under an unconditional guarantee on
+  // the previous build. It is a shape refusal, not a signature verdict, so
+  // the signer refuses to sign it and the verifier refuses it before the
+  // signature, by the same name.
+  if ((rec.windowEndMs as number) <= (rec.windowStartMs as number)) {
+    return "malformed-extract-window";
+  }
   if (!Array.isArray(rec.settlements)) {
     return "missing-extract-settlements";
   }

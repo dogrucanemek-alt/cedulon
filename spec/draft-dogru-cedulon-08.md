@@ -171,9 +171,11 @@ returned for checkpoints, names what a witness holding a checkpoint the
 presented chain omits reports, brings equivocation within reach by
 comparing recorded copies against the presented chain, and states how
 checkpoint totals may be withheld without withholding the fact that
-they were. No signed object is attested by a key it carries itself,
-and a presented Trade Manifest must be bound both to the
-receipts that name it and to the terms those receipts claim. The
+they were. No signed object is attested by a key it carries itself, a
+signature checked against such a key where no key is held establishes
+internal consistency and attests nothing, and a presented Trade
+Manifest must be bound both to the receipts that name it and to the
+terms those receipts claim. The
 document also names a threat no adversary causes, a settlement
 recorded on a rail with no receipt behind it, and defines a Dispute
 Evidence Bundle (evidence, not an award) and optional SCITT anchoring.
@@ -871,7 +873,10 @@ record's `timestampMs`, and `clockSkewMs` - MUST be integers of
 magnitude at most 2^53 - 1, the range a JSON number carries exactly,
 and `clockSkewMs` MUST NOT be negative; a value outside those bounds,
 or a non-integer, is refused by name in the same way as a missing
-member.
+member. `windowEndMs` MUST be greater than `windowStartMs`: the window
+is half-open, so one that does not end after it starts declares no
+population, and a body carrying one is refused by name
+(`malformed-extract-window`) in the same way, at both ends.
 
 The body is read as text before it is read as an object. A text in
 which any object repeats a member name is refused as
@@ -2757,9 +2762,15 @@ that branch against an installed 0.9.0 will not find it either.
 
 ## Changes from -07 {#changes-07}
 
-This revision has one subject and adds no requirement. It widens
-`MUST-T10-19` from the two surfaces -07 named to every structure an
-implementation returns for an audit.
+This revision has one subject. It widens `MUST-T10-19` from the two
+surfaces -07 named to every structure an implementation returns for
+an audit, and it states one shape rule the half-open window already
+implied: an extract whose window does not end after it starts
+declares no population and is refused as malformed by name. That rule
+was measured before it was written - a correctly signed extract with
+its window inverted and no rows came back from the companion as a
+balanced audit under an unconditional guarantee - and the companion
+refuses it at both ends from 0.10.0.
 
 -07 had the report carry the account, rail and window it was computed
 over in the printed report and in the finding object, and said in its
@@ -2785,8 +2796,11 @@ gives from the other side. Its ledger export is unchanged: that
 export's audit is always over the in-process ledger, which declares
 no population, so it has nothing to name, and a member that is always
 absent would say nothing. The requirements table row, the third step
-of the verification algorithm and the abstract say the widened form;
-no other text moved.
+of the verification algorithm and the abstract say the widened form,
+and the extract shape paragraph of {{rail-extract}} states the window
+rule. The Implementation Status section is re-measured for this
+revision, the sentences that name the revision are renumbered, and no
+other text moved.
 
 ## Changes from -06 {#changes-06}
 

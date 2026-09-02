@@ -51,7 +51,7 @@ const TOOLS = [
         extract: {
           type: "object",
           description:
-            "A signed rail extract you were presented with: { body: { accountId, railId, windowStartMs, windowEndMs, settlements: [{ ref, amount, currency, timestampMs }], clockSkewMs? }, signature, publicKeyPem }. Present, it is the settlement side of the audit: this server's in-process ledger is not consulted, extraSettlements is refused beside it, and the result carries scope. Absent, the audit runs over this server's own ledger and declares no scope.",
+            "A signed rail extract you were presented with: { body: { accountId, railId, windowStartMs, windowEndMs, settlements: [{ ref, amount, currency, timestampMs }], clockSkewMs? }, signature, publicKeyPem }. Present, it is the settlement side of the audit: this server's in-process settlement rows are not consulted, rows added through extraSettlements are refused beside it (an empty list adds nothing and is accepted), and the result carries scope. The receipt side is still this server's own receipt chain and checkpoints, so an extract for an account or rail this server did not settle on reports this server's receipts as unmatched; that is the correct reading of that pairing, not a defect. A body the library would refuse to sign (malformed window, amount outside the grammar, negative clock skew), an empty account, rail or signature, or a key that is not a PEM is refused as extract: ... before anything is reconciled. Absent, the audit runs over this server's own ledger and declares no scope.",
         },
         trust: {
           type: "object",
@@ -170,10 +170,13 @@ function asSpendArgs(args: Record<string, unknown>): SpendArgs {
  * account read as one that declared "", and the audit would name that.
  */
 function asExtract(value: unknown): SignedRailExtract | undefined {
-  if (value === undefined || value === null) {
+  if (value === undefined) {
     return undefined;
   }
-  if (typeof value !== "object" || Array.isArray(value)) {
+  // null is a presented value, not an absent one. Reading it as "no extract"
+  // would run the in-process audit for a caller who asked for something else
+  // and could not tell the two answers apart.
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("extract: expected an object { body, signature, publicKeyPem }");
   }
   const v = value as Record<string, unknown>;
@@ -221,13 +224,13 @@ function asExtract(value: unknown): SignedRailExtract | undefined {
   if (shape !== null) {
     throw new Error(`extract: ${shape}`);
   }
-  // Three refusals the boundary adds on top of the library's shape rule. An
+  // Two refusals the boundary adds on top of the library's shape rule. An
   // empty account or rail is an unstated one written as a string, and the
   // audit would otherwise name "" as the population it covered. An empty
   // signature or a public key that is not a PEM cannot verify, so the audit
   // would only ever report them as an unauthenticated extract; refusing them
   // here says what is wrong with the document rather than what it fails to
-  // prove. A window that does not end after it starts declares no population.
+  // prove.
   if (b.accountId.length === 0 || b.railId.length === 0) {
     throw new Error("extract: body.accountId and body.railId must be non-empty");
   }
@@ -236,9 +239,6 @@ function asExtract(value: unknown): SignedRailExtract | undefined {
   }
   if (!v.publicKeyPem.includes("-----BEGIN PUBLIC KEY-----")) {
     throw new Error("extract: publicKeyPem must be an SPKI PEM public key");
-  }
-  if (b.windowEndMs <= b.windowStartMs) {
-    throw new Error("extract: body.windowEndMs must be later than body.windowStartMs");
   }
   // The body is passed through as presented rather than rebuilt, so the bytes
   // the signature covers are the bytes the audit canonicalises.
@@ -275,11 +275,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "cedulon_audit": {
         const extract = asExtract(args.extract);
         const extraSettlements = asExtraSettlements(args.extraSettlements);
-        if (extract && extraSettlements) {
+        if (extract && extraSettlements && extraSettlements.length > 0) {
           // A presented extract is the population the audit is over. A row added
           // beside it would be a charge no rail key stands behind (MUST-T10-20's
           // reasoning from the other side), so the call is refused rather than
-          // reconciled with a warning.
+          // reconciled with a warning. An empty list adds nothing and is not
+          // refused: the rule is about rows, not about the member being present.
           return textResult(
             {
               ok: false,

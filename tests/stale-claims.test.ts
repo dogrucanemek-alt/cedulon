@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -655,6 +656,28 @@ describe("claims that describe something outside their own file", () => {
     const gone = page.replace(/the deposit for the posted -\d+ revision is <a href="https:\/\/doi\.org\/10\.5281\/zenodo\.\d+">[^<]*<\/a>/, "");
     assert.notEqual(gone, page, "fixture did not remove the deposit line");
     assert.throws(() => assertDepositLineNamesPosted(gone, newest), /no longer names the deposit of a posted revision/);
+  });
+
+  it("RED then GREEN: the newest posted revision is the newest archive text, and an opened revision with no text is not posted", () => {
+    // What "posted" means to the tree: the archive text is carried beside the
+    // source. This is a discipline, not a datatracker query, and the fixture
+    // shows both edges of it on a synthetic spec/ rather than the live one: a
+    // .md with no .txt is opened and not posted; a .txt dropped in before
+    // posting would read as posted, which is why the render stays out of the
+    // tree until the posting day.
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-spec-"));
+    try {
+      assert.throws(() => latestPostedRevision(dir), /no draft-dogru-cedulon-NN\.txt/);
+      writeFileSync(join(dir, "draft-dogru-cedulon-07.md"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-07.txt"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-08.md"), "");
+      assert.equal(latestDraftRevision(dir), "08");
+      assert.equal(latestPostedRevision(dir), "07");
+      writeFileSync(join(dir, "draft-dogru-cedulon-08.txt"), "");
+      assert.equal(latestPostedRevision(dir), "08");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("no status page cites a requirement the draft does not define, or calls a closed gap open", () => {

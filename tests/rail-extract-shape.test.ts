@@ -99,12 +99,23 @@ const SAFE_INTEGER_FIELDS = [
   {
     field: "windowStartMs",
     refusal: "malformed-extract-windowStartMs",
-    apply: (base: RailExtractBody, value: number): unknown => ({ ...base, windowStartMs: value }),
+    // The other bound moves with a safe value so the window still ends after
+    // it starts: this table measures the integer rule, and the order rule has
+    // its own case below.
+    apply: (base: RailExtractBody, value: number): unknown => ({
+      ...base,
+      windowStartMs: value,
+      windowEndMs: Number.isSafeInteger(value) ? value + 1 : base.windowEndMs,
+    }),
   },
   {
     field: "windowEndMs",
     refusal: "malformed-extract-windowEndMs",
-    apply: (base: RailExtractBody, value: number): unknown => ({ ...base, windowEndMs: value }),
+    apply: (base: RailExtractBody, value: number): unknown => ({
+      ...base,
+      windowEndMs: value,
+      windowStartMs: Number.isSafeInteger(value) ? value - 1 : base.windowStartMs,
+    }),
   },
   {
     field: "timestampMs",
@@ -155,7 +166,7 @@ describe("rail extract POSIX millisecond fields are safe integers", () => {
     // magnitude: the text says clockSkewMs MUST NOT be negative, so the
     // gate refuses it by name. -0 is numerically 0 and stays accepted.
     assert.equal(railExtractShapeRefusal({ ...body, windowStartMs: -1 }), null);
-    assert.equal(railExtractShapeRefusal({ ...body, windowEndMs: -1 }), null);
+    assert.equal(railExtractShapeRefusal({ ...body, windowStartMs: -2, windowEndMs: -1 }), null);
     assert.equal(
       railExtractShapeRefusal({
         ...body,
@@ -166,6 +177,22 @@ describe("rail extract POSIX millisecond fields are safe integers", () => {
     assert.equal(railExtractShapeRefusal({ ...body, clockSkewMs: -1 }), "malformed-extract-clockSkewMs");
     assert.equal(railExtractShapeRefusal({ ...body, clockSkewMs: -0 }), null);
     assert.equal(railExtractShapeRefusal({ ...body, clockSkewMs: 0 }), null);
+  });
+
+  it("a window that does not end after it starts is refused as malformed-extract-window, and cannot be signed", () => {
+    // Measured on the previous build: a correctly signed extract with
+    // windowStartMs 20 and windowEndMs 10 and no rows came back from the
+    // audit as balanced under an unconditional guarantee. The window is
+    // half-open, so an empty or inverted one declares no population, and a
+    // body carrying one is refused by name at both ends.
+    const inverted = { ...body, windowStartMs: body.windowEndMs, windowEndMs: body.windowStartMs };
+    assert.equal(railExtractShapeRefusal(inverted), "malformed-extract-window");
+    assert.equal(railExtractShapeRefusal({ ...body, windowEndMs: body.windowStartMs }), "malformed-extract-window");
+    assert.equal(railExtractShapeRefusal({ ...body, windowEndMs: body.windowStartMs + 1 }), null);
+    const k = generateExtractKeys();
+    assert.throws(() => signRailExtract(inverted, k.privateKeyPem, k.publicKeyPem), /malformed-extract-window/);
+    const honest = signRailExtract(body, k.privateKeyPem, k.publicKeyPem);
+    assert.equal(verifyRailExtract({ ...honest, body: inverted }, k.publicKeyPem), false);
   });
 
   it("an extra non-finite member is still the JCS encode refusal, not the shape gate", () => {
