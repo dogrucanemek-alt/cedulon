@@ -1850,13 +1850,21 @@ export type FindingObject = {
   counts: AuditCounts;
 };
 
-export function toFindingObject(report: AuditReport, receiptCount = 0): FindingObject {
+/**
+ * The receipt total is the count the audit measured. The second parameter is
+ * kept so existing calls still compile; it is not read, because a number the
+ * caller hands over and a number the report counted are one fact from two
+ * sources, and the two disagreed the day a caller passed the wrong one.
+ *
+ * @param _receiptCount ignored since 0.11.0; `report.counts.receipts.submitted` is the total.
+ */
+export function toFindingObject(report: AuditReport, _receiptCount?: number): FindingObject {
   return {
     findingObjectVersion: FINDING_OBJECT_VERSION,
     ok: report.ok,
     guarantee: report.guarantee,
     summary: report.summary,
-    receipts: receiptCount,
+    receipts: report.counts.receipts.submitted,
     findings: report.findings,
     warnings: report.warnings,
     // A caller reading this object makes the same judgement as an operator
@@ -1879,9 +1887,10 @@ function formatCounts(counts: AuditCounts): string[] {
   ];
 }
 
-export function formatAudit(report: AuditReport, receiptCount = 0): string {
+/** @param _receiptCount ignored since 0.11.0; the printed total is `report.counts.receipts.submitted`. */
+export function formatAudit(report: AuditReport, _receiptCount?: number): string {
   const lines = report.ok
-    ? [`audit: balanced`, `receipts=${receiptCount}`, "findings=0"]
+    ? [`audit: balanced`, `receipts=${report.counts.receipts.submitted}`, "findings=0"]
     : [report.summary, ...report.findings.map((f) => `${f.code}\t${f.id}\t${f.detail}`)];
   // Warnings decide whether the balance means anything, so an operator has to
   // see them on the passing path too, not only in the returned object.

@@ -315,4 +315,25 @@ describe("Round 5: the report publishes the class counts it already computes", (
     assert.ok(lines.indexOf("guarantee=unconditional") < lines.findIndex((l) => l.startsWith("counts\t")));
     assert.ok(lines.findIndex((l) => l.startsWith("scope=")) < lines.findIndex((l) => l.startsWith("counts\t")));
   });
+
+  it("8 RED then GREEN: the receipt total is the measured count, not a number the caller hands over", () => {
+    const honest = generateReceiptKeys();
+    const receipts = chain(honest, [
+      { ref: "ref-a", at: MIDDLE, nonce: "n-a" },
+      { ref: "ref-b", at: MIDDLE + 1, nonce: "n-b" },
+    ]);
+    const report = audit({
+      receipts,
+      checkpoints: [checkpointOver(honest, receipts)],
+      settlements: [row("ref-a", MIDDLE), row("ref-b", MIDDLE + 1)],
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.equal(report.counts.receipts.submitted, 2);
+    // One fact, one source. A caller that passes a different number does not
+    // get a report that disagrees with its own counts.
+    assert.equal(toFindingObject(report, 99).receipts, 2);
+    assert.equal(toFindingObject(report).receipts, 2);
+    assert.match(formatAudit(report, 99), /^receipts=2$/m);
+    assert.match(formatAudit(report), /^receipts=2$/m);
+  });
 });

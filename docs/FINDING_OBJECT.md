@@ -21,7 +21,7 @@ call; the recommendation at the end is the one this tree would make.
   ok: boolean,
   guarantee: "unconditional" | "conditional",
   summary: string,          // same text formatAudit prints first
-  receipts: number,
+  receipts: number,         // counts.receipts.submitted, the total the audit measured
   findings: Finding[],      // severity is fail or omitted
   warnings: Finding[],
   scope?: AuditScope,       // the account, rail and window an extract declared
@@ -79,7 +79,11 @@ here; that is a courtesy, not a contract.
 
 Adding an optional field on a finding is not a version bump. Removing
 or renaming a required envelope field is. Adding a new `code` is not a
-version bump (see unknown codes).
+version bump (see unknown codes). Adding an envelope member the schema
+lists as optional is not one either, and a consumer that validates with
+`additionalProperties: false` from an older copy of the schema will
+refuse the new member until it updates the schema; `scope` and `counts`
+both arrived that way, at version 1.
 
 ## Unknown codes
 

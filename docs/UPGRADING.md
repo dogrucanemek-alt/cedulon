@@ -34,12 +34,16 @@ holding none. It is now `aborted`. Neither is a new check. The behaviour that
 excluded the rows was right and is unchanged; the exclusion is now reported.
 
 The member is on every surface the report reaches. The finding object carries
-`counts` (`docs/finding-object.schema.json` names the shape; adding an envelope
-member is not a version bump under `docs/FINDING_OBJECT.md`, and the object
-version stays 1). `formatAudit` prints two `counts` lines, one per side, after
-the guarantee and scope lines and before the warnings, so the documented
-`npm run audit` output in `docs/RUN_AS_VERIFIER.md` and `docs/INTEROP_RUN.md`
-grew those two lines. The `cedulon_audit` result on the MCP server carries
+`counts` (`docs/finding-object.schema.json` names the shape as an optional
+envelope member; `docs/FINDING_OBJECT.md` counts that among the changes that
+are not a version bump, and the object version stays 1). `formatAudit` prints
+two `counts` lines, one per side, after the guarantee and scope lines and
+before the warnings, so the documented `npm run audit` output in
+`docs/RUN_AS_VERIFIER.md` and `docs/INTEROP_RUN.md` grew those two lines. The
+`receipts` total in the finding object and the `receipts=` line of the printed
+report are now `counts.receipts.submitted`, the number the audit measured; the
+second parameter of `toFindingObject` and `formatAudit` is still accepted so
+existing calls compile, and is not read. The `cedulon_audit` result on the MCP server carries
 `counts` beside `scope`, and `cedulon_export_ledger` carries the counts of the
 in-process audit it exports, because an export is a structure returned for
 that audit and the counts are never absent the way a scope can be.
@@ -54,7 +58,10 @@ nothing.
 What breaks: nothing at the boundary. A consumer of the finding object that
 validates against the version-1 schema from an older tree will see an
 unknown envelope member; the schema in this tree names it. A type that
-constructs `AuditReport` or `FindingObject` literals now needs `counts`.
+constructs `AuditReport` or `FindingObject` literals now needs `counts`. A
+caller that passed something other than the submitted count as the receipt
+total gets the measured number instead; every caller in this tree passed the
+submitted count, and the documented output did not move.
 
 Where this stands against the posted draft. No requirement in `-08` asks for
 class counts; `MUST-T10-19` asks the report to name its population, and this
