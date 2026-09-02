@@ -2688,11 +2688,12 @@ in the published packages at version 0.9.0, the version on npm as this
 is posted. -06 was posted while those were in the repository and in no
 package, and said so; 0.8.0 and 0.9.0 were published after it. What
 this revision widens - `MUST-T10-19` to every structure returned for
-the audit - is carried by the companion's MCP result at 0.10.0, which
-is prepared in the repository at the commit this revision describes
-and is not on npm as this is written; its ledger export is unchanged,
-because that export's audit is over the in-process ledger and declares
-no population. The
+the audit - and the window rule it states are carried by the
+companion at 0.10.0, published on npm as this is written with a
+provenance attestation whose build definition names
+`refs/tags/v0.10.0`; its ledger export is unchanged, because that
+export's audit is over the in-process ledger and declares no
+population. The
 0.7.0 packages a reader may still hold parse extract text with a
 parser that keeps the last of two values, verify a signature over a
 stuffed unprotected header without complaint, and name neither the

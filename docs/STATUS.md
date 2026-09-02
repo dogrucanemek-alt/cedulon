@@ -32,10 +32,19 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-`0.10.0` is prepared in this tree and is not a published npm release: it adds
-an `extract` input to `cedulon_audit` on the MCP server and a `scope` member
-to that tool's result, which a clean install of 0.9.0 does not have.
-Publishing is a separate step. What it changes: an audit asked over a rail
+`0.10.0` is published on npm, with a provenance attestation, and it is what a
+reader now gets from an installed package. Checked from the published packages
+rather than from this tree: a clean install of `@cedulon/mcp-server@0.10.0` in
+an empty folder answers `initialize` reporting `0.10.0` and lists `extract` on
+`cedulon_audit`, and a clean `npm pack @cedulon/x402-adapter@0.10.0` carries
+`malformed-extract-window`. All eight packages answer `0.10.0`, each with a
+SLSA v1 attestation whose build definition names `refs/tags/v0.10.0` and
+`.github/workflows/release.yml`, and each reporting `gitHead` `7b1c362`. The
+tagged run published all eight and then failed its own post-release check,
+because this file still named `0.9.0` as the published version; this is the
+repair, and nothing was republished. What it adds: an `extract` input to
+`cedulon_audit` on the MCP server and a `scope` member to that tool's result,
+which a clean install of 0.9.0 does not have. What it changes: an audit asked over a rail
 extract the caller presents runs over that document rather than the server's
 own ledger, refuses rows added beside it as `extra-settlements-with-extract`,
 and names the account, rail and window it was computed over, the member
@@ -53,8 +62,8 @@ it; and `requestHash` is still the SHA-256 of the six-field canonical
 document in lowercase hex, the digest the posted `-03` named a hash for
 without naming the octets.
 
-`0.9.0` is published on npm, with a provenance attestation, and it is what a
-reader now gets from an installed package. Checked from the published package
+`0.9.0` was the release before it, published on npm with a provenance
+attestation. Checked from the published package
 rather than from this tree: a clean `npm pack @cedulon/audit@0.9.0` in an empty
 folder carries the `extractRejected` gate and the `settlement-comparison-skipped`
 warning. All eight packages answer `0.9.0`, each with a SLSA v1 attestation whose
@@ -142,7 +151,7 @@ false` for a departure the pinned key does attest. A clean install of
 `@cedulon/core@0.6.0` returns a 64-character lowercase hex digest from
 `requestHashOf`, matching the value the conformance run records.
 
-Eight packages are published on npm at `0.9.0`, so the server runs without a
+Eight packages are published on npm at `0.10.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
 `MUST-T8-9`, and it breaks: an audit that used to return a clean
 unconditional result over a receipt carrying the hash of terms it departs from
@@ -162,12 +171,14 @@ reports rather than refuses, and names the external-rail bound on T12 in the
 draft. The extract-evidence exits from `indeterminate` are built and red-then-green: authenticated presence settles late, authenticated full-window absence releases the authority. The reversing-entry branch of `MUST-T12-4` still has no evidence object, so T12-4 is executed for the extract branch and open for the reversal branch.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.9.0` answers `initialize` reporting `0.9.0`. A clean
-pack of `@cedulon/audit@0.9.0` in an empty folder was asked what this version
-changed, from the published bytes rather than the tree: it carries the
+`@cedulon/mcp-server@0.10.0` answers `initialize` reporting `0.10.0`, lists
+five tools, and carries `extract` on `cedulon_audit`. A clean pack of
+`@cedulon/x402-adapter@0.10.0` in an empty folder carries the
+`malformed-extract-window` refusal this version adds, and a clean pack of
+`@cedulon/audit@0.10.0` still carries the
 `extractRejected` gate that stops a refused extract supplying a settlement
 finding, and the `settlement-comparison-skipped` warning that says the
-reconciliation did not run. The release before that carried
+reconciliation did not run, which 0.9.0 added. The release before that carried
 `unstated-audit-scope`, the `AuditScope` type on the report and the finding
 object, and the unpinned-witness warning that no longer says a check ran on a
 branch that runs none. The one before those answered its own three: an oversized
@@ -223,9 +234,9 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.9.0 bundle was built and unpacked: its manifest states
-`0.9.0` and the server inside it installs `@cedulon/mcp-server@^0.9.0`. Every
-`@cedulon` package inside it reads `0.9.0`, with no older copy left beside them. The builder installs the published version rather than the
+desktop install. The 0.10.0 bundle was built and unpacked: its manifest states
+`0.10.0` and the server inside it installs `@cedulon/mcp-server@^0.10.0`. Every
+`@cedulon` package inside it reads `0.10.0`, with no older copy left beside them. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -252,7 +263,11 @@ where `0.9.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output, on 1 September after the
 entry was pushed by hand. `server.json` is the entry it was published from, and
 the listing names `@cedulon/mcp-server` at the same `0.9.0`. On that reading the
-two channels are in step.
+two channels were in step. Since `0.10.0` went to npm on 2 September, npm
+serves `0.10.0`, the MCP Registry still serves `0.9.0`, and a reader installing
+from the listing gets a release behind npm until `mcp-publisher` is run again;
+the publish attempt on 2 September was refused with an expired login and is
+waiting on a fresh one.
 
 That is a dated observation and not a claim about now. The listing moves whenever
 someone runs `mcp-publisher`, this page is not notified when they do, and an
