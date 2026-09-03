@@ -4,6 +4,49 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.13.0 (prepared, not published)
+
+A. The five money-shaped axes behind `audit()` now sit on
+`ReconciliationProfile` (`packages/audit/src/profile.ts`). Today's spend
+walk moved behind `SPEND_PROFILE`; texts and order did not move. The tree
+now carries `tests/spend-golden.test.ts`; unproven until a change that
+should have shifted a finding fails that file. `docs/DECISION_PROFILE.md`
+is the decision-side note.
+
+B. The tree now carries `DecisionRecordClaims` and `SignedDecisionRecord`
+(`packages/core/src/decision-record.ts`, CWT `-70501`…`-70512`, content
+type `application/cedulon-decision-record+cbor`) and
+`@cedulon/effect-extract` (`EffectRow` / `EffectExtractClaims`).
+`decisionRecordHash` hashes the COSE Sign1 bytes, the same input
+`receiptHash` uses on the COSE path. `buildCheckpointClaims` takes two
+optional functions after the previous-checkpoint hash: `totalsFn`
+(default `totalsFromReceipts`) and `headHashFn` (default `receiptHash`).
+The tree now carries those objects; unproven until a foreign verifier
+round-trips a record it did not mint.
+
+C. `DECISION_PROFILE` binds allow to an effect row on `effectHash`, and
+treats deny/defer as the aborted class. Four codes join the catalogue:
+`decision-without-effect`, `effect-without-decision`,
+`effect-against-refusal`, `effect-mismatch`. `FINDING_CODES` is 54; the
+schema enum lists the same 54. `interop/mizan-ig` turns two proposed
+JSONL files into that audit. The tree now carries twelve conformance
+cases and four offline fixtures; unproven until the live bridge log is
+measured and only `fromBridgeLine` / `fromMetaLine` have to move.
+`AuditInput.trust` on this profile is the effect-extract signer;
+`issuerTrust` is the decider. `terms()` is empty: policy binding is not
+exercised. The behaviour carried forward is unchanged: an audit still
+reports `manifest-terms-mismatch` with the split 0.6.0 introduced, where
+with a usable issuer pin the departure is a finding that fails the
+audit, and without a pin the same departure is a warning that does not
+by itself fail it; and `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted
+`-03` named a hash for without naming the octets.
+
+What breaks: nothing on the spend path; the golden test in
+`tests/spend-golden.test.ts` compares byte for byte. Callers of
+`buildCheckpointClaims` that already passed five arguments keep compiling;
+the two new parameters are optional.
+
 ## 0.12.0: the inclusion verifier binds to the bytes the caller holds
 
 A. `release.yml` now logs in with `mcp-publisher login github-oidc` and publishes

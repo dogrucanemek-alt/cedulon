@@ -444,3 +444,42 @@ Known, not closed:
 
 - MCP `cedulon_audit` still does not carry a layer-2 input (`packages/mcp-server/src/session.ts` `audit()`, `src/index.ts` tool schema). A caller on that surface cannot present candidate bytes and a proof.
 - JSON `receiptHash` still hashes `canonical({claims, signature})` (`packages/receipts/src/index.ts` `receiptHash`) rather than the signed COSE octets spec `{#hash-inputs}` names. New receipts MUST use COSE; the JSON path is legacy.
+
+## Round 7 - decision profile, 2026-09-04
+
+Origin. The 1 September population probe (`interop/abak-00`) applied
+draft-abak-agent-control-delivery-evidence-00 Section 6 to the spend
+reconciler and found two holes that `counts` later named (Round 5). The
+draft-abak -01 review, 3 September, recorded that an absent extract is
+a FAIL from absence. The same triangle — issuer record, independent
+counterparty, declared population — is the one a decision needs: who
+decided, what was effected, over which window.
+
+What this tree now carries (0.13.0 prepared, not published):
+
+- a `ReconciliationProfile` seam; spend behaviour held by
+  `tests/spend-golden.test.ts` (byte for byte)
+- `DecisionRecordClaims` / `decisionRecordHash` (COSE Sign1 bytes) and
+  `@cedulon/effect-extract`
+- `DECISION_PROFILE` and four codes (`decision-without-effect`,
+  `effect-without-decision`, `effect-against-refusal`, `effect-mismatch`)
+- twelve conformance cases (`tests/decision-profile.test.ts`)
+- an offline IG koba (`interop/mizan-ig`) over proposed JSONL
+
+Known, not closed:
+
+- FAIL from absence when no extract is presented (same as spend;
+  draft-abak -01 review, 3 September)
+- counter names remain spend dialect (`receipts`, `settlements`,
+  `aborted`, `settled`)
+- effect-signer independence is a pin the verifier states; Meta does
+  not sign. Until B is an independent process, `guarantee` is
+  conditional
+- IG / WhatsApp-bridge log field names were not measured on Hetzner;
+  only `fromBridgeLine` / `fromMetaLine` should move when they are
+- policy-document binding is not exercised (`terms()` returns `[]`)
+- Decision Record CWT block is `-70501`…`-70512`, not the `-70401` the
+  task first named (countersign already holds `-70401`/`-70402`)
+- `CTY_DECISION_RECORD` and the effect-extract media type are not in
+  the posted IANA table (spec text is a separate decision)
+- README and the site were not updated; those are external claims
