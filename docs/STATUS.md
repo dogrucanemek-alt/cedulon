@@ -343,8 +343,13 @@ The bundle's manifest declares its privacy policy at
 <https://cedulon.com/privacy.html>, which is also linked from the README that
 ships inside the package. A missing or incomplete privacy policy is an outright
 rejection from the Anthropic connector directory, so a test checks the manifest
-declaration, the HTTPS scheme, and the shipped README together. Nothing has been
-submitted to that directory yet.
+declaration, the HTTPS scheme, and the shipped README together. The desktop
+extension submission form was filed twice: on 27 August 2026 with the 0.2.4
+bundle, and on 3 September 2026 with the 0.12.0 bundle, the second filed as
+a new submission rather than as an update to the first. Anthropic states that
+it does not respond to every submission; as of 3 September it has not
+responded to either, and this sentence said nothing had been submitted until
+that day, which was wrong for a week.
 
 Smithery lists the server as `dogrucanemek/cedulon` since 3 September 2026
 (release `9cc8b89c`, published with `@smithery/cli` 4.11.1 from a bundle). The
