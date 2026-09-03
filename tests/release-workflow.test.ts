@@ -79,4 +79,31 @@ describe("release.yml static shape", () => {
       "bundle step does not compare manifest version to the tag",
     );
   });
+
+  // A workflow_dispatch run had github.ref on a branch: the tag guard was
+  // skipped, npm publish ran, and the run went green with nothing checked
+  // (gate review of 25c24c3, FIX-3). The workflow answers to tags only.
+  it("the workflow is triggered by tags only, and the publish job is locked to them", () => {
+    const on = yml.match(/^on:\s*\n([\s\S]*?)(?=^\S)/m);
+    assert.ok(on, "release.yml has no on: block");
+    assert.doesNotMatch(on[1]!, /workflow_dispatch/, "workflow_dispatch would run publish steps off a branch");
+    assert.match(on[1]!, /push:\s*\n\s*tags:/, "the push trigger is not on tags");
+    const publish = jobBodies(yml).get("publish")!;
+    assert.match(publish, /^\s{4}if:\s*startsWith\(github\.ref, 'refs\/tags\/'\)/m, "publish job is not locked to tags at job level");
+  });
+
+  // The first awk took the first paragraph only and never touched the notes
+  // of an existing release (gate review of 25c24c3, FIX-4). The section is
+  // produced by a tested script and written on both the create and the
+  // upload path.
+  it("release notes come from scripts/release-notes.ts and are written on both paths", () => {
+    assert.match(yml, /scripts\/release-notes\.ts/, "notes are not produced by the tested script");
+    assert.doesNotMatch(yml, /awk -v t=/, "the paragraph-cutting awk is still there");
+    assert.match(yml, /gh release edit "\$GITHUB_REF_NAME" --notes-file/, "the upload path does not update the notes");
+  });
+
+  it("the bundle check does not reach for python", () => {
+    assert.doesNotMatch(yml, /python3/, "manifest check still depends on python3");
+    assert.match(yml, /unzip -p "\$bundle" manifest\.json/, "manifest is not read with unzip");
+  });
 });

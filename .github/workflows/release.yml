@@ -15,11 +15,13 @@
 # until the next tag runs it.
 name: release
 
+# Tags only. A manual dispatch used to be accepted and ran the publish steps
+# with github.ref on a branch: the tag guard was skipped, npm publish ran,
+# and the run was green with nothing checked. There is no second way in.
 on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 # Default is read. id-token: write is only on publish (npm trusted publishing
 # and mcp-publisher login github-oidc). contents: write is only on release
@@ -29,6 +31,7 @@ permissions:
 
 jobs:
   publish:
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -222,7 +225,7 @@ jobs:
           tag="${GITHUB_REF_NAME#v}"
           bundle="build/cedulon-${tag}.mcpb"
           [ -f "$bundle" ] || { echo "bundle $bundle was not produced"; exit 1; }
-          ver=$(python3 -c "import json,zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(json.loads(z.read('manifest.json'))['version'])" "$bundle")
+          ver=$(unzip -p "$bundle" manifest.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
           echo "manifest version $ver, tag says $tag"
           if [ "$ver" != "$tag" ]; then
             echo "refusing to attach a bundle whose manifest version is not the tag"
@@ -238,14 +241,13 @@ jobs:
           bundle="build/cedulon-${tag}.mcpb"
           bundle_sha=$(sha256sum "$bundle" | awk '{print $1}')
           echo "bundle sha256 $bundle_sha"
+          # The whole UPGRADING section for this version, by the tested
+          # script (tests/release-notes.test.ts), plus the bundle digest.
+          # A first cut took the first paragraph only and left an existing
+          # release's notes untouched; both paths now write the same notes.
           notes=$(mktemp)
           {
-            awk -v t="$tag" '
-              $0 ~ "^## " t { grab=1; next }
-              grab && /^## / { exit }
-              grab && NF==0 && seen { exit }
-              grab && NF { seen=1; print }
-            ' docs/UPGRADING.md
+            node --experimental-strip-types scripts/release-notes.ts "$tag" docs/UPGRADING.md
             echo
             echo "Bundle SHA-256: $bundle_sha"
           } > "$notes"
@@ -254,6 +256,7 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" "$bundle" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$notes"
           fi
+          gh release edit "$GITHUB_REF_NAME" --notes-file "$notes"
           empty=$(mktemp -d)
           gh release download "$GITHUB_REF_NAME" --pattern "cedulon-${tag}.mcpb" --dir "$empty"
           echo "$bundle_sha  $empty/cedulon-${tag}.mcpb" | sha256sum -c -

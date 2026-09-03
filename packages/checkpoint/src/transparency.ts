@@ -88,7 +88,48 @@ export function buildInclusionProof(leaves: readonly string[], leafIndex: number
   return { leafIndex, siblings };
 }
 
+const LOWER_HEX_RE = /^(?:[0-9a-f]{2})+$/;
+const HASH_HEX_RE = /^[0-9a-f]{64}$/;
+
+/**
+ * Hex the way this package writes it: lowercase, even length, at least one
+ * byte, and nothing else in the string. `Buffer.from(hex, "hex")` stops at
+ * the first character it cannot read and returns what it decoded so far, so
+ * "aazz" hashed like "aa" and a receipt with a trailing suffix verified as
+ * the receipt without it. Anything the regex refuses is not bytes.
+ */
+export function strictHexBytes(hex: unknown): Buffer | null {
+  if (typeof hex !== "string" || !LOWER_HEX_RE.test(hex)) {
+    return null;
+  }
+  return Buffer.from(hex, "hex");
+}
+
+/**
+ * The proof shape the tree walk is defined over: a non-negative safe
+ * integer leaf index and 32-byte sibling hashes, one per level, with the
+ * index resolving to the root when the path ends. An empty path at index 1
+ * returns the leaf unchanged, so leaf == treeHead would pass a verifier
+ * that only compares; the last condition is what refuses it.
+ */
+export function validInclusionProof(proof: unknown): proof is InclusionProof {
+  if (typeof proof !== "object" || proof === null) {
+    return false;
+  }
+  const { leafIndex, siblings } = proof as { leafIndex?: unknown; siblings?: unknown };
+  if (typeof leafIndex !== "number" || !Number.isSafeInteger(leafIndex) || leafIndex < 0) {
+    return false;
+  }
+  if (!Array.isArray(siblings) || !siblings.every((s) => typeof s === "string" && HASH_HEX_RE.test(s))) {
+    return false;
+  }
+  return siblings.length < 53 && leafIndex < 2 ** siblings.length;
+}
+
 export function applyInclusionProof(leafHash: string, proof: InclusionProof): string {
+  if (!validInclusionProof(proof)) {
+    throw new Error("inclusion-proof");
+  }
   let hash = leafHash;
   let idx = proof.leafIndex;
   for (const sibling of proof.siblings) {
@@ -111,7 +152,11 @@ export class MemoryTransparencyService {
   }
 
   register(statementHex: string): InclusionReceipt {
-    const statementHash = createHash("sha256").update(Buffer.from(statementHex, "hex")).digest("hex");
+    const statement = strictHexBytes(statementHex);
+    if (!statement) {
+      throw new Error("statement-hex");
+    }
+    const statementHash = createHash("sha256").update(statement).digest("hex");
     const index = this.leaves.length;
     this.leaves.push(statementHash);
     this.treeHead = merkleRoot(this.leaves);
@@ -177,7 +222,8 @@ export function verifyInclusionEnvelope(
   ) {
     return false;
   }
-  if (!verifyCoseSign1(Buffer.from(receipt.coseHex, "hex"), receipt.issuerPublicKeyPem, CTY_INCLUSION)) {
+  const cose = strictHexBytes(receipt.coseHex);
+  if (!cose || !verifyCoseSign1(cose, receipt.issuerPublicKeyPem, CTY_INCLUSION)) {
     return false;
   }
   try {
@@ -192,24 +238,12 @@ export function verifyInclusionEnvelope(
   }
 }
 
-function candidateBytes(hex: string): Buffer | null {
-  try {
-    if (hex.length === 0 || hex.length % 2 !== 0) {
-      return null;
-    }
-    const bytes = Buffer.from(hex, "hex");
-    if (bytes.length === 0) {
-      return null;
-    }
-    return bytes;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Tier-2 (MUST-T11-18): the receipt covers these candidate bytes under the
  * witness pin. Seven decisions, in this order; any miss is false, none throw.
+ * The candidate is consumed whole (`strictHexBytes`) and the proof has to be
+ * the shape the walk is defined over (`validInclusionProof`) before it is
+ * applied; a proof of another shape is false here, not an exception.
  */
 export function verifyInclusion(
   receipt: InclusionReceipt,
@@ -219,7 +253,7 @@ export function verifyInclusion(
   if (!verifyInclusionEnvelope(receipt, expectedWitnessKeyPem)) {
     return false;
   }
-  const bytes = candidateBytes(candidateStatementHex);
+  const bytes = strictHexBytes(candidateStatementHex);
   if (!bytes) {
     return false;
   }
@@ -227,8 +261,8 @@ export function verifyInclusion(
   if (receipt.statementHash !== leaf) {
     return false;
   }
-  const proof = receipt.inclusionProof;
-  if (!proof) {
+  const proof: unknown = receipt.inclusionProof;
+  if (!validInclusionProof(proof)) {
     return false;
   }
   if (proof.leafIndex !== receipt.index) {

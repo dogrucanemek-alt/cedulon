@@ -410,6 +410,24 @@ takes the candidate bytes and the witness key and applies the seven decisions
 in `MUST-T11-18` order. Tests: `tests/inclusion-shape.test.ts` (six cases plus
 the in-memory log's (a)(b)).
 
+A second reader over that cut, before merge, found what the seven decisions
+did not cover: the hex under them. `Buffer.from(hex, "hex")` keeps whatever it
+decoded before the first bad character, so `aazz` as a candidate, a `coseHex`
+with a trailing suffix, and an empty statement at `register` all passed or
+were accepted; and a proof was applied before its shape was looked at, so an
+empty path at index 1 handed back the leaf unchanged and matched a
+witness-signed envelope whose tree head was that leaf, while a `null` path
+threw out of the public verifier. Both are closed in the same prepared
+release: one strict hex reader for the package and the audit's layer-2 input,
+and a named proof shape whose index must resolve to the root. Tests:
+`tests/inclusion-shape.test.ts` ("hex and proof shape"), the layer-2 cases in
+`tests/tiago04-k-round.test.ts`. The same pass found that `release.yml` would
+have run its npm publish steps off a manual dispatch with the tag guard
+skipped, and that its release notes stopped at the first blank line; the
+workflow now answers to tags only and the notes come from
+`scripts/release-notes.ts`, with `tests/release-workflow.test.ts` and
+`tests/release-notes.test.ts` holding the shape.
+
 Known, not closed:
 
 - MCP `cedulon_audit` still does not carry a layer-2 input (`packages/mcp-server/src/session.ts` `audit()`, `src/index.ts` tool schema). A caller on that surface cannot present candidate bytes and a proof.

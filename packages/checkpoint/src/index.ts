@@ -27,6 +27,8 @@ export {
   merkleRoot,
   statementHashOfCheckpoint,
   statementHashOfReceipt,
+  strictHexBytes,
+  validInclusionProof,
   verifyInclusion,
   verifyInclusionEnvelope,
   type InclusionProof,

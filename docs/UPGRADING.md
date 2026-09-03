@@ -31,6 +31,23 @@ now reads `verifyInclusionEnvelope`, and a call that meant to check that a
 receipt covers the bytes you hold now reads `verifyInclusion(receipt,
 candidateHex, witnessKey)` and fails without a proof.
 
+A review pass over the first cut found two more holes, both closed here. Hex
+was read with `Buffer.from(hex, "hex")`, which stops at the first character it
+cannot read and keeps what it decoded so far: a candidate of `aazz` hashed like
+`aa`, a receipt whose `coseHex` carried a trailing suffix verified as the
+receipt without it, and the in-memory log registered an empty statement. The
+checkpoint package now reads hex in one place (`strictHexBytes`: lowercase,
+even length, at least one byte, nothing else) and `register`, the envelope
+check, `verifyInclusion` and the audit's layer-2 input all refuse anything
+else; `register` throws `statement-hex`. And a proof was applied without
+looking at its shape: an empty path at index 1 returned the leaf unchanged, so
+a witness-signed envelope whose tree head was that leaf passed, and a `null`
+path threw out of the public verifier. `validInclusionProof` now names the
+shape (a non-negative safe-integer index, 32-byte lowercase siblings, and an
+index that resolves to the root when the path ends); `verifyInclusion` answers
+false to anything else without throwing, `applyInclusionProof` refuses it by
+name, and the audit reports `witness-inclusion-invalid`.
+
 ## 0.11.0: the report counts what it classed
 
 This one adds a member and prints two lines. It refuses nothing that used to

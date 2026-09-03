@@ -20,6 +20,7 @@ import {
   verifyCounterSignature,
 } from "@cedulon/receipts";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
+import { CTY_INCLUSION, cborMap, encodeCbor, signCoseSign1 } from "@cedulon/cose";
 
 const NOW = 1_700_000_000_000;
 const WINDOW_END = NOW + 3_600_000;
@@ -285,6 +286,46 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
       true,
       "proof for A plus candidate B must be witness-inclusion-invalid",
     );
+    // The candidate hex is consumed whole: a trailing non-hex suffix used to
+    // decode to the same bytes and pass (gate review of 25c24c3, FIX-1).
+    const dirtyHex = audit({
+      ...base,
+      layer2: { candidateStatementHex: `${cp.coseHex}zz`, inclusionProof: inc.inclusionProof },
+    });
+    assert.equal(
+      dirtyHex.findings.some((f) => f.code === "witness-inclusion-invalid"),
+      true,
+      "a candidate that is not clean hex must be witness-inclusion-invalid",
+    );
+    // A witness-signed envelope at index 1 with an empty path: the path returns
+    // the leaf unchanged, so leaf == treeHead, and only the structural rule
+    // (the index must resolve to the root) refuses it (FIX-2).
+    const leaf = createHash("sha256").update(Buffer.from(cp.coseHex, "hex")).digest("hex");
+    const impossibleCose = signCoseSign1(
+      encodeCbor(cborMap([[1, leaf], [2, 1], [3, leaf]])),
+      honest.privateKeyPem,
+      CTY_INCLUSION,
+    );
+    const impossible = audit({
+      ...base,
+      inclusionReceipts: [
+        {
+          ...inc,
+          statementHash: leaf,
+          index: 1,
+          treeHead: leaf,
+          coseHex: Buffer.from(impossibleCose).toString("hex"),
+          inclusionProof: { leafIndex: 1, siblings: [] },
+          checkpoint: cp,
+        },
+      ],
+      layer2: { candidateStatementHex: cp.coseHex, inclusionProof: { leafIndex: 1, siblings: [] } },
+    });
+    assert.equal(
+      impossible.findings.some((f) => f.code === "witness-inclusion-invalid"),
+      true,
+      "an index that does not resolve to the root must be witness-inclusion-invalid",
+    );
     const flipped = {
       ...inc.inclusionProof!,
       siblings: inc.inclusionProof!.siblings.map((s, i) =>
@@ -378,4 +419,3 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
     void _proof;
   });
 });
-

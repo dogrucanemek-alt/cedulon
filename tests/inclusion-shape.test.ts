@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
+import { createHash } from "node:crypto";
 
 import { MemoryTransparencyService, verifyInclusion, verifyInclusionEnvelope, type InclusionReceipt } from "@cedulon/checkpoint";
 import { CTY_CHECKPOINT, CTY_INCLUSION, cborMap, encodeCbor, signCoseSign1 } from "@cedulon/cose";
@@ -141,5 +142,68 @@ describe("receipt binding: inclusion leaf vs caller candidate", () => {
 
   it("a foreign witness key does not verify", () => {
     assert.equal(verifyInclusion(recA, statementA, other.publicKeyPem), false);
+  });
+});
+
+describe("hex and proof shape: what the verifier refuses without throwing", () => {
+  const keys = generateReceiptKeys();
+  const log = new MemoryTransparencyService(keys);
+  log.register("bb");
+  const recA = log.register("aa");
+  const hashOf = (hex: string) => createHash("sha256").update(Buffer.from(hex, "hex")).digest("hex");
+
+  it("a candidate that is not lowercase, even-length, non-empty hex is not coverage", () => {
+    for (const bad of ["aazz", "AA", "aa  ", "a", "", "aa\n", "0xaa"]) {
+      assert.equal(verifyInclusion(recA, bad, keys.publicKeyPem), false, JSON.stringify(bad));
+    }
+    assert.equal(verifyInclusion(recA, "aa", keys.publicKeyPem), true, "the honest candidate still verifies");
+  });
+
+  it("a receipt whose coseHex is not clean hex does not verify as an envelope", () => {
+    assert.equal(verifyInclusionEnvelope({ ...recA, coseHex: recA.coseHex + "zz" }, keys.publicKeyPem), false);
+    assert.equal(verifyInclusionEnvelope({ ...recA, coseHex: recA.coseHex.toUpperCase() }, keys.publicKeyPem), false);
+    assert.equal(verifyInclusion({ ...recA, coseHex: recA.coseHex + "zz" }, "aa", keys.publicKeyPem), false);
+  });
+
+  it("the log refuses to register a statement that is not clean hex", () => {
+    for (const bad of ["", "aazz", "AA", "a"]) {
+      assert.throws(() => log.register(bad), /statement-hex/, JSON.stringify(bad));
+    }
+    assert.equal(log.size(), 2, "nothing was appended");
+  });
+
+  it("a real one-byte sibling flip on a two-leaf log does not verify", () => {
+    assert.equal(recA.inclusionProof!.siblings.length, 1);
+    const s = recA.inclusionProof!.siblings[0]!;
+    const flipped = { ...recA, inclusionProof: { ...recA.inclusionProof!, siblings: [(s.startsWith("00") ? "01" : "00") + s.slice(2)] } };
+    assert.equal(verifyInclusion(flipped, "aa", keys.publicKeyPem), false);
+  });
+
+  it("a proof whose path does not resolve to the root is refused even when the witness signed the envelope", () => {
+    // The witness signs {H(aa), index 1, treeHead H(aa)}: a one-leaf root at index 1 is structurally impossible,
+    // and an empty path returns the leaf unchanged, so leaf == treeHead would pass a verifier that only compares.
+    const leaf = hashOf("aa");
+    const envelope = resigned(recA, keys.privateKeyPem, [[1, leaf], [2, 1], [3, leaf]], CTY_INCLUSION);
+    const impossible = { ...envelope, statementHash: leaf, index: 1, treeHead: leaf, inclusionProof: { leafIndex: 1, siblings: [] } };
+    assert.equal(verifyInclusionEnvelope(impossible, keys.publicKeyPem), true, "the envelope itself is witness-signed");
+    assert.equal(verifyInclusion(impossible, "aa", keys.publicKeyPem), false);
+  });
+
+  it("a malformed proof is false, never a throw", () => {
+    const shapes: unknown[] = [
+      { leafIndex: 1, siblings: null },
+      { leafIndex: 1, siblings: [null] },
+      { leafIndex: 1, siblings: ["zz"] },
+      { leafIndex: 1, siblings: [recA.inclusionProof!.siblings[0]!.toUpperCase()] },
+      { leafIndex: -1, siblings: recA.inclusionProof!.siblings },
+      { leafIndex: 0.5, siblings: recA.inclusionProof!.siblings },
+      { leafIndex: "1", siblings: recA.inclusionProof!.siblings },
+      { leafIndex: 2, siblings: recA.inclusionProof!.siblings },
+      "not an object",
+    ];
+    for (const proof of shapes) {
+      assert.doesNotThrow(() => verifyInclusion({ ...recA, inclusionProof: proof as never }, "aa", keys.publicKeyPem), JSON.stringify(proof));
+      assert.equal(verifyInclusion({ ...recA, inclusionProof: proof as never }, "aa", keys.publicKeyPem), false, JSON.stringify(proof));
+    }
   });
 });

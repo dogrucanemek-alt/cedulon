@@ -13,7 +13,9 @@ import {
   findCheckpointChainBreak,
   findEquivocation,
   statementHashOfCheckpoint,
+  strictHexBytes,
   totalsFromReceipts,
+  validInclusionProof,
   verifyCheckpoint,
   verifyCheckpointUnderPin,
   verifyInclusionEnvelope,
@@ -1754,10 +1756,22 @@ export function audit(input: AuditInput): AuditReport {
         id: "witness-layer2",
         detail: "layer-2 inclusion input was presented without an inclusion proof",
       });
+    } else if (!validInclusionProof(proof)) {
+      // Same rule as verifyInclusion: the walk is defined over 32-byte
+      // siblings and an index that resolves to the root. An empty path at
+      // index 1 returns the leaf unchanged and would otherwise match a
+      // witness-signed envelope whose tree head is that leaf.
+      findings.push({
+        code: "witness-inclusion-invalid",
+        id: "witness-layer2",
+        detail: "layer-2 inclusion proof is not a valid audit path",
+      });
     } else {
       try {
-        const candidate = Buffer.from(input.layer2.candidateStatementHex, "hex");
-        if (candidate.length === 0 && input.layer2.candidateStatementHex.length > 0) {
+        // Consumed whole, the way the checkpoint package reads hex: a
+        // trailing non-hex suffix used to decode to the same bytes and pass.
+        const candidate = strictHexBytes(input.layer2.candidateStatementHex);
+        if (!candidate) {
           throw new Error("hex");
         }
         const leaf = createHash("sha256").update(candidate).digest("hex");
