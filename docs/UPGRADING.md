@@ -48,6 +48,14 @@ index that resolves to the root when the path ends); `verifyInclusion` answers
 false to anything else without throwing, `applyInclusionProof` refuses it by
 name, and the audit reports `witness-inclusion-invalid`.
 
+The behaviour carried forward is unchanged: an audit still reports
+`manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
+usable issuer pin the departure is a finding that fails the audit, and
+without a pin the same departure is a warning that does not by itself fail
+it; and `requestHash` is still the SHA-256 of the six-field canonical
+document in lowercase hex, the digest the posted `-03` named a hash for
+without naming the octets.
+
 ## 0.11.0: the report counts what it classed
 
 This one adds a member and prints two lines. It refuses nothing that used to

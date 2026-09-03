@@ -32,6 +32,29 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.12.0` is prepared in this tree and is not a published npm release: it
+replaces `verifyInclusionReceipt` with `verifyInclusionEnvelope` (the envelope
+check) and `verifyInclusion(receipt, candidateHex, witnessKey)` (coverage of
+the bytes the caller holds, MUST-T11-18), which a clean install of 0.11.0 does
+not have; it reads hex whole (`strictHexBytes`) and names the proof shape
+(`validInclusionProof`) in the checkpoint package and in the audit's layer-2
+input; and its `release.yml` carries the MCP Registry step and the bundle job,
+answers to tags only, and takes its release notes from
+`scripts/release-notes.ts`. The tree now carries those steps; they are
+unproven until the next tag runs them. Publishing is a separate step. What it
+changes: a call that meant coverage has to present the candidate bytes and a
+proof, and a candidate, `coseHex` or registered statement that is not
+lowercase, even-length, non-empty hex is refused rather than partly decoded; a
+proof whose index does not resolve to the root is refused, and a malformed one
+is false from the verifier and `witness-inclusion-invalid` from the audit,
+never an exception. The behaviour carried forward is unchanged: an audit still
+reports `manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
+usable issuer pin the departure is a finding that fails the audit, and
+without a pin the same departure is a warning that does not by itself fail
+it; and `requestHash` is still the SHA-256 of the six-field canonical
+document in lowercase hex, the digest the posted `-03` named a hash for
+without naming the octets.
+
 `0.11.0` is published on npm, with a provenance attestation, and it is what a
 reader now gets from an installed package. Checked from the published packages
 rather than from this tree: a clean install of `@cedulon/mcp-server@0.11.0` in
