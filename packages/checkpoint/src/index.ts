@@ -27,7 +27,8 @@ export {
   merkleRoot,
   statementHashOfCheckpoint,
   statementHashOfReceipt,
-  verifyInclusionReceipt,
+  verifyInclusion,
+  verifyInclusionEnvelope,
   type InclusionProof,
   type InclusionReceipt,
 } from "./transparency.ts";

@@ -88,7 +88,7 @@ describe("mock transparency service", () => {
     const receipt = signReceipt(sampleClaims("n1"), rk.privateKeyPem, rk.publicKeyPem);
     const ts = new MemoryTransparencyService(issuer);
     const inc = anchorReceipt(ts, receipt);
-    assert.equal(ts.verifyInclusion(inc), true);
+    assert.equal(ts.verifyInclusion(inc, receipt.coseHex!), true);
     assert.equal(inc.index, 0);
     assert.equal(ts.size(), 1);
   });
@@ -105,8 +105,8 @@ describe("mock transparency service", () => {
     const ts = new MemoryTransparencyService(issuer);
     const a = anchorReceipt(ts, receipt);
     const b = anchorCheckpoint(ts, cp);
-    assert.equal(ts.verifyInclusion(a), true);
-    assert.equal(ts.verifyInclusion(b), true);
+    assert.equal(ts.verifyInclusion(a, receipt.coseHex!), true);
+    assert.equal(ts.verifyInclusion(b, cp.coseHex!), true);
     assert.equal(b.index, 1);
   });
 });

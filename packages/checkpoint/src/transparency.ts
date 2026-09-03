@@ -135,11 +135,11 @@ export class MemoryTransparencyService {
   }
 
   /** The log answering about its own receipt: checked against this log's key. */
-  verifyInclusion(receipt: InclusionReceipt): boolean {
+  verifyInclusion(receipt: InclusionReceipt, candidateStatementHex: string): boolean {
     if (this.leaves[receipt.index] !== receipt.statementHash) {
       return false;
     }
-    return verifyInclusionReceipt(receipt, this.publicKeyPem);
+    return verifyInclusion(receipt, candidateStatementHex, this.publicKeyPem);
   }
 
   size(): number {
@@ -155,6 +155,10 @@ export function anchorReceipt(ts: MemoryTransparencyService, signed: SignedRecei
 }
 
 /**
+ * Establishes that the log signed this envelope: hash, index, tree head. It
+ * does NOT establish that the receipt covers any statement the caller holds;
+ * for that, `verifyInclusion`.
+ *
  * `expectedWitnessKeyPem` is the log's key, held out of band. Without it this
  * checks the receipt against the key it carries, so anyone able to mint a
  * keypair can assert that a statement is in a log they invented.
@@ -163,7 +167,7 @@ export function anchorReceipt(ts: MemoryTransparencyService, signed: SignedRecei
  * `statementHash` would let the envelope claim a position in the log that its
  * own signature does not support.
  */
-export function verifyInclusionReceipt(
+export function verifyInclusionEnvelope(
   receipt: InclusionReceipt,
   expectedWitnessKeyPem?: string,
 ): boolean {
@@ -186,6 +190,54 @@ export function verifyInclusionReceipt(
   } catch {
     return false;
   }
+}
+
+function candidateBytes(hex: string): Buffer | null {
+  try {
+    if (hex.length === 0 || hex.length % 2 !== 0) {
+      return null;
+    }
+    const bytes = Buffer.from(hex, "hex");
+    if (bytes.length === 0) {
+      return null;
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tier-2 (MUST-T11-18): the receipt covers these candidate bytes under the
+ * witness pin. Seven decisions, in this order; any miss is false, none throw.
+ */
+export function verifyInclusion(
+  receipt: InclusionReceipt,
+  candidateStatementHex: string,
+  expectedWitnessKeyPem?: string,
+): boolean {
+  if (!verifyInclusionEnvelope(receipt, expectedWitnessKeyPem)) {
+    return false;
+  }
+  const bytes = candidateBytes(candidateStatementHex);
+  if (!bytes) {
+    return false;
+  }
+  const leaf = createHash("sha256").update(bytes).digest("hex");
+  if (receipt.statementHash !== leaf) {
+    return false;
+  }
+  const proof = receipt.inclusionProof;
+  if (!proof) {
+    return false;
+  }
+  if (proof.leafIndex !== receipt.index) {
+    return false;
+  }
+  if (applyInclusionProof(leaf, proof) !== receipt.treeHead) {
+    return false;
+  }
+  return true;
 }
 
 export function anchorCheckpoint(

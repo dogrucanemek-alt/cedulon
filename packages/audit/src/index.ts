@@ -16,7 +16,7 @@ import {
   totalsFromReceipts,
   verifyCheckpoint,
   verifyCheckpointUnderPin,
-  verifyInclusionReceipt,
+  verifyInclusionEnvelope,
   type InclusionProof,
   type InclusionReceipt,
   type SignedCheckpoint,
@@ -873,7 +873,10 @@ export function findEquivocationFinding(checkpoints: SignedCheckpoint[]): Findin
   };
 }
 
-/** A log may publish under more than one key, the same way an issuer may. */
+/**
+ * A log may publish under more than one key, the same way an issuer may.
+ * Envelope only; the body binding is the next check.
+ */
 function inclusionFromPinnedLog(
   rec: InclusionReceipt,
   witnessKeyPem?: string | readonly string[],
@@ -882,10 +885,10 @@ function inclusionFromPinnedLog(
   // unverifiable receipt is left out (MUST-T11-15) - it must not become an
   // uncaught exception that takes the whole audit down with it.
   if (witnessKeyPem === undefined) {
-    return verifiesOrRefusal(() => verifyInclusionReceipt(rec), rec.coseHex).ok;
+    return verifiesOrRefusal(() => verifyInclusionEnvelope(rec), rec.coseHex).ok;
   }
   const pems = typeof witnessKeyPem === "string" ? [witnessKeyPem] : witnessKeyPem;
-  return pems.some((pem) => verifiesOrRefusal(() => verifyInclusionReceipt(rec, pem), rec.coseHex).ok);
+  return pems.some((pem) => verifiesOrRefusal(() => verifyInclusionEnvelope(rec, pem), rec.coseHex).ok);
 }
 
 /**

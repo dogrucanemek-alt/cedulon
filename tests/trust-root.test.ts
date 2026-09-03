@@ -9,7 +9,7 @@ import {
   buildCheckpointClaims,
   signCheckpoint,
   verifyCheckpoint,
-  verifyInclusionReceipt,
+  verifyInclusionEnvelope,
 } from "@cedulon/checkpoint";
 import { signDecisionToken, verifyDecisionToken } from "@cedulon/core";
 import {
@@ -236,22 +236,22 @@ describe("issuer trust root", () => {
 
     const log = new MemoryTransparencyService(witness);
     const inc = anchorCheckpoint(log, cp);
-    assert.equal(verifyInclusionReceipt(inc), true);
-    assert.equal(verifyInclusionReceipt(inc, witness.publicKeyPem), true);
+    assert.equal(verifyInclusionEnvelope(inc), true);
+    assert.equal(verifyInclusionEnvelope(inc, witness.publicKeyPem), true);
     assert.equal(
-      verifyInclusionReceipt(inc, attacker.publicKeyPem),
+      verifyInclusionEnvelope(inc, attacker.publicKeyPem),
       false,
       "a log we never named cannot vouch for the checkpoint",
     );
 
     const forgedLog = new MemoryTransparencyService(attacker);
     const forged = anchorCheckpoint(forgedLog, cp);
-    assert.equal(verifyInclusionReceipt(forged), true, "it is internally consistent, as always");
-    assert.equal(verifyInclusionReceipt(forged, witness.publicKeyPem), false);
+    assert.equal(verifyInclusionEnvelope(forged), true, "it is internally consistent, as always");
+    assert.equal(verifyInclusionEnvelope(forged, witness.publicKeyPem), false);
 
     // The envelope must not be able to claim a position the signature does not.
-    assert.equal(verifyInclusionReceipt({ ...inc, index: inc.index + 1 }, witness.publicKeyPem), false);
-    assert.equal(verifyInclusionReceipt({ ...inc, treeHead: "0".repeat(64) }, witness.publicKeyPem), false);
+    assert.equal(verifyInclusionEnvelope({ ...inc, index: inc.index + 1 }, witness.publicKeyPem), false);
+    assert.equal(verifyInclusionEnvelope({ ...inc, treeHead: "0".repeat(64) }, witness.publicKeyPem), false);
   });
 
   it("36 RED then GREEN: verifyReceipt, verifyCheckpoint and verifyDecisionToken take a key to check against", () => {

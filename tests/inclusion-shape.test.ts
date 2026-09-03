@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
-import { MemoryTransparencyService, verifyInclusionReceipt, type InclusionReceipt } from "@cedulon/checkpoint";
+import { MemoryTransparencyService, verifyInclusion, verifyInclusionEnvelope, type InclusionReceipt } from "@cedulon/checkpoint";
 import { CTY_CHECKPOINT, CTY_INCLUSION, cborMap, encodeCbor, signCoseSign1 } from "@cedulon/cose";
 import { generateReceiptKeys } from "@cedulon/receipts";
 
@@ -40,14 +40,14 @@ describe("witness receipt shape", () => {
   ];
 
   it("the issued receipt, and the same map re-signed by the witness, verify", () => {
-    assert.equal(verifyInclusionReceipt(inc, witness.publicKeyPem), true);
+    assert.equal(verifyInclusionEnvelope(inc, witness.publicKeyPem), true);
     const same = resigned(inc, witness.privateKeyPem, three, CTY_INCLUSION);
-    assert.equal(verifyInclusionReceipt(same, witness.publicKeyPem), true, "the harness itself must pass");
+    assert.equal(verifyInclusionEnvelope(same, witness.publicKeyPem), true, "the harness itself must pass");
   });
 
   it("another content type over the same map does not verify", () => {
     const wrongType = resigned(inc, witness.privateKeyPem, three, CTY_CHECKPOINT);
-    assert.equal(verifyInclusionReceipt(wrongType, witness.publicKeyPem), false);
+    assert.equal(verifyInclusionEnvelope(wrongType, witness.publicKeyPem), false);
   });
 
   it("a map missing one of the three entries does not verify", () => {
@@ -58,7 +58,7 @@ describe("witness receipt shape", () => {
         three.filter(([label]) => label !== drop),
         CTY_INCLUSION,
       );
-      assert.equal(verifyInclusionReceipt(short, witness.publicKeyPem), false, `label ${drop} missing`);
+      assert.equal(verifyInclusionEnvelope(short, witness.publicKeyPem), false, `label ${drop} missing`);
     }
   });
 
@@ -73,7 +73,7 @@ describe("witness receipt shape", () => {
       ],
       CTY_INCLUSION,
     );
-    assert.equal(verifyInclusionReceipt(indexAsText, witness.publicKeyPem), false, "index as a text string");
+    assert.equal(verifyInclusionEnvelope(indexAsText, witness.publicKeyPem), false, "index as a text string");
     const hashAsInt = resigned(
       inc,
       witness.privateKeyPem,
@@ -84,11 +84,62 @@ describe("witness receipt shape", () => {
       ],
       CTY_INCLUSION,
     );
-    assert.equal(verifyInclusionReceipt(hashAsInt, witness.publicKeyPem), false, "statement hash as an integer");
+    assert.equal(verifyInclusionEnvelope(hashAsInt, witness.publicKeyPem), false, "statement hash as an integer");
   });
 
   it("an entry under a label the map does not define is not refused, as the draft says", () => {
     const extra = resigned(inc, witness.privateKeyPem, [...three, [4, "undefined here"]], CTY_INCLUSION);
-    assert.equal(verifyInclusionReceipt(extra, witness.publicKeyPem), true);
+    assert.equal(verifyInclusionEnvelope(extra, witness.publicKeyPem), true);
+  });
+});
+
+describe("receipt binding: inclusion leaf vs caller candidate", () => {
+  const keys = generateReceiptKeys();
+  const other = generateReceiptKeys();
+  const log = new MemoryTransparencyService(keys);
+  const statementA = Buffer.from("aa".repeat(16)).toString("hex");
+  const statementB = Buffer.from("bb".repeat(16)).toString("hex");
+  const recA = log.register(statementA);
+
+  it("a valid receipt for A does not cover candidate B", () => {
+    assert.equal(verifyInclusion(recA, statementB, keys.publicKeyPem), false);
+    assert.equal(log.verifyInclusion(recA, statementB), false);
+  });
+
+  it("a valid receipt for A covers candidate A", () => {
+    assert.equal(verifyInclusion(recA, statementA, keys.publicKeyPem), true);
+    assert.equal(log.verifyInclusion(recA, statementA), true);
+  });
+
+  it("a candidate without a proof does not verify", () => {
+    const { inclusionProof: _proof, ...legacy } = recA;
+    assert.equal(verifyInclusion(legacy, statementA, keys.publicKeyPem), false);
+    void _proof;
+  });
+
+  it("a proof whose leafIndex is not the receipt index does not verify", () => {
+    const moved = {
+      ...recA,
+      inclusionProof: { ...recA.inclusionProof!, leafIndex: recA.index + 1 },
+    };
+    assert.equal(verifyInclusion(moved, statementA, keys.publicKeyPem), false);
+  });
+
+  it("a one-byte sibling flip does not verify", () => {
+    const siblings = recA.inclusionProof!.siblings.map((s, i) =>
+      i === 0 ? (s.startsWith("00") ? `01${s.slice(2)}` : `00${s.slice(2)}`) : s,
+    );
+    const flipped = {
+      ...recA,
+      inclusionProof: {
+        ...recA.inclusionProof!,
+        siblings: siblings.length === 0 ? ["11".repeat(32)] : siblings,
+      },
+    };
+    assert.equal(verifyInclusion(flipped, statementA, keys.publicKeyPem), false);
+  });
+
+  it("a foreign witness key does not verify", () => {
+    assert.equal(verifyInclusion(recA, statementA, other.publicKeyPem), false);
   });
 });

@@ -9,7 +9,7 @@ import {
   applyInclusionProof,
   buildCheckpointClaims,
   signCheckpoint,
-  verifyInclusionReceipt,
+  verifyInclusionEnvelope,
 } from "@cedulon/checkpoint";
 import { generateManifestKeys, signManifest } from "@cedulon/manifest";
 import {
@@ -274,6 +274,17 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
     });
     assert.equal(honestLayer.findings.some((f) => f.code === "witness-inclusion-invalid"), false);
     assert.equal(honestLayer.warnings.some((w) => w.code === "witness-inclusion-not-exercised"), false);
+    // MUST-T11-18: HASH(candidate) must equal the receipt leaf. A valid
+    // proof for the checkpoint plus a different statement's bytes is not coverage.
+    const swapped = audit({
+      ...base,
+      layer2: { candidateStatementHex: receipt.coseHex!, inclusionProof: inc.inclusionProof },
+    });
+    assert.equal(
+      swapped.findings.some((f) => f.code === "witness-inclusion-invalid"),
+      true,
+      "proof for A plus candidate B must be witness-inclusion-invalid",
+    );
     const flipped = {
       ...inc.inclusionProof!,
       siblings: inc.inclusionProof!.siblings.map((s, i) =>
@@ -363,7 +374,8 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
     const receipt = settledReceipt(honest);
     const inc = log.register(receipt.coseHex!);
     const { inclusionProof: _proof, ...legacy } = inc;
-    assert.equal(verifyInclusionReceipt(legacy, honest.publicKeyPem), true);
+    assert.equal(verifyInclusionEnvelope(legacy, honest.publicKeyPem), true);
     void _proof;
   });
 });
+

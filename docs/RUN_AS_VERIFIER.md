@@ -323,7 +323,8 @@ closed. The same rule filters checkpoints.
 Every verify in the project takes the key
 directly for callers outside `audit()`: `verifyReceipt(signed, issuerKey)`,
 `verifyCheckpoint(signed, issuerKey)`, `verifyDecisionToken(signed, nowMs,
-issuerKey)`, `verifyInclusionReceipt(signed, witnessKey)`,
+issuerKey)`, `verifyInclusionEnvelope(signed, witnessKey)`,
+`verifyInclusion(signed, candidateHex, witnessKey)`,
 `verifyManifest(signed, issuerKey)`, `verifyCounterSignature(signed, payeeKey)`,
 `counterSign(receipt, payeePriv, payeePub, issuerKey)`, and the two checkpoint
 helpers `findCheckpointChainBreak` and `findEquivocation`. `gatedSettle` takes
