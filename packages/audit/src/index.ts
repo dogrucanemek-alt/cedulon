@@ -42,8 +42,15 @@ import {
   type RailSettlement,
   type SignedRailExtract,
 } from "@cedulon/x402-adapter";
+import { SPEND_PROFILE, type ReconciliationProfile } from "./profile.ts";
 
 export { DEFAULT_CLOCK_SKEW_MS };
+export {
+  SPEND_PROFILE,
+  type BindResult,
+  type ProfileFinding,
+  type ReconciliationProfile,
+} from "./profile.ts";
 
 export const FINDING_CODES = [
   "settlement-without-receipt",
@@ -512,8 +519,12 @@ type MatchCounts = {
  * The counts for a reconciliation that did not run: every settled receipt and
  * every row is `unreconciled`, and no other class is claimed.
  */
-function unreconciledCounts(receipts: SignedReceipt[], settlements: RailSettlement[]): MatchCounts {
-  const settled = receipts.filter(isSettled).length;
+function unreconciledCounts(
+  receipts: SignedReceipt[],
+  settlements: RailSettlement[],
+  profile: ReconciliationProfile<SignedReceipt, RailSettlement> = SPEND_PROFILE,
+): MatchCounts {
+  const settled = receipts.filter((r) => profile.expectsRow(r)).length;
   return {
     receipts: {
       aborted: receipts.length - settled,
@@ -540,12 +551,13 @@ function classifySettlementMatches(
   receipts: SignedReceipt[],
   settlements: RailSettlement[],
   boundary?: SettlementBoundary,
+  profile: ReconciliationProfile<SignedReceipt, RailSettlement> = SPEND_PROFILE,
 ): { findings: Finding[]; counts: MatchCounts } {
   const findings: Finding[] = [];
-  const settled = receipts.filter(isSettled);
+  const settled = receipts.filter((r) => profile.expectsRow(r));
 
   const receiptItems = settled
-    .map((r) => ({ ref: receiptRef(r), id: r.claims.nonce, side: "receipt" as const, receipt: r }))
+    .map((r) => ({ ref: profile.recordRef(r), id: r.claims.nonce, side: "receipt" as const, receipt: r }))
     .filter((x): x is typeof x & { ref: string } => x.ref !== null);
   const settlementItems = settlements.map((s) => ({
     ref: s.ref,
@@ -588,58 +600,15 @@ function classifySettlementMatches(
   // aggregate settled amount against the aggregate receipted amount instead.
   // Otherwise a repeated ref hides the amount that is unaccounted for.
   for (const ref of skip) {
-    let malformed = false;
-    const add = (into: Map<string, bigint>, currency: string, amount: string): void => {
-      let parsed: bigint;
-      try {
-        parsed = BigInt(amount);
-      } catch {
-        // An amount the audit cannot read is itself a finding. Throwing here
-        // would take down the whole report over one bad row.
-        malformed = true;
-        findings.push({
-          code: "malformed-amount",
-          id: ref,
-          detail: `ref ${ref} carries the amount ${JSON.stringify(amount)}, which is not an integer`,
-        });
-        return;
-      }
-      into.set(currency, (into.get(currency) ?? 0n) + parsed);
-    };
-
-    const settledByCurrency = new Map<string, bigint>();
-    for (const item of settlementItems) {
-      if (item.ref !== ref) continue;
-      add(settledByCurrency, item.settlement.currency, item.settlement.amount);
-    }
-    const receiptedByCurrency = new Map<string, bigint>();
-    for (const item of receiptItems) {
-      if (item.ref !== ref) continue;
-      add(receiptedByCurrency, item.receipt.claims.currency, item.receipt.claims.amount);
-    }
-    if (malformed) {
-      continue;
-    }
-    // Walk both sides: a currency that appears only among the receipts is a
-    // receipt with nothing settled behind it, and iterating the settled side
-    // alone would report nothing at all for it.
-    const currencies = new Set([...settledByCurrency.keys(), ...receiptedByCurrency.keys()]);
-    for (const currency of currencies) {
-      const settled = settledByCurrency.get(currency) ?? 0n;
-      const receipted = receiptedByCurrency.get(currency) ?? 0n;
-      if (settled > receipted) {
-        findings.push({
-          code: "settlement-without-receipt",
-          id: ref,
-          detail: `ref ${ref} settled ${settled} ${currency} against ${receipted} ${currency} receipted; ${settled - receipted} ${currency} unaccounted`,
-        });
-      } else if (settled < receipted) {
-        findings.push({
-          code: "settlement-mismatch",
-          id: ref,
-          detail: `ref ${ref} settled ${settled} ${currency} against ${receipted} ${currency} receipted`,
-        });
-      }
+    const records = receiptItems.filter((item) => item.ref === ref).map((item) => item.receipt);
+    const rows = settlementItems.filter((item) => item.ref === ref).map((item) => item.settlement);
+    for (const f of profile.aggregate(ref, records, rows)) {
+      findings.push({
+        code: f.code as FindingCode,
+        id: f.id,
+        detail: f.detail,
+        ...(f.severity ? { severity: f.severity } : {}),
+      });
     }
   }
 
@@ -686,11 +655,12 @@ function classifySettlementMatches(
     }
     counts.settlements.matched += 1;
     counts.receipts.matched += 1;
-    if (r.claims.amount !== s.amount || r.claims.currency !== s.currency) {
+    const bound = profile.bind(r, s);
+    if (!bound.ok) {
       findings.push({
         code: "settlement-mismatch",
         id: ref,
-        detail: `settlement ${ref} ${s.amount} ${s.currency} != receipt ${r.claims.amount} ${r.claims.currency}`,
+        detail: bound.detail,
       });
     }
     if (typeof s.beneficiary === "string" && r.claims.payee !== s.beneficiary) {
@@ -798,6 +768,7 @@ export function findWindowCoverage(
 export function findCheckpointTotalMismatches(
   receipts: SignedReceipt[],
   checkpoints: SignedCheckpoint[],
+  totalsFn: (records: SignedReceipt[]) => Record<string, string> = totalsFromReceipts,
 ): Finding[] {
   const findings: Finding[] = [];
   for (const cp of checkpoints) {
@@ -815,7 +786,7 @@ export function findCheckpointTotalMismatches(
     }
     const inWindow = receiptsInWindow(receipts, cp);
     const inWindowOnChain = receiptsInWindow(orderByIssuerChain(receipts).ordered, cp);
-    const expected = totalsFromReceipts(inWindow);
+    const expected = totalsFn(inWindow);
     if (cp.claims.totals !== null && JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
       findings.push({
         code: "checkpoint-total-mismatch",
@@ -1077,14 +1048,21 @@ function findCountersignFindings(input: {
   return { warnings, findings };
 }
 
-function settlementKey(s: RailSettlement): string {
-  return [s.ref, s.amount, s.currency, s.timestampMs].join("\u0000");
+function settlementKey(
+  s: RailSettlement,
+  profile: ReconciliationProfile<SignedReceipt, RailSettlement> = SPEND_PROFILE,
+): string {
+  return profile.rowKey(s);
 }
 
-function sameSettlements(a: RailSettlement[], b: RailSettlement[]): boolean {
+function sameSettlements(
+  a: RailSettlement[],
+  b: RailSettlement[],
+  profile: ReconciliationProfile<SignedReceipt, RailSettlement> = SPEND_PROFILE,
+): boolean {
   if (a.length !== b.length) return false;
-  const left = a.map(settlementKey).sort();
-  const right = b.map(settlementKey).sort();
+  const left = a.map((row) => settlementKey(row, profile)).sort();
+  const right = b.map((row) => settlementKey(row, profile)).sort();
   return left.every((k, i) => k === right[i]);
 }
 
@@ -1120,6 +1098,10 @@ export type AuditInput = {
     candidateStatementHex: string;
     inclusionProof?: InclusionProof;
   };
+  /**
+   * Which axes this audit reconciles. Absent ⇒ spend, today's behaviour.
+   */
+  profile?: ReconciliationProfile<SignedReceipt, RailSettlement>;
 };
 
 /** Largest honest audit in this suite is 41 receipts (case 86). 100× that. */
@@ -1190,6 +1172,7 @@ function findMalformedHashClaims(input: AuditInput): Finding[] {
 
 export function audit(input: AuditInput): AuditReport {
   assertAuditBounds(input);
+  const profile = input.profile ?? SPEND_PROFILE;
   const findings: Finding[] = [...findMalformedHashClaims(input)];
   const warnings: Finding[] = [];
 
@@ -1202,7 +1185,7 @@ export function audit(input: AuditInput): AuditReport {
   // not a refusal - the same distinction the manifest branch draws.
   let extractRejected = false;
   if (input.extract) {
-    if (input.settlements && !sameSettlements(input.settlements, input.extract.body.settlements)) {
+    if (input.settlements && !sameSettlements(input.settlements, input.extract.body.settlements, profile)) {
       findings.push({
         code: "extract-settlement-mismatch",
         id: "extract",
@@ -1562,19 +1545,7 @@ export function audit(input: AuditInput): AuditReport {
     const terms = input.manifest.body;
     for (const r of issuerPinUsable ? attested : input.receipts) {
       if (r.claims.manifestHash !== presentedHash) continue;
-      const broken: string[] = [];
-      if (r.claims.amount !== terms.amount) {
-        broken.push(`amount ${r.claims.amount} against manifest ${terms.amount}`);
-      }
-      if (r.claims.currency !== terms.currency) {
-        broken.push(`currency ${r.claims.currency} against manifest ${terms.currency}`);
-      }
-      if (r.claims.timestampMs > terms.expiresAtMs) {
-        broken.push(`settled at ${r.claims.timestampMs} after the manifest expired at ${terms.expiresAtMs}`);
-      }
-      if (typeof terms.payee === "string" && r.claims.payee !== terms.payee) {
-        broken.push(`payee ${JSON.stringify(r.claims.payee)} against manifest ${JSON.stringify(terms.payee)}`);
-      }
+      const broken = profile.terms(r, terms);
       if (broken.length > 0) {
         const charge = {
           code: "manifest-terms-mismatch" as const,
@@ -1599,7 +1570,7 @@ export function audit(input: AuditInput): AuditReport {
   const inScope =
     input.extract && !extractRejected
       ? attested.filter((r) => {
-        const ref = receiptRef(r);
+        const ref = profile.recordRef(r);
         if (ref !== null && extractRefs.has(ref)) {
           return true;
         }
@@ -1662,9 +1633,9 @@ export function audit(input: AuditInput): AuditReport {
       detail:
         "the presented extract was refused by the pinned rail key, so its rows were not reconciled against the receipts; no settlement finding in this report was read out of that document",
     });
-    matchCounts = unreconciledCounts(inScope, reconciled);
+    matchCounts = unreconciledCounts(inScope, reconciled, profile);
   } else {
-    const classified = classifySettlementMatches(inScope, reconciled, settlementBoundary);
+    const classified = classifySettlementMatches(inScope, reconciled, settlementBoundary, profile);
     findings.push(...classified.findings);
     matchCounts = classified.counts;
   }
@@ -1709,7 +1680,7 @@ export function audit(input: AuditInput): AuditReport {
     : attested;
   const chain = findReceiptChainBreak(chainWalk, issuerPinUsable ? issuerPins : undefined);
   if (chain) findings.push(chain);
-  findings.push(...findCheckpointTotalMismatches(attested, attestedCheckpoints));
+  findings.push(...findCheckpointTotalMismatches(attested, attestedCheckpoints, (recs) => profile.checkpointTotals(recs)));
   findings.push(...findWindowCoverage(attested, attestedCheckpoints));
 
   // A witness only adds evidence once the verifier has named the log. Until then

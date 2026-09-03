@@ -76,6 +76,7 @@ export function buildCheckpointClaims(
   startMs: number,
   endMs: number,
   prevCheckpointHash: string | null,
+  totalsFn: (records: SignedReceipt[]) => Record<string, string> = totalsFromReceipts,
 ): CheckpointClaims {
   return {
     epoch,
@@ -83,7 +84,7 @@ export function buildCheckpointClaims(
     endMs,
     receiptCount: receipts.length,
     chainHeadHash: receipts.length === 0 ? null : receiptHash(receipts[receipts.length - 1]),
-    totals: totalsFromReceipts(receipts),
+    totals: totalsFn(receipts),
     prevCheckpointHash,
   };
 }
