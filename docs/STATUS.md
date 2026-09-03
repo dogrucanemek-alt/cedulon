@@ -358,16 +358,15 @@ checking before a build and not after. The 0.5.0 build ran against `5b080e6`,
 started, and listed five tools.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.11.0` is the current version (`isLatest`), read back from the registry
+where `0.12.0` is the current version (`isLatest`), read back from the registry
 API rather than from the publish command's own output, on 3 September at
-13:18 UTC, after `0.12.0` had gone to npm: npm serves `0.12.0`, the MCP
-Registry still serves `0.11.0`, one release behind npm, because the tagged
-run's registry step never started (the post-release check ahead of it failed,
-as it does on every tagged run) and the entry has not yet been pushed by
-hand. `server.json` is the entry it will be published from, and it names
-`@cedulon/mcp-server` at `0.12.0`. The `0.11.0` listing was itself pushed by
-hand on 2 September at 23:59 UTC, half an hour after `0.11.0` had gone to
-npm, after a first attempt refused with an expired login. The search endpoint
+13:44 UTC after the entry was pushed by hand, forty minutes after `0.12.0` had
+gone to npm; in between the listing served `0.11.0`, because the tagged run's
+registry step never started (the post-release check ahead of it failed, as it
+does on every tagged run). `server.json` is the entry it was published from,
+and the listing names `@cedulon/mcp-server` at the same `0.12.0`. On that
+reading the two channels are in step. The `0.11.0` listing had been pushed by
+hand the same way on 2 September at 23:59 UTC. The search endpoint
 answered a stale version for a short while after an earlier publish returned;
 the versions endpoint is what settles it, and a reader checking the listing
 right after a publish should ask that one.
