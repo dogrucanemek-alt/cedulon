@@ -290,9 +290,9 @@ The 0.11.0 bundle is attached to the GitHub release `v0.11.0` as
 release notes carry that digest. On 3 September the asset was downloaded back
 twice, once through the GitHub CLI and once from the unauthenticated download
 URL, and both copies hashed the same as the file `npm run mcpb` had produced.
-The release was created by hand. Nothing in `release.yml` touches GitHub
-releases, so a later tag will not carry a bundle until that step exists and
-has run once.
+The 0.11.0 release was created by hand. `release.yml` now has a job that
+builds the bundle and attaches it to the GitHub release for the tag. The tree
+now carries the step; it is unproven until the next tag runs it.
 
 The bundle's manifest declares its privacy policy at
 <https://cedulon.com/privacy.html>, which is also linked from the README that
@@ -332,19 +332,12 @@ releases and then caught up in one push. What is stated here is the reading and
 its date; whether the numbers still agree is a question for the registry, and
 `tests/published-as.test.ts` asks it rather than trusting this sentence.
 
-`release.yml` sends packages to npm from the tag and deliberately does not touch
-the registry, because whether
-`mcp-publisher` accepts Actions OIDC has not been measured here; the registry
-entry moves when someone runs it, and until then this paragraph is the notice
-rather than a reader having to discover the state.
-
-The two still move separately on purpose. `release.yml` publishes to npm from
-the tag with no long-lived credential, and it does not publish to the MCP
-Registry, because `mcp-publisher` authenticates through its own GitHub device
-flow and whether it accepts Actions OIDC has not been measured here; adding it
-untested would put a claim in that workflow nobody checked. Until it is
-measured, the registry entry is pushed by hand and can lag behind npm - it
-spent half a day on `0.6.0` while npm served `0.7.0` - so when the numbers
+`release.yml` still sends packages to npm from the tag. It now also carries an
+MCP Registry step (`mcp-publisher login github-oidc` then `publish`) after the
+npm readback and the post-release suite. The tree now carries the step; it is
+unproven until the next tag runs it. Until that tag runs, the registry entry
+still moves when someone runs `mcp-publisher` by hand and can lag behind npm -
+it spent half a day on `0.6.0` while npm served `0.7.0` - so when the numbers
 differ, this paragraph is where both get named. Earlier listings: `0.2.1` announced itself as `0.2.0`
 over `initialize`, because the version was written out a second time in the
 source; `0.2.2` replaced that. `tests/release-manifest.test.ts` and the version

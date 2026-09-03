@@ -4,6 +4,19 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.12.0 (prepared, not published)
+
+A. `release.yml` now logs in with `mcp-publisher login github-oidc` and publishes
+the repo-root `server.json` after the npm readback and the post-release suite.
+The tree now carries the step; it is unproven until the next tag runs it. A tag
+that reached npm and then failed this step is still a completed npm release;
+the later step does not roll it back.
+
+B. After those steps a second job builds `cedulon-<tag>.mcpb`, refuses a
+manifest whose version is not the tag, and attaches the file to the GitHub
+release (creating the release if it is missing). The tree now carries the
+step; it is unproven until the next tag runs it.
+
 ## 0.11.0: the report counts what it classed
 
 This one adds a member and prints two lines. It refuses nothing that used to

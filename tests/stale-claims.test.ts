@@ -444,8 +444,8 @@ describe("claims that describe something outside their own file", () => {
     assert.equal(bundle[3], published, "STATUS bundle install range is not the published version");
 
     // The MCP Registry is a second distribution channel and it moves on its
-    // own: release.yml sends the packages to npm from the tag and deliberately
-    // does not touch the registry, so the two numbers can differ and the
+    // own: the workflow now carries a registry step, unproven until the next
+    // tag runs it, so the two numbers can still differ and the
     // difference is a fact about what a user receives, not a drift to forbid.
     // Requiring them equal would push the document toward the tidier sentence
     // rather than the true one. What must not happen is the lag going unsaid.

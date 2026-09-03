@@ -8,10 +8,11 @@
 # Until that is done for a package, its publish step fails with a permission
 # error rather than falling back to anything weaker.
 #
-# The MCP Registry step is deliberately absent. mcp-publisher authenticates
-# with its own GitHub device flow and whether it accepts Actions OIDC has not
-# been measured here. Adding it untested would put a claim in this file that
-# nobody checked, which is the defect this repository keeps finding elsewhere.
+# The MCP Registry and GitHub Release bundle steps sit after npm publish,
+# the npm readback, and the post-release suite. A tag that reached npm and
+# then failed those later steps is still a completed npm release; the later
+# steps do not roll it back. The tree now carries the step; it is unproven
+# until the next tag runs it.
 name: release
 
 on:
@@ -20,14 +21,19 @@ on:
       - "v*"
   workflow_dispatch:
 
+# Default is read. id-token: write is only on publish (npm trusted publishing
+# and mcp-publisher login github-oidc). contents: write is only on release
+# (gh release create / upload).
 permissions:
-  id-token: write
   contents: read
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -104,3 +110,150 @@ jobs:
           done
 
       - run: npm run test:post-release
+
+      # mcp-publisher 1.8.1. Digest from the release checksums file:
+      # https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/registry_1.8.1_checksums.txt
+      #   a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  mcp-publisher_linux_amd64.tar.gz
+      # Recomputed locally 2026-09-03; same digest. ubuntu-latest is x86_64;
+      # any other arch fails rather than fetching an unpinned latest.
+      - name: install pinned mcp-publisher
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          MCP_PUBLISHER_VERSION: "1.8.1"
+          MCP_PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+        run: |
+          set -e
+          arch=$(uname -m)
+          [ "$arch" = "x86_64" ] || { echo "pinned linux_amd64 digest; runner is $arch"; exit 1; }
+          curl -fsSL -o mcp-publisher_linux_amd64.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "$MCP_PUBLISHER_SHA256  mcp-publisher_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
+
+      # Official login for Actions: `mcp-publisher login github-oidc`.
+      # Documented at docs/reference/cli/commands.md and
+      # docs/modelcontextprotocol-io/github-actions.mdx in
+      # github.com/modelcontextprotocol/registry. Requires id-token: write.
+      # Publish takes server.json; no --dry-run flag exists on publish
+      # (validate is a separate command and does not publish).
+      - name: publish server.json to the MCP Registry
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME#v}"
+          sj=$(node -p "require('./server.json').version")
+          if [ "$sj" != "$tag" ]; then
+            echo "server.json is $sj, tag says $tag; refusing to publish"
+            exit 1
+          fi
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
+      # Official readback: GET /v0.1/servers/{name}/versions/{version} on
+      # https://registry.modelcontextprotocol.io (docs/reference/api/official-registry-api.md).
+      # isLatest is _meta.io.modelcontextprotocol.registry/official.isLatest
+      # (openapi.yaml). Same 10 x 15s bound as the npm readback.
+      - name: the MCP Registry answers with this version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME#v}"
+          encoded="io.github.dogrucanemek-alt%2Fcedulon"
+          url="https://registry.modelcontextprotocol.io/v0.1/servers/${encoded}/versions/${tag}"
+          got=""
+          latest=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            body=$(curl -fsS "$url" || echo "")
+            if [ -n "$body" ]; then
+              got=$(printf '%s' "$body" | node -e '
+                let raw = "";
+                process.stdin.on("data", (c) => { raw += c; });
+                process.stdin.on("end", () => {
+                  try {
+                    const b = JSON.parse(raw);
+                    const v = b.server && b.server.version ? b.server.version : "";
+                    const latest = b._meta && b._meta["io.modelcontextprotocol.registry/official"] && b._meta["io.modelcontextprotocol.registry/official"].isLatest === true;
+                    process.stdout.write(v + " " + (latest ? "true" : "false"));
+                  } catch {
+                    process.stdout.write(" ");
+                  }
+                });
+              ')
+              ver=${got%% *}
+              latest=${got#* }
+              [ "$ver" = "$tag" ] && [ "$latest" = "true" ] && break
+            fi
+            echo "  MCP Registry -> ${got:-no answer} (attempt $attempt, waiting)"
+            sleep 15
+          done
+          echo "  MCP Registry -> $got"
+          ver=${got%% *}
+          latest=${got#* }
+          [ "$ver" = "$tag" ] && [ "$latest" = "true" ] || {
+            echo "MCP Registry still says version=${ver:-nothing} isLatest=${latest:-nothing} after 10 attempts, tag says $tag"
+            exit 1
+          }
+
+  release:
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - run: npm ci
+
+      # Builds from the published npm package, not the working tree, so this
+      # job depends on publish having completed the npm readback.
+      - name: build the desktop bundle
+        run: npm run mcpb
+
+      - name: the manifest version is the tag
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME#v}"
+          bundle="build/cedulon-${tag}.mcpb"
+          [ -f "$bundle" ] || { echo "bundle $bundle was not produced"; exit 1; }
+          ver=$(python3 -c "import json,zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(json.loads(z.read('manifest.json'))['version'])" "$bundle")
+          echo "manifest version $ver, tag says $tag"
+          if [ "$ver" != "$tag" ]; then
+            echo "refusing to attach a bundle whose manifest version is not the tag"
+            exit 1
+          fi
+
+      - name: attach the bundle to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME#v}"
+          bundle="build/cedulon-${tag}.mcpb"
+          bundle_sha=$(sha256sum "$bundle" | awk '{print $1}')
+          echo "bundle sha256 $bundle_sha"
+          notes=$(mktemp)
+          {
+            awk -v t="$tag" '
+              $0 ~ "^## " t { grab=1; next }
+              grab && /^## / { exit }
+              grab && NF==0 && seen { exit }
+              grab && NF { seen=1; print }
+            ' docs/UPGRADING.md
+            echo
+            echo "Bundle SHA-256: $bundle_sha"
+          } > "$notes"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$bundle" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$bundle" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$notes"
+          fi
+          empty=$(mktemp -d)
+          gh release download "$GITHUB_REF_NAME" --pattern "cedulon-${tag}.mcpb" --dir "$empty"
+          echo "$bundle_sha  $empty/cedulon-${tag}.mcpb" | sha256sum -c -
