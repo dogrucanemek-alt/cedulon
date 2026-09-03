@@ -9,7 +9,7 @@ import {
   applyInclusionProof,
   buildCheckpointClaims,
   signCheckpoint,
-  verifyInclusionReceipt,
+  verifyInclusionEnvelope,
 } from "@cedulon/checkpoint";
 import { generateManifestKeys, signManifest } from "@cedulon/manifest";
 import {
@@ -374,31 +374,8 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
     const receipt = settledReceipt(honest);
     const inc = log.register(receipt.coseHex!);
     const { inclusionProof: _proof, ...legacy } = inc;
-    assert.equal(verifyInclusionReceipt(legacy, honest.publicKeyPem), true);
+    assert.equal(verifyInclusionEnvelope(legacy, honest.publicKeyPem), true);
     void _proof;
   });
 });
 
-describe("receipt binding: inclusion leaf vs caller candidate", () => {
-  it("RED: verifyInclusionReceipt accepts a receipt for A when the caller holds only B", () => {
-    const keys = generateReceiptKeys();
-    const log = new MemoryTransparencyService(keys);
-    const statementA = Buffer.from("aa".repeat(16)).toString("hex");
-    const statementB = Buffer.from("bb".repeat(16)).toString("hex");
-    const recA = log.register(statementA);
-    const hashB = createHash("sha256").update(Buffer.from(statementB, "hex")).digest("hex");
-
-    // The public verifier takes the receipt and an optional pin. It does not
-    // take candidate bytes. A caller who holds only B and asks whether this
-    // receipt covers that statement has no parameter to pass B in, and the
-    // call still returns true. That is inclusion without coverage: the leaf
-    // is read from the receipt, not compared to HASH(B).
-    assert.notEqual(recA.statementHash, hashB, "B is not the registered leaf");
-    const accepted = verifyInclusionReceipt(recA, keys.publicKeyPem);
-    assert.equal(
-      accepted,
-      false,
-      "verifyInclusionReceipt must not accept a receipt whose leaf is HASH(A) when the caller holds B",
-    );
-  });
-});

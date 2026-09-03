@@ -11,7 +11,7 @@ import {
   findEquivocation,
   signCheckpoint,
   verifyCheckpoint,
-  verifyInclusionReceipt,
+  verifyInclusionEnvelope,
 } from "@cedulon/checkpoint";
 import { canonical, jcsEncodeRefusal, signDecisionToken, verifyDecisionToken } from "@cedulon/core";
 import { signManifest, verifyManifest } from "@cedulon/manifest";
@@ -199,7 +199,7 @@ describe("lone surrogate (RFC 8785 §3.2.2.2 / Tiago 561)", () => {
     assert.equal(verifyManifest(manifestBad), false);
     assert.equal(verifyDecisionToken(tokenBad, 1), false);
     assert.equal(verifyCounterSignature({ ...cose, counterCoseHex: "00", payeePublicKeyPem: k.publicKeyPem }), false);
-    assert.equal(verifyInclusionReceipt(inclusion as never), false);
+    assert.equal(verifyInclusionEnvelope(inclusion as never), false);
     assert.doesNotThrow(() => findCheckpointChainBreak([cpBad]));
     assert.doesNotThrow(() => findEquivocation([cpBad]));
 

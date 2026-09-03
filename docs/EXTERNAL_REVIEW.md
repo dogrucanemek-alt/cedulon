@@ -383,3 +383,34 @@ they belong to the transparency or terms layer. The codes are also many-to-one
 against instructions - one malformed receipt emits seven of them, one twice,
 across five layers - so a disposition mapping needs a precedence rule and a
 record of what it discarded, which is what Section 6.2 already asks for.
+
+## Round 6 - receipt binding, self-review after the CCF -04 Last Call, 2026-09-03
+
+The CCF receipts profile Last Call comment (Sent/101) said a receipt verified
+without `assert(proof.leaf.data-hash == HASH(candidate_bytes))` establishes
+inclusion, not coverage. The same question was asked of this tree on 3 September
+(`receipt-binding-audit` @ `772fd24`). Inventory:
+
+| Path | Verdict |
+|---|---|
+| `verifyInclusionReceipt` | Unbound. Takes the receipt only; reads the leaf from the envelope. |
+| `MemoryTransparencyService.verifyInclusion` | Unbound at verify time. Compared the log's stored leaf, not caller bytes. |
+| `audit()` layer-2 | Bound. `HASH(candidate)` against `statementHash`, proof root, index, pin. |
+| `verifyReceipt` / `verifyCoseSign1` / MCP `cedulon_verify_receipt` | No inclusion path. Signature (and claims) only. |
+| MCP `cedulon_audit` | No inclusion path. Does not take `layer2` or `inclusionReceipts`. |
+
+Finding: the public function whose name said "inclusion" did the envelope check
+and stopped. A valid receipt for statement A verified while the caller held
+only B. The audit library already implemented MUST-T11-18 on its layer-2 input;
+the named verifier did not.
+
+Fix in this tree (0.12.0 prepared, not published): `verifyInclusionReceipt` is
+removed. `verifyInclusionEnvelope` is the old envelope check. `verifyInclusion`
+takes the candidate bytes and the witness key and applies the seven decisions
+in `MUST-T11-18` order. Tests: `tests/inclusion-shape.test.ts` (six cases plus
+the in-memory log's (a)(b)).
+
+Known, not closed:
+
+- MCP `cedulon_audit` still does not carry a layer-2 input (`packages/mcp-server/src/session.ts` `audit()`, `src/index.ts` tool schema). A caller on that surface cannot present candidate bytes and a proof.
+- JSON `receiptHash` still hashes `canonical({claims, signature})` (`packages/receipts/src/index.ts` `receiptHash`) rather than the signed COSE octets spec `{#hash-inputs}` names. New receipts MUST use COSE; the JSON path is legacy.

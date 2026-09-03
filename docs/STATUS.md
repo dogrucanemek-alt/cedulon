@@ -238,7 +238,9 @@ installed `@cedulon/audit` carries the finding codes that round added -
 `issuer-key-mismatch`, `countersign-key-mismatch`, `countersign-missing`,
 `witness-entry-unattributable` and the three `unauthenticated-*` warnings.
 `padNonce` is gone from the installed `@cedulon/receipts`, and `verifyReceipt`
-and `verifyInclusionReceipt` take the key to check against. `0.2.x` predates all
+and `verifyInclusionReceipt` took the key to check against. 0.12.0 (prepared,
+not published) splits that surface into `verifyInclusionEnvelope` and
+`verifyInclusion`. `0.2.x` predates all
 of it and `0.1.0` predates `-01` as well.
 
 Every tool the server exposes carries a title and the hint that applies to it:
@@ -375,8 +377,9 @@ settlement, and the audit reported nothing at all.
 
 `audit()` now takes `issuerTrust` and `witnessTrust` beside `trust`, and
 `verifyReceipt`, `verifyCheckpoint`, `verifyDecisionToken` and
-`verifyInclusionReceipt` each take the key to check against as an optional
-argument. A receipt that does not answer to the pinned issuer is reported as
+`verifyInclusionReceipt` each took the key to check against as an optional
+argument. 0.12.0 (prepared, not published) replaces that last name with
+`verifyInclusionEnvelope` (envelope) and `verifyInclusion` (candidate bytes). A receipt that does not answer to the pinned issuer is reported as
 `issuer-key-mismatch` and is not counted as coverage, so the settlement it named
 stays reported. An audit given no issuer or witness key says so
 (`unauthenticated-issuer`, `unauthenticated-witness`) instead of reaching an

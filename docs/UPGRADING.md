@@ -4,6 +4,22 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.12.0 (prepared, not published)
+
+C. The public inclusion verifier now binds the receipt to the candidate bytes
+the caller holds. `verifyInclusionReceipt` is gone. The envelope check (signature
+plus `{statementHash, index, treeHead}`) is `verifyInclusionEnvelope`. Coverage
+is `verifyInclusion(receipt, candidateHex, witnessKey)`, which hashes the
+candidate, requires a proof, and accepts only when the leaf, index, and
+reproduced root match the signed envelope. Why: the same defect we wrote into
+the CCF -04 Last Call (a receipt verified without `HASH(candidate)` equality
+establishes inclusion, not coverage) was measured on this API on 3 September.
+
+What breaks: `verifyInclusionReceipt` is gone; a call that verified an envelope
+now reads `verifyInclusionEnvelope`, and a call that meant to check that a
+receipt covers the bytes you hold now reads `verifyInclusion(receipt,
+candidateHex, witnessKey)` and fails without a proof.
+
 ## 0.11.0: the report counts what it classed
 
 This one adds a member and prints two lines. It refuses nothing that used to
