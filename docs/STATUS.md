@@ -344,8 +344,23 @@ The bundle's manifest declares its privacy policy at
 ships inside the package. A missing or incomplete privacy policy is an outright
 rejection from the Anthropic connector directory, so a test checks the manifest
 declaration, the HTTPS scheme, and the shipped README together. Nothing has been
-submitted to that directory yet. Smithery takes an HTTPS endpoint or a bundle;
-neither has been submitted there either.
+submitted to that directory yet.
+
+Smithery lists the server as `dogrucanemek/cedulon` since 3 September 2026
+(release `9cc8b89c`, published with `@smithery/cli` 4.11.1 from a bundle). The
+bundle it holds is the 0.12.0 bundle with one difference: the manifest's
+`tools` list is removed and `tools_generated` is set, 3,860,925 bytes, SHA-256
+`21f34d9250c8351df6cf88146f0824add165a5502d306afbacf2fedb0aba4afd`. The
+reason is a disagreement between two specifications: the CLI copies the
+manifest's `tools` entries into a server card that requires an `inputSchema`
+on each, and the MCPB manifest validator refuses an `inputSchema` on a tool
+entry, so a manifest that lists its tools cannot be published there and a
+manifest that could be published is not a valid bundle; the tools list was
+the thing to drop. Read back from the listing the same day: no description
+and no tools are shown, the score reads 28/100, and the hosted URL the
+publish command printed answers 404. The card is what the CLI sent, name and
+version; it is not what the server exposes. The `v0.12.0` GitHub release
+carries the unaltered bundle.
 
 The server is listed on Glama at `dogrucanemek-alt/cedulon`. License and
 quality both grade A, Install Server is active, and the release listed there is
