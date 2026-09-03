@@ -32,6 +32,17 @@ export type ReconciliationProfile<Rec, Row> = {
   /** Broken-field list against the named terms document; empty if none. */
   terms(record: Rec, manifestTerms: unknown): string[];
   checkpointTotals(records: Rec[]): Record<string, string>;
+  /**
+   * Finding codes the match walk emits. Spend keeps today's names.
+   * `rowAgainstRefusal` is for a row whose ref belongs to a record that
+   * does not expect a row (aborted / deny / defer).
+   */
+  codes: {
+    recordWithoutRow: string;
+    rowWithoutRecord: string;
+    bindFailure: string;
+    rowAgainstRefusal: string;
+  };
 };
 
 type SpendTerms = {
@@ -139,4 +150,10 @@ export const SPEND_PROFILE: ReconciliationProfile<SignedReceipt, RailSettlement>
   aggregate: spendAggregate,
   terms: spendTerms,
   checkpointTotals: totalsFromReceipts,
+  codes: {
+    recordWithoutRow: "receipt-without-settlement",
+    rowWithoutRecord: "settlement-without-receipt",
+    bindFailure: "settlement-mismatch",
+    rowAgainstRefusal: "settlement-without-receipt",
+  },
 };

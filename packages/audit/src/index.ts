@@ -42,7 +42,20 @@ import {
   type RailSettlement,
   type SignedRailExtract,
 } from "@cedulon/x402-adapter";
+import {
+  decisionRecordHash,
+  findDecisionRecordChainBreak,
+  verifyDecisionRecord,
+  type SignedDecisionRecord,
+} from "@cedulon/core";
+import {
+  effectExtractEncodeRefusal,
+  verifyEffectExtract,
+  type EffectRow,
+  type SignedEffectExtract,
+} from "@cedulon/effect-extract";
 import { SPEND_PROFILE, type ReconciliationProfile } from "./profile.ts";
+import { DECISION_PROFILE } from "./profiles/decision.ts";
 
 export { DEFAULT_CLOCK_SKEW_MS };
 export {
@@ -51,6 +64,7 @@ export {
   type ProfileFinding,
   type ReconciliationProfile,
 } from "./profile.ts";
+export { DECISION_PROFILE } from "./profiles/decision.ts";
 
 export const FINDING_CODES = [
   "settlement-without-receipt",
@@ -103,6 +117,10 @@ export const FINDING_CODES = [
   "delivery-mismatch",
   "witness-inclusion-invalid",
   "witness-inclusion-not-exercised",
+  "decision-without-effect",
+  "effect-without-decision",
+  "effect-against-refusal",
+  "effect-mismatch",
 ] as const;
 
 export type FindingCode = (typeof FINDING_CODES)[number];
@@ -113,6 +131,7 @@ export const FINDING_OBJECT_VERSION = 1;
 /**
  * Trust root the verifier supplies out of band. Without it a rail extract only
  * proves internal consistency: any key can sign any body, including its own.
+ * On the decision profile this pin is the effect-extract signer, not a rail.
  */
 export type RailTrustPin = {
   publicKeyPem: string;
@@ -127,6 +146,7 @@ export type RailTrustPin = {
  * the settlements; this says who was entitled to issue receipts and checkpoints
  * for them. Without it an attacker mints a key, signs a receipt for a settlement
  * they were never authorised to make, and the row stops looking uncovered.
+ * On the decision profile this pin is the decider.
  */
 export type IssuerTrustPin = {
   /**
@@ -293,11 +313,51 @@ function isSettled(r: SignedReceipt): boolean {
   return r.claims.outcome === "settled";
 }
 
+function isDecisionRecord(r: PresentedRecord): r is SignedDecisionRecord {
+  return "decision" in r.claims;
+}
+
+function isEffectExtract(x: PresentedExtract): x is SignedEffectExtract {
+  return "effects" in x.body;
+}
+
+function extractRows(x: PresentedExtract): PresentedRow[] {
+  return isEffectExtract(x) ? x.body.effects : x.body.settlements;
+}
+
+function extractAccountId(x: PresentedExtract): string {
+  return isEffectExtract(x) ? x.body.deciderId : x.body.accountId;
+}
+
+function extractRailId(x: PresentedExtract): string {
+  return isEffectExtract(x) ? x.body.channelId : x.body.railId;
+}
+
+function verifyPresentedExtract(x: PresentedExtract, pin?: string): boolean {
+  return isEffectExtract(x)
+    ? pin
+      ? verifyEffectExtract(x, pin)
+      : verifyEffectExtract(x)
+    : pin
+      ? verifyRailExtract(x, pin)
+      : verifyRailExtract(x);
+}
+
+function recordAttestedByPins(r: PresentedRecord, pins: readonly string[]): boolean {
+  if (isDecisionRecord(r)) {
+    return pins.some((pem) => toSpkiDer(pem) !== null && verifyDecisionRecord(r, pem));
+  }
+  return receiptAttestedByPins(r, pins);
+}
+
 export function inCheckpointWindow(timestampMs: number, cp: SignedCheckpoint): boolean {
   return timestampMs >= cp.claims.startMs && timestampMs < cp.claims.endMs;
 }
 
-export function receiptsInWindow(receipts: SignedReceipt[], cp: SignedCheckpoint): SignedReceipt[] {
+export function receiptsInWindow<T extends { claims: { timestampMs: number } }>(
+  receipts: T[],
+  cp: SignedCheckpoint,
+): T[] {
   return receipts.filter((r) => inCheckpointWindow(r.claims.timestampMs, cp));
 }
 
@@ -497,8 +557,11 @@ export type SettlementBoundary = {
   nextRefs?: ReadonlySet<string>;
 };
 
-function clockSkewOf(body: RailExtractBody): number {
-  return typeof body.clockSkewMs === "number" ? body.clockSkewMs : DEFAULT_CLOCK_SKEW_MS;
+function clockSkewOf(extract: PresentedExtract): number {
+  if (!isEffectExtract(extract) && typeof extract.body.clockSkewMs === "number") {
+    return extract.body.clockSkewMs;
+  }
+  return DEFAULT_CLOCK_SKEW_MS;
 }
 
 export function findSettlementMatches(
@@ -520,9 +583,12 @@ type MatchCounts = {
  * every row is `unreconciled`, and no other class is claimed.
  */
 function unreconciledCounts(
-  receipts: SignedReceipt[],
-  settlements: RailSettlement[],
-  profile: ReconciliationProfile<SignedReceipt, RailSettlement> = SPEND_PROFILE,
+  receipts: PresentedRecord[],
+  settlements: PresentedRow[],
+  profile: ReconciliationProfile<PresentedRecord, PresentedRow> = SPEND_PROFILE as ReconciliationProfile<
+    PresentedRecord,
+    PresentedRow
+  >,
 ): MatchCounts {
   const settled = receipts.filter((r) => profile.expectsRow(r)).length;
   return {
@@ -548,13 +614,22 @@ function unreconciledCounts(
 }
 
 function classifySettlementMatches(
-  receipts: SignedReceipt[],
-  settlements: RailSettlement[],
+  receipts: PresentedRecord[],
+  settlements: PresentedRow[],
   boundary?: SettlementBoundary,
-  profile: ReconciliationProfile<SignedReceipt, RailSettlement> = SPEND_PROFILE,
+  profile: ReconciliationProfile<PresentedRecord, PresentedRow> = SPEND_PROFILE as ReconciliationProfile<
+    PresentedRecord,
+    PresentedRow
+  >,
 ): { findings: Finding[]; counts: MatchCounts } {
   const findings: Finding[] = [];
   const settled = receipts.filter((r) => profile.expectsRow(r));
+  const refusalRefs = new Set(
+    receipts
+      .filter((r) => !profile.expectsRow(r))
+      .map((r) => profile.recordRef(r))
+      .filter((ref): ref is string => ref !== null),
+  );
 
   const receiptItems = settled
     .map((r) => ({ ref: profile.recordRef(r), id: r.claims.nonce, side: "receipt" as const, receipt: r }))
@@ -612,13 +687,13 @@ function classifySettlementMatches(
     }
   }
 
-  const receiptsByRef = new Map<string, SignedReceipt>();
+  const receiptsByRef = new Map<string, PresentedRecord>();
   for (const item of receiptItems) {
     if (!skip.has(item.ref)) {
       receiptsByRef.set(item.ref, item.receipt);
     }
   }
-  const settlementsByRef = new Map<string, RailSettlement>();
+  const settlementsByRef = new Map<string, PresentedRow>();
   for (const item of settlementItems) {
     if (!skip.has(item.ref)) {
       settlementsByRef.set(item.ref, item.settlement);
@@ -645,10 +720,17 @@ function classifySettlementMatches(
         });
       } else {
         counts.settlements.unmatched += 1;
+        const againstRefusal = refusalRefs.has(ref);
         findings.push({
-          code: "settlement-without-receipt",
+          code: (againstRefusal
+            ? profile.codes.rowAgainstRefusal
+            : profile.codes.rowWithoutRecord) as FindingCode,
           id: ref,
-          detail: `settlement ${s.ref} ${s.amount} ${s.currency} has no spend receipt`,
+          detail: againstRefusal
+            ? `effect ${s.ref} exists against a refusal on the same ref`
+            : "amount" in s
+              ? `settlement ${s.ref} ${(s as RailSettlement).amount} ${(s as RailSettlement).currency} has no spend receipt`
+              : `effect ${s.ref} has no decision record`,
         });
       }
       continue;
@@ -658,12 +740,17 @@ function classifySettlementMatches(
     const bound = profile.bind(r, s);
     if (!bound.ok) {
       findings.push({
-        code: "settlement-mismatch",
+        code: profile.codes.bindFailure as FindingCode,
         id: ref,
         detail: bound.detail,
       });
     }
-    if (typeof s.beneficiary === "string" && r.claims.payee !== s.beneficiary) {
+    if (
+      "beneficiary" in s &&
+      typeof s.beneficiary === "string" &&
+      "payee" in r.claims &&
+      r.claims.payee !== s.beneficiary
+    ) {
       findings.push({
         code: "beneficiary-mismatch",
         id: ref,
@@ -693,7 +780,7 @@ function classifySettlementMatches(
       } else {
         counts.receipts.unmatched += 1;
         findings.push({
-          code: "receipt-without-settlement",
+          code: profile.codes.recordWithoutRow as FindingCode,
           id: r.claims.nonce,
           detail: `receipt nonce=${r.claims.nonce} ref=${ref} is not on the rail extract`,
         });
@@ -721,7 +808,7 @@ export function findReceiptsWithoutSettlement(
 }
 
 export function findWindowCoverage(
-  receipts: SignedReceipt[],
+  receipts: PresentedRecord[],
   checkpoints: SignedCheckpoint[],
 ): Finding[] {
   const findings: Finding[] = [];
@@ -745,7 +832,11 @@ export function findWindowCoverage(
     }
   }
 
-  const chained = orderByIssuerChain(receipts);
+  const spend = receipts.filter((r): r is SignedReceipt => !isDecisionRecord(r));
+  const chained =
+    spend.length === receipts.length
+      ? orderByIssuerChain(spend)
+      : { ordered: receipts, leftover: [] as PresentedRecord[] };
   for (const r of [...chained.ordered, ...chained.leftover]) {
     const hits = checkpoints.filter((cp) => inCheckpointWindow(r.claims.timestampMs, cp));
     if (hits.length === 0) {
@@ -766,9 +857,11 @@ export function findWindowCoverage(
 }
 
 export function findCheckpointTotalMismatches(
-  receipts: SignedReceipt[],
+  receipts: PresentedRecord[],
   checkpoints: SignedCheckpoint[],
-  totalsFn: (records: SignedReceipt[]) => Record<string, string> = totalsFromReceipts,
+  totalsFn: (records: PresentedRecord[]) => Record<string, string> = totalsFromReceipts as (
+    records: PresentedRecord[]
+  ) => Record<string, string>,
 ): Finding[] {
   const findings: Finding[] = [];
   for (const cp of checkpoints) {
@@ -785,7 +878,11 @@ export function findCheckpointTotalMismatches(
       continue;
     }
     const inWindow = receiptsInWindow(receipts, cp);
-    const inWindowOnChain = receiptsInWindow(orderByIssuerChain(receipts).ordered, cp);
+    const spend = receipts.filter((r): r is SignedReceipt => !isDecisionRecord(r));
+    const inWindowOnChain =
+      spend.length === receipts.length
+        ? receiptsInWindow(orderByIssuerChain(spend).ordered, cp)
+        : inWindow;
     const expected = totalsFn(inWindow);
     if (cp.claims.totals !== null && JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
       findings.push({
@@ -804,7 +901,8 @@ export function findCheckpointTotalMismatches(
     let expectedHead: string | null = null;
     if (inWindowOnChain.length > 0) {
       try {
-        expectedHead = receiptHash(inWindowOnChain[inWindowOnChain.length - 1]);
+        const head = inWindowOnChain[inWindowOnChain.length - 1];
+        expectedHead = isDecisionRecord(head) ? decisionRecordHash(head) : receiptHash(head);
       } catch (err) {
         const name = err instanceof Error && err.message !== "" ? err.message : "unencodable";
         findings.push({
@@ -1049,16 +1147,22 @@ function findCountersignFindings(input: {
 }
 
 function settlementKey(
-  s: RailSettlement,
-  profile: ReconciliationProfile<SignedReceipt, RailSettlement> = SPEND_PROFILE,
+  s: PresentedRow,
+  profile: ReconciliationProfile<PresentedRecord, PresentedRow> = SPEND_PROFILE as ReconciliationProfile<
+    PresentedRecord,
+    PresentedRow
+  >,
 ): string {
   return profile.rowKey(s);
 }
 
 function sameSettlements(
-  a: RailSettlement[],
-  b: RailSettlement[],
-  profile: ReconciliationProfile<SignedReceipt, RailSettlement> = SPEND_PROFILE,
+  a: PresentedRow[],
+  b: PresentedRow[],
+  profile: ReconciliationProfile<PresentedRecord, PresentedRow> = SPEND_PROFILE as ReconciliationProfile<
+    PresentedRecord,
+    PresentedRow
+  >,
 ): boolean {
   if (a.length !== b.length) return false;
   const left = a.map((row) => settlementKey(row, profile)).sort();
@@ -1066,11 +1170,15 @@ function sameSettlements(
   return left.every((k, i) => k === right[i]);
 }
 
+export type PresentedRecord = SignedReceipt | SignedDecisionRecord;
+export type PresentedExtract = SignedRailExtract | SignedEffectExtract;
+export type PresentedRow = RailSettlement | EffectRow;
+
 export type AuditInput = {
-  receipts: SignedReceipt[];
+  receipts: PresentedRecord[];
   checkpoints: SignedCheckpoint[];
-  settlements?: RailSettlement[];
-  extract?: SignedRailExtract;
+  settlements?: PresentedRow[];
+  extract?: PresentedExtract;
   trust?: RailTrustPin;
   issuerTrust?: IssuerTrustPin;
   /** The transparency log's key, held out of band. Same argument as the two above. */
@@ -1088,7 +1196,7 @@ export type AuditInput = {
   /** Checkpoint inclusion receipts. Absent ⇒ today's behaviour. Present ⇒ T11 witness is configured. */
   inclusionReceipts?: InclusionReceipt[];
   /** Following rail window; closes `boundary-deferred` records that match it. */
-  nextExtract?: SignedRailExtract;
+  nextExtract?: PresentedExtract;
   /**
    * Layer-2 pair (RFC 9942 §5.2.1): candidate registered statement bytes +
    * inclusion proof. Both present ⇒ proof is applied. Omitted ⇒ named as
@@ -1101,7 +1209,7 @@ export type AuditInput = {
   /**
    * Which axes this audit reconciles. Absent ⇒ spend, today's behaviour.
    */
-  profile?: ReconciliationProfile<SignedReceipt, RailSettlement>;
+  profile?: ReconciliationProfile<PresentedRecord, PresentedRow>;
 };
 
 /** Largest honest audit in this suite is 41 receipts (case 86). 100× that. */
@@ -1120,7 +1228,7 @@ function assertAuditBounds(input: AuditInput): void {
   if (input.checkpoints.length > AUDIT_MAX_CHECKPOINTS) {
     throw new Error("audit-too-large");
   }
-  const settlements = input.extract ? input.extract.body.settlements : (input.settlements ?? []);
+  const settlements = input.extract ? extractRows(input.extract) : (input.settlements ?? []);
   if (settlements.length > AUDIT_MAX_SETTLEMENTS) {
     throw new Error("audit-too-large");
   }
@@ -1150,8 +1258,10 @@ function findMalformedHashClaims(input: AuditInput): Finding[] {
   const findings: Finding[] = [];
   for (const r of input.receipts) {
     pushHashRefusal(findings, "policyHash", r.claims.policyHash, r.claims.nonce);
-    pushHashRefusal(findings, "manifestHash", r.claims.manifestHash, r.claims.nonce, true);
-    pushHashRefusal(findings, "prevReceiptHash", r.claims.prevReceiptHash, r.claims.nonce, true);
+    if (!isDecisionRecord(r)) {
+      pushHashRefusal(findings, "manifestHash", r.claims.manifestHash, r.claims.nonce, true);
+      pushHashRefusal(findings, "prevReceiptHash", r.claims.prevReceiptHash, r.claims.nonce, true);
+    }
   }
   for (const cp of input.checkpoints) {
     const id = `epoch-${cp.claims.epoch}`;
@@ -1172,35 +1282,35 @@ function findMalformedHashClaims(input: AuditInput): Finding[] {
 
 export function audit(input: AuditInput): AuditReport {
   assertAuditBounds(input);
-  const profile = input.profile ?? SPEND_PROFILE;
+  const profile = (input.profile ?? SPEND_PROFILE) as ReconciliationProfile<PresentedRecord, PresentedRow>;
   const findings: Finding[] = [...findMalformedHashClaims(input)];
   const warnings: Finding[] = [];
 
   // When an extract is supplied it is the subject of the audit: reconcile the
   // rows it actually carries, never a separate array the caller hands over.
-  const reconciled = input.extract ? input.extract.body.settlements : (input.settlements ?? []);
+  const reconciled = input.extract ? extractRows(input.extract) : (input.settlements ?? []);
 
   // Set where a stated rail pin refuses the presented extract; read where the
   // extract's rows would otherwise be compared. A pin that cannot be read is
   // not a refusal - the same distinction the manifest branch draws.
   let extractRejected = false;
   if (input.extract) {
-    if (input.settlements && !sameSettlements(input.settlements, input.extract.body.settlements, profile)) {
+    if (input.settlements && !sameSettlements(input.settlements, extractRows(input.extract), profile)) {
       findings.push({
         code: "extract-settlement-mismatch",
         id: "extract",
-        detail: `caller supplied ${input.settlements.length} settlement(s) that differ from the ${input.extract.body.settlements.length} in the signed extract; the extract is authoritative`,
+        detail: `caller supplied ${input.settlements.length} settlement(s) that differ from the ${extractRows(input.extract).length} in the signed extract; the extract is authoritative`,
       });
     }
 
     const signatureVerifies = input.trust
-      ? verifyRailExtract(input.extract, input.trust.publicKeyPem)
-      : verifyRailExtract(input.extract);
+      ? verifyPresentedExtract(input.extract, input.trust.publicKeyPem)
+      : verifyPresentedExtract(input.extract);
 
     // An extract that declares one window and carries rows from outside it has
     // not reported on the period it claims to cover. This holds whether or not
     // a key was pinned, so it is checked before the trust branch.
-    for (const row of input.extract.body.settlements) {
+    for (const row of extractRows(input.extract)) {
       if (
         row.timestampMs < input.extract.body.windowStartMs ||
         row.timestampMs >= input.extract.body.windowEndMs
@@ -1218,7 +1328,11 @@ export function audit(input: AuditInput): AuditReport {
     // for). The refusal keeps its name in the report, the same split the
     // COSE side makes: "signature failed" for a refused body would leave an
     // operator unable to tell a limit from a forgery.
-    const encodeRefusal = signatureVerifies ? null : railExtractEncodeRefusal(input.extract);
+    const encodeRefusal = signatureVerifies
+      ? null
+      : isEffectExtract(input.extract)
+        ? effectExtractEncodeRefusal(input.extract)
+        : railExtractEncodeRefusal(input.extract);
 
     if (!input.trust) {
       warnings.push({
@@ -1268,18 +1382,20 @@ export function audit(input: AuditInput): AuditReport {
           });
         }
       }
-      if (t.accountId !== undefined && body.accountId !== t.accountId) {
+      const coveredAccount = extractAccountId(input.extract);
+      const coveredRail = extractRailId(input.extract);
+      if (t.accountId !== undefined && coveredAccount !== t.accountId) {
         findings.push({
           code: "extract-scope-mismatch",
           id: "extract",
-          detail: `rail extract covers account ${body.accountId}, not the expected ${t.accountId}`,
+          detail: `rail extract covers account ${coveredAccount}, not the expected ${t.accountId}`,
         });
       }
-      if (t.railId !== undefined && body.railId !== t.railId) {
+      if (t.railId !== undefined && coveredRail !== t.railId) {
         findings.push({
           code: "extract-scope-mismatch",
           id: "extract",
-          detail: `rail extract covers rail ${body.railId}, not the expected ${t.railId}`,
+          detail: `rail extract covers rail ${coveredRail}, not the expected ${t.railId}`,
         });
       }
       if (t.windowStartMs !== undefined && body.windowStartMs > t.windowStartMs) {
@@ -1398,7 +1514,9 @@ export function audit(input: AuditInput): AuditReport {
     // other window; presenting it beside a set of noManifest receipts would
     // otherwise leave a report that reads as terms-backed and is not.
     const presentedHash = manifestHash(input.manifest);
-    const covered = input.receipts.some((r) => r.claims.manifestHash === presentedHash);
+    const covered = input.receipts.some(
+      (r) => !isDecisionRecord(r) && r.claims.manifestHash === presentedHash,
+    );
     if (!covered) {
       warnings.push({
         code: "manifest-covers-no-receipt",
@@ -1465,9 +1583,13 @@ export function audit(input: AuditInput): AuditReport {
       // Attestation is pin-under-signature (K2). The carried PEM is not the
       // identity source; a kid match without a pin-valid signature still drops.
       const rejected = namesMismatches
-        ? input.receipts.filter((r) => !receiptAttestedByPins(r, issuerPins))
+        ? input.receipts.filter((r) => !recordAttestedByPins(r, issuerPins))
         : [];
-      const foreign = rejected.filter((r) => !receiptBelongsToPin(r, issuerPins));
+      const foreign = rejected.filter((r) =>
+        isDecisionRecord(r)
+          ? !issuerPins.some((pem) => sameSpkiKey(r.publicKeyPem, pem))
+          : !receiptBelongsToPin(r, issuerPins),
+      );
       const NAMED_LIMIT = 10;
       if (foreign.length > NAMED_LIMIT) {
         findings.push({
@@ -1480,7 +1602,7 @@ export function audit(input: AuditInput): AuditReport {
           findings.push({
             code: "issuer-key-mismatch",
             id: r.claims.nonce,
-            detail: `receipt nonce=${r.claims.nonce} is signed by a key other than the pinned issuer key, so it is not coverage for ${r.claims.x402PaymentRef ?? "any settlement"}`,
+            detail: `receipt nonce=${r.claims.nonce} is signed by a key other than the pinned issuer key, so it is not coverage for ${profile.recordRef(r) ?? "any settlement"}`,
           });
         }
       }
@@ -1493,8 +1615,9 @@ export function audit(input: AuditInput): AuditReport {
           });
         }
       }
-      attested = input.receipts.filter((r) => receiptAttestedByPins(r, issuerPins));
+      attested = input.receipts.filter((r) => recordAttestedByPins(r, issuerPins));
       for (const r of attested) {
+        if (isDecisionRecord(r)) continue;
         const verifying = issuerPins.filter((pem) => verifyReceiptUnderPin(r, pem));
         if (verifying.length > 0 && !verifying.some((pem) => sameSpkiKey(r.publicKeyPem, pem))) {
           warnings.push({
@@ -1521,8 +1644,9 @@ export function audit(input: AuditInput): AuditReport {
   // Presentation order carries no weight. Rebuild the attested bag from the
   // prevReceiptHash links so every later walk (chain head, window coverage,
   // settlement match order) sees the same issuer order.
-  {
-    const chained = orderByIssuerChain(attested);
+  if (profile.id !== "decision") {
+    const spend = attested.filter((r): r is SignedReceipt => !isDecisionRecord(r));
+    const chained = orderByIssuerChain(spend);
     attested = [...chained.ordered, ...chained.leftover];
   }
 
@@ -1544,12 +1668,12 @@ export function audit(input: AuditInput): AuditReport {
     const presentedHash = manifestHash(input.manifest);
     const terms = input.manifest.body;
     for (const r of issuerPinUsable ? attested : input.receipts) {
-      if (r.claims.manifestHash !== presentedHash) continue;
+      if (isDecisionRecord(r) || r.claims.manifestHash !== presentedHash) continue;
       const broken = profile.terms(r, terms);
       if (broken.length > 0) {
         const charge = {
           code: "manifest-terms-mismatch" as const,
-          id: r.claims.x402PaymentRef ?? r.claims.nonce,
+          id: profile.recordRef(r) ?? r.claims.nonce,
           detail: `the receipt carries the hash of this Trade Manifest but departs from it: ${broken.join("; ")}. A gate applying MUST-T8-2 and MUST-T3-3 would have refused this payment`,
         };
         if (issuerPinUsable) findings.push(charge);
@@ -1591,12 +1715,16 @@ export function audit(input: AuditInput): AuditReport {
   // is asked of everything submitted; what two receipts say about each other is
   // asked of the set this verifier accepts, or of everything when there is no
   // accepted set to speak of.
-  findings.push(...findReceiptDefects(input.receipts));
+  findings.push(
+    ...findReceiptDefects(input.receipts.filter((r): r is SignedReceipt => !isDecisionRecord(r))),
+  );
   // With an issuer key a clash is between receipts the verifier accepts, so it
   // is a failure. Without one nothing distinguishes a submitted receipt from any
   // other, so the same clash cannot be pinned on anyone - said out loud, but not
   // as a verdict against a set the verifier cannot vouch for.
-  for (const clash of findReceiptRefClashes(issuerPinUsable ? attested : input.receipts)) {
+  for (const clash of findReceiptRefClashes(
+    (issuerPinUsable ? attested : input.receipts).filter((r): r is SignedReceipt => !isDecisionRecord(r)),
+  )) {
     if (issuerPinUsable) {
       findings.push(clash);
     } else {
@@ -1606,16 +1734,16 @@ export function audit(input: AuditInput): AuditReport {
   const nextOk = Boolean(
     input.nextExtract &&
       (input.trust
-        ? verifyRailExtract(input.nextExtract, input.trust.publicKeyPem)
-        : verifyRailExtract(input.nextExtract)),
+        ? verifyPresentedExtract(input.nextExtract, input.trust.publicKeyPem)
+        : verifyPresentedExtract(input.nextExtract)),
   );
   const settlementBoundary: SettlementBoundary | undefined = input.extract
     ? {
         windowStartMs: input.extract.body.windowStartMs,
         windowEndMs: input.extract.body.windowEndMs,
-        clockSkewMs: clockSkewOf(input.extract.body),
+        clockSkewMs: clockSkewOf(input.extract),
         ...(nextOk
-          ? { nextRefs: new Set(input.nextExtract!.body.settlements.map((s) => s.ref)) }
+          ? { nextRefs: new Set(extractRows(input.nextExtract!).map((s) => s.ref)) }
           : {}),
       }
     : undefined;
@@ -1649,7 +1777,7 @@ export function audit(input: AuditInput): AuditReport {
     settlements: matchCounts.settlements,
   };
   const manifestPayeeBound = Boolean(input.manifest && typeof input.manifest.body.payee === "string");
-  const beneficiaryBound = reconciled.some((s) => typeof s.beneficiary === "string");
+  const beneficiaryBound = reconciled.some((s) => "beneficiary" in s && typeof s.beneficiary === "string");
   if (input.extract && !manifestPayeeBound && !beneficiaryBound) {
     warnings.push({
       code: "counterparty-unbound",
@@ -1667,7 +1795,9 @@ export function audit(input: AuditInput): AuditReport {
     ? input.checkpoints.filter((cp) => attestsCheckpoint!(cp))
     : input.checkpoints;
   const countersign = findCountersignFindings({
-    receipts: issuerPinUsable ? attested : input.receipts,
+    receipts: (issuerPinUsable ? attested : input.receipts).filter(
+      (r): r is SignedReceipt => !isDecisionRecord(r),
+    ),
     payeeTrust: input.payeeTrust,
     manifest: manifestRejected ? undefined : input.manifest,
   });
@@ -1675,11 +1805,26 @@ export function audit(input: AuditInput): AuditReport {
   findings.push(...countersign.findings);
   const chainWalk = issuerPinUsable
     ? input.receipts.filter(
-        (r) => receiptAttestedByPins(r, issuerPins) || receiptBelongsToPin(r, issuerPins),
+        (r) =>
+          recordAttestedByPins(r, issuerPins) ||
+          (!isDecisionRecord(r) && receiptBelongsToPin(r, issuerPins)),
       )
     : attested;
-  const chain = findReceiptChainBreak(chainWalk, issuerPinUsable ? issuerPins : undefined);
-  if (chain) findings.push(chain);
+  if (profile.id === "decision") {
+    const decisionWalk = chainWalk.filter(isDecisionRecord);
+    const brk = findDecisionRecordChainBreak(decisionWalk);
+    if (brk) {
+      findings.push({
+        code: "receipt-chain-break",
+        id: decisionWalk[brk.index]?.claims.nonce ?? `decision-${brk.index}`,
+        detail: `decision record chain ${brk.reason} at ${brk.index}`,
+      });
+    }
+  } else {
+    const spendWalk = chainWalk.filter((r): r is SignedReceipt => !isDecisionRecord(r));
+    const chain = findReceiptChainBreak(spendWalk, issuerPinUsable ? issuerPins : undefined);
+    if (chain) findings.push(chain);
+  }
   findings.push(...findCheckpointTotalMismatches(attested, attestedCheckpoints, (recs) => profile.checkpointTotals(recs)));
   findings.push(...findWindowCoverage(attested, attestedCheckpoints));
 
@@ -1831,8 +1976,8 @@ export function audit(input: AuditInput): AuditReport {
     ...(input.extract
       ? {
           scope: {
-            accountId: input.extract.body.accountId,
-            railId: input.extract.body.railId,
+            accountId: extractAccountId(input.extract),
+            railId: extractRailId(input.extract),
             windowStartMs: input.extract.body.windowStartMs,
             windowEndMs: input.extract.body.windowEndMs,
           },

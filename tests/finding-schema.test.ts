@@ -98,6 +98,8 @@ describe("finding object schema", () => {
     for (const code of FINDING_CODES) {
       assert.match(code, /^[a-z]+(-[a-z]+)*$/);
     }
+    const listed = schema.$defs?.finding?.properties?.code?.enum;
+    assert.deepEqual(listed, [...FINDING_CODES]);
   });
 
   it("audit --json matches the schema and leaves human output alone", () => {
