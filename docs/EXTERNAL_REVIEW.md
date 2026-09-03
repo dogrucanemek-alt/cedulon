@@ -483,3 +483,17 @@ Known, not closed:
 - `CTY_DECISION_RECORD` and the effect-extract media type are not in
   the posted IANA table (spec text is a separate decision)
 - README and the site were not updated; those are external claims
+
+Gate, same day. The branch was read and re-run from a second worktree, and
+the golden file was run against the pre-seam source (`45bb020`): it passed
+there, so it does record the old behaviour. One spend sentence had still
+moved. An aborted receipt that kept its ref, presented beside a row on that
+ref, read "effect … against a refusal" instead of "settlement … has no spend
+receipt"; the golden's `aborted` case carried no ref, so the branch the seam
+added was never exercised. The three one-sided sentences now live on the
+profile, the golden gained `aborted-with-ref` (regenerated from `45bb020`,
+red on the branch before the fix), and the twelve conformance cases assert
+their counters. Two documentation sentences were corrected: the effect
+extract refuses a row outside its window whole, where a rail extract is
+accepted and the row is named; and the decision chain break borrows the
+spend code.

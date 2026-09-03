@@ -55,6 +55,8 @@ type ReceiptOpt = {
   ts?: number;
   outcome?: "settled" | "aborted";
   prevReceiptHash?: string | null;
+  /** Keep the ref on an aborted receipt; the default drops it. */
+  keepRef?: boolean;
 };
 
 const receipt = (ref: string, nonce: string, o: ReceiptOpt = {}): SignedReceipt =>
@@ -67,7 +69,7 @@ const receipt = (ref: string, nonce: string, o: ReceiptOpt = {}): SignedReceipt 
       policyHash: H,
       manifestHash: o.manifestHash ?? null,
       noManifest: o.manifestHash === undefined,
-      x402PaymentRef: o.outcome === "aborted" ? null : ref,
+      x402PaymentRef: o.outcome === "aborted" && !o.keepRef ? null : ref,
       timestampMs: o.ts ?? MID,
       nonce: nonce.padEnd(16, "-"),
       prevReceiptHash: o.prevReceiptHash ?? null,
@@ -169,6 +171,12 @@ function buildCases(): Record<string, AuditReport> {
       ],
     }),
     aborted: run([receipt("r-abort", "n-abort", { outcome: "aborted" })], []),
+    // An aborted receipt may still carry the ref it tried. A row on that ref
+    // is an uncovered settlement in today's words; the seam must not rename it.
+    "aborted-with-ref": run(
+      [receipt("r-abref", "n-abref", { outcome: "aborted", keepRef: true })],
+      [S("r-abref")],
+    ),
     "opening-boundary-deferred": run([], [S("r-open", { ts: NOW + 1 })]),
     "closing-boundary-carried": run([receipt("r-late", "n-late", { ts: CLOSING })], [], {
       nextExtract: extract([S("r-late", { ts: END })], END, END + 1_000),

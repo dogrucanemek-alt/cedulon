@@ -43,6 +43,15 @@ export const DECISION_PROFILE: ReconciliationProfile<SignedDecisionRecord, Effec
     bindFailure: "effect-mismatch",
     rowAgainstRefusal: "effect-against-refusal",
   },
+  recordWithoutRowDetail(record, ref) {
+    return `decision nonce=${record.claims.nonce} ref=${ref} has no effect row on the extract`;
+  },
+  rowWithoutRecordDetail(row) {
+    return `effect ${row.ref} has no decision record`;
+  },
+  rowAgainstRefusalDetail(row) {
+    return `effect ${row.ref} exists against a refusal on the same ref`;
+  },
 };
 
 function decisionAggregate(
@@ -50,18 +59,8 @@ function decisionAggregate(
   records: SignedDecisionRecord[],
   rows: EffectRow[],
 ): ProfileFinding[] {
+  // A repeated ref is counted, not summed: there is no amount to add up.
   const findings: ProfileFinding[] = [];
-  const byClass = new Map<string, number>();
-  for (const row of rows) {
-    byClass.set(row.effectClass, (byClass.get(row.effectClass) ?? 0) + 1);
-  }
-  const byDecision = new Map<string, number>();
-  for (const record of records) {
-    const d = record.claims.decision;
-    byDecision.set(d, (byDecision.get(d) ?? 0) + 1);
-  }
-  void byClass;
-  void byDecision;
   if (rows.length > records.length) {
     findings.push({
       code: "effect-without-decision",

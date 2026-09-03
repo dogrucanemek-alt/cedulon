@@ -726,11 +726,7 @@ function classifySettlementMatches(
             ? profile.codes.rowAgainstRefusal
             : profile.codes.rowWithoutRecord) as FindingCode,
           id: ref,
-          detail: againstRefusal
-            ? `effect ${s.ref} exists against a refusal on the same ref`
-            : "amount" in s
-              ? `settlement ${s.ref} ${(s as RailSettlement).amount} ${(s as RailSettlement).currency} has no spend receipt`
-              : `effect ${s.ref} has no decision record`,
+          detail: againstRefusal ? profile.rowAgainstRefusalDetail(s) : profile.rowWithoutRecordDetail(s),
         });
       }
       continue;
@@ -782,7 +778,7 @@ function classifySettlementMatches(
         findings.push({
           code: profile.codes.recordWithoutRow as FindingCode,
           id: r.claims.nonce,
-          detail: `receipt nonce=${r.claims.nonce} ref=${ref} is not on the rail extract`,
+          detail: profile.recordWithoutRowDetail(r, ref),
         });
       }
     }

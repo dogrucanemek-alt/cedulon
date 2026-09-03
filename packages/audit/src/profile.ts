@@ -43,6 +43,14 @@ export type ReconciliationProfile<Rec, Row> = {
     bindFailure: string;
     rowAgainstRefusal: string;
   };
+  /**
+   * Finding text for the three match-walk outcomes that name one side only.
+   * The sentence belongs to the profile: a spend report must not read
+   * "effect", and a decision report must not read "rail extract".
+   */
+  recordWithoutRowDetail(record: Rec, ref: string): string;
+  rowWithoutRecordDetail(row: Row): string;
+  rowAgainstRefusalDetail(row: Row): string;
 };
 
 type SpendTerms = {
@@ -155,5 +163,16 @@ export const SPEND_PROFILE: ReconciliationProfile<SignedReceipt, RailSettlement>
     rowWithoutRecord: "settlement-without-receipt",
     bindFailure: "settlement-mismatch",
     rowAgainstRefusal: "settlement-without-receipt",
+  },
+  recordWithoutRowDetail(record, ref) {
+    return `receipt nonce=${record.claims.nonce} ref=${ref} is not on the rail extract`;
+  },
+  rowWithoutRecordDetail(row) {
+    return `settlement ${row.ref} ${row.amount} ${row.currency} has no spend receipt`;
+  },
+  rowAgainstRefusalDetail(row) {
+    // Spend never told this case apart from a plain uncovered row, and an
+    // aborted receipt may still carry the ref it tried. Same sentence.
+    return `settlement ${row.ref} ${row.amount} ${row.currency} has no spend receipt`;
   },
 };

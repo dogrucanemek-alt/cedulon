@@ -141,12 +141,19 @@ describe("decision profile conformance", () => {
     const report = run([denied], [sharedRow]);
     assert.equal(report.findings.some((f) => f.code === "effect-against-refusal"), true);
     assert.equal(report.ok, false);
+    assert.equal(report.counts.receipts.aborted, 1);
+    assert.equal(report.counts.receipts.settled, 0);
+    assert.equal(report.counts.settlements.rows, 1);
+    assert.equal(report.counts.settlements.unmatched, 1);
   });
 
   it("5: effect, no record → effect-without-decision", () => {
     const report = run([], [row({ ref: "orphan" })]);
     assert.equal(report.findings.some((f) => f.code === "effect-without-decision"), true);
     assert.equal(report.ok, false);
+    assert.equal(report.counts.receipts.submitted, 0);
+    assert.equal(report.counts.settlements.rows, 1);
+    assert.equal(report.counts.settlements.unmatched, 1);
   });
 
   it("6: allow + effect, only the row hash changes → effect-mismatch", () => {
@@ -154,6 +161,8 @@ describe("decision profile conformance", () => {
     const report = run([rec], [row({ effectHash: H2 })]);
     assert.equal(report.findings.some((f) => f.code === "effect-mismatch"), true);
     assert.equal(report.ok, false);
+    assert.equal(report.counts.receipts.matched, 1);
+    assert.equal(report.counts.settlements.matched, 1);
   });
 
   it("7: same ref two effect rows → duplicate path", () => {
@@ -161,6 +170,8 @@ describe("decision profile conformance", () => {
     const report = run([rec], [row(), row({ timestampMs: MID + 1 })]);
     assert.equal(report.findings.some((f) => f.code === "duplicate-ref"), true);
     assert.equal(report.counts.settlements.repeated, 2);
+    assert.equal(report.counts.receipts.repeated, 1);
+    assert.equal(report.ok, false);
   });
 
   it("8: closing-boundary record + nextExtract names the ref → carried 1", () => {
@@ -179,6 +190,8 @@ describe("decision profile conformance", () => {
     assert.equal(report.ok, false);
     assert.equal(report.guarantee, "conditional");
     assert.equal(report.warnings.some((w) => w.code === "unauthenticated-extract"), true);
+    assert.equal(report.counts.receipts.unmatched, 1);
+    assert.equal(report.counts.settlements.rows, 0);
   });
 
   it("10: no effect-extract pin → guarantee conditional, unauthenticated-extract", () => {
@@ -186,6 +199,8 @@ describe("decision profile conformance", () => {
     const report = run([rec], [row()], { omitTrust: true });
     assert.equal(report.guarantee, "conditional");
     assert.equal(report.warnings.some((w) => w.code === "unauthenticated-extract"), true);
+    assert.equal(report.counts.receipts.matched, 1);
+    assert.equal(report.counts.settlements.matched, 1);
   });
 
   it("11: no decider pin → unauthenticated-issuer", () => {
@@ -199,6 +214,8 @@ describe("decision profile conformance", () => {
     });
     assert.equal(report.warnings.some((w) => w.code === "unauthenticated-issuer"), true);
     assert.equal(report.guarantee, "conditional");
+    assert.equal(report.counts.receipts.matched, 1);
+    assert.equal(report.counts.settlements.matched, 1);
   });
 
   it("12: window/scope unstated still fire on the decision profile", () => {
@@ -214,5 +231,7 @@ describe("decision profile conformance", () => {
     assert.equal(report.warnings.some((w) => w.code === "unstated-audit-window"), true);
     assert.equal(report.warnings.some((w) => w.code === "unstated-audit-scope"), true);
     assert.equal(report.guarantee, "conditional");
+    assert.equal(report.counts.receipts.matched, 1);
+    assert.equal(report.counts.settlements.matched, 1);
   });
 });

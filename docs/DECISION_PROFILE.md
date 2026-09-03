@@ -49,8 +49,16 @@ export type ReconciliationProfile<Rec, Row> = {
     bindFailure: string;
     rowAgainstRefusal: string;
   };
+  recordWithoutRowDetail(record: Rec, ref: string): string;
+  rowWithoutRecordDetail(row: Row): string;
+  rowAgainstRefusalDetail(row: Row): string;
 };
 ```
+
+The three `…Detail` sentences belong to the profile. The first cut of the
+seam kept them in the match walk, and a spend audit of an aborted receipt
+that still carried its ref read "effect … against a refusal"; the golden
+file's `aborted-with-ref` case now holds that sentence in spend words.
 
 `AuditInput.profile` defaults to `SPEND_PROFILE`. `DECISION_PROFILE` is
 the second implementation. `trust` on that path is the effect-extract
@@ -97,9 +105,13 @@ EffectExtractClaims = { deciderId, channelId, windowStartMs, windowEndMs, effect
 ```
 
 Content type `application/cedulon-effect-extract+cbor`. The body is
-signed the way a rail extract is (JCS + detached). Shape refusals match
-the rail helper: unknown field, inverted window, empty ref, hash grammar,
-row outside the declared window.
+signed the way a rail extract is (JCS + detached). Shape refusals follow
+the rail helper for an inverted window, an empty ref and hash grammar,
+and go further on two points: an unknown field is refused, and a row
+outside the declared window is refused at the shape level. A rail
+extract with such a row is accepted and the audit names the row
+(`extract-scope-mismatch`); an effect extract with one is refused whole,
+so that per-row finding is never reached on this profile.
 
 ## Finding codes (decision)
 
@@ -146,6 +158,12 @@ finding: see the next section.
   JSONL. The live `/opt/whatsapp-bridge` log is not in this repository.
 - **Policy binding not exercised.** `terms()` is empty. A frozen rule
   document is not wired through the Trade Manifest path.
+- **Chain-break code is borrowed.** A broken `prevRecordHash` link is
+  reported under the spend code `receipt-chain-break`; no decision-side
+  name exists yet.
+- **Audit-time hash grammar** on a decision record checks `policyHash`
+  only; `requestHash`, `effectHash`, `inputsHash`, `prevRecordHash` are
+  refused at signing time, not re-read by `audit()`.
 
 The tree now carries the profile, the two signed objects, twelve
 conformance cases, and four offline IG fixtures; unproven until those
