@@ -284,6 +284,16 @@ desktop install. The 0.11.0 bundle was built and unpacked: its manifest states
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
+The 0.11.0 bundle is attached to the GitHub release `v0.11.0` as
+`cedulon-0.11.0.mcpb`, 3,859,661 bytes, SHA-256
+`ebaa32f064b73605dddcf9d9a0b06376ab2adf9433ab815af9239ca915069e67`, and the
+release notes carry that digest. On 3 September the asset was downloaded back
+twice, once through the GitHub CLI and once from the unauthenticated download
+URL, and both copies hashed the same as the file `npm run mcpb` had produced.
+The release was created by hand. Nothing in `release.yml` touches GitHub
+releases, so a later tag will not carry a bundle until that step exists and
+has run once.
+
 The bundle's manifest declares its privacy policy at
 <https://cedulon.com/privacy.html>, which is also linked from the README that
 ships inside the package. A missing or incomplete privacy policy is an outright
