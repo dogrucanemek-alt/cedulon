@@ -72,3 +72,16 @@ window holding one refused spend from a window holding none.
 
 Both are one requirement. The report publishes findings and an aggregate, not
 the class counts Section 6.4 asks for.
+
+## Cases beyond the probe (3 September 2026)
+
+`cases-0.12.0.mjs` runs ten further audits used in the review of the
+draft-abak `-01` candidate: balanced runs with and without a pinned rail key,
+window and scope; the closing-boundary receipt a following window names; an
+aborted receipt; the many-to-one malformed record; a refused extract; no
+extract at all; and an extract for a different account. It prints the report
+fields the review quoted (`ok`, `guarantee`, `summary`, `counts`, `scope`,
+findings, warnings). Run it the same way as the probe, from an empty directory
+against the published packages; substitute `0.8.0` for `0.12.0` to reproduce
+the older column. The setup helpers are copied from the probe rather than
+imported, so the probe file and its pinned digest do not change.
