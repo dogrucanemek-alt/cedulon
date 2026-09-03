@@ -18,6 +18,8 @@ export const CTY_CHECKPOINT = "application/cedulon-checkpoint+cbor";
 export const CTY_MANIFEST = "application/cedulon-manifest+cbor";
 export const CTY_INCLUSION = "application/cedulon-inclusion+cbor";
 export const CTY_DECISION = "application/cedulon-decision+cbor";
+/** Decision Record, not the token. Token keeps CTY_DECISION. */
+export const CTY_DECISION_RECORD = "application/cedulon-decision-record+cbor";
 export const CTY_COUNTERSIGN = "application/cedulon-countersign+cbor";
 
 export type CoseSign1 = {
