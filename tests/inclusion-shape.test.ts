@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 
-import { MemoryTransparencyService, verifyInclusion, verifyInclusionEnvelope, type InclusionReceipt } from "@cedulon/checkpoint";
+import { MemoryTransparencyService, applyInclusionProof, validInclusionProof, verifyInclusion, verifyInclusionEnvelope, type InclusionReceipt } from "@cedulon/checkpoint";
 import { CTY_CHECKPOINT, CTY_INCLUSION, cborMap, encodeCbor, signCoseSign1 } from "@cedulon/cose";
 import { generateReceiptKeys } from "@cedulon/receipts";
 
@@ -205,5 +205,18 @@ describe("hex and proof shape: what the verifier refuses without throwing", () =
       assert.doesNotThrow(() => verifyInclusion({ ...recA, inclusionProof: proof as never }, "aa", keys.publicKeyPem), JSON.stringify(proof));
       assert.equal(verifyInclusion({ ...recA, inclusionProof: proof as never }, "aa", keys.publicKeyPem), false, JSON.stringify(proof));
     }
+  });
+});
+
+describe("proof depth is not capped: the index has to resolve, the path may be long", () => {
+  it("a structurally valid deep path is a proof shape; only the index rule refuses", () => {
+    // A 60-level path (2^60 leaves) cannot be built here, but its shape is valid and
+    // the walk over it is finite. A cap at 53 refused such a proof for no reason the
+    // tree gives (gate review of c1f8243).
+    const deep = { leafIndex: 0, siblings: Array.from({ length: 60 }, () => "00".repeat(32)) };
+    assert.equal(validInclusionProof(deep), true);
+    assert.equal(validInclusionProof({ leafIndex: 2 ** 53 - 1, siblings: deep.siblings }), true);
+    assert.equal(validInclusionProof({ leafIndex: 2, siblings: ["00".repeat(32)] }), false, "index 2 needs two levels");
+    assert.doesNotThrow(() => applyInclusionProof("00".repeat(32), deep));
   });
 });

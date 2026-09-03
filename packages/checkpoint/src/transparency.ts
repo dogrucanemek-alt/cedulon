@@ -110,7 +110,9 @@ export function strictHexBytes(hex: unknown): Buffer | null {
  * integer leaf index and 32-byte sibling hashes, one per level, with the
  * index resolving to the root when the path ends. An empty path at index 1
  * returns the leaf unchanged, so leaf == treeHead would pass a verifier
- * that only compares; the last condition is what refuses it.
+ * that only compares; the last condition is what refuses it. The path's
+ * length is not capped: a safe integer index resolves under any path of 53
+ * levels or more, and the walk is one hash per level either way.
  */
 export function validInclusionProof(proof: unknown): proof is InclusionProof {
   if (typeof proof !== "object" || proof === null) {
@@ -123,7 +125,7 @@ export function validInclusionProof(proof: unknown): proof is InclusionProof {
   if (!Array.isArray(siblings) || !siblings.every((s) => typeof s === "string" && HASH_HEX_RE.test(s))) {
     return false;
   }
-  return siblings.length < 53 && leafIndex < 2 ** siblings.length;
+  return leafIndex < 2 ** siblings.length;
 }
 
 export function applyInclusionProof(leafHash: string, proof: InclusionProof): string {

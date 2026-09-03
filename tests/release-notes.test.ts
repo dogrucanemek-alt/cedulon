@@ -50,6 +50,17 @@ describe("release notes come from the whole UPGRADING section", () => {
     assert.throws(() => releaseNotesSection(prepared, "0.1"), /no section/);
   });
 
+  it("a heading that continues with letters or a dash is another section, even when it comes first", () => {
+    // "## 0.12.0evil" and "## 0.12.0-rc1" placed above the real heading must not shadow it
+    // (gate review of c1f8243). Only ":", " (", or end of line may follow the version.
+    for (const shadow of ["## 0.12.0evil", "## 0.12.0-rc1", "## 0.12.0 evil"]) {
+      const shadowed = prepared.replace("## 0.12.0 (prepared, not published)", `${shadow}\n\nShadow.\n\n## 0.12.0 (prepared, not published)`);
+      const notes = releaseNotesSection(shadowed, "0.12.0");
+      assert.doesNotMatch(notes, /Shadow/, shadow);
+      assert.match(notes, /^A\. First paragraph/, shadow);
+    }
+  });
+
   it("throws when the version has no section", () => {
     assert.throws(() => releaseNotesSection(prepared, "9.9.9"), /no section/);
   });

@@ -8,7 +8,10 @@ import { readFileSync } from "node:fs";
 export function releaseNotesSection(markdown: string, version: string): string {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const heading = new RegExp(`^## ${escaped}(?![0-9.])`);
+  // The version may be followed only by ":", " (" or the end of the line.
+  // "## 0.12.0evil" or "## 0.12.0-rc1" above the real heading is another
+  // section, not this one.
+  const heading = new RegExp(`^## ${escaped}(?::| \\(|\\s*$)`);
   const start = lines.findIndex((l) => heading.test(l));
   if (start < 0) {
     throw new Error(`no section for ${version}`);
