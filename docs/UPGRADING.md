@@ -17,6 +17,15 @@ manifest whose version is not the tag, and attaches the file to the GitHub
 release (creating the release if it is missing). The tree now carries the
 step; it is unproven until the next tag runs it.
 
+The workflow answers to tags only: the `workflow_dispatch` trigger is gone,
+because a manual run had `github.ref` on a branch, skipped the tag guard and
+still ran the npm publish steps; the `publish` job carries the tag condition
+at job level as well. The release notes are the whole UPGRADING section for
+the tag, produced by `scripts/release-notes.ts` and written on both the
+create and the upload path; the bundle's manifest is read with `unzip` and
+Node rather than Python. `tests/release-workflow.test.ts` holds that shape,
+`tests/release-notes.test.ts` the notes.
+
 C. The public inclusion verifier now binds the receipt to the candidate bytes
 the caller holds. `verifyInclusionReceipt` is gone. The envelope check (signature
 plus `{statementHash, index, treeHead}`) is `verifyInclusionEnvelope`. Coverage
@@ -46,7 +55,15 @@ path threw out of the public verifier. `validInclusionProof` now names the
 shape (a non-negative safe-integer index, 32-byte lowercase siblings, and an
 index that resolves to the root when the path ends); `verifyInclusion` answers
 false to anything else without throwing, `applyInclusionProof` refuses it by
-name, and the audit reports `witness-inclusion-invalid`.
+name, and the audit reports `witness-inclusion-invalid`. The path's depth is
+not capped: a safe-integer index resolves under any path of 53 levels or
+more, and the walk is one hash per level. A third reader found the shape
+check was still read with `Array.prototype.every`, which skips holes, so a
+sparse array with one filled slot passed and the walk met `undefined`; the
+check walks by index now, and the two remaining loose readers in the package
+(`decodeInclusionPayload`, and the leaf and sibling hashes under
+`applyInclusionProof`) refuse anything that is not lowercase hex of the right
+length by name.
 
 The behaviour carried forward is unchanged: an audit still reports
 `manifest-terms-mismatch` with the split 0.6.0 introduced, where with a

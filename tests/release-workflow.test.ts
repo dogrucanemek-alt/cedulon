@@ -88,6 +88,12 @@ describe("release.yml static shape", () => {
     assert.ok(on, "release.yml has no on: block");
     assert.doesNotMatch(on[1]!, /workflow_dispatch/, "workflow_dispatch would run publish steps off a branch");
     assert.match(on[1]!, /push:\s*\n\s*tags:/, "the push trigger is not on tags");
+    // Any other trigger (workflow_call, repository_dispatch, pull_request, schedule)
+    // would be a second way in that the dispatch check above does not see.
+    const triggers = [...on[1]!.matchAll(/^  ([a-z_]+):/gm)].map((m) => m[1]);
+    assert.deepEqual(triggers, ["push"], `on: has triggers other than push: ${triggers.join(",")}`);
+    const pushKeys = [...on[1]!.matchAll(/^    ([a-z_]+):/gm)].map((m) => m[1]);
+    assert.deepEqual(pushKeys, ["tags"], `push: filters other than tags: ${pushKeys.join(",")}`);
     const publish = jobBodies(yml).get("publish")!;
     assert.match(publish, /^\s{4}if:\s*startsWith\(github\.ref, 'refs\/tags\/'\)/m, "publish job is not locked to tags at job level");
   });

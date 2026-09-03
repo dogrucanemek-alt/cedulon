@@ -428,6 +428,17 @@ workflow now answers to tags only and the notes come from
 `scripts/release-notes.ts`, with `tests/release-workflow.test.ts` and
 `tests/release-notes.test.ts` holding the shape.
 
+A third reader, over the tree after those closures, found that the shape
+check still read the siblings with `Array.prototype.every`, which skips
+holes: a sparse array with one filled slot passed and the public verifier
+threw where the audit had reported a finding, the exact divergence the round
+was meant to close. It walks by index now, and the two hex readers the
+package still had outside `strictHexBytes` (`decodeInclusionPayload`, and
+the leaf and sibling hashes under `applyInclusionProof`) refuse by name.
+Nothing else in that reading reproduced as a defect; the notes it left are
+in the tree as tests (the workflow accepts no trigger but a tag push) and as
+sentences in UPGRADING.
+
 Known, not closed:
 
 - MCP `cedulon_audit` still does not carry a layer-2 input (`packages/mcp-server/src/session.ts` `audit()`, `src/index.ts` tool schema). A caller on that surface cannot present candidate bytes and a proof.

@@ -41,6 +41,9 @@ function sha256Bytes(data: Uint8Array): string {
 }
 
 function hex32(hex: string): Buffer {
+  if (!HASH_HEX_RE.test(hex)) {
+    throw new Error("hash-hex");
+  }
   return Buffer.from(hex, "hex");
 }
 
@@ -122,14 +125,22 @@ export function validInclusionProof(proof: unknown): proof is InclusionProof {
   if (typeof leafIndex !== "number" || !Number.isSafeInteger(leafIndex) || leafIndex < 0) {
     return false;
   }
-  if (!Array.isArray(siblings) || !siblings.every((s) => typeof s === "string" && HASH_HEX_RE.test(s))) {
+  if (!Array.isArray(siblings)) {
     return false;
+  }
+  // By index, not Array.prototype.every: every skips holes, and a sparse
+  // array with one filled slot passed the shape while the walk met undefined.
+  for (let i = 0; i < siblings.length; i += 1) {
+    const s: unknown = siblings[i];
+    if (typeof s !== "string" || !HASH_HEX_RE.test(s)) {
+      return false;
+    }
   }
   return leafIndex < 2 ** siblings.length;
 }
 
 export function applyInclusionProof(leafHash: string, proof: InclusionProof): string {
-  if (!validInclusionProof(proof)) {
+  if (typeof leafHash !== "string" || !HASH_HEX_RE.test(leafHash) || !validInclusionProof(proof)) {
     throw new Error("inclusion-proof");
   }
   let hash = leafHash;
@@ -296,7 +307,11 @@ export function decodeInclusionPayload(coseHex: string): {
   index: number;
   treeHead: string;
 } {
-  const msg = decodeCoseSign1(Buffer.from(coseHex, "hex"));
+  const cose = strictHexBytes(coseHex);
+  if (!cose) {
+    throw new Error("cose-hex");
+  }
+  const msg = decodeCoseSign1(cose);
   const claims = asMap(decodeCbor(msg.payload));
   const statementHash = mapGet(claims, 1);
   const index = mapGet(claims, 2);

@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 
-import { MemoryTransparencyService, applyInclusionProof, validInclusionProof, verifyInclusion, verifyInclusionEnvelope, type InclusionReceipt } from "@cedulon/checkpoint";
+import { MemoryTransparencyService, applyInclusionProof, decodeInclusionPayload, validInclusionProof, verifyInclusion, verifyInclusionEnvelope, type InclusionReceipt } from "@cedulon/checkpoint";
 import { CTY_CHECKPOINT, CTY_INCLUSION, cborMap, encodeCbor, signCoseSign1 } from "@cedulon/cose";
 import { generateReceiptKeys } from "@cedulon/receipts";
 
@@ -126,7 +126,7 @@ describe("receipt binding: inclusion leaf vs caller candidate", () => {
     assert.equal(verifyInclusion(moved, statementA, keys.publicKeyPem), false);
   });
 
-  it("a one-byte sibling flip does not verify", () => {
+  it("an appended sibling on a one-leaf log does not verify", () => {
     const siblings = recA.inclusionProof!.siblings.map((s, i) =>
       i === 0 ? (s.startsWith("00") ? `01${s.slice(2)}` : `00${s.slice(2)}`) : s,
     );
@@ -218,5 +218,33 @@ describe("proof depth is not capped: the index has to resolve, the path may be l
     assert.equal(validInclusionProof({ leafIndex: 2 ** 53 - 1, siblings: deep.siblings }), true);
     assert.equal(validInclusionProof({ leafIndex: 2, siblings: ["00".repeat(32)] }), false, "index 2 needs two levels");
     assert.doesNotThrow(() => applyInclusionProof("00".repeat(32), deep));
+  });
+});
+
+describe("holes and the two hex readers the review pass left open", () => {
+  const keys = generateReceiptKeys();
+  const log = new MemoryTransparencyService(keys);
+  log.register("bb");
+  const recA = log.register("aa");
+  const sib = recA.inclusionProof!.siblings[0]!;
+
+  it("a sparse siblings array is not a proof shape, and the verifier does not throw on it", () => {
+    // Array.prototype.every skips holes, so [sib, <hole>] passed the shape check and the
+    // walk met undefined (gate 2 of 41ca91e, FIX-1). Holes come from JS callers, not JSON.
+    const holey: string[] = [sib];
+    holey.length = 2;
+    const proof = { leafIndex: 1, siblings: holey };
+    assert.equal(validInclusionProof(proof), false);
+    assert.doesNotThrow(() => verifyInclusion({ ...recA, inclusionProof: proof }, "aa", keys.publicKeyPem));
+    assert.equal(verifyInclusion({ ...recA, inclusionProof: proof }, "aa", keys.publicKeyPem), false);
+    assert.throws(() => applyInclusionProof(recA.statementHash, proof), /inclusion-proof/);
+  });
+
+  it("decodeInclusionPayload and applyInclusionProof read hex the same strict way", () => {
+    assert.throws(() => decodeInclusionPayload(`${recA.coseHex}zz`), /cose-hex/);
+    assert.throws(() => decodeInclusionPayload(recA.coseHex.toUpperCase()), /cose-hex/);
+    assert.throws(() => applyInclusionProof("aazz", recA.inclusionProof!), /inclusion-proof/);
+    assert.throws(() => applyInclusionProof(recA.statementHash.toUpperCase(), recA.inclusionProof!), /inclusion-proof/);
+    assert.equal(applyInclusionProof(recA.statementHash, recA.inclusionProof!), recA.treeHead);
   });
 });
