@@ -356,11 +356,15 @@ manifest's `tools` entries into a server card that requires an `inputSchema`
 on each, and the MCPB manifest validator refuses an `inputSchema` on a tool
 entry, so a manifest that lists its tools cannot be published there and a
 manifest that could be published is not a valid bundle; the tools list was
-the thing to drop. Read back from the listing the same day: no description
-and no tools are shown, the score reads 28/100, and the hosted URL the
-publish command printed answers 404. The card is what the CLI sent, name and
-version; it is not what the server exposes. The `v0.12.0` GitHub release
-carries the unaltered bundle.
+the thing to drop. Read back from the listing the same day, before anything
+was typed into its settings: no description and no tools were shown, the
+score read 28/100, and the hosted URL the publish command printed answered
+404. The card is what the CLI sent, name and version; it is not what the
+server exposes. The description, homepage and repository were then entered
+by hand in the listing's settings, after which the page showed them and the
+score read 52/100; the tools are still not listed there, because nothing
+the CLI sends carries them. The `v0.12.0` GitHub release carries the
+unaltered bundle.
 
 The server is listed on Glama at `dogrucanemek-alt/cedulon`. License and
 quality both grade A, Install Server is active, and the release listed there is
