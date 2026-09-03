@@ -25,15 +25,25 @@ function jobBodies(text: string): Map<string, string> {
 }
 
 describe("release.yml static shape", () => {
-  it("the MCP Registry step comes after the npm readback and the post-release suite", () => {
+  it("the MCP Registry step comes after the npm readback", () => {
     const npmReadback = yml.indexOf("the registry answers with this version");
-    const post = yml.indexOf("npm run test:post-release");
     const oidc = yml.indexOf("./mcp-publisher login github-oidc");
     assert.ok(npmReadback >= 0, "npm readback step title is gone");
-    assert.ok(post >= 0, "test:post-release is gone");
     assert.ok(oidc >= 0, "mcp-publisher login github-oidc is absent");
     assert.ok(oidc > npmReadback, "registry login is not after the npm readback");
-    assert.ok(oidc > post, "registry login is not after test:post-release");
+  });
+
+  // test:post-release is red on every tagged run by design (STATUS moves
+  // after the publish). Sitting in the publish job, it stopped the registry
+  // and bundle steps from ever running on v0.12.0. It lives in its own job.
+  it("test:post-release is in its own job, and neither publish nor release depends on it", () => {
+    const jobs = jobBodies(yml);
+    assert.ok(jobs.has("post-release"), "post-release job is missing");
+    assert.match(jobs.get("post-release")!, /npm run test:post-release/, "post-release job does not run the check");
+    assert.doesNotMatch(jobs.get("publish")!, /npm run test:post-release/, "publish job still runs test:post-release");
+    assert.doesNotMatch(jobs.get("release")!, /npm run test:post-release/, "release job runs test:post-release");
+    assert.match(jobs.get("release")!, /^\s{4}needs:\s*publish\s*$/m, "release job must need publish only");
+    assert.match(jobs.get("post-release")!, /^\s{4}needs:\s*publish\s*$/m, "post-release job must need publish only");
   });
 
   it("mcp-publisher version and sha256 are pinned and bound to each other", () => {

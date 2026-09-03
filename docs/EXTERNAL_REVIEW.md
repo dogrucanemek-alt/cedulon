@@ -437,7 +437,8 @@ package still had outside `strictHexBytes` (`decodeInclusionPayload`, and
 the leaf and sibling hashes under `applyInclusionProof`) refuse by name.
 Nothing else in that reading reproduced as a defect; the notes it left are
 in the tree as tests (the workflow accepts no trigger but a tag push) and as
-sentences in UPGRADING.
+sentences in UPGRADING. Published as 0.12.0 on 3 September 2026 (13:06 UTC),
+eight packages from the tag with provenance.
 
 Known, not closed:
 

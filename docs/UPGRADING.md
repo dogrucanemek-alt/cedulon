@@ -4,7 +4,7 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
-## 0.12.0 (prepared, not published)
+## 0.12.0: the inclusion verifier binds to the bytes the caller holds
 
 A. `release.yml` now logs in with `mcp-publisher login github-oidc` and publishes
 the repo-root `server.json` after the npm readback and the post-release suite.
