@@ -19,7 +19,7 @@ three roles:
 | Issuer record | `SpendReceiptClaims` | `DecisionRecordClaims` |
 | Counterparty | `RailSettlement` | `EffectRow` |
 | Match key | `ref` | `ref` |
-| Content bind | amount + currency | allow ⇒ a row exists and `effectHash` is equal; deny/defer ⇒ no row |
+| Content bind | amount + currency | allow ⇒ a row exists and `effectHash` then `effectClass` are equal; deny/defer ⇒ no row |
 | Record that expects no row | `outcome: aborted` | `decision: deny` or `defer` |
 | Aggregate witness | checkpoint `totals` per currency | checkpoint `totals` `{allow,deny,defer}` |
 | Population | account, rail, window | decider, channel, window |
@@ -34,6 +34,8 @@ Copied from `packages/audit/src/profile.ts`. If this block and that file
 disagree, the file is right.
 
 ```
+export type BindResult = { ok: true } | { ok: false; detail: string; code?: string };
+
 export type ProfileWords = {
   record: string;
   row: string;
@@ -115,10 +117,12 @@ Copied from `packages/core/src/decision-record.ts`:
   timestampMs: number;
   nonce: string;
   prevRecordHash: string | null;
+  effectClass: string | null;  // required on allow; a refusal may name what it refused
 }
 ```
 
-CWT labels `-70501`…`-70512`. `-70401`/`-70402` are already the
+CWT labels `-70501`…`-70513`. The thirteen labels are always present;
+a nullable claim carries CBOR null. `-70401`/`-70402` are already the
 countersignature claims. Content type
 `application/cedulon-decision-record+cbor`. `CTY_DECISION` remains the
 token. `decisionRecordHash` hashes the COSE Sign1 bytes (`coseHex`),
@@ -154,8 +158,13 @@ so that per-row finding is never reached on this profile.
 | `effect-without-decision` | row, no record (ORPHAN) |
 | `effect-against-refusal` | deny/defer and a row on the same ref (worst) |
 | `effect-mismatch` | allow, row, `effectHash` differs (SUBSTITUTION) |
+| `effect-class-mismatch` | allow, row, `effectClass` differs, hash equal (CLASS SUBSTITUTION) |
 
-`FINDING_CODES` is 54. The schema enum lists the same 54.
+`FINDING_CODES` is 55. The schema enum lists the same 55. Hash difference
+is reported first and alone; a class difference beside a hash difference
+is not a second finding. `BindResult.code` lets the decision profile
+name `effect-class-mismatch`; spend still omits `code` and stays
+`settlement-mismatch`.
 
 ## Conservation (decision dialect)
 
@@ -196,8 +205,8 @@ finding: see the next section.
   name exists yet.
 - **Audit-time hash grammar** on a decision record checks `policyHash`
   only in `findMalformedHashClaims`; `requestHash`, `effectHash`,
-  `inputsHash`, `prevRecordHash` and the allow-requires-`ref`/`effectHash`
-  rule are refused at signing time and again by `verifyDecisionRecord`,
+  `inputsHash`, `prevRecordHash` and the allow-requires-`ref`/`effectHash`/
+  `effectClass` rule are refused at signing time and again by `verifyDecisionRecord`,
   which re-applies them on the decoded payload. A record that fails them
   under the pinned decider key is not attested and the chain walk names
   it (`receipt-chain-break`, `bad-signature`); it does not drop silently.
@@ -221,17 +230,25 @@ finding: see the next section.
   claim the audit cannot measure; the signer and the verifier both refuse
   it (`refusal-carries-effect-hash`). The `ref` may stay: it names what
   was refused, and a row on it is `effect-against-refusal`.
-- **The record does not name the effect class.** `effectClass` is on the
-  row only; an allow bound to a row by `ref` and `effectHash` matches
-  whatever class the extract states. Binding the class is a record
-  field the record does not have yet.
+- **D6 closed.** `effectClass` is a signed claim (`-70513`). An allow
+  must name a non-empty class; a refusal may name what it refused or
+  carry null. Bind compares hash first, then class: same hash and a
+  different class is `effect-class-mismatch`. A -00 record with twelve
+  labels is refused by this reader as `decision-record-tstr-or-null`
+  (the missing label is not CBOR null).
 - **The IG adapter refuses an allow line with no `replyText`**
   (`allow-without-reply-text`) rather than hashing an empty string.
 - **Wrong-document, both directions.** A rail extract presented to this
   profile and an effect extract presented to the spend profile are each
   refused with a finding on `extract` and `settlement-comparison-skipped`;
   neither is reconciled and neither throws.
+- **Witness is optional and silent.** Case 1, no inclusion receipts, no
+  witness pin: `warnings` is empty, no `equivocation` finding,
+  `guarantee` is `unconditional`. The report does not say a log was
+  not asked. Equivocation is only compared among checkpoints that were
+  presented. Iman item 2 (off-list -00): if the witness is optional,
+  the chain-controls-equivocation claim has to narrow.
 
-The tree now carries the profile, the two signed objects, eighteen
+The tree now carries the profile, the two signed objects, twenty
 conformance cases, and four offline IG fixtures; unproven until those
 run against a measured log and a reader who did not write this branch.

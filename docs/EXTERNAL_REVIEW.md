@@ -572,3 +572,24 @@ still name on a refused body, the reachable-code list, the order of
 the content-type check, the refusal count the report publishes as one
 number, and a claim about outside readers that the review log
 contradicted.
+
+## Round 8 — decision profile -01, 4 Sep 2026
+
+Origin. Iman Schrock, off-list review of decision-profile-00, same day
+the -00 text was posted. Item 3: bind `effectClass` into the signed
+Decision Record; otherwise the same signed record can be classified
+differently without the decider's signature moving. Items 1, 2, and 4
+are text and are carried in -01.
+
+Item 3 is closed by this change. `effectClass` is claim `-70513`. An
+allow without a non-empty class is `allow-requires-effect-class`. Hash
+equal and class different is `effect-class-mismatch`. Cases 19 and 20
+hold it. A -00 twelve-label record is refused as
+`decision-record-tstr-or-null`.
+
+Item 2 was measured, not closed in code. Case 1 with no inclusion
+receipt and no witness pin: `warnings` is `[]`, no `equivocation`
+finding, `guarantee` is `"unconditional"`, `scope` is the extract
+window. The report does not say a log was not asked. If the witness
+is optional, the claim that the chain controls equivocation has to
+narrow in the -01 text.

@@ -63,7 +63,8 @@ is a promise of the package, not of the schema.
 Decision-profile codes (0.13.0 prepared, not published):
 `decision-without-effect` (allow, no row), `effect-without-decision`
 (row, no record), `effect-against-refusal` (deny/defer and a row on
-the same ref; the worst), `effect-mismatch` (allow, row, hash differs).
+the same ref; the worst), `effect-mismatch` (allow, row, hash differs),
+`effect-class-mismatch` (allow, row, `effectClass` differs, hash equal).
 
 Unknown properties on a finding are allowed. The schema says so. A
 producer may add `ref`, `amount`, or a language tag without a version

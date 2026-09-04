@@ -62,10 +62,25 @@ by itself fail it; and `requestHash` is still the SHA-256 of the
 six-field canonical document in lowercase hex, the digest the posted
 `-03` named a hash for without naming the octets.
 
+D. `effectClass` is now a signed Decision Record claim (`-70513`,
+`tstr / null`). The thirteen labels are always present. An allow
+without a non-empty class is `allow-requires-effect-class` at sign and
+at verify. A refusal may name the class it refused or carry null.
+`DECISION_PROFILE.bind` compares `effectHash` first; equal hash and a
+different class is `effect-class-mismatch`. `FINDING_CODES` is 55; the
+schema enum lists the same 55. Twenty conformance cases. A -00 record
+with the twelve-label map is refused by this reader as
+`decision-record-tstr-or-null` (measured: `decisionRecordFromCbor` on
+a twelve-pair CBOR map; the missing `-70513` is `undefined`, not CBOR
+null). `verifyDecisionRecord` on those bytes returns false. There is
+no distribution of -00 records (companion + IG adapter only).
+
 What breaks: nothing on the spend path; the golden test in
 `tests/spend-golden.test.ts` compares byte for byte. Callers of
 `buildCheckpointClaims` that already passed five arguments keep compiling;
-the two new parameters are optional.
+the two new parameters are optional. A verifier that still accepts a
+twelve-label Decision Record will not read this tree's records, and
+this tree will not attest that verifier's -00 records.
 
 ## 0.12.0: the inclusion verifier binds to the bytes the caller holds
 
