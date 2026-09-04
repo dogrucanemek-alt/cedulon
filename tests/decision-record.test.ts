@@ -106,6 +106,28 @@ describe("decision record: signed, chained, not a token", () => {
     assert.equal(verifyDecisionRecord(defer, k.publicKeyPem), true);
   });
 
+  it("a refusal carries no effectHash; it may still carry the ref it refused", () => {
+    // The profile binds deny/defer to the absence of a row, never to a
+    // hash, so a hash on a refusal would be a claim the audit cannot
+    // measure. Fewer states, no second reading of "was it sent".
+    const k = generateDecisionRecordKeys();
+    assert.throws(
+      () => signDecisionRecord(base({ decision: "deny", effectHash: H }), k.privateKeyPem, k.publicKeyPem),
+      /refusal-carries-effect-hash/,
+    );
+    assert.throws(
+      () => signDecisionRecord(base({ decision: "defer", effectHash: H, ref: null }), k.privateKeyPem, k.publicKeyPem),
+      /refusal-carries-effect-hash/,
+    );
+    const denyWithRef = signDecisionRecord(
+      base({ decision: "deny", effectHash: null, reasonCode: "silent" }),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    assert.equal(denyWithRef.claims.ref, "ref-1");
+    assert.equal(verifyDecisionRecord(denyWithRef, k.publicKeyPem), true);
+  });
+
   it("the verifier applies the signer's rules: a record signed below the API is false", () => {
     // The decider is the party under audit. A signer that skipped
     // assertDecisionRecordClaims still produces a well-formed COSE Sign1
@@ -124,6 +146,7 @@ describe("decision record: signed, chained, not a token", () => {
     assert.equal(verifyDecisionRecord(below(base({ effectHash: null }))), false, "allow without effectHash");
     assert.equal(verifyDecisionRecord(below(base({ requestHash: "not-a-hash" }))), false, "malformed requestHash");
     assert.equal(verifyDecisionRecord(below(base({ prevRecordHash: "AA" }))), false, "malformed prevRecordHash");
+    assert.equal(verifyDecisionRecord(below(base({ decision: "deny", effectHash: H }))), false, "deny with effectHash");
     // Control: the same path with claims the signer would have accepted.
     assert.equal(verifyDecisionRecord(below(base())), true, "well-formed allow");
     assert.equal(

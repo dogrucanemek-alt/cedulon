@@ -27,10 +27,10 @@ type `application/cedulon-decision-record+cbor`) and
 `@cedulon/effect-extract` (`EffectRow` / `EffectExtractClaims`).
 `decisionRecordHash` hashes the COSE Sign1 bytes, the same input
 `receiptHash` uses on the COSE path. `verifyDecisionRecord` re-applies
-the signer's claim rules (hash grammar, allow requires `ref` and
-`effectHash`) on the decoded payload, so a record signed below
-`signDecisionRecord` verifies false; under a pinned decider key the
-chain walk names it. `buildCheckpointClaims` takes two
+the signer's claim rules (hash grammar; allow requires `ref` and
+`effectHash`; deny and defer carry no `effectHash`) on the decoded
+payload, so a record signed below `signDecisionRecord` verifies false;
+under a pinned decider key the chain walk names it. `buildCheckpointClaims` takes two
 optional functions after the previous-checkpoint hash: `totalsFn`
 (default `totalsFromReceipts`) and `headHashFn` (default `receiptHash`).
 The tree now carries those objects; unproven until a foreign verifier

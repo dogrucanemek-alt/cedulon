@@ -525,10 +525,15 @@ a rail extract is refused on the decision profile. The spend
 `counterparty-unbound` warning fired on every decision audit that carried
 an extract, in spend words; the counterparty axis is now the profile's,
 and the decision profile has none. The documents said twelve cases where
-the tree had thirteen. Three did not hold as stated: a deny may carry an
-`effectHash` (undecided, written down, not a defect); the IG adapter reads
-the directory it is given, which is what a command-line adapter does; and
-swapping the two test key pairs wholesale cannot break a fixture that
-signs and pins with the same constants, though the point under it was
-real, so the cases gained a wrong effect-extract key and a wrong decider
-key. Seventeen cases now.
+the tree had thirteen. Three did not hold as stated: a deny carrying an
+`effectHash` was not a hole (the profile binds refusals to the absence of
+a row, and a row on that ref is `effect-against-refusal` either way), but
+the stricter grammar is the simpler one, so signer and verifier now
+refuse it; the IG adapter reads the directory it is given, which is what
+a command-line adapter does; and swapping the two test key pairs
+wholesale cannot break a fixture that signs and pins with the same
+constants, though the point under it was real, so the cases gained a
+wrong effect-extract key and a wrong decider key. Seventeen cases now.
+Two smaller defaults were closed on the same pass: the IG adapter hashed
+an empty string for an allow line with no `replyText`, and now refuses
+the line; and the golden regeneration flag is refused under CI.

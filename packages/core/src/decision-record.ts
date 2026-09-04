@@ -150,6 +150,11 @@ function assertDecisionRecordClaims(claims: DecisionRecordClaims): void {
     if (claims.effectHash === null) {
       throw new Error("allow-requires-effect-hash");
     }
+  } else if (claims.effectHash !== null) {
+    // A refusal binds to the absence of a row, never to a hash. A hash on
+    // a deny would be a claim the audit cannot measure and a second
+    // reading of "was it sent". The ref may stay: it names what was refused.
+    throw new Error("refusal-carries-effect-hash");
   }
 }
 

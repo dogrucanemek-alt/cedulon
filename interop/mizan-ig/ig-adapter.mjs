@@ -54,6 +54,11 @@ export function fromBridgeLine(line, policyHash) {
     throw new Error(`unknown-verdict:${line.verdict}`);
   }
   const allow = decision === "allow";
+  if (allow && typeof line.replyText !== "string") {
+    // sha256("") would be a silent default: an effect whose content nobody
+    // stated. The line is refused; the audit never sees a made-up hash.
+    throw new Error(`allow-without-reply-text:${line.id}`);
+  }
   return {
     decider: DECIDER_ID,
     subject: String(line.from),
@@ -63,7 +68,7 @@ export function fromBridgeLine(line, policyHash) {
     decision,
     reasonCode: String(line.reason),
     ref: String(line.id),
-    effectHash: allow ? sha256Text(line.replyText ?? "") : null,
+    effectHash: allow ? sha256Text(line.replyText) : null,
     timestampMs: toMs(line.receivedAt),
     nonce: String(line.id).padEnd(16, "-"),
     prevRecordHash: null,

@@ -20,7 +20,7 @@ node interop/mizan-ig/ig-adapter.mjs interop/mizan-ig/fixtures/normal-day
 | `verdict: "ask-boss"` | `decision: "defer"` |
 | `id` | `ref` |
 | `text` | `requestHash = sha256(text)` |
-| `replyText` (allow) | `effectHash = sha256(replyText)` |
+| `replyText` (allow) | `effectHash = sha256(replyText)`; a reply line without it is refused (`allow-without-reply-text`) |
 | `receivedAt` | `timestampMs` |
 | `from` | `subject` |
 | `reason` | `reasonCode` |

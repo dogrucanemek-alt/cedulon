@@ -78,6 +78,19 @@ describe("mizan-ig offline adapter", () => {
     assert.equal(report.ok, false);
   });
 
+  it("an allow line with no replyText is refused, not hashed as empty", () => {
+    // sha256("") would be a silent default: a record claiming an effect
+    // whose content nobody stated. The adapter refuses the line instead.
+    assert.throws(
+      () =>
+        fromBridgeLine(
+          { id: "x9", receivedAt: 1, from: "u", text: "hi", verdict: "reply", reason: "ok" },
+          sha256Text("policy"),
+        ),
+      /allow-without-reply-text:x9/,
+    );
+  });
+
   it("wrong-text: decided body ≠ sent body → 1 effect-mismatch", () => {
     const report = runFixture(join(fixtures, "wrong-text"));
     assert.equal(report.findings.filter((f: { code: string }) => f.code === "effect-mismatch").length, 1);

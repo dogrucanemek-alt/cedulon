@@ -221,6 +221,11 @@ function goldenBytes(): string {
 }
 
 if (process.env.WRITE_SPEND_GOLDEN === "1") {
+  // Regeneration is a local, deliberate act against the pre-seam source.
+  // Under CI the same flag would let the guard approve itself.
+  if (process.env.CI) {
+    throw new Error("WRITE_SPEND_GOLDEN is refused under CI: the golden is regenerated locally, from the pre-seam source");
+  }
   writeFileSync(FIXTURE, goldenBytes(), { encoding: "utf8" });
 }
 

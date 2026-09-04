@@ -92,8 +92,8 @@ Copied from `packages/core/src/decision-record.ts`:
   inputsHash: string | null;
   decision: "allow" | "deny" | "defer";
   reasonCode: string;
-  ref: string | null;          // required on allow
-  effectHash: string | null;   // required on allow; the intended effect
+  ref: string | null;          // required on allow; a refusal may keep it
+  effectHash: string | null;   // required on allow; refused on deny/defer
   timestampMs: number;
   nonce: string;
   prevRecordHash: string | null;
@@ -183,9 +183,17 @@ finding: see the next section.
   profile: `effectHash` binds the content of the effect, and `actor` on a
   row is carried, not measured. Spend keeps its `counterparty-unbound`
   warning unchanged.
-- **A refusal may carry an `effectHash`.** deny and defer bind to the
-  absence of a row, not to that hash; the signer does not refuse a deny
-  that names the effect it declined. Whether it should is undecided.
+- **A refusal carries no `effectHash`.** deny and defer bind to the
+  absence of a row, never to a hash, so a hash on a refusal would be a
+  claim the audit cannot measure; the signer and the verifier both refuse
+  it (`refusal-carries-effect-hash`). The `ref` may stay: it names what
+  was refused, and a row on it is `effect-against-refusal`.
+- **The record does not name the effect class.** `effectClass` is on the
+  row only; an allow bound to a row by `ref` and `effectHash` matches
+  whatever class the extract states. Binding the class is a record
+  field the record does not have yet.
+- **The IG adapter refuses an allow line with no `replyText`**
+  (`allow-without-reply-text`) rather than hashing an empty string.
 - **Wrong-document, both directions.** A rail extract presented to this
   profile and an effect extract presented to the spend profile are each
   refused with a finding on `extract` and `settlement-comparison-skipped`;
