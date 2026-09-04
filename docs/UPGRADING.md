@@ -75,6 +75,19 @@ a twelve-pair CBOR map; the missing `-70513` is `undefined`, not CBOR
 null). `verifyDecisionRecord` on those bytes returns false. There is
 no distribution of -00 records (companion + IG adapter only).
 
+E. The release path carries nine public packages. `@cedulon/effect-extract`
+entered the workspace with B and `@cedulon/audit` imports it at runtime;
+`release.yml` now publishes and reads it back between `x402-adapter` and
+`audit`, and a pre-flight step asks npm whether every package exists
+before anything is sent, because a package that has never been published
+cannot go out through trusted publishing. The first publish of
+effect-extract was made by hand at `0.12.0` (4 September 2026, no
+provenance, `gitHead` `9955382`) so that the step passes. Two guards that
+let this through are repaired: the workflow's package loops are compared
+with the public workspace by a test, and a 404 from npm fails the
+post-release guard by name instead of being read as offline. Unproven
+until the next tag runs the nine-package loop.
+
 What breaks: nothing on the spend path; the golden test in
 `tests/spend-golden.test.ts` compares byte for byte. Callers of
 `buildCheckpointClaims` that already passed five arguments keep compiling;

@@ -27,10 +27,35 @@ operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 
 `draft-dogru-cedulon` is posted on the IETF datatracker through `-08`
-(2 September 2026), alongside the two companion `-00` drafts.
+(2 September 2026), alongside the companion decision profile,
+`draft-dogru-cedulon-decision-profile-01` (4 September 2026), and the two
+`-00` direction seeds.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
+
+`0.13.0` is prepared in this tree and is not a published npm release: it is
+the decision profile, the second population on the reconciler that
+`docs/UPGRADING.md` describes under its heading, sections A to E. The
+profile seam (`ReconciliationProfile`, `SPEND_PROFILE`, the spend golden
+file), the Decision Record and Effect Extract objects, `DECISION_PROFILE`
+with its five codes (`FINDING_CODES` is 55), `effectClass` under the
+Decider's signature (`-70513`), the `interop/mizan-ig` adapter with four
+fixtures, and twenty conformance cases are in the tree; a ninth public
+package, `@cedulon/effect-extract`, goes out with it, listed in
+`release.yml` behind a pre-flight step that refuses to publish anything
+when a package has never been published. Publishing is a separate step.
+What it changes: `audit()` reads every presented document as the profile's
+record and row types and never by the shape of the body; a Decision
+Record signed below the signer's rules verifies false; a row of a
+different class under a matching hash is `effect-class-mismatch`. The
+behaviour carried forward is unchanged: an audit still reports
+`manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
+usable issuer pin the departure is a finding that fails the audit, and
+without a pin the same departure is a warning that does not by itself fail
+it; and `requestHash` is still the SHA-256 of the six-field canonical
+document in lowercase hex, the digest the posted `-03` named a hash for
+without naming the octets.
 
 `0.12.0` is published on npm, with a provenance attestation, and it is what a
 reader now gets from an installed package. Checked from the published packages
@@ -86,10 +111,12 @@ effect-extract was therefore a step by hand, and it is done:
 than from this tree: `npm view` answers `0.12.0` with shasum
 `6fc71529cafb442c47339af31412b21fd62cbcca`, a clean install in an empty
 folder imports it and lists its seven exports, and `test:post-release` is
-green on all nine. What remains before the next tag is the ninth
-package's trusted publisher on npmjs.com, not yet configured as this is
-written: the pre-flight step now passes, and the publish of that one
-package would still fail with a permission error until it is.
+green on all nine. The ninth package's trusted publisher was then
+configured on npmjs.com (GitHub Actions, `dogrucanemek-alt/cedulon`,
+`release.yml`, `npm publish` allowed), read back from the package's
+settings page on 5 September 2026; the pre-flight step passes, and
+whether the tagged run publishes that package with provenance like the
+other eight is unproven until a tag runs it.
 
 `0.11.0` was the release before it, published on npm with a provenance
 attestation. Checked from the published packages

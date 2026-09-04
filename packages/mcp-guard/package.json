@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/mcp-guard",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "description": "Fail-closed MCP tools/call wrapper for Cedulon spend.",
   "license": "Apache-2.0",
@@ -41,8 +41,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/core": "^0.12.0",
-    "@cedulon/manifest": "^0.12.0",
-    "@cedulon/x402-adapter": "^0.12.0"
+    "@cedulon/core": "^0.13.0",
+    "@cedulon/manifest": "^0.13.0",
+    "@cedulon/x402-adapter": "^0.13.0"
   }
 }
