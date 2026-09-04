@@ -106,6 +106,44 @@ describe("decision record: signed, chained, not a token", () => {
     assert.equal(verifyDecisionRecord(defer, k.publicKeyPem), true);
   });
 
+  it("under a pin the signature is checked against the pin; the carried key is a surface", () => {
+    // Core 6.3 / 10.1: a carried key is not an identity source. An honest
+    // record whose carried PEM was swapped still verifies under the pin
+    // (the audit reports carried-key-mismatch as a warning); with no pin
+    // held the carried key is the only key there is, and it is the wrong one.
+    const k = generateDecisionRecordKeys();
+    const other = generateDecisionRecordKeys();
+    const signed = signDecisionRecord(base(), k.privateKeyPem, k.publicKeyPem);
+    const swapped: SignedDecisionRecord = { ...signed, publicKeyPem: other.publicKeyPem };
+    assert.equal(verifyDecisionRecord(swapped, k.publicKeyPem), true, "under the pin");
+    assert.equal(verifyDecisionRecord(swapped), false, "no pin: the carried key does not verify it");
+    assert.equal(verifyDecisionRecord(swapped, other.publicKeyPem), false, "under the wrong pin");
+  });
+
+  it("timestampMs is a non-negative safe integer, at signing and at verification", () => {
+    const k = generateDecisionRecordKeys();
+    assert.throws(
+      () => signDecisionRecord(base({ timestampMs: 1.5 }), k.privateKeyPem, k.publicKeyPem),
+      /decision-record-timestamp/,
+    );
+    assert.throws(
+      () => signDecisionRecord(base({ timestampMs: -1 }), k.privateKeyPem, k.publicKeyPem),
+      /decision-record-timestamp/,
+    );
+    const below = (claims: DecisionRecordClaims): SignedDecisionRecord => {
+      const cose = signCoseSign1(
+        decisionRecordToCbor(claims),
+        asSigner(k.privateKeyPem, k.publicKeyPem),
+        CTY_DECISION_RECORD,
+      );
+      return { claims, publicKeyPem: k.publicKeyPem, encoding: "cose", coseHex: Buffer.from(cose).toString("hex") };
+    };
+    assert.equal(verifyDecisionRecord(below(base({ timestampMs: -1 }))), false, "negative, signed below the API");
+    // Beyond a safe integer the CBOR encoder refuses first, by name; the
+    // rule above is for a decoder handed such bytes from elsewhere.
+    assert.throws(() => below(base({ timestampMs: 2 ** 53 })), /cbor-non-integer/);
+  });
+
   it("a refusal carries no effectHash; it may still carry the ref it refused", () => {
     // The profile binds deny/defer to the absence of a row, never to a
     // hash, so a hash on a refusal would be a claim the audit cannot

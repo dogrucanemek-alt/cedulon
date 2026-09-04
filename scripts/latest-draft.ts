@@ -33,6 +33,26 @@ export function latestDraftPath(root: string): string {
 }
 
 /**
+ * The newest revision of each companion document beside the core
+ * (`draft-dogru-cedulon-<name>-NN.md`). A companion may register media
+ * types of its own; a check about what the tree's documents register as a
+ * whole reads these beside the core.
+ */
+export function companionDraftPaths(root: string): string[] {
+  const specDir = join(root, "spec");
+  const newest = new Map<string, number>();
+  for (const f of readdirSync(specDir)) {
+    const m = /^draft-dogru-cedulon-([a-z][a-z-]*)-(\d+)\.md$/.exec(f);
+    if (m === null) continue;
+    const rev = Number(m[2]);
+    if ((newest.get(m[1]) ?? -1) < rev) newest.set(m[1], rev);
+  }
+  return [...newest.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, rev]) => join(specDir, `draft-dogru-cedulon-${name}-${String(rev).padStart(2, "0")}.md`));
+}
+
+/**
  * The newest revision that has been posted. Every posted revision's archive
  * text is carried in the tree beside its source, so the newest `.txt` is the
  * newest posted revision, and a revision that has been opened but not posted

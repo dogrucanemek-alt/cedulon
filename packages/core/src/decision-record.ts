@@ -8,7 +8,6 @@ import {
   decodeCoseSign1,
   encodeCbor,
   mapGet,
-  sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
   type Signer,
@@ -143,6 +142,10 @@ function assertDecisionRecordClaims(claims: DecisionRecordClaims): void {
   if (effect) throw new Error(effect);
   const prev = hashClaimRefusal("prevRecordHash", claims.prevRecordHash, true);
   if (prev) throw new Error(prev);
+  if (!Number.isSafeInteger(claims.timestampMs) || claims.timestampMs < 0) {
+    // The label table says uint. A CBOR decoder hands back any number.
+    throw new Error("decision-record-timestamp");
+  }
   if (claims.decision === "allow") {
     if (claims.ref === null || claims.ref === "") {
       throw new Error("allow-requires-ref");
@@ -182,17 +185,17 @@ export function signDecisionRecord(
 
 /**
  * `expectedDeciderKeyPem` is the decider key the verifier holds out of band.
- * Omitted, the record is checked against the key it carries.
+ * Given, the signature is checked under that key and the carried key is not
+ * consulted: it is an unsigned surface, and whether it matches the pin is
+ * the audit's `carried-key-mismatch` question, not this function's (core
+ * 6.3, 10.1). Omitted, the carried key is the only key there is.
  */
 export function verifyDecisionRecord(
   signed: SignedDecisionRecord,
   expectedDeciderKeyPem?: string,
 ): boolean {
-  if (expectedDeciderKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedDeciderKeyPem)) {
-    return false;
-  }
   const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_DECISION_RECORD)) {
+  if (!verifyCoseSign1(bytes, expectedDeciderKeyPem ?? signed.publicKeyPem, CTY_DECISION_RECORD)) {
     return false;
   }
   try {
@@ -221,11 +224,19 @@ export function decisionRecordHash(signed: SignedDecisionRecord): string {
 
 export type DecisionRecordChainBreak = { index: number; reason: string };
 
+/**
+ * `pinPems`, when given, are the decider keys the verifier holds: a record
+ * verifies under any of them. Absent, each record is checked against the
+ * key it carries.
+ */
 export function findDecisionRecordChainBreak(
   records: SignedDecisionRecord[],
+  pinPems?: readonly string[],
 ): DecisionRecordChainBreak | null {
+  const verifies = (r: SignedDecisionRecord): boolean =>
+    pinPems === undefined ? verifyDecisionRecord(r) : pinPems.some((pem) => verifyDecisionRecord(r, pem));
   for (let i = 0; i < records.length; i += 1) {
-    if (!verifyDecisionRecord(records[i])) {
+    if (!verifies(records[i])) {
       return { index: i, reason: "bad-signature" };
     }
     const expectedPrev = i === 0 ? null : decisionRecordHash(records[i - 1]);

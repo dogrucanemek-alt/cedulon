@@ -4,8 +4,8 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { latestDraftPath } from "../scripts/latest-draft.ts";
-import { draftMediaTypes, mediaTypeDiff, statedCounts } from "../scripts/media-types-guard.ts";
+import { companionDraftPaths, latestDraftPath } from "../scripts/latest-draft.ts";
+import { draftMediaTypes, mediaTypeDiff, mediaTypeDiffAcross, statedCounts } from "../scripts/media-types-guard.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -85,40 +85,40 @@ describe("media types: the packages against the draft's IANA section", () => {
     assert.deepEqual(statedCounts(PROBE_DRAFT), [2, 2]);
   });
 
-  it("every media type the packages carry is registered by the latest draft, and every template is carried", () => {
-    const md = readFileSync(latestDraftPath(root), "utf8");
-    const diff = mediaTypeDiff(packageSources(), md);
-    // 0.13.0 prepared, not published. Spec IANA is Claude+patron; these
-    // two names live in the tree and in no template yet. The guard still
-    // measures them — they must stay in this list, not vanish into [].
-    const preparedUnpublished = [
-      "application/cedulon-decision-record+cbor",
-      "application/cedulon-effect-extract+cbor",
-    ];
+  it("every media type the packages carry is registered by the core or a companion, and every template is carried", () => {
+    // The core registers its six; the decision profile companion registers
+    // its one. A name in the tree with a template in neither is the 0.9.0
+    // defect (inclusion) again, and a template with no name behind it is a
+    // document claiming code it does not have.
+    const drafts = [latestDraftPath(root), ...companionDraftPaths(root)].map((p) => readFileSync(p, "utf8"));
+    assert.ok(drafts.length >= 2, "expected the core and at least one companion under spec/");
+    const diff = mediaTypeDiffAcross(packageSources(), drafts);
     assert.deepEqual(
-      diff.codeOnly.filter((n) => !preparedUnpublished.includes(n)),
+      diff.codeOnly,
       [],
       `carried by packages/*/src, registered by no template: ${diff.codeOnly.join(", ")}`,
     );
     assert.deepEqual(
-      diff.codeOnly.filter((n) => preparedUnpublished.includes(n)).sort(),
-      preparedUnpublished,
-      "prepared media types must still be carried so the draft gap stays visible",
-    );
-    assert.deepEqual(
       diff.draftOnly,
       [],
-      `registered by the draft, carried by no package: ${diff.draftOnly.join(", ")}`,
+      `registered by a draft, carried by no package: ${diff.draftOnly.join(", ")}`,
     );
   });
 
-  it("the count the IANA prose states is the number of templates the section holds", () => {
-    const md = readFileSync(latestDraftPath(root), "utf8");
-    const templates = draftMediaTypes(md).length;
-    const stated = statedCounts(md);
-    assert.ok(stated.length > 0, "the IANA prose states no count of its own templates");
-    for (const n of stated) {
-      assert.equal(n, templates, `the prose says ${n}, the section holds ${templates} templates`);
+  it("the count each IANA prose states is the number of templates its section holds", () => {
+    const paths = [latestDraftPath(root), ...companionDraftPaths(root)];
+    let measured = 0;
+    for (const p of paths) {
+      const md = readFileSync(p, "utf8");
+      const templates = draftMediaTypes(md).length;
+      const stated = statedCounts(md);
+      if (templates === 0 && stated.length === 0) continue; // "This document has no IANA actions."
+      assert.ok(stated.length > 0, `${p}: the IANA prose states no count of its own templates`);
+      for (const n of stated) {
+        assert.equal(n, templates, `${p}: the prose says ${n}, the section holds ${templates} templates`);
+      }
+      measured += 1;
     }
+    assert.ok(measured >= 2, "expected the core and the decision profile companion to state a count");
   });
 });

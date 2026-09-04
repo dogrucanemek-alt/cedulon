@@ -1648,8 +1648,9 @@ export function audit(input: AuditInput): AuditReport {
       }
       attested = input.receipts.filter((r) => recordAttestedByPins(r, issuerPins, pop));
       for (const r of attested) {
-        if (isDecisionRecord(r, pop)) continue;
-        const verifying = issuerPins.filter((pem) => verifyReceiptUnderPin(r, pem));
+        const verifying = issuerPins.filter((pem) =>
+          isDecisionRecord(r, pop) ? verifyDecisionRecord(r, pem) : verifyReceiptUnderPin(r, pem),
+        );
         if (verifying.length > 0 && !verifying.some((pem) => sameSpkiKey(r.publicKeyPem, pem))) {
           warnings.push({
             code: "carried-key-mismatch",
@@ -1848,7 +1849,7 @@ export function audit(input: AuditInput): AuditReport {
     : attested;
   if (profile.id === "decision") {
     const decisionWalk = chainWalk.filter((r): r is SignedDecisionRecord => isDecisionRecord(r, pop));
-    const brk = findDecisionRecordChainBreak(decisionWalk);
+    const brk = findDecisionRecordChainBreak(decisionWalk, issuerPinUsable ? issuerPins : undefined);
     if (brk) {
       findings.push({
         code: "receipt-chain-break",

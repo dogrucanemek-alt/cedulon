@@ -2,7 +2,6 @@ import { generateKeyPairSync, verify } from "node:crypto";
 import { pemSigner, sameSpkiKey } from "@cedulon/cose";
 import { canonical, hashClaimRefusal, jcsEncodeRefusal, jsonDuplicateMemberName, parseIJson } from "@cedulon/core";
 
-export const CTY_EFFECT_EXTRACT = "application/cedulon-effect-extract+cbor";
 
 const BODY_FIELDS = ["deciderId", "channelId", "windowStartMs", "windowEndMs", "effects"] as const;
 const ROW_FIELDS = ["ref", "effectHash", "effectClass", "timestampMs", "actor"] as const;

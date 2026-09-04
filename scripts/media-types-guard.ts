@@ -75,7 +75,7 @@ const WORDS: Record<string, number> = {
  */
 export function statedCounts(md: string): number[] {
   const out: number[] = [];
-  const pattern = /\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+) (?:media types|templates)\b/gi;
+  const pattern = /\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+) (?:media types?|templates?)\b/gi;
   for (const m of ianaSection(md).matchAll(pattern)) {
     const w = m[1].toLowerCase();
     out.push(w in WORDS ? WORDS[w] : Number(w));
@@ -84,8 +84,17 @@ export function statedCounts(md: string): number[] {
 }
 
 export function mediaTypeDiff(sources: readonly string[], md: string): MediaTypeDiff {
+  return mediaTypeDiffAcross(sources, [md]);
+}
+
+/**
+ * The same comparison against every document the tree carries: the core
+ * and its companions each register names of their own, and a name the
+ * code carries is registered if any one of them holds its template.
+ */
+export function mediaTypeDiffAcross(sources: readonly string[], mds: readonly string[]): MediaTypeDiff {
   const code = codeMediaTypes(sources);
-  const draft = draftMediaTypes(md);
+  const draft = [...new Set(mds.flatMap((md) => draftMediaTypes(md)))].sort();
   return {
     codeOnly: code.filter((n) => !draft.includes(n)),
     draftOnly: draft.filter((n) => !code.includes(n)),

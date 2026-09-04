@@ -32,7 +32,13 @@ type `application/cedulon-decision-record+cbor`) and
 the signer's claim rules (hash grammar; allow requires `ref` and
 `effectHash`; deny and defer carry no `effectHash`) on the decoded
 payload, so a record signed below `signDecisionRecord` verifies false;
-under a pinned decider key the chain walk names it. `buildCheckpointClaims` takes two
+under a pinned decider key the chain walk names it. Under a pin the
+signature is checked against the pin and the carried key is a surface,
+as it is for a receipt: a swapped carried key is `carried-key-mismatch`
+and the record stays attested. `timestampMs` is refused unless it is a
+non-negative safe integer. `@cedulon/effect-extract` no longer exports
+a media type name: the extract is a JSON body with a detached
+signature, as the rail extract is, and has none. `buildCheckpointClaims` takes two
 optional functions after the previous-checkpoint hash: `totalsFn`
 (default `totalsFromReceipts`) and `headHashFn` (default `receiptHash`).
 The tree now carries those objects; unproven until a foreign verifier
@@ -43,7 +49,7 @@ treats deny/defer as the aborted class. Four codes join the catalogue:
 `decision-without-effect`, `effect-without-decision`,
 `effect-against-refusal`, `effect-mismatch`. `FINDING_CODES` is 54; the
 schema enum lists the same 54. `interop/mizan-ig` turns two proposed
-JSONL files into that audit. The tree now carries seventeen conformance
+JSONL files into that audit. The tree now carries eighteen conformance
 cases and four offline fixtures; unproven until the live bridge log is
 measured and only `fromBridgeLine` / `fromMetaLine` have to move.
 `AuditInput.trust` on this profile is the effect-extract signer;

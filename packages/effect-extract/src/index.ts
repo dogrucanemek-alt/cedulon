@@ -1,5 +1,4 @@
 export {
-  CTY_EFFECT_EXTRACT,
   effectExtractEncodeRefusal,
   effectExtractShapeRefusal,
   effectExtractTextRefusal,

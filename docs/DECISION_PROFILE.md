@@ -133,8 +133,12 @@ EffectRow = { ref, effectHash, effectClass, timestampMs, actor? }
 EffectExtractClaims = { deciderId, channelId, windowStartMs, windowEndMs, effects }
 ```
 
-Content type `application/cedulon-effect-extract+cbor`. The body is
-signed the way a rail extract is (JCS + detached). Shape refusals follow
+The extract has no media type: like the rail extract it is a JSON body
+with a detached signature (JCS + Ed25519), not a COSE object, and the
+core registers names only for objects whose content type is checked in
+a protected header. A first cut exported a `+cbor` name for it
+(`cedulon-effect-extract`); nothing used the name and it was withdrawn
+(`draft-dogru-cedulon-decision-profile-00`). Shape refusals follow
 the rail helper for an inverted window, an empty ref and hash grammar,
 and go further on two points: an unknown field is refused, and a row
 outside the declared window is refused at the shape level. A rail
@@ -197,6 +201,17 @@ finding: see the next section.
   which re-applies them on the decoded payload. A record that fails them
   under the pinned decider key is not attested and the chain walk names
   it (`receipt-chain-break`, `bad-signature`); it does not drop silently.
+- **Attestation is pin-under-signature** (core 6.3, 10.1).
+  `verifyDecisionRecord(record, pin)` checks the signature under the pin
+  and does not consult the carried key; an honest record whose carried
+  PEM was swapped stays attested and is reported `carried-key-mismatch`,
+  a warning (case 18). The first cut required the carried key to equal
+  the pin and dropped such a record as `issuer-key-mismatch`, which
+  failed the checkpoint behind it; the companion draft's third reading
+  caught the departure from the core.
+- **`timestampMs` is a uint** at signing and at verification
+  (`decision-record-timestamp`); the CBOR decoder alone accepted any
+  number. The spend receipt has the same table entry and no such rule.
 - **No counterparty axis.** `counterpartyUnbound` returns null on this
   profile: `effectHash` binds the content of the effect, and `actor` on a
   row is carried, not measured. Spend keeps its `counterparty-unbound`
@@ -217,6 +232,6 @@ finding: see the next section.
   refused with a finding on `extract` and `settlement-comparison-skipped`;
   neither is reconciled and neither throws.
 
-The tree now carries the profile, the two signed objects, seventeen
+The tree now carries the profile, the two signed objects, eighteen
 conformance cases, and four offline IG fixtures; unproven until those
 run against a measured log and a reader who did not write this branch.

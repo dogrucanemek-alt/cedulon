@@ -463,7 +463,7 @@ What this tree now carries (0.13.0 prepared, not published):
   `@cedulon/effect-extract`
 - `DECISION_PROFILE` and four codes (`decision-without-effect`,
   `effect-without-decision`, `effect-against-refusal`, `effect-mismatch`)
-- seventeen conformance cases (`tests/decision-profile.test.ts`)
+- eighteen conformance cases (`tests/decision-profile.test.ts`)
 - an offline IG koba (`interop/mizan-ig`) over proposed JSONL
 
 Known, not closed:
@@ -545,3 +545,30 @@ say decision record / effect / effect extract / effect-extract key /
 effect path / decider / channel. Twenty-three sentences moved; spend-only
 paths (manifest/terms, countersign/payee, `settled-without-ref`) stayed.
 The watcher is `tests/decision-profile.test.ts` ("no spend vocabulary").
+
+Third reading, same day, of the companion draft
+(`spec/draft-dogru-cedulon-decision-profile-00.md`) against this tree
+and against the core -08, by a reader barred from editing either. Two
+items blocked posting and both held. The draft repeated the core's
+carried-key rule for a Decision Record, and the code did not follow it:
+`verifyDecisionRecord` required the carried key to equal the pin before
+checking the signature, so an honest record whose carried PEM had been
+swapped was dropped as `issuer-key-mismatch` and failed the checkpoint
+behind it, where the core (6.3, 10.1) keeps such an object attested
+under a `carried-key-mismatch` warning. The verifier now checks the
+signature under the pin, the chain walk verifies under the pins, and
+the audit's carried-key loop reads decision records; case 18 holds it.
+The draft also cited the core's generalization section as reserving
+this profile, and that section reserves compute, data and energy; the
+sentence was rewritten. Of the notes, three changed the tree: the
+unused `application/cedulon-effect-extract+cbor` export is gone (the
+extract is a JSON body with a detached signature and has no media type,
+as the rail extract has none), `timestampMs` is refused unless it is a
+non-negative safe integer (the label table said `uint`; the decoder
+accepted any number), and the media-types guard now reads the
+companions beside the core, so the exception list it carried is gone.
+The rest were sentences: the per-row window finding the audit can
+still name on a refused body, the reachable-code list, the order of
+the content-type check, the refusal count the report publishes as one
+number, and a claim about outside readers that the review log
+contradicted.

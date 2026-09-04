@@ -355,6 +355,31 @@ describe("decision profile conformance", () => {
     // The row it would have covered is now an effect with no decision behind it.
     assert.equal(report.findings.some((f) => f.code === "effect-without-decision"), true);
   });
+
+  it("18: an honest record whose carried key was swapped stays attested under the pin → carried-key-mismatch", () => {
+    // Core 10.1 on the decider root: attestation is pin-under-signature.
+    // The carried PEM is an unsigned surface; rewriting it is a warning,
+    // not a reason to drop the record and fail the checkpoint behind it.
+    const rec = record({ nonce: "n-18".padEnd(16, "-") });
+    const other = generateDecisionRecordKeys();
+    const swapped: SignedDecisionRecord = { ...rec, publicKeyPem: other.publicKeyPem };
+    const report = audit({
+      receipts: [swapped],
+      checkpoints: [checkpoint([rec])],
+      issuerTrust: { publicKeyPem: decider.publicKeyPem },
+      profile: DECISION_PROFILE,
+      extract: extract([row()]),
+      trust: PIN,
+    });
+    assert.equal(report.ok, true, report.findings.map((f) => f.code).join(","));
+    assert.equal(report.counts.receipts.attested, 1);
+    assert.equal(report.counts.receipts.matched, 1);
+    const warn = report.warnings.find((w) => w.code === "carried-key-mismatch");
+    assert.ok(warn, report.warnings.map((w) => w.code).join(","));
+    assert.equal(warn.id, swapped.claims.nonce);
+    assert.equal(report.findings.some((f) => f.code === "issuer-key-mismatch"), false);
+    assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), false);
+  });
 });
 
 const SPEND_VOCAB = /\b(settlements?|receipts?|rails?|payees?|beneficiar(y|ies)|spend)\b/i;
