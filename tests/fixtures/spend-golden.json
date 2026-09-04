@@ -469,6 +469,49 @@
       }
     ]
   },
+  "rail-extra-member-effects": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 1,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 1,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [],
+    "guarantee": "unconditional",
+    "ok": true,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: balanced",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
   "settlement-without-receipt": {
     "counts": {
       "receipts": {

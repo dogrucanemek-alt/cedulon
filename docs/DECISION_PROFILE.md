@@ -65,6 +65,16 @@ the second implementation. `trust` on that path is the effect-extract
 signer, not a rail; `issuerTrust` is the decider. The field names did
 not change.
 
+Which population a presented document belongs to is the profile's call,
+never the body's. Under `SPEND_PROFILE` every record is read as a receipt
+and every extract as a rail extract, whatever extra members the body
+carries; a rail may add members (`EXTRACT_SCOPE_FIELDS`), and one named
+`effects` re-routed a spend audit in the first cut of the seam. The golden
+file's `rail-extra-member-effects` case holds that input at the old
+answer. Under `DECISION_PROFILE` every record is read as a decision
+record and every extract as an effect extract, so a rail extract there is
+the wrong document and is refused as one (conformance case 13).
+
 `terms()` on the decision profile returns `[]`. Policy-document binding
 is not exercised.
 

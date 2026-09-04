@@ -82,9 +82,16 @@ const receipt = (ref: string, nonce: string, o: ReceiptOpt = {}): SignedReceipt 
 const checkpoint = (receipts: SignedReceipt[]) =>
   signCheckpoint(buildCheckpointClaims(1, receipts, NOW, END, null), ik.privateKeyPem, ik.publicKeyPem);
 
-const extract = (settlements: RailSettlement[], ws = NOW, we = END) =>
+const extract = (settlements: RailSettlement[], ws = NOW, we = END, extra: Record<string, unknown> = {}) =>
   signRailExtract(
-    { accountId: "acct", railId: "rail", windowStartMs: ws, windowEndMs: we, settlements },
+    {
+      accountId: "acct",
+      railId: "rail",
+      windowStartMs: ws,
+      windowEndMs: we,
+      settlements,
+      ...extra,
+    } as Parameters<typeof signRailExtract>[0],
     rk.privateKeyPem,
     rk.publicKeyPem,
   );
@@ -184,6 +191,11 @@ function buildCases(): Record<string, AuditReport> {
     "extract-absent": run([receipt("r-abs", "n-abs")], [], { omitExtract: true }),
     "wrong-rail-key": run([receipt("r-pin", "n-pin")], [S("r-pin")], {
       trust: { ...PIN, publicKeyPem: wrongRail.publicKeyPem },
+    }),
+    // A rail may add members (`EXTRACT_SCOPE_FIELDS`: extra members are free).
+    // One named `effects` must not re-route a spend audit onto another profile.
+    "rail-extra-member-effects": run([receipt("r-extra", "n-extra")], [], {
+      extract: extract([S("r-extra")], NOW, END, { effects: [], note: "free member" }),
     }),
     "manifest-terms-mismatch": audit({
       receipts: [bound],

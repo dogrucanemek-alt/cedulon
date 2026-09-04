@@ -16,6 +16,7 @@ import {
   signEffectExtract,
   type EffectRow,
 } from "@cedulon/effect-extract";
+import { signRailExtract } from "@cedulon/x402-adapter";
 
 const H = createHash("sha256").update("cedulon/decision-profile").digest("hex");
 const H2 = createHash("sha256").update("cedulon/decision-profile-other").digest("hex");
@@ -233,5 +234,27 @@ describe("decision profile conformance", () => {
     assert.equal(report.guarantee, "conditional");
     assert.equal(report.counts.receipts.matched, 1);
     assert.equal(report.counts.settlements.matched, 1);
+  });
+
+  it("13: a rail extract presented to the decision profile is refused, never reconciled", () => {
+    // The population is the profile's call, not the body's. A rail extract
+    // signed by the pinned effect key is still the wrong document here.
+    const rec = record({ nonce: "n-13".padEnd(16, "-") });
+    const rail = signRailExtract(
+      {
+        accountId: "decider-1",
+        railId: "ig-dm",
+        windowStartMs: NOW,
+        windowEndMs: END,
+        settlements: [{ ref: "ref-1", amount: "1", currency: "USD", timestampMs: MID }],
+      },
+      effect.privateKeyPem,
+      effect.publicKeyPem,
+    );
+    const report = run([rec], [], { extract: rail as unknown as Parameters<typeof audit>[0]["extract"] });
+    assert.equal(report.ok, false);
+    assert.equal(report.findings.some((f) => f.code === "extract-key-mismatch"), true);
+    assert.equal(report.warnings.some((w) => w.code === "settlement-comparison-skipped"), true);
+    assert.equal(report.counts.settlements.matched, 0);
   });
 });

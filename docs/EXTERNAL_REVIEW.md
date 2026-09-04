@@ -497,3 +497,15 @@ their counters. Two documentation sentences were corrected: the effect
 extract refuses a row outside its window whole, where a rail extract is
 accepted and the row is named; and the decision chain break borrows the
 spend code.
+
+A second sentence had moved, found while an outside model was reading the
+same diff. The seam told a rail extract from an effect extract by whether
+the body carried `effects`, and a record from a decision record by whether
+the claims carried `decision`. A rail may add members, so a rail extract
+with an extra `effects` member, balanced on the base commit, was refused
+on the branch as a malformed effect extract. The population is now the
+profile's call: under `SPEND_PROFILE` every document is read as spend,
+under `DECISION_PROFILE` as decision. The golden file gained
+`rail-extra-member-effects` (regenerated from `45bb020`, red on the
+branch before the fix) and the conformance cases gained a thirteenth, a
+rail extract presented to the decision profile, which is refused.

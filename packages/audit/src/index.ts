@@ -313,28 +313,45 @@ function isSettled(r: SignedReceipt): boolean {
   return r.claims.outcome === "settled";
 }
 
-function isDecisionRecord(r: PresentedRecord): r is SignedDecisionRecord {
-  return "decision" in r.claims;
+/**
+ * Which population a presented record or extract belongs to is the profile's
+ * call, never the body's. A rail may add members to an extract (`effects`
+ * included), and a body shape must not re-route a spend audit; under the
+ * decision profile every presented document is read as a decision document,
+ * so a rail extract there is the wrong document and is refused as such.
+ */
+type Population = "spend" | "decision";
+
+function populationOf(
+  profile: ReconciliationProfile<PresentedRecord, PresentedRow> | undefined,
+): Population {
+  return profile !== undefined && profile.id === "decision" ? "decision" : "spend";
 }
 
-function isEffectExtract(x: PresentedExtract): x is SignedEffectExtract {
-  return "effects" in x.body;
+function isDecisionRecord(r: PresentedRecord, pop: Population): r is SignedDecisionRecord {
+  return pop === "decision";
 }
 
-function extractRows(x: PresentedExtract): PresentedRow[] {
-  return isEffectExtract(x) ? x.body.effects : x.body.settlements;
+function isEffectExtract(x: PresentedExtract, pop: Population): x is SignedEffectExtract {
+  return pop === "decision";
 }
 
-function extractAccountId(x: PresentedExtract): string {
-  return isEffectExtract(x) ? x.body.deciderId : x.body.accountId;
+function extractRows(x: PresentedExtract, pop: Population): PresentedRow[] {
+  // A rail body presented to the decision profile carries no `effects`; an
+  // empty row set lets the shape refusal below name it instead of a crash.
+  return isEffectExtract(x, pop) ? (x.body.effects ?? []) : x.body.settlements;
 }
 
-function extractRailId(x: PresentedExtract): string {
-  return isEffectExtract(x) ? x.body.channelId : x.body.railId;
+function extractAccountId(x: PresentedExtract, pop: Population): string {
+  return isEffectExtract(x, pop) ? x.body.deciderId : x.body.accountId;
 }
 
-function verifyPresentedExtract(x: PresentedExtract, pin?: string): boolean {
-  return isEffectExtract(x)
+function extractRailId(x: PresentedExtract, pop: Population): string {
+  return isEffectExtract(x, pop) ? x.body.channelId : x.body.railId;
+}
+
+function verifyPresentedExtract(x: PresentedExtract, pop: Population, pin?: string): boolean {
+  return isEffectExtract(x, pop)
     ? pin
       ? verifyEffectExtract(x, pin)
       : verifyEffectExtract(x)
@@ -343,8 +360,8 @@ function verifyPresentedExtract(x: PresentedExtract, pin?: string): boolean {
       : verifyRailExtract(x);
 }
 
-function recordAttestedByPins(r: PresentedRecord, pins: readonly string[]): boolean {
-  if (isDecisionRecord(r)) {
+function recordAttestedByPins(r: PresentedRecord, pins: readonly string[], pop: Population): boolean {
+  if (isDecisionRecord(r, pop)) {
     return pins.some((pem) => toSpkiDer(pem) !== null && verifyDecisionRecord(r, pem));
   }
   return receiptAttestedByPins(r, pins);
@@ -557,8 +574,8 @@ export type SettlementBoundary = {
   nextRefs?: ReadonlySet<string>;
 };
 
-function clockSkewOf(extract: PresentedExtract): number {
-  if (!isEffectExtract(extract) && typeof extract.body.clockSkewMs === "number") {
+function clockSkewOf(extract: PresentedExtract, pop: Population): number {
+  if (!isEffectExtract(extract, pop) && typeof extract.body.clockSkewMs === "number") {
     return extract.body.clockSkewMs;
   }
   return DEFAULT_CLOCK_SKEW_MS;
@@ -806,6 +823,7 @@ export function findReceiptsWithoutSettlement(
 export function findWindowCoverage(
   receipts: PresentedRecord[],
   checkpoints: SignedCheckpoint[],
+  pop: Population = "spend",
 ): Finding[] {
   const findings: Finding[] = [];
   const ordered = [...checkpoints].sort((a, b) => a.claims.epoch - b.claims.epoch);
@@ -828,10 +846,9 @@ export function findWindowCoverage(
     }
   }
 
-  const spend = receipts.filter((r): r is SignedReceipt => !isDecisionRecord(r));
   const chained =
-    spend.length === receipts.length
-      ? orderByIssuerChain(spend)
+    pop === "spend"
+      ? orderByIssuerChain(receipts as SignedReceipt[])
       : { ordered: receipts, leftover: [] as PresentedRecord[] };
   for (const r of [...chained.ordered, ...chained.leftover]) {
     const hits = checkpoints.filter((cp) => inCheckpointWindow(r.claims.timestampMs, cp));
@@ -858,6 +875,7 @@ export function findCheckpointTotalMismatches(
   totalsFn: (records: PresentedRecord[]) => Record<string, string> = totalsFromReceipts as (
     records: PresentedRecord[]
   ) => Record<string, string>,
+  pop: Population = "spend",
 ): Finding[] {
   const findings: Finding[] = [];
   for (const cp of checkpoints) {
@@ -874,10 +892,9 @@ export function findCheckpointTotalMismatches(
       continue;
     }
     const inWindow = receiptsInWindow(receipts, cp);
-    const spend = receipts.filter((r): r is SignedReceipt => !isDecisionRecord(r));
     const inWindowOnChain =
-      spend.length === receipts.length
-        ? receiptsInWindow(orderByIssuerChain(spend).ordered, cp)
+      pop === "spend"
+        ? receiptsInWindow(orderByIssuerChain(receipts as SignedReceipt[]).ordered, cp)
         : inWindow;
     const expected = totalsFn(inWindow);
     if (cp.claims.totals !== null && JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
@@ -898,7 +915,7 @@ export function findCheckpointTotalMismatches(
     if (inWindowOnChain.length > 0) {
       try {
         const head = inWindowOnChain[inWindowOnChain.length - 1];
-        expectedHead = isDecisionRecord(head) ? decisionRecordHash(head) : receiptHash(head);
+        expectedHead = isDecisionRecord(head, pop) ? decisionRecordHash(head) : receiptHash(head);
       } catch (err) {
         const name = err instanceof Error && err.message !== "" ? err.message : "unencodable";
         findings.push({
@@ -1224,7 +1241,9 @@ function assertAuditBounds(input: AuditInput): void {
   if (input.checkpoints.length > AUDIT_MAX_CHECKPOINTS) {
     throw new Error("audit-too-large");
   }
-  const settlements = input.extract ? extractRows(input.extract) : (input.settlements ?? []);
+  const settlements = input.extract
+    ? extractRows(input.extract, populationOf(input.profile))
+    : (input.settlements ?? []);
   if (settlements.length > AUDIT_MAX_SETTLEMENTS) {
     throw new Error("audit-too-large");
   }
@@ -1252,9 +1271,10 @@ function pushHashRefusal(
 
 function findMalformedHashClaims(input: AuditInput): Finding[] {
   const findings: Finding[] = [];
+  const pop = populationOf(input.profile);
   for (const r of input.receipts) {
     pushHashRefusal(findings, "policyHash", r.claims.policyHash, r.claims.nonce);
-    if (!isDecisionRecord(r)) {
+    if (!isDecisionRecord(r, pop)) {
       pushHashRefusal(findings, "manifestHash", r.claims.manifestHash, r.claims.nonce, true);
       pushHashRefusal(findings, "prevReceiptHash", r.claims.prevReceiptHash, r.claims.nonce, true);
     }
@@ -1279,34 +1299,35 @@ function findMalformedHashClaims(input: AuditInput): Finding[] {
 export function audit(input: AuditInput): AuditReport {
   assertAuditBounds(input);
   const profile = (input.profile ?? SPEND_PROFILE) as ReconciliationProfile<PresentedRecord, PresentedRow>;
+  const pop = populationOf(profile);
   const findings: Finding[] = [...findMalformedHashClaims(input)];
   const warnings: Finding[] = [];
 
   // When an extract is supplied it is the subject of the audit: reconcile the
   // rows it actually carries, never a separate array the caller hands over.
-  const reconciled = input.extract ? extractRows(input.extract) : (input.settlements ?? []);
+  const reconciled = input.extract ? extractRows(input.extract, pop) : (input.settlements ?? []);
 
   // Set where a stated rail pin refuses the presented extract; read where the
   // extract's rows would otherwise be compared. A pin that cannot be read is
   // not a refusal - the same distinction the manifest branch draws.
   let extractRejected = false;
   if (input.extract) {
-    if (input.settlements && !sameSettlements(input.settlements, extractRows(input.extract), profile)) {
+    if (input.settlements && !sameSettlements(input.settlements, extractRows(input.extract, pop), profile)) {
       findings.push({
         code: "extract-settlement-mismatch",
         id: "extract",
-        detail: `caller supplied ${input.settlements.length} settlement(s) that differ from the ${extractRows(input.extract).length} in the signed extract; the extract is authoritative`,
+        detail: `caller supplied ${input.settlements.length} settlement(s) that differ from the ${extractRows(input.extract, pop).length} in the signed extract; the extract is authoritative`,
       });
     }
 
     const signatureVerifies = input.trust
-      ? verifyPresentedExtract(input.extract, input.trust.publicKeyPem)
-      : verifyPresentedExtract(input.extract);
+      ? verifyPresentedExtract(input.extract, pop, input.trust.publicKeyPem)
+      : verifyPresentedExtract(input.extract, pop);
 
     // An extract that declares one window and carries rows from outside it has
     // not reported on the period it claims to cover. This holds whether or not
     // a key was pinned, so it is checked before the trust branch.
-    for (const row of extractRows(input.extract)) {
+    for (const row of extractRows(input.extract, pop)) {
       if (
         row.timestampMs < input.extract.body.windowStartMs ||
         row.timestampMs >= input.extract.body.windowEndMs
@@ -1326,7 +1347,7 @@ export function audit(input: AuditInput): AuditReport {
     // operator unable to tell a limit from a forgery.
     const encodeRefusal = signatureVerifies
       ? null
-      : isEffectExtract(input.extract)
+      : isEffectExtract(input.extract, pop)
         ? effectExtractEncodeRefusal(input.extract)
         : railExtractEncodeRefusal(input.extract);
 
@@ -1378,8 +1399,8 @@ export function audit(input: AuditInput): AuditReport {
           });
         }
       }
-      const coveredAccount = extractAccountId(input.extract);
-      const coveredRail = extractRailId(input.extract);
+      const coveredAccount = extractAccountId(input.extract, pop);
+      const coveredRail = extractRailId(input.extract, pop);
       if (t.accountId !== undefined && coveredAccount !== t.accountId) {
         findings.push({
           code: "extract-scope-mismatch",
@@ -1511,7 +1532,7 @@ export function audit(input: AuditInput): AuditReport {
     // otherwise leave a report that reads as terms-backed and is not.
     const presentedHash = manifestHash(input.manifest);
     const covered = input.receipts.some(
-      (r) => !isDecisionRecord(r) && r.claims.manifestHash === presentedHash,
+      (r) => !isDecisionRecord(r, pop) && r.claims.manifestHash === presentedHash,
     );
     if (!covered) {
       warnings.push({
@@ -1579,10 +1600,10 @@ export function audit(input: AuditInput): AuditReport {
       // Attestation is pin-under-signature (K2). The carried PEM is not the
       // identity source; a kid match without a pin-valid signature still drops.
       const rejected = namesMismatches
-        ? input.receipts.filter((r) => !recordAttestedByPins(r, issuerPins))
+        ? input.receipts.filter((r) => !recordAttestedByPins(r, issuerPins, pop))
         : [];
       const foreign = rejected.filter((r) =>
-        isDecisionRecord(r)
+        isDecisionRecord(r, pop)
           ? !issuerPins.some((pem) => sameSpkiKey(r.publicKeyPem, pem))
           : !receiptBelongsToPin(r, issuerPins),
       );
@@ -1611,9 +1632,9 @@ export function audit(input: AuditInput): AuditReport {
           });
         }
       }
-      attested = input.receipts.filter((r) => recordAttestedByPins(r, issuerPins));
+      attested = input.receipts.filter((r) => recordAttestedByPins(r, issuerPins, pop));
       for (const r of attested) {
-        if (isDecisionRecord(r)) continue;
+        if (isDecisionRecord(r, pop)) continue;
         const verifying = issuerPins.filter((pem) => verifyReceiptUnderPin(r, pem));
         if (verifying.length > 0 && !verifying.some((pem) => sameSpkiKey(r.publicKeyPem, pem))) {
           warnings.push({
@@ -1641,7 +1662,7 @@ export function audit(input: AuditInput): AuditReport {
   // prevReceiptHash links so every later walk (chain head, window coverage,
   // settlement match order) sees the same issuer order.
   if (profile.id !== "decision") {
-    const spend = attested.filter((r): r is SignedReceipt => !isDecisionRecord(r));
+    const spend = attested.filter((r): r is SignedReceipt => !isDecisionRecord(r, pop));
     const chained = orderByIssuerChain(spend);
     attested = [...chained.ordered, ...chained.leftover];
   }
@@ -1664,7 +1685,7 @@ export function audit(input: AuditInput): AuditReport {
     const presentedHash = manifestHash(input.manifest);
     const terms = input.manifest.body;
     for (const r of issuerPinUsable ? attested : input.receipts) {
-      if (isDecisionRecord(r) || r.claims.manifestHash !== presentedHash) continue;
+      if (isDecisionRecord(r, pop) || r.claims.manifestHash !== presentedHash) continue;
       const broken = profile.terms(r, terms);
       if (broken.length > 0) {
         const charge = {
@@ -1712,14 +1733,14 @@ export function audit(input: AuditInput): AuditReport {
   // asked of the set this verifier accepts, or of everything when there is no
   // accepted set to speak of.
   findings.push(
-    ...findReceiptDefects(input.receipts.filter((r): r is SignedReceipt => !isDecisionRecord(r))),
+    ...findReceiptDefects(input.receipts.filter((r): r is SignedReceipt => !isDecisionRecord(r, pop))),
   );
   // With an issuer key a clash is between receipts the verifier accepts, so it
   // is a failure. Without one nothing distinguishes a submitted receipt from any
   // other, so the same clash cannot be pinned on anyone - said out loud, but not
   // as a verdict against a set the verifier cannot vouch for.
   for (const clash of findReceiptRefClashes(
-    (issuerPinUsable ? attested : input.receipts).filter((r): r is SignedReceipt => !isDecisionRecord(r)),
+    (issuerPinUsable ? attested : input.receipts).filter((r): r is SignedReceipt => !isDecisionRecord(r, pop)),
   )) {
     if (issuerPinUsable) {
       findings.push(clash);
@@ -1730,16 +1751,16 @@ export function audit(input: AuditInput): AuditReport {
   const nextOk = Boolean(
     input.nextExtract &&
       (input.trust
-        ? verifyPresentedExtract(input.nextExtract, input.trust.publicKeyPem)
-        : verifyPresentedExtract(input.nextExtract)),
+        ? verifyPresentedExtract(input.nextExtract, pop, input.trust.publicKeyPem)
+        : verifyPresentedExtract(input.nextExtract, pop)),
   );
   const settlementBoundary: SettlementBoundary | undefined = input.extract
     ? {
         windowStartMs: input.extract.body.windowStartMs,
         windowEndMs: input.extract.body.windowEndMs,
-        clockSkewMs: clockSkewOf(input.extract),
+        clockSkewMs: clockSkewOf(input.extract, pop),
         ...(nextOk
-          ? { nextRefs: new Set(extractRows(input.nextExtract!).map((s) => s.ref)) }
+          ? { nextRefs: new Set(extractRows(input.nextExtract!, pop).map((s) => s.ref)) }
           : {}),
       }
     : undefined;
@@ -1792,7 +1813,7 @@ export function audit(input: AuditInput): AuditReport {
     : input.checkpoints;
   const countersign = findCountersignFindings({
     receipts: (issuerPinUsable ? attested : input.receipts).filter(
-      (r): r is SignedReceipt => !isDecisionRecord(r),
+      (r): r is SignedReceipt => !isDecisionRecord(r, pop),
     ),
     payeeTrust: input.payeeTrust,
     manifest: manifestRejected ? undefined : input.manifest,
@@ -1802,12 +1823,12 @@ export function audit(input: AuditInput): AuditReport {
   const chainWalk = issuerPinUsable
     ? input.receipts.filter(
         (r) =>
-          recordAttestedByPins(r, issuerPins) ||
-          (!isDecisionRecord(r) && receiptBelongsToPin(r, issuerPins)),
+          recordAttestedByPins(r, issuerPins, pop) ||
+          (!isDecisionRecord(r, pop) && receiptBelongsToPin(r, issuerPins)),
       )
     : attested;
   if (profile.id === "decision") {
-    const decisionWalk = chainWalk.filter(isDecisionRecord);
+    const decisionWalk = chainWalk.filter((r): r is SignedDecisionRecord => isDecisionRecord(r, pop));
     const brk = findDecisionRecordChainBreak(decisionWalk);
     if (brk) {
       findings.push({
@@ -1817,12 +1838,14 @@ export function audit(input: AuditInput): AuditReport {
       });
     }
   } else {
-    const spendWalk = chainWalk.filter((r): r is SignedReceipt => !isDecisionRecord(r));
+    const spendWalk = chainWalk.filter((r): r is SignedReceipt => !isDecisionRecord(r, pop));
     const chain = findReceiptChainBreak(spendWalk, issuerPinUsable ? issuerPins : undefined);
     if (chain) findings.push(chain);
   }
-  findings.push(...findCheckpointTotalMismatches(attested, attestedCheckpoints, (recs) => profile.checkpointTotals(recs)));
-  findings.push(...findWindowCoverage(attested, attestedCheckpoints));
+  findings.push(
+    ...findCheckpointTotalMismatches(attested, attestedCheckpoints, (recs) => profile.checkpointTotals(recs), pop),
+  );
+  findings.push(...findWindowCoverage(attested, attestedCheckpoints, pop));
 
   // A witness only adds evidence once the verifier has named the log. Until then
   // its inclusion receipts are a log anyone could have invented, and letting them
@@ -1972,8 +1995,8 @@ export function audit(input: AuditInput): AuditReport {
     ...(input.extract
       ? {
           scope: {
-            accountId: extractAccountId(input.extract),
-            railId: extractRailId(input.extract),
+            accountId: extractAccountId(input.extract, pop),
+            railId: extractRailId(input.extract, pop),
             windowStartMs: input.extract.body.windowStartMs,
             windowEndMs: input.extract.body.windowEndMs,
           },
