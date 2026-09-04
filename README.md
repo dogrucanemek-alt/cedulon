@@ -137,8 +137,12 @@ packages/x402-adapter   HTTP 402 adapter + mock rail extract
 packages/base-extract   read-only Base Sepolia USDC → RailExtract
 examples/demo           runaway, dispute, bypass, audit CLI
 spec/                   draft-dogru-cedulon-08 (posted 2 September 2026),
-                        -07, -06, -05, -04, -03, -02, -01, -00,
-                        plus the reattestation and streaming drafts
+                        -07, -06, -05, -04, -03, -02, -01, -00;
+                        draft-dogru-cedulon-decision-profile-01 (posted
+                        4 September 2026), -00: decisions against effects
+                        on the same reconciler; and the direction seeds
+                        draft-dogru-cedulon-reattestation-00 and
+                        draft-dogru-cedulon-streaming-00
 THREAT_MODEL.md
 docs/RUN_AS_VERIFIER.md
 ```

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import { loadVectors } from "../conformance/run.ts";
-import { latestDraftRevision, latestPostedRevision } from "../scripts/latest-draft.ts";
+import { companionDraftPaths, latestDraftRevision, latestPostedRevision } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p: string): string => readFileSync(join(root, p), "utf8");
@@ -624,6 +624,31 @@ describe("claims that describe something outside their own file", () => {
         newest,
         `site/spec.html names draft-dogru-cedulon-${rev}; the newest revision in spec/ is -${newest}`,
       );
+    }
+  });
+
+  it("the README and the site name every companion draft at its newest revision", () => {
+    // The core draft got this guard twice, once per page. A companion that
+    // is posted and then revised has the same drift: the page that named -00
+    // by hand still says -00 at -01. Compare both pages to the tree for each
+    // companion beside the core, the way the core check does.
+    const pages = { "README.md": read("README.md"), "site/spec.html": read("site/spec.html") };
+    for (const path of companionDraftPaths(root)) {
+      const m = /draft-dogru-cedulon-([a-z][a-z-]*)-(\d+)\.md$/.exec(path)!;
+      const [name, newest] = [m[1], m[2]];
+      for (const [page, text] of Object.entries(pages)) {
+        assert.ok(
+          text.includes(`draft-dogru-cedulon-${name}`),
+          `${page} does not name the companion draft-dogru-cedulon-${name}`,
+        );
+        for (const hit of text.matchAll(new RegExp(`draft-dogru-cedulon-${name}-(\\d+)`, "g"))) {
+          assert.equal(
+            hit[1],
+            newest,
+            `${page} names draft-dogru-cedulon-${name}-${hit[1]}; the newest revision in spec/ is -${newest}`,
+          );
+        }
+      }
     }
   });
 

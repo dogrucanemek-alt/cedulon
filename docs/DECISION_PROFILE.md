@@ -138,11 +138,16 @@ EffectExtractClaims = { deciderId, channelId, windowStartMs, windowEndMs, effect
 ```
 
 The extract has no media type: like the rail extract it is a JSON body
-with a detached signature (JCS + Ed25519), not a COSE object, and the
-core registers names only for objects whose content type is checked in
-a protected header. A first cut exported a `+cbor` name for it
-(`cedulon-effect-extract`); nothing used the name and it was withdrawn
-(`draft-dogru-cedulon-decision-profile-00`). Shape refusals follow
+with a detached signature (JCS + Ed25519), not a COSE object. The
+reason -01 gives is the population rule, not the protected header:
+which population a document belongs to is the verifier's declaration
+(`MUST-DP-1`, `MUST-DP-7`), never the document's, so a name on the
+extract would be a self-description the verifier is told not to select
+on. The day an extract is wrapped as a Signed Statement and needs a
+content type, `application/cedulon-effect-extract+json` is the name to
+register. A first cut exported a `+cbor` name for it
+(`cedulon-effect-extract`); nothing used the name and -00 withdrew it;
+-01 withdrew the protected-header test as the reason. Shape refusals follow
 the rail helper for an inverted window, an empty ref and hash grammar,
 and go further on two points: an unknown field is refused, and a row
 outside the declared window is refused at the shape level. A rail
