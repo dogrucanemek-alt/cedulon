@@ -6,13 +6,16 @@ import { buildCheckpointClaims, totalsFromDecisionRecords } from "@cedulon/check
 import {
   generateDecisionRecordKeys,
   decisionRecordHash,
+  decisionRecordToCbor,
   findDecisionRecordChainBreak,
   signDecisionRecord,
   signDecisionToken,
   verifyDecisionRecord,
   verifyDecisionToken,
   type DecisionRecordClaims,
+  type SignedDecisionRecord,
 } from "@cedulon/core";
+import { asSigner, CTY_DECISION_RECORD, signCoseSign1 } from "@cedulon/cose";
 
 const H = createHash("sha256").update("cedulon/decision-record-test").digest("hex");
 const H2 = createHash("sha256").update("cedulon/decision-record-other").digest("hex");
@@ -101,6 +104,33 @@ describe("decision record: signed, chained, not a token", () => {
       k.publicKeyPem,
     );
     assert.equal(verifyDecisionRecord(defer, k.publicKeyPem), true);
+  });
+
+  it("the verifier applies the signer's rules: a record signed below the API is false", () => {
+    // The decider is the party under audit. A signer that skipped
+    // assertDecisionRecordClaims still produces a well-formed COSE Sign1
+    // over the CBOR map; the verifier must refuse it on the same rules,
+    // not trust that the signer applied them.
+    const k = generateDecisionRecordKeys();
+    const below = (claims: DecisionRecordClaims): SignedDecisionRecord => {
+      const cose = signCoseSign1(
+        decisionRecordToCbor(claims),
+        asSigner(k.privateKeyPem, k.publicKeyPem),
+        CTY_DECISION_RECORD,
+      );
+      return { claims, publicKeyPem: k.publicKeyPem, encoding: "cose", coseHex: Buffer.from(cose).toString("hex") };
+    };
+    assert.equal(verifyDecisionRecord(below(base({ ref: null }))), false, "allow without ref");
+    assert.equal(verifyDecisionRecord(below(base({ effectHash: null }))), false, "allow without effectHash");
+    assert.equal(verifyDecisionRecord(below(base({ requestHash: "not-a-hash" }))), false, "malformed requestHash");
+    assert.equal(verifyDecisionRecord(below(base({ prevRecordHash: "AA" }))), false, "malformed prevRecordHash");
+    // Control: the same path with claims the signer would have accepted.
+    assert.equal(verifyDecisionRecord(below(base())), true, "well-formed allow");
+    assert.equal(
+      verifyDecisionRecord(below(base({ decision: "deny", ref: null, effectHash: null, reasonCode: "silent" }))),
+      true,
+      "well-formed deny",
+    );
   });
 
   it("a forged prevRecordHash is a chain break, not a signature failure", () => {

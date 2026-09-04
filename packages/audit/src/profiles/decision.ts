@@ -52,6 +52,13 @@ export const DECISION_PROFILE: ReconciliationProfile<SignedDecisionRecord, Effec
   rowAgainstRefusalDetail(row) {
     return `effect ${row.ref} exists against a refusal on the same ref`;
   },
+  counterpartyUnbound(_rows, _manifestPayeeBound) {
+    // No counterparty axis here: `effectHash` binds the content of the
+    // effect itself, which is more than a payee name ever bound on spend.
+    // `actor` on a row is carried, not measured; measuring it is a later
+    // decision, not a warning leaked from the spend rule.
+    return null;
+  },
 };
 
 function decisionAggregate(

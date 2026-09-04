@@ -567,7 +567,7 @@ PID reuse on a stale lock. `demo:unguarded` remains the intentional hole.
 0.13.0 (prepared, not published). The tree now carries a decision
 reconciliation profile on the existing `audit()` (`DECISION_PROFILE`,
 `docs/DECISION_PROFILE.md`): Decision Record, Effect Extract, four new
-finding codes, twelve conformance cases, and an offline IG koba
+finding codes, seventeen conformance cases, and an offline IG koba
 (`interop/mizan-ig`). Measured in this tree: the spend golden file is
 unchanged byte for byte; `MatchCounts.aborted` counts deny+defer; an
 absent extract still fails (same as spend, draft-abak -01, 3 September);

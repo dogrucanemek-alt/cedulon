@@ -52,6 +52,7 @@ export type ReconciliationProfile<Rec, Row> = {
   recordWithoutRowDetail(record: Rec, ref: string): string;
   rowWithoutRecordDetail(row: Row): string;
   rowAgainstRefusalDetail(row: Row): string;
+  counterpartyUnbound(rows: Row[], manifestPayeeBound: boolean): string | null;
 };
 ```
 
@@ -172,9 +173,24 @@ finding: see the next section.
   reported under the spend code `receipt-chain-break`; no decision-side
   name exists yet.
 - **Audit-time hash grammar** on a decision record checks `policyHash`
-  only; `requestHash`, `effectHash`, `inputsHash`, `prevRecordHash` are
-  refused at signing time, not re-read by `audit()`.
+  only in `findMalformedHashClaims`; `requestHash`, `effectHash`,
+  `inputsHash`, `prevRecordHash` and the allow-requires-`ref`/`effectHash`
+  rule are refused at signing time and again by `verifyDecisionRecord`,
+  which re-applies them on the decoded payload. A record that fails them
+  under the pinned decider key is not attested and the chain walk names
+  it (`receipt-chain-break`, `bad-signature`); it does not drop silently.
+- **No counterparty axis.** `counterpartyUnbound` returns null on this
+  profile: `effectHash` binds the content of the effect, and `actor` on a
+  row is carried, not measured. Spend keeps its `counterparty-unbound`
+  warning unchanged.
+- **A refusal may carry an `effectHash`.** deny and defer bind to the
+  absence of a row, not to that hash; the signer does not refuse a deny
+  that names the effect it declined. Whether it should is undecided.
+- **Wrong-document, both directions.** A rail extract presented to this
+  profile and an effect extract presented to the spend profile are each
+  refused with a finding on `extract` and `settlement-comparison-skipped`;
+  neither is reconciled and neither throws.
 
-The tree now carries the profile, the two signed objects, twelve
+The tree now carries the profile, the two signed objects, seventeen
 conformance cases, and four offline IG fixtures; unproven until those
 run against a measured log and a reader who did not write this branch.

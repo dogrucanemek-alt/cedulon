@@ -337,9 +337,10 @@ function isEffectExtract(x: PresentedExtract, pop: Population): x is SignedEffec
 }
 
 function extractRows(x: PresentedExtract, pop: Population): PresentedRow[] {
-  // A rail body presented to the decision profile carries no `effects`; an
-  // empty row set lets the shape refusal below name it instead of a crash.
-  return isEffectExtract(x, pop) ? (x.body.effects ?? []) : x.body.settlements;
+  // A rail body presented to the decision profile carries no `effects`, and
+  // an effect body presented to the spend profile carries no `settlements`;
+  // an empty row set lets the refusal below name it instead of a crash.
+  return isEffectExtract(x, pop) ? (x.body.effects ?? []) : (x.body.settlements ?? []);
 }
 
 function extractAccountId(x: PresentedExtract, pop: Population): string {
@@ -1794,14 +1795,13 @@ export function audit(input: AuditInput): AuditReport {
     settlements: matchCounts.settlements,
   };
   const manifestPayeeBound = Boolean(input.manifest && typeof input.manifest.body.payee === "string");
-  const beneficiaryBound = reconciled.some((s) => "beneficiary" in s && typeof s.beneficiary === "string");
-  if (input.extract && !manifestPayeeBound && !beneficiaryBound) {
+  const counterpartyUnbound = input.extract ? profile.counterpartyUnbound(reconciled, manifestPayeeBound) : null;
+  if (counterpartyUnbound !== null) {
     warnings.push({
       code: "counterparty-unbound",
       id: "counterparty",
       severity: "warn",
-      detail:
-        "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+      detail: counterpartyUnbound,
     });
   }
   // Every check below reasons about what the issuer published. Walking the whole
@@ -1820,11 +1820,17 @@ export function audit(input: AuditInput): AuditReport {
   });
   warnings.push(...countersign.warnings);
   findings.push(...countersign.findings);
+  // A record that carries the pinned key but does not verify under it walks
+  // the chain so the walk can name it ("signature failed" / bad-signature).
+  // Dropping it silently would leave only the checkpoint totals to notice,
+  // and a decider that also wrote the checkpoint would not let them.
   const chainWalk = issuerPinUsable
     ? input.receipts.filter(
         (r) =>
           recordAttestedByPins(r, issuerPins, pop) ||
-          (!isDecisionRecord(r, pop) && receiptBelongsToPin(r, issuerPins)),
+          (isDecisionRecord(r, pop)
+            ? issuerPins.some((pem) => sameSpkiKey(r.publicKeyPem, pem))
+            : receiptBelongsToPin(r, issuerPins)),
       )
     : attested;
   if (profile.id === "decision") {

@@ -6,11 +6,13 @@ import { audit, DECISION_PROFILE } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint, totalsFromDecisionRecords } from "@cedulon/checkpoint";
 import {
   decisionRecordHash,
+  decisionRecordToCbor,
   generateDecisionRecordKeys,
   signDecisionRecord,
   type DecisionRecordClaims,
   type SignedDecisionRecord,
 } from "@cedulon/core";
+import { asSigner, CTY_DECISION_RECORD, signCoseSign1 } from "@cedulon/cose";
 import {
   generateEffectExtractKeys,
   signEffectExtract,
@@ -48,6 +50,17 @@ function claims(over: Partial<DecisionRecordClaims> = {}): DecisionRecordClaims 
 
 function record(over: Partial<DecisionRecordClaims> = {}): SignedDecisionRecord {
   return signDecisionRecord(claims(over), decider.privateKeyPem, decider.publicKeyPem);
+}
+
+/** Signed by the decider key but below signDecisionRecord: no claim rules applied. */
+function recordBelowApi(over: Partial<DecisionRecordClaims> = {}): SignedDecisionRecord {
+  const c = claims(over);
+  const cose = signCoseSign1(
+    decisionRecordToCbor(c),
+    asSigner(decider.privateKeyPem, decider.publicKeyPem),
+    CTY_DECISION_RECORD,
+  );
+  return { claims: c, publicKeyPem: decider.publicKeyPem, encoding: "cose", coseHex: Buffer.from(cose).toString("hex") };
 }
 
 function row(over: Partial<EffectRow> = {}): EffectRow {
@@ -113,6 +126,9 @@ describe("decision profile conformance", () => {
     assert.equal(report.counts.receipts.matched, 1);
     assert.equal(report.counts.settlements.matched, 1);
     assert.equal(report.findings.length, 0);
+    // No counterparty axis on this profile: effectHash binds the content.
+    // A spend-shaped "counterparty-unbound" here would be a leaked rule.
+    assert.deepEqual(report.warnings.map((w) => w.code), []);
   });
 
   it("2: allow, no effect → decision-without-effect, unmatched 1", () => {
@@ -256,5 +272,78 @@ describe("decision profile conformance", () => {
     assert.equal(report.findings.some((f) => f.code === "extract-key-mismatch"), true);
     assert.equal(report.warnings.some((w) => w.code === "settlement-comparison-skipped"), true);
     assert.equal(report.counts.settlements.matched, 0);
+  });
+
+  it("14: an effect extract presented to the spend profile is refused, never reconciled", () => {
+    // The mirror of 13. Before this case the spend walk read
+    // body.settlements off an effect body and threw on undefined.length;
+    // a crash is not a finding, and the report never existed.
+    let report: ReturnType<typeof audit> | undefined;
+    assert.doesNotThrow(() => {
+      report = audit({
+        receipts: [],
+        checkpoints: [],
+        extract: extract([row()]) as unknown as Parameters<typeof audit>[0]["extract"],
+        trust: { publicKeyPem: effect.publicKeyPem, accountId: "decider-1", railId: "ig-dm", windowStartMs: NOW, windowEndMs: END },
+      });
+    });
+    assert.ok(report);
+    assert.equal(report.ok, false);
+    assert.equal(report.findings.some((f) => f.id === "extract"), true, report.findings.map((f) => f.code).join(","));
+    assert.equal(report.warnings.some((w) => w.code === "settlement-comparison-skipped"), true);
+    assert.equal(report.counts.settlements.rows, 0);
+    assert.equal(report.counts.settlements.matched, 0);
+  });
+
+  it("15: an allow record without a ref, signed below the API, is refused, not passed", () => {
+    // The decider is the audited party; its signer applying the rules is
+    // not evidence. Before the verifier re-applied them this record was
+    // attested, counted unmatched, and the audit still said ok.
+    const rec = recordBelowApi({ nonce: "n-15".padEnd(16, "-"), ref: null, effectHash: null });
+    const report = run([rec], []);
+    assert.equal(report.ok, false);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.findings.some((f) => f.id === rec.claims.nonce), true, report.findings.map((f) => f.code).join(","));
+  });
+
+  it("16: effect extract signed by a key other than the pinned one → extract-key-mismatch", () => {
+    const other = generateEffectExtractKeys();
+    const rec = record({ nonce: "n-16".padEnd(16, "-") });
+    const foreign = signEffectExtract(
+      { deciderId: "decider-1", channelId: "ig-dm", windowStartMs: NOW, windowEndMs: END, effects: [row()] },
+      other.privateKeyPem,
+      other.publicKeyPem,
+    );
+    const report = run([rec], [], { extract: foreign });
+    assert.equal(report.ok, false);
+    assert.equal(report.findings.some((f) => f.code === "extract-key-mismatch"), true);
+    assert.equal(report.warnings.some((w) => w.code === "settlement-comparison-skipped"), true);
+    assert.equal(report.counts.settlements.matched, 0);
+    assert.equal(report.counts.receipts.matched, 0);
+  });
+
+  it("17: decision record signed by a key other than the pinned decider → issuer-key-mismatch", () => {
+    const other = generateDecisionRecordKeys();
+    const foreign = signDecisionRecord(claims({ nonce: "n-17".padEnd(16, "-") }), other.privateKeyPem, other.publicKeyPem);
+    const report = audit({
+      receipts: [foreign],
+      checkpoints: [
+        signCheckpoint(
+          buildCheckpointClaims(1, [foreign], NOW, END, null, totalsFromDecisionRecords, decisionRecordHash),
+          other.privateKeyPem,
+          other.publicKeyPem,
+        ),
+      ],
+      issuerTrust: { publicKeyPem: decider.publicKeyPem },
+      profile: DECISION_PROFILE,
+      extract: extract([row()]),
+      trust: PIN,
+    });
+    assert.equal(report.ok, false);
+    assert.equal(report.findings.some((f) => f.code === "issuer-key-mismatch"), true);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.matched, 0);
+    // The row it would have covered is now an effect with no decision behind it.
+    assert.equal(report.findings.some((f) => f.code === "effect-without-decision"), true);
   });
 });

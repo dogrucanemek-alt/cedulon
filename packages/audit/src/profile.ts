@@ -51,6 +51,14 @@ export type ReconciliationProfile<Rec, Row> = {
   recordWithoutRowDetail(record: Rec, ref: string): string;
   rowWithoutRecordDetail(row: Row): string;
   rowAgainstRefusalDetail(row: Row): string;
+  /**
+   * The counterparty axis, if the profile has one. Returns the warning
+   * text when nothing in the presented population names the other party,
+   * null when it is named or when the profile binds content some other
+   * way. `manifestPayeeBound` is the caller's word on the manifest, which
+   * only the spend path carries.
+   */
+  counterpartyUnbound(rows: Row[], manifestPayeeBound: boolean): string | null;
 };
 
 type SpendTerms = {
@@ -174,5 +182,10 @@ export const SPEND_PROFILE: ReconciliationProfile<SignedReceipt, RailSettlement>
     // Spend never told this case apart from a plain uncovered row, and an
     // aborted receipt may still carry the ref it tried. Same sentence.
     return `settlement ${row.ref} ${row.amount} ${row.currency} has no spend receipt`;
+  },
+  counterpartyUnbound(rows, manifestPayeeBound) {
+    const beneficiaryBound = rows.some((s) => "beneficiary" in s && typeof s.beneficiary === "string");
+    if (manifestPayeeBound || beneficiaryBound) return null;
+    return "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found";
   },
 };

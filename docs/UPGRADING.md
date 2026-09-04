@@ -8,17 +8,29 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 A. The five money-shaped axes behind `audit()` now sit on
 `ReconciliationProfile` (`packages/audit/src/profile.ts`). Today's spend
-walk moved behind `SPEND_PROFILE`; texts and order did not move. The tree
-now carries `tests/spend-golden.test.ts`; unproven until a change that
-should have shifted a finding fails that file. `docs/DECISION_PROFILE.md`
-is the decision-side note.
+walk moved behind `SPEND_PROFILE`; texts and order did not move. The
+profile also owns the three one-sided match sentences
+(`recordWithoutRowDetail`, `rowWithoutRecordDetail`,
+`rowAgainstRefusalDetail`), the counterparty axis
+(`counterpartyUnbound`, null on a profile that has none), and the
+population: `audit()` reads every presented document as the profile's
+record and row types, never by the shape of the body, so a rail extract
+carrying an extra `effects` member is still a rail extract. The tree
+now carries `tests/spend-golden.test.ts` (fifteen cases generated from
+the pre-seam source); unproven until a change that should have shifted
+a finding fails that file. `docs/DECISION_PROFILE.md` is the
+decision-side note.
 
 B. The tree now carries `DecisionRecordClaims` and `SignedDecisionRecord`
 (`packages/core/src/decision-record.ts`, CWT `-70501`…`-70512`, content
 type `application/cedulon-decision-record+cbor`) and
 `@cedulon/effect-extract` (`EffectRow` / `EffectExtractClaims`).
 `decisionRecordHash` hashes the COSE Sign1 bytes, the same input
-`receiptHash` uses on the COSE path. `buildCheckpointClaims` takes two
+`receiptHash` uses on the COSE path. `verifyDecisionRecord` re-applies
+the signer's claim rules (hash grammar, allow requires `ref` and
+`effectHash`) on the decoded payload, so a record signed below
+`signDecisionRecord` verifies false; under a pinned decider key the
+chain walk names it. `buildCheckpointClaims` takes two
 optional functions after the previous-checkpoint hash: `totalsFn`
 (default `totalsFromReceipts`) and `headHashFn` (default `receiptHash`).
 The tree now carries those objects; unproven until a foreign verifier
@@ -29,7 +41,7 @@ treats deny/defer as the aborted class. Four codes join the catalogue:
 `decision-without-effect`, `effect-without-decision`,
 `effect-against-refusal`, `effect-mismatch`. `FINDING_CODES` is 54; the
 schema enum lists the same 54. `interop/mizan-ig` turns two proposed
-JSONL files into that audit. The tree now carries twelve conformance
+JSONL files into that audit. The tree now carries seventeen conformance
 cases and four offline fixtures; unproven until the live bridge log is
 measured and only `fromBridgeLine` / `fromMetaLine` have to move.
 `AuditInput.trust` on this profile is the effect-extract signer;

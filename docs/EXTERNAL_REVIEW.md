@@ -463,7 +463,7 @@ What this tree now carries (0.13.0 prepared, not published):
   `@cedulon/effect-extract`
 - `DECISION_PROFILE` and four codes (`decision-without-effect`,
   `effect-without-decision`, `effect-against-refusal`, `effect-mismatch`)
-- twelve conformance cases (`tests/decision-profile.test.ts`)
+- seventeen conformance cases (`tests/decision-profile.test.ts`)
 - an offline IG koba (`interop/mizan-ig`) over proposed JSONL
 
 Known, not closed:
@@ -509,3 +509,26 @@ under `DECISION_PROFILE` as decision. The golden file gained
 `rail-extra-member-effects` (regenerated from `45bb020`, red on the
 branch before the fix) and the conformance cases gained a thirteenth, a
 rail extract presented to the decision profile, which is refused.
+
+Second eye, same day. An outside model read the branch at `3e5f066` with
+the whole diff and the two fix commits, ran the suite (528 tests, the same
+counts), and returned seven blocking items. Four held under measurement
+and are closed here. `verifyDecisionRecord` checked the signature and the
+payload against the carried claims but not the claim rules the signer
+applies, so an allow record with no `ref`, signed below the API by the
+pinned decider, verified true, was attested, and the audit said ok; the
+verifier now re-applies those rules on the decoded payload, and a record
+that fails them under the pinned key walks the chain and is named. An
+effect extract presented to the spend profile threw on an absent
+`settlements` array before any report existed; it is now refused the way
+a rail extract is refused on the decision profile. The spend
+`counterparty-unbound` warning fired on every decision audit that carried
+an extract, in spend words; the counterparty axis is now the profile's,
+and the decision profile has none. The documents said twelve cases where
+the tree had thirteen. Three did not hold as stated: a deny may carry an
+`effectHash` (undecided, written down, not a defect); the IG adapter reads
+the directory it is given, which is what a command-line adapter does; and
+swapping the two test key pairs wholesale cannot break a fixture that
+signs and pins with the same constants, though the point under it was
+real, so the cases gained a wrong effect-extract key and a wrong decider
+key. Seventeen cases now.

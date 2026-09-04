@@ -193,6 +193,11 @@ export function verifyDecisionRecord(
   try {
     const msg = decodeCoseSign1(bytes);
     const decoded = decisionRecordFromCbor(msg.payload);
+    // The decider is the party under audit. Its signer applying the claim
+    // rules is not evidence that they were applied; a Sign1 over a CBOR
+    // map that skips them is byte-for-byte as valid. Re-apply them here,
+    // where the verifier is, on the decoded claims.
+    assertDecisionRecordClaims(decoded);
     return canonical(decoded) === canonical(signed.claims);
   } catch {
     return false;
