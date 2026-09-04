@@ -613,3 +613,49 @@ September 2026 (22:50 UTC, nine packages, provenance on all nine, the MCP
 Registry and the bundle produced by the tagged run itself; the bundle job
 needed a rerun because two tarballs were not yet served ten seconds after
 the publish).
+
+## Round 10 — one fixture, two readers, 5 Sep 2026
+
+Origin. Agreed off-list with Iman Schrock (EMILIA) on 4 September: the
+same frozen bytes read by two separately owned adapters, with no claim
+that either reader speaks the other's native input. The bytes are the
+companion's `interop/mizan-ig/fixtures/leaked-refusal/` at commit
+`06c3119badc269ef5d6d3596ea3b3d48219d6ba4`:
+
+| file | sha256 |
+|---|---|
+| decisions.jsonl | `2db5f0a8491aa34031223d9d4e732620a1df86bb37747972fa86e9095dd48d72` |
+| sent.jsonl | `cfd9037ef183c04364d2c32951b108be2740d4b75bdd2f9cb83dc1ac7fd5d131` |
+| policy.txt | `41d79f176661c3ac24181dae71506e8d5738f0470102d9cdda1dd9222cfe0805` |
+
+One decision line (verdict silent, ref `leak-1`), one sent line under the
+same ref.
+
+Cedulon reader (this tree, `runFixture`): findings
+`[effect-against-refusal leak-1]`, warnings `[]`, `ok:false`,
+`guarantee:"unconditional"`. Held by `tests/mizan-ig-adapter.test.ts`
+("leaked-refusal: silent but sent").
+
+EMILIA reader (Outcome Binding, `verifyOutcomeBindingSet`), run by Iman
+Schrock against the same bytes, all three digests matching:
+`lifecycle_state=reconciled`, `outcome=divergent`, `valid=false`; the
+mapped absent prediction for `ig-dm-reply` at `leak-1` was contradicted by
+one observed effect. Mapping, in Iman's words: deny/defer to an `absent`
+predicate, `ref` to `target`, `effectClass` to `effect_type`, `effectHash`
+to the observed value. EMILIA commit
+`2986500386319342070590368a917eba78cbcd65`
+(<https://github.com/emiliaprotocol/emilia-protocol/commit/2986500386319342070590368a917eba78cbcd65>),
+PR #735 "test: add Cedulon Mizan leaked-refusal fixture"
+(<https://github.com/emiliaprotocol/emilia-protocol/pull/735>). Outcome
+Binding result
+`sha256:80d9c6f5f2c6fd57eb0931044fc8d530c3fc34fbe11d8611c14aee9145486a15`;
+harness report
+`sha256:56eeb27a388ce7dbf7515cc85ec5bccb29a643ef097fb0d02b0385d26c8f8b37`.
+
+Boundary, kept with the entry as Iman asked: this is agreement on one
+pinned raw fixture through separately owned adapters, not native-format
+interoperability. The keys are public test material and the timestamps
+are derived after the fact, so the run establishes neither real identity
+nor temporal precommitment. Neither reader identifies where the refusal
+failed to take effect; both say the population did not reconcile, each
+in its own word.
