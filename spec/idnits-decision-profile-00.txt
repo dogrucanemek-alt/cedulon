@@ -1,0 +1,1030 @@
+idnits 2.17.1 
+
+draft-dogru-cedulon-decision-profile-00.txt:
+
+  Checking boilerplate required by RFC 5378 and the IETF Trust (see
+  https://trustee.ietf.org/license-info):
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+  Checking nits according to https://www.ietf.org/id-info/1id-guidelines.txt:
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+  Checking nits according to https://www.ietf.org/id-info/checklist :
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+  Miscellaneous warnings:
+  ----------------------------------------------------------------------------
+
+  == Couldn't figure out when the document was first submitted -- there may
+     comments or warnings related to the use of a disclaimer for pre-RFC5378
+     work that could not be issued because of this.  Please check the Legal
+     Provisions document at https://trustee.ietf.org/license-info to determine
+     if you need the pre-RFC5378 disclaimer.
+
+
+  Checking references for intended status: Informational
+  ----------------------------------------------------------------------------
+
+     No issues found here.
+
+     Summary: 0 errors (**), 0 flaws (~~), 1 warning (==), 0 comments (--).
+--------------------------------------------------------------------------------
+
+
+2	Network Working Group                                        E. C. Dogru
+3	Internet-Draft                           VERAX TEKNOLOJI LIMITED SIRKETI
+4	Intended status: Informational                          4 September 2026
+5	Expires: 8 March 2027
+
+7	 Cedulon Decision Profile: Reconciling an Agent's Decisions Against Its
+8	                                Effects
+9	                draft-dogru-cedulon-decision-profile-00
+
+11	Abstract
+
+13	   The Cedulon core document reconciles an issuer's signed Spend
+14	   Receipts against an authenticated extract of a payment rail and
+15	   reports, over a declared population, that no settlement lacks a
+16	   receipt and no settled receipt is absent from the rail.  Money is the
+17	   special case that document implements.  This document defines a
+18	   second population on the same reconciler.  A Decision Record is
+19	   signed by the party that decided whether an agent may act; an Effect
+20	   Extract is an authenticated list of the effects that actually
+21	   occurred on a channel.  An allow must be matched by exactly one
+22	   effect whose content hash the record named; a refusal must be matched
+23	   by none.  The Decision Record claim set, the Effect Extract shape,
+24	   the points at which the reconciliation departs from the spend rules,
+25	   the finding codes, and one media type are defined.  The text is
+26	   provisional and the companion implementation carries the profile
+27	   prepared and unpublished.
+
+29	Status of This Memo
+
+31	   This Internet-Draft is submitted in full conformance with the
+32	   provisions of BCP 78 and BCP 79.
+
+34	   Internet-Drafts are working documents of the Internet Engineering
+35	   Task Force (IETF).  Note that other groups may also distribute
+36	   working documents as Internet-Drafts.  The list of current Internet-
+37	   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+39	   Internet-Drafts are draft documents valid for a maximum of six months
+40	   and may be updated, replaced, or obsoleted by other documents at any
+41	   time.  It is inappropriate to use Internet-Drafts as reference
+42	   material or to cite them other than as "work in progress."
+
+44	   This Internet-Draft will expire on 8 March 2027.
+
+46	Copyright Notice
+
+48	   Copyright (c) 2026 IETF Trust and the persons identified as the
+49	   document authors.  All rights reserved.
+
+51	   This document is subject to BCP 78 and the IETF Trust's Legal
+52	   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+53	   license-info) in effect on the date of publication of this document.
+54	   Please review these documents carefully, as they describe your rights
+55	   and restrictions with respect to this document.  Code Components
+56	   extracted from this document must include Revised BSD License text as
+57	   described in Section 4.e of the Trust Legal Provisions and are
+58	   provided without warranty as described in the Revised BSD License.
+
+60	Table of Contents
+
+62	   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
+63	   2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   3
+64	   3.  The population  . . . . . . . . . . . . . . . . . . . . . . .   4
+65	   4.  Decision Record . . . . . . . . . . . . . . . . . . . . . . .   6
+66	     4.1.  Claim labels  . . . . . . . . . . . . . . . . . . . . . .   6
+67	     4.2.  Claim rules . . . . . . . . . . . . . . . . . . . . . . .   8
+68	     4.3.  Presentation and confusion  . . . . . . . . . . . . . . .   9
+69	     4.4.  The Decider's chain and checkpoints . . . . . . . . . . .   9
+70	   5.  Effect Extract Profile  . . . . . . . . . . . . . . . . . . .  10
+71	     5.1.  Body and row schema . . . . . . . . . . . . . . . . . . .  10
+72	     5.2.  Authentication and scope  . . . . . . . . . . . . . . . .  12
+73	   6.  Reconciliation  . . . . . . . . . . . . . . . . . . . . . . .  13
+74	     6.1.  What binds  . . . . . . . . . . . . . . . . . . . . . . .  13
+75	     6.2.  Conservation  . . . . . . . . . . . . . . . . . . . . . .  14
+76	     6.3.  Finding codes . . . . . . . . . . . . . . . . . . . . . .  14
+77	   7.  Trust roots . . . . . . . . . . . . . . . . . . . . . . . . .  16
+78	   8.  Security Considerations . . . . . . . . . . . . . . . . . . .  16
+79	     8.1.  D1: An effect occurs against a refusal  . . . . . . . . .  17
+80	     8.2.  D2: Effects without decisions . . . . . . . . . . . . . .  17
+81	     8.3.  D3: Substitution of content . . . . . . . . . . . . . . .  17
+82	     8.4.  D4: The Decider signs below its own rules . . . . . . . .  17
+83	     8.5.  D5: Equivocation on the record chain  . . . . . . . . . .  17
+84	     8.6.  D6: The class of the effect is not bound  . . . . . . . .  18
+85	     8.7.  D7: Silent defaults in capture  . . . . . . . . . . . . .  18
+86	     8.8.  D8: The capture process is the Decider  . . . . . . . . .  18
+87	   9.  Privacy Considerations  . . . . . . . . . . . . . . . . . . .  18
+88	   10. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  19
+89	     10.1.  application/cedulon-decision-record+cbor . . . . . . . .  19
+90	   11. Implementation Status . . . . . . . . . . . . . . . . . . . .  20
+91	   12. References  . . . . . . . . . . . . . . . . . . . . . . . . .  21
+92	     12.1.  Normative References . . . . . . . . . . . . . . . . . .  21
+93	     12.2.  Informative References . . . . . . . . . . . . . . . . .  22
+
+95	   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  23
+96	   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  23
+
+98	1.  Introduction
+
+100	   The Cedulon core document [CEDULON] answers one question about an
+101	   agent that spends: did every settlement on the rail have a receipt
+102	   behind it, and did every settled receipt reach the rail?  It answers
+103	   it by closing three signed objects over a declared population: the
+104	   issuer's records, an authenticated extract of the counterparty
+105	   system, and epoch checkpoints that total the records.  The verifier
+106	   holds the keys out of band and the report names the population it
+107	   covered.
+
+109	   An agent that acts without spending raises the same question with
+110	   different nouns.  A party decided whether the agent may reply, post,
+111	   send, or call; a channel carried whatever the agent then did.  Did
+112	   every effect on the channel have a decision behind it?  Did every
+113	   allowed action occur, once, with the content that was allowed?  Did
+114	   anything occur that was refused?  Section 19 of [CEDULON] reserves
+115	   later profiles in name only, and its Section 19.3 sketches the same
+116	   completeness calculus for other consumable resources: compute, data,
+117	   energy.  This document is a different population on the same
+118	   reconciler, decisions against effects rather than another unit of
+119	   spend, and it is the first profile written out.
+
+121	   The profile keeps the core's three roles and its verification
+122	   algorithm.  What changes is the record, the row, the binding between
+123	   them, and the words the report uses.  What does not change is
+124	   measured: the companion implementation holds the spend behaviour byte
+125	   for byte behind a golden file, and every rule in this document that
+126	   departs from the spend rules is stated as a departure.
+
+128	   This document is a companion to the core document, not a revision of
+129	   it.  It is not an IETF working-group item.  Its requirement language
+130	   is provisional in the sense Section 19 of [CEDULON] gives the
+131	   structures it reserves: a direction written with the core's
+132	   discipline, not a commitment, and a later revision may change it.
+133	   The companion implementation carries the profile prepared and
+134	   unpublished.
+
+136	2.  Terminology
+
+138	   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+139	   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+140	   "OPTIONAL" in this document are to be interpreted as described in
+141	   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+142	   capitals, as shown here.
+
+144	   Terms defined in the core document keep their meaning here: Policy
+145	   Decision Point, epoch checkpoint, trust root, population, finding,
+146	   warning, guarantee.  The following are specific to this profile.
+
+148	   Decider:  The party that decides, per request, whether the agent may
+149	      act.  It signs Decision Records and epoch checkpoints over them.
+150	      Its key is the issuer root of this profile (Section 7).
+
+152	   Subject:  The party on whose request the decision was taken, named in
+153	      the record as an opaque identifier.
+
+155	   Decision Record:  A COSE_Sign1 object signed by the Decider stating
+156	      one decision: allow, deny, or defer, with the request it answered,
+157	      the policy it applied, and, for an allow, the reference and the
+158	      content hash of the effect it allowed (Section 4).
+
+160	   Effect:  One thing that happened on a channel as a result of, or in
+161	      the absence of, a decision: a message sent, a post made, a call
+162	      placed.  It is identified by a reference, classed by a short name,
+163	      and bound by the SHA-256 of its content.
+
+165	   Channel:  The system on which effects occur and from which an Effect
+166	      Extract is taken.  It plays the role a rail plays in the core
+167	      document.
+
+169	   Effect Extract:  The authenticated list of effects on one channel,
+170	      for one Decider, over one window (Section 5).  It plays the role a
+171	      rail extract plays in the core document.
+
+173	   Refusal:  A Decision Record whose decision is deny or defer.  A
+174	      refusal expects no effect.
+
+176	3.  The population
+
+178	   The core document's reconciler closes an issuer record against a
+179	   counterparty row over a declared population.  This profile fills the
+180	   same three roles:
+
+182	       +==============+===================+========================+
+183	       | Role         | Spend (core)      | Decision (this         |
+184	       |              |                   | document)              |
+185	       +==============+===================+========================+
+186	       | Issuer       | Spend Receipt     | Decision Record        |
+187	       | record       |                   |                        |
+188	       +--------------+-------------------+------------------------+
+189	       | Counterparty | settlement record | effect row on an       |
+190	       | row          | on a rail extract | Effect Extract         |
+191	       +--------------+-------------------+------------------------+
+192	       | Match key    | ref               | ref                    |
+193	       +--------------+-------------------+------------------------+
+194	       | Content      | amount and        | allow: a row exists    |
+195	       | binding      | currency equal    | and effectHash is      |
+196	       |              |                   | equal; refusal: no row |
+197	       +--------------+-------------------+------------------------+
+198	       | Record that  | outcome aborted   | decision deny or defer |
+199	       | expects no   |                   |                        |
+200	       | row          |                   |                        |
+201	       +--------------+-------------------+------------------------+
+202	       | Aggregate    | checkpoint totals | checkpoint totals per  |
+203	       | witness      | per currency      | decision kind          |
+204	       +--------------+-------------------+------------------------+
+205	       | Declared     | account, rail,    | decider, channel,      |
+206	       | population   | window            | window                 |
+207	       +--------------+-------------------+------------------------+
+
+209	                                  Table 1
+
+211	   Which population a presented document belongs to is the verifier's
+212	   call, made by the profile it applies, and never the document's.  A
+213	   verifier applying this profile MUST read every presented record as a
+214	   Decision Record and every presented extract as an Effect Extract, and
+215	   MUST refuse by name a document that does not have that shape; it MUST
+216	   NOT infer the population from members a body happens to carry (MUST-
+217	   DP-1).  The companion found the alternative wrong in both directions:
+218	   a rail extract that added a member named effects was re-routed away
+219	   from the spend rules it was subject to, and an Effect Extract handed
+220	   to the spend rules crashed before any report existed.  Under this
+221	   profile a rail extract is the wrong document and is refused as one;
+222	   under the spend rules an Effect Extract is refused the same way.
+
+224	4.  Decision Record
+
+226	   A Decision Record is COSE_Sign1 with the header profile of
+227	   Section 6.2 of [CEDULON]: deterministic CBOR, alg -19 (Ed25519,
+228	   [RFC9864]), kid mandatory and computed as the core states, an empty
+229	   unprotected header refused by name if not empty, and the payload the
+230	   CBOR encoding of the claim map below.  The content type header
+231	   parameter is application/cedulon-decision-record+cbor (Section 10).
+
+233	4.1.  Claim labels
+
+235	   The labels lie in the Private Use range of the CWT Claims registry
+236	   [RFC8392], below the block the core document uses for the Decision
+237	   Token (-70301 to -70305) and the countersignature (-70401, -70402),
+238	   so that no two Cedulon claim maps share a label.  Every claim
+239	   annotated hash carries a SHA-256 [RFC6234] digest rendered as exactly
+240	   64 lowercase hexadecimal characters, the grammar of Section 6.1 of
+241	   [CEDULON], and a value outside that grammar is refused by name at
+242	   signing and at verification.
+
+244	         +========+================+=============================+
+245	         | Label  | Claim          | CBOR type                   |
+246	         +========+================+=============================+
+247	         | -70501 | decider        | tstr                        |
+248	         +--------+----------------+-----------------------------+
+249	         | -70502 | subject        | tstr                        |
+250	         +--------+----------------+-----------------------------+
+251	         | -70503 | requestHash    | tstr (hash)                 |
+252	         +--------+----------------+-----------------------------+
+253	         | -70504 | policyHash     | tstr (hash)                 |
+254	         +--------+----------------+-----------------------------+
+255	         | -70505 | inputsHash     | tstr (hash) / null          |
+256	         +--------+----------------+-----------------------------+
+257	         | -70506 | decision       | tstr (allow / deny / defer) |
+258	         +--------+----------------+-----------------------------+
+259	         | -70507 | reasonCode     | tstr                        |
+260	         +--------+----------------+-----------------------------+
+261	         | -70508 | ref            | tstr / null                 |
+262	         +--------+----------------+-----------------------------+
+263	         | -70509 | effectHash     | tstr (hash) / null          |
+264	         +--------+----------------+-----------------------------+
+265	         | -70510 | timestampMs    | uint                        |
+266	         +--------+----------------+-----------------------------+
+267	         | -70511 | nonce          | tstr                        |
+268	         +--------+----------------+-----------------------------+
+269	         | -70512 | prevRecordHash | tstr (hash) / null          |
+270	         +--------+----------------+-----------------------------+
+
+272	                                  Table 2
+
+274	   All twelve labels are always present; a nullable claim carries CBOR
+275	   null when it has no value.
+
+277	   decider and subject are opaque identifiers chosen by the deployment.
+278	   requestHash is the SHA-256 of the request the Decider evaluated, in
+279	   the canonical encoding of Section 7 of [CEDULON] when the request is
+280	   a JSON document and over its UTF-8 octets when it is text; this
+281	   document does not fix the request's fields, and a deployment MUST
+282	   state what it hashes. policyHash is the SHA-256 of the canonical
+283	   policy document the Decider applied. inputsHash, when not null, is
+284	   the SHA-256 of whatever further context the Decider consulted,
+285	   encoded the same way, so that a later reader can tell two decisions
+286	   on the same request apart by what else was on the table. reasonCode
+287	   is a short token the deployment defines; it is carried, not
+288	   interpreted.
+
+290	   ref is the reference under which the allowed effect will appear on
+291	   the channel, and the key on which the reconciliation matches.
+292	   effectHash is the SHA-256 of the content of the effect the Decider
+293	   allowed, over the octets the channel will carry: for a text reply,
+294	   the UTF-8 octets of the text.  The Effect Extract computes the same
+295	   digest over the same octets (Section 5), so equality of the two is
+296	   equality of content.
+
+298	   timestampMs is the decision time in POSIX milliseconds. nonce
+299	   identifies the record. prevRecordHash links records into the
+300	   Decider's chain: it is the SHA-256 of the previous record's
+301	   COSE_Sign1 octets, the same input the core's receiptHash takes on the
+302	   COSE path (Section 7.1 of [CEDULON]), or null for the first record of
+303	   a chain.
+
+305	4.2.  Claim rules
+
+307	   A signer MUST refuse to sign, and a verifier MUST reject, a claim set
+308	   that breaks any of the following, naming the rule in the refusal
+309	   (MUST-DP-2):
+
+311	   *  decision is one of allow, deny, defer.
+
+313	   *  Every hash-annotated claim that is not null matches the hash
+314	      grammar.
+
+316	   *  timestampMs is a non-negative integer of magnitude at most 2^53 -
+317	      1, the uint the label table states; a CBOR decoder hands back any
+318	      number, and the rule is what makes the table true.
+
+320	   *  An allow carries a non-empty ref and a non-null effectHash.  An
+321	      allow that names no effect is a decision the reconciliation cannot
+322	      close, and an allow that names no reference is one it cannot find.
+
+324	   *  A refusal carries effectHash null.  A refusal binds to the absence
+325	      of an effect, never to a content hash, so a hash on a refusal
+326	      would be a claim the audit cannot measure and a second reading of
+327	      whether the effect occurred.  A refusal MAY carry a ref: it names
+328	      what was refused, and an effect appearing under that reference is
+329	      the worst finding this profile has (Section 6.3).
+
+331	   The verifier MUST apply these rules itself, on the claim map it
+332	   decoded from the signed payload, and MUST NOT rely on the signer
+333	   having applied them (MUST-DP-3).  The Decider is the party under
+334	   audit.  A Decider that signed a well-formed COSE_Sign1 over a claim
+335	   map that skips a rule has produced an object whose signature
+336	   verifies, and a verifier that checked only the signature and the
+337	   equality of the decoded map with the presented claims would attest
+338	   it.  The companion implementation did exactly that until it was
+339	   measured: an allow with no reference, signed below the signer's own
+340	   rules under the pinned decider key, verified true, was attested, was
+341	   counted as unmatched, and the audit still said the books balanced.
+342	   The rules now run at both ends.
+
+344	4.3.  Presentation and confusion
+
+346	   A Decision Record is presented as Section 6.3 of [CEDULON] states for
+347	   the core's COSE objects: the signed octets, the decoded claim set,
+348	   and the Decider's public key as a SubjectPublicKeyInfo PEM beside
+349	   them.  The carried key is not an identity source.  Under a pinned
+350	   decider key a record that verifies under the pin while carrying
+351	   another key is reported as carried-key-mismatch, a warning, and stays
+352	   attested; with no pin held the signature check that runs against the
+353	   carried key says the record is internally consistent and nothing
+354	   about who signed it.
+
+356	   A Decision Record is not a Decision Token.  The core's Decision Token
+357	   (Section 8 of [CEDULON]) is the portable encoding of a PDP allow,
+358	   carried by the party that will spend; a Decision Record is the
+359	   Decider's own log of what it decided, kept for audit, and it exists
+360	   for refusals as well.  The two carry different content types and
+361	   different claim maps.  A verifier MUST reject a Decision Record whose
+362	   content type is not application/cedulon-decision-record+cbor, and
+363	   MUST reject a token presented as a record or a record presented as a
+364	   token, on the content type, before the signature is checked and
+365	   before any claim is read (MUST-DP-4).
+
+367	4.4.  The Decider's chain and checkpoints
+
+369	   Decision Records chain on prevRecordHash the way Spend Receipts chain
+370	   on prevReceiptHash, and the Decider signs epoch checkpoints over them
+371	   with the checkpoint claim set of Section 11.1 of [CEDULON] unchanged:
+372	   receiptCount is the number of records in the window, chainHeadHash is
+373	   the SHA-256 of the last record's COSE_Sign1 octets, and totals is a
+374	   map from the three decision kinds to decimal counts, {"allow": n,
+375	   "deny": n, "defer": n}, each rendered as a text string as the core
+376	   renders its currency totals.  A verifier compares the totals it
+377	   computes over the attested records in the window against the signed
+378	   map, and a difference is checkpoint-total-mismatch as in the core.
+
+380	   Two records that claim the same position in a chain cannot both link
+381	   to it: the second record's prevRecordHash must be the first's hash,
+382	   so a Decider that signs two decisions under one nonce, or presents
+383	   one record twice, breaks its own chain and the walk names the break.
+384	   The chain is the equivocation control of this profile, and a verifier
+385	   MUST walk it over every presented record that carries the pinned
+386	   decider key, not only over the records that verified, so that a
+387	   record that claims the pin and fails the rules is named by the walk
+388	   rather than dropped from the population without a word (MUST-DP-5).
+
+390	5.  Effect Extract Profile
+
+392	   A verifier checks completeness against an Effect Extract, not against
+393	   the Decider's own records alone.  The extract is the channel's
+394	   account of what happened, obtained independently of the Decider, and
+395	   the profile is only as strong as that independence (Section 7).
+
+397	5.1.  Body and row schema
+
+399	   The extract body is one JSON document with exactly this shape:
+
+401	      +===============+=============================================+
+402	      | Member        | JSON type                                   |
+403	      +===============+=============================================+
+404	      | deciderId     | string (non-empty)                          |
+405	      +---------------+---------------------------------------------+
+406	      | channelId     | string (non-empty)                          |
+407	      +---------------+---------------------------------------------+
+408	      | windowStartMs | number (POSIX milliseconds, a safe integer) |
+409	      +---------------+---------------------------------------------+
+410	      | windowEndMs   | number (POSIX milliseconds, a safe integer, |
+411	      |               | greater than windowStartMs)                 |
+412	      +---------------+---------------------------------------------+
+413	      | effects       | array of effect rows                        |
+414	      +---------------+---------------------------------------------+
+
+416	                                  Table 3
+
+418	   Each effect row is a JSON object with exactly these members:
+
+420	       +=============+=============================================+
+421	       | Member      | JSON type                                   |
+422	       +=============+=============================================+
+423	       | ref         | string (non-empty; the reference the        |
+424	       |             | Decision Record named)                      |
+425	       +-------------+---------------------------------------------+
+426	       | effectHash  | string (SHA-256 of the effect's content, 64 |
+427	       |             | lowercase hex)                              |
+428	       +-------------+---------------------------------------------+
+429	       | effectClass | string (non-empty; a short class name the   |
+430	       |             | channel defines, such as a reply or a post) |
+431	       +-------------+---------------------------------------------+
+432	       | timestampMs | number (POSIX milliseconds, a safe integer, |
+433	       |             | inside the window)                          |
+434	       +-------------+---------------------------------------------+
+435	       | actor       | string (optional; the party the effect      |
+436	       |             | reached)                                    |
+437	       +-------------+---------------------------------------------+
+
+439	                                  Table 4
+
+441	   These member names are normative.  The body and its rows follow the
+442	   core's rail extract (Section 9 of [CEDULON]) in every rule that
+443	   document states for a JSON body: the text is read for a repeated
+444	   member name before it is parsed and refused as json-duplicate-key;
+445	   integers are safe integers; the window is half-open and MUST end
+446	   after it starts; a missing member, a wrong type, an empty identifier,
+447	   or a hash outside the grammar is refused by name at both ends, by the
+448	   signer before it signs and by the verifier before it checks a
+449	   signature.
+
+451	   The profile departs from the rail extract at two points, and a reader
+452	   who knows the core should note both (MUST-DP-6):
+
+454	   *  A member this document does not name is refused, on the body and
+455	      on a row.  The core lets a rail add members of its own because a
+456	      rail is a system the profile does not control; an Effect Extract
+457	      is produced by a process the deployment does control (Section 7),
+458	      and the companion measured what a free member can do to a
+459	      population (Section 3).  A later revision may open this once a
+460	      channel that needs its own members is measured.
+
+462	   *  A row whose timestampMs falls outside [windowStartMs, windowEndMs)
+463	      makes the whole extract malformed, refused as effect-outside-
+464	      window before any signature is checked.  The core accepts such a
+465	      rail extract and names the row (extract-scope-mismatch).  Here the
+466	      extract is the deployment's own document and a window it did not
+467	      keep is a document it did not produce correctly: a signer applying
+468	      this schema never produces such an extract, and a verifier refuses
+469	      one that is presented as a document, whatever else it may also
+470	      name about its rows.  The trade is stated so it can be reversed: a
+471	      single row out of place fails the whole window closed.
+
+473	   effectHash on a row is computed by the extract's signer over the same
+474	   octets a Decider hashes for its effectHash claim: the content as the
+475	   channel carried it.  A deployment MUST state those octets once for
+476	   both sides; the companion's example channel hashes the UTF-8 octets
+477	   of the message text.
+
+479	5.2.  Authentication and scope
+
+481	   The extract is signed the way a rail extract is signed: Ed25519
+482	   [RFC8032] over the UTF-8 octets of the [RFC8785] encoding of the
+483	   body, with the signature as base64 and the signer's public key as a
+484	   SubjectPublicKeyInfo PEM beside the body, neither inside the signed
+485	   octets.  It is a JSON document with a detached signature, not a COSE
+486	   object, and like the rail extract it has no media type: the core
+487	   registers names for the objects whose content type is checked inside
+488	   a protected header, and an extract has no such header.  A first cut
+489	   of the companion exported a +cbor name for it that nothing used; the
+490	   name is withdrawn with this revision.  Section 9.3 of [CEDULON]
+491	   applies unchanged: a signature proves internal consistency and not
+492	   origin; the verifier MUST hold the extract signer's key out of band
+493	   and MUST compare keys as SubjectPublicKeyInfo DER; with no key held
+494	   the guarantee is conditional and unauthenticated-extract is reported;
+495	   with a key held, an extract that does not verify under it is extract-
+496	   key-mismatch and its rows are not reconciled (settlement-comparison-
+497	   skipped, the core's name for the same condition).
+
+499	   The extract is scoped to one Decider, one channel, and one window,
+500	   and Section 9.4 of [CEDULON] applies with the nouns renamed: a
+501	   verifier that knows which Decider, channel, and window it audits MUST
+502	   check the extract against them and MUST fail closed on a mismatch
+503	   (extract-scope-mismatch); one that has not stated the window MUST
+504	   report unstated-audit-window, one that has not stated the Decider or
+505	   the channel MUST report unstated-audit-scope, and in either case the
+506	   guarantee is conditional.  The strongest line this profile can print,
+507	   a balanced audit under an unconditional guarantee, is true of one
+508	   Decider, on one channel, over one window, and a report that carries
+509	   it MUST also carry those three (MUST-DP-7).
+
+511	6.  Reconciliation
+
+513	   The verification algorithm of Section 11.4 of [CEDULON] runs
+514	   unchanged over this population: establish the subject, verify the
+515	   extract, check scope, resolve records against the decider root, walk
+516	   the chain, index both sides by ref, match, decode and walk the
+517	   checkpoints, consult the witness if one is supplied, and decide.
+518	   This section states only what the algorithm reads differently.
+
+520	6.1.  What binds
+
+522	   A Decision Record expects a row when its decision is allow, and
+523	   expects none when it is a refusal.  For a ref that appears once on
+524	   each side:
+
+526	   *  an allow and a row bind when the row's effectHash equals the
+527	      record's effectHash; a difference is effect-mismatch (the content
+528	      that occurred is not the content that was allowed);
+
+530	   *  an allow with no row is decision-without-effect;
+
+532	   *  a row with no record is effect-without-decision;
+
+534	   *  a row whose ref a refusal names is effect-against-refusal.
+
+536	   The last is the finding this profile exists for.  A spend audit has
+537	   no row that should not be there in the same sense: an aborted receipt
+538	   that still carries its reference and a settlement under that
+539	   reference is reported by the core as a settlement without a receipt,
+540	   and it never told the two cases apart.  Here a refusal that was
+541	   followed by the effect it refused is a different fact from an effect
+542	   nobody decided on, and it has its own name.
+
+544	   A ref that appears more than once on a side is duplicate-ref as in
+545	   the core, and the repeating reference is then reconciled by count
+546	   rather than by amount: there is nothing to sum.  More rows than
+547	   records under one reference is effect-without-decision; more records
+548	   than rows is decision-without-effect.
+
+550	   There is no amount, no currency, no manifest, no terms, and no
+551	   counterparty axis on this profile.  The core's counterparty-unbound
+552	   scope record is not emitted: effectHash binds the content of the
+553	   effect itself, which is more than a payee name ever bound on spend,
+554	   and actor on a row is carried for the reader, not measured.  The
+555	   core's boundary rule applies unchanged: an unmatched item inside the
+556	   declared clock-skew allowance of a window edge is boundary-deferred,
+557	   and a closing-edge allow whose ref the following extract names is
+558	   carried, not a finding.
+
+560	6.2.  Conservation
+
+562	   With |R| the in-scope Decision Records and |E| the effect rows, the
+563	   identities the core report publishes hold with the words changed:
+
+565	   |R|      = refusals + allows
+566	   refusals = deny + defer
+567	   allows   = matched + deferred + carried
+568	              + unmatched + repeated + unreconciled
+569	   |E|      = matched + deferred
+570	              + unmatched + repeated + unreconciled
+571	   matched on |R| equals matched on |E|
+
+573	   A report under this profile MUST publish these counts and MUST name
+574	   the population they were computed over (MUST-DP-8), for the reason
+575	   the core gives: a report whose counts do not close is a report that
+576	   lost a record somewhere, and a reader is entitled to see that without
+577	   re-running the audit.  The report publishes refusals as one count,
+578	   the core's aborted; the split of that count into deny and defer is
+579	   the checkpoint's totals (Section 4.4), not a counter of the report.
+
+581	6.3.  Finding codes
+
+583	   The identifiers below are for diagnostic output and are not an
+584	   interoperability surface, as Section 11.5 of [CEDULON] states for the
+585	   core's codes.  Four are new to this profile:
+
+587	    +=========================+========+==============================+
+588	    | Code                    | Effect | Meaning                      |
+589	    +=========================+========+==============================+
+590	    | decision-without-effect | audit  | An allow names a reference   |
+591	    |                         | fails  | under which no effect        |
+592	    |                         |        | occurred, or a reference had |
+593	    |                         |        | more records than rows       |
+594	    +-------------------------+--------+------------------------------+
+595	    | effect-without-decision | audit  | An effect occurred under a   |
+596	    |                         | fails  | reference no Decision Record |
+597	    |                         |        | names, or a reference had    |
+598	    |                         |        | more rows than records       |
+599	    +-------------------------+--------+------------------------------+
+600	    | effect-against-refusal  | audit  | An effect occurred under a   |
+601	    |                         | fails  | reference a refusal names    |
+602	    +-------------------------+--------+------------------------------+
+603	    | effect-mismatch         | audit  | The effect that occurred     |
+604	    |                         | fails  | does not carry the content   |
+605	    |                         |        | hash the allow named         |
+606	    +-------------------------+--------+------------------------------+
+
+608	                                  Table 5
+
+610	   The remaining codes a report under this profile can carry are the
+611	   core's, with the same effect on the verdict and the guarantee:
+612	   duplicate-ref, boundary-deferred, receipt-chain-break for a break in
+613	   the Decider's chain (signature, rule, or link), checkpoint-total-
+614	   mismatch, checkpoint-head-mismatch, window-coverage, equivocation,
+615	   unauthenticated-extract, extract-key-mismatch, extract-scope-
+616	   mismatch, extract-settlement-mismatch (a caller-supplied row list
+617	   that disagrees with the extract), settlement-comparison-skipped,
+618	   trust-key-unreadable, unauthenticated-issuer, issuer-key-mismatch,
+619	   carried-key-mismatch, unstated-audit-window, unstated-audit-scope,
+620	   the witness codes, and malformed-policy-hash; the other hash claims
+621	   of a Decision Record are refused at verification (Section 4.2) and
+622	   reach the chain walk rather than a malformed-hash code.  Two code
+623	   names carry a spend noun onto this profile (receipt-chain-break,
+624	   settlement-comparison-skipped); they are kept so that one catalogue
+625	   serves both populations, and a later revision may add decision-side
+626	   aliases.  The codes the core defines for a Trade Manifest, a payee
+627	   countersignature, a beneficiary, or a counterparty are not reachable
+628	   on this profile.
+
+630	   The sentences a report prints beside those codes are another matter.
+631	   An operator reading a decision report SHOULD NOT have to translate
+632	   "settlement" as "effect" or "receipt" as "decision record"; an
+633	   implementation SHOULD print the sentence in the population's own
+634	   words, and the companion holds that under a test that runs every
+635	   conformance case and refuses a spend noun in any decision sentence.
+636	   Counter names in a returned structure are diagnostic and MAY keep the
+637	   core's names.
+
+639	7.  Trust roots
+
+641	   This profile has two roots, filling the core's issuer root and rail
+642	   root (Sections 10.1 and 9.3 of [CEDULON]):
+
+644	   The decider root:  The key under which Decision Records and their
+645	      checkpoints are attested.  Everything Section 10.1 of the core
+646	      states for the issuer root applies: a pinned key attests by
+647	      signature, a carried key is not an identity, a record under
+648	      another key is issuer-key-mismatch and covers nothing, and with no
+649	      pin unauthenticated-issuer makes the guarantee conditional.
+
+651	   The effect-extract root:  The key under which the Effect Extract is
+652	      attested.  Everything Section 9.3 of the core states for the rail
+653	      key applies.
+
+655	   The core's payee, witness, decision-token, and manifest roots are not
+656	   used by this profile, except that a transparency witness MAY hold the
+657	   Decider's checkpoints exactly as it holds a Receipt Issuer's, with
+658	   the witness root and codes of the core unchanged.
+
+660	   What the two roots do not cover is the relation between them.  The
+661	   profile's claim is only as strong as the independence of the party
+662	   that signs the Effect Extract from the party that signs the Decision
+663	   Records.  Where the channel operator signs an export of its own log,
+664	   the extract root is that operator's key and the independence is the
+665	   operator's.  Where the channel operator signs nothing, which is the
+666	   common case for a messaging platform, the extract is produced by a
+667	   capture process the deployment runs, and the deployment is stating,
+668	   by pinning that process's key, that the process is not the Decider
+669	   and cannot be told what to omit.  A deployment MUST state which of
+670	   the two it has, and a verifier MUST treat the guarantee as
+671	   conditional where the extract root and the decider root are, or may
+672	   be, the same party (MUST-DP-9).  The companion cannot measure that
+673	   from the keys alone; two keys can be held by one hand.
+
+675	8.  Security Considerations
+
+677	   The core's threat analysis (Section 16 of [CEDULON]) applies where
+678	   the nouns carry over: forgery and repudiation of a signed record
+679	   (T4), key leakage (T7), and suppression of checkpoints (T11) are the
+680	   same threats against a Decider that they are against a Receipt
+681	   Issuer, and the controls are the same.  The threats below are the
+682	   ones this population adds or sharpens.
+
+684	8.1.  D1: An effect occurs against a refusal
+
+686	   The agent, or something acting through its channel access, does what
+687	   the Decider refused.  This is the threat the profile exists for.  A
+688	   Decision Record for the refusal, with the reference it refused, and
+689	   an authenticated extract that carries an effect under that reference
+690	   make the event effect-against-refusal, and the audit fails.  A
+691	   refusal that carried no reference cannot support this finding; the
+692	   effect is then effect-without-decision, which also fails the audit
+693	   but does not say it was refused.  A Decider SHOULD carry the
+694	   reference on a refusal whenever the channel assigns one before the
+695	   decision.
+
+697	8.2.  D2: Effects without decisions
+
+699	   Something acts on the channel that never asked.  Every such effect is
+700	   effect-without-decision.  The control is the extract's completeness,
+701	   which is the extract root's independence (Section 7); a capture
+702	   process the Decider controls can leave the effect out.
+
+704	8.3.  D3: Substitution of content
+
+706	   The Decider allows one content and the channel carries another.  The
+707	   allow's effectHash and the row's effectHash are computed over the
+708	   same octets, and a difference is effect-mismatch.  The control fails
+709	   open if the two sides hash different octets, which is why a
+710	   deployment MUST state the octets once for both (Section 5.1).
+
+712	8.4.  D4: The Decider signs below its own rules
+
+714	   A Decider produces a well-formed signature over a claim map that
+715	   breaks a rule this profile states: an allow with no reference or no
+716	   content hash, a refusal with a content hash, a hash outside the
+717	   grammar.  Every such record is a record the reconciliation cannot
+718	   close or would close wrongly.  The verifier applies the rules on the
+719	   decoded payload (MUST-DP-3) and walks the chain over every record
+720	   that claims the pin (MUST-DP-5), so the record is refused and named
+721	   rather than attested or dropped.
+
+723	8.5.  D5: Equivocation on the record chain
+
+725	   The Decider signs two decisions for one request, or presents a record
+726	   twice, and offers each to a different reader.  The chain (MUST-DP-5)
+727	   makes the second record unlinkable: it names the same predecessor as
+728	   the first, or none, and the walk reports the break.  The epoch
+729	   checkpoint totals, held by a witness where one is used, close the
+730	   other route.
+
+732	8.6.  D6: The class of the effect is not bound
+
+734	   A Decision Record names a reference and a content hash and does not
+735	   name the class of effect it allowed.  A row of a different class
+736	   under the same reference and the same content hash matches.  This is
+737	   a known gap of this revision: the record has no claim for the class,
+738	   and adding one is a claim-set change.  A deployment whose channel
+739	   assigns references per class closes it by construction; one whose
+740	   references are shared across classes does not, and SHOULD say so in
+741	   its statement of what it hashes.
+
+743	8.7.  D7: Silent defaults in capture
+
+745	   The process that turns a channel's log into Decision Records or
+746	   Effect Extract rows fills a missing value with a default, and the
+747	   default hashes to something.  An allow with no stated content that is
+748	   hashed as the empty string produces a record that will match an empty
+749	   effect and mismatch every real one, with no finding that says the
+750	   content was never stated.  Such a process MUST refuse the line by
+751	   name rather than fill it (MUST-DP-10).  The companion's example
+752	   adapter did fill it until it was measured, and refuses it now.
+
+754	8.8.  D8: The capture process is the Decider
+
+756	   The party that produces the Effect Extract is, or answers to, the
+757	   party that signed the Decision Records.  Every finding in D1 and D2
+758	   can then be made to disappear by omission, and no signature check
+759	   detects it.  This is the independence statement of Section 7 (MUST-
+760	   DP-9), and it is a deployment fact the profile can name but not
+761	   prove.  A verifier that holds both roots and cannot state their
+762	   independence has a conditional result, and MUST say so.
+
+764	9.  Privacy Considerations
+
+766	   A Decision Record carries no request content and no effect content:
+767	   hashes of both, an opaque subject identifier, and a reason code.  The
+768	   Effect Extract carries a reference, a class, a content hash, a time,
+769	   and optionally the identifier of the party the effect reached.  The
+770	   core's Privacy Considerations (Section 15 of [CEDULON]) apply to what
+771	   a transparency witness is given.
+
+773	   Two points are specific to this population.  A content hash over a
+774	   short text is a fingerprint of that text: a reader who can guess the
+775	   message can confirm the guess.  This revision hashes the plain
+776	   content octets, as the companion does, so that the two sides need no
+777	   shared secret to agree; a keyed or salted construction that would
+778	   defeat the guess is a claim-set change and is not defined here.  A
+779	   deployment whose effects are short and guessable SHOULD treat the
+780	   extract and the records as confidential to the audit.  The subject
+781	   and actor identifiers are opaque to the profile but need not be
+782	   opaque to a reader; a deployment SHOULD pseudonymize them before
+783	   either object leaves its control.
+
+785	10.  IANA Considerations
+
+787	   This document requests the registration of one media type in the
+788	   "Media Types" registry [RFC6838], in the standards tree, carrying the
+789	   +cbor structured syntax suffix that [RFC8949] registers, on the terms
+790	   Section 17 of [CEDULON] states for that document's six: it names the
+791	   one COSE_Sign1 object this document defines and is checked inside
+792	   that object's protected header, which is why the name cannot stay
+793	   unregistered while that check stands.  The Effect Extract is a JSON
+794	   document with a detached signature and has no media type
+795	   (Section 5.2).  Registration in the standards tree requires IETF
+796	   approval; until then, an implementation outside a closed deployment
+797	   should treat the name as a placeholder that a registration may
+798	   change.  The provisional registration procedure of [RFC6838]
+799	   Section 5.2.1 is available to an Internet-Draft, and a provisional
+800	   entry, if one is made, is superseded by the registration this section
+801	   requests.
+
+803	   The claim labels this document assigns, -70501 through -70512
+804	   (Section 4.1), lie in the Private Use range of the "CBOR Web Token
+805	   (CWT) Claims" registry [RFC8392], integer values less than -65536,
+806	   and this document requests no assignment for them.
+
+808	   No other IANA action is requested.
+
+810	10.1.  application/cedulon-decision-record+cbor
+
+812	   Type name:  application
+
+814	   Subtype name:  cedulon-decision-record+cbor
+
+816	   Required parameters:  N/A
+
+818	   Optional parameters:  N/A
+
+820	   Encoding considerations:  binary.  A COSE_Sign1 structure [RFC9052]
+821	      in deterministic CBOR [RFC8949], untagged, as profiled in
+822	      Section 4 and in Section 6 of [CEDULON].
+
+824	   Security considerations:  See Section 8 of this document.  The object
+825	      is signed by the party under audit; its evidentiary weight depends
+826	      on the verifier holding the decider key out of band (Section 7)
+827	      and on the verifier applying the claim rules of Section 4.2
+828	      itself, never on a key the object carries or on the signer's word
+829	      that the rules were applied.
+
+831	   Interoperability considerations:  The claim set is a CBOR map with
+832	      the labels and types stated in Section 4.1, encoded per [RFC8949]
+833	      Section 4.2.1.  A decoder refuses a duplicate key, an input beyond
+834	      its stated bounds, and a non-empty unprotected header by name
+835	      rather than accepting it, as Section 6 of [CEDULON] requires of
+836	      every Cedulon object.  A Decision Record and a Decision Token are
+837	      distinct objects with distinct content types and are never
+838	      accepted for one another.
+
+840	   Published specification:  This document, Section 4.
+
+842	   Applications that use this media type:  Policy decision points and
+843	      other deciders that log the decisions they take about an agent's
+844	      actions, and auditors that reconcile those logs against the
+845	      channels the actions occurred on.
+
+847	   Fragment identifier considerations:  N/A
+
+849	   Additional information:  Deprecated alias names for this type: N/A.
+850	      Magic number(s): N/A.  File extension(s): N/A.  Macintosh file
+851	      type code(s): N/A.
+
+853	   Person and email address to contact for further information:  Emek
+854	      Can Dogru, e.dogru@cedulon.com
+
+856	   Intended usage:  COMMON
+
+858	   Restrictions on usage:  N/A
+
+860	   Author:  Emek Can Dogru
+
+862	   Change controller:  IETF
+
+864	11.  Implementation Status
+
+866	   This section is to be removed before publishing as an RFC.
+
+868	   RFC 7942 [RFC7942] note.
+
+870	   Implementation:  The profile is carried by the core document's
+871	      companion implementation at https://github.com/dogrucanemek-alt/
+872	      cedulon (https://github.com/dogrucanemek-alt/cedulon), on the same
+873	      reconciler that implements the core, selected by a profile object
+874	      rather than by a second code path.  As of the commit this revision
+875	      was written against, the tree carries the Decision Record and
+876	      Effect Extract objects, the profile, eighteen conformance cases
+877	      covering the rules and departures this document states, and four
+878	      offline fixtures for one example channel, a direct-message reply
+879	      log.  The spend behaviour of the same reconciler is held byte for
+880	      byte by a golden file of fifteen cases generated from the source
+881	      before the profile seam was added.
+
+883	   Maturity:  Prepared, not published.  The code is on the companion's
+884	      default branch and in no released package.  Before merge the
+885	      branch was read twice: by the author's own gate, re-running it
+886	      from a second worktree, and by an outside model reading the whole
+887	      diff and barred from changing it.  The two readings found four
+888	      defects in the first cut of this profile, each recorded in the
+889	      companion's review log: a verifier that did not apply the signer's
+890	      claim rules (D4), a spend-side crash on the wrong document
+891	      (Section 3), a spend warning leaking onto decision reports, and a
+892	      document that counted its own cases wrong.  All four were closed
+893	      with a test that was red before the fix.  A third pass moved the
+894	      report vocabulary onto the profile.
+
+896	      Not measured: a live channel log.  The example adapter maps a
+897	      proposed line format for a direct-message bridge; the bridge's
+898	      actual field names were not read when this revision was written,
+899	      and the adapter is written so that only its two line-mapping
+900	      functions should move when they are.  No independent
+901	      implementation of this profile is known to the author; the one
+902	      outside reading ran the companion's own suite, which is the same
+903	      code agreeing with itself on a second machine.
+
+905	12.  References
+
+907	12.1.  Normative References
+
+909	   [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
+910	              Commerce", Work in Progress, Internet-Draft, draft-dogru-
+911	              cedulon-08, 2 September 2026,
+912	              <https://datatracker.ietf.org/doc/html/draft-dogru-
+913	              cedulon-08>.
+
+915	   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+916	              Requirement Levels", BCP 14, RFC 2119,
+917	              DOI 10.17487/RFC2119, March 1997,
+918	              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+920	   [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
+921	              (SHA and SHA-based HMAC and HKDF)", RFC 6234,
+922	              DOI 10.17487/RFC6234, May 2011,
+923	              <https://www.rfc-editor.org/rfc/rfc6234>.
+
+925	   [RFC6838]  Freed, N., Klensin, J., and T. Hansen, "Media Type
+926	              Specifications and Registration Procedures", BCP 13,
+927	              RFC 6838, DOI 10.17487/RFC6838, January 2013,
+928	              <https://www.rfc-editor.org/rfc/rfc6838>.
+
+930	   [RFC8032]  Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
+931	              Signature Algorithm (EdDSA)", RFC 8032,
+932	              DOI 10.17487/RFC8032, January 2017,
+933	              <https://www.rfc-editor.org/rfc/rfc8032>.
+
+935	   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+936	              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+937	              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+939	   [RFC8392]  Jones, M., Wahlstroem, E., Erdtman, S., and H. Tschofenig,
+940	              "CBOR Web Token (CWT)", RFC 8392, DOI 10.17487/RFC8392,
+941	              May 2018, <https://www.rfc-editor.org/rfc/rfc8392>.
+
+943	   [RFC8785]  Rundgren, A., Jordan, B., and S. Erdtman, "JSON
+944	              Canonicalization Scheme (JCS)", RFC 8785,
+945	              DOI 10.17487/RFC8785, June 2020,
+946	              <https://www.rfc-editor.org/rfc/rfc8785>.
+
+948	   [RFC8949]  Bormann, C. and P. Hoffman, "Concise Binary Object
+949	              Representation (CBOR)", STD 94, RFC 8949,
+950	              DOI 10.17487/RFC8949, December 2020,
+951	              <https://www.rfc-editor.org/rfc/rfc8949>.
+
+953	   [RFC9052]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
+954	              Structures and Process", STD 96, RFC 9052,
+955	              DOI 10.17487/RFC9052, August 2022,
+956	              <https://www.rfc-editor.org/rfc/rfc9052>.
+
+958	   [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
+959	              JSON Object Signing and Encryption (JOSE) and CBOR Object
+960	              Signing and Encryption (COSE)", RFC 9864,
+961	              DOI 10.17487/RFC9864, October 2025,
+962	              <https://www.rfc-editor.org/rfc/rfc9864>.
+
+964	12.2.  Informative References
+
+966	   [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of Running
+967	              Code: The Implementation Status Section", BCP 205,
+968	              RFC 7942, DOI 10.17487/RFC7942, July 2016,
+969	              <https://www.rfc-editor.org/rfc/rfc7942>.
+
+971	Acknowledgments
+
+973	   This profile is the first concrete instance of the generalization the
+974	   core document reserves.  The refusal that was followed by the effect
+975	   it refused, as a finding with its own name, came out of watching a
+976	   messaging assistant's decision log beside the channel's sent log and
+977	   finding that the spend vocabulary had no word for it.
+
+979	Author's Address
+
+981	   Emek Can Dogru
+982	   VERAX TEKNOLOJI LIMITED SIRKETI
+983	   Email: e.dogru@cedulon.com
+
+
+
+
+
+
+
+
+
