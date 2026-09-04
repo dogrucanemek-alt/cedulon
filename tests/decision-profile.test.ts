@@ -321,7 +321,11 @@ describe("decision profile conformance", () => {
     );
     const report = run([rec], [], { extract: foreign });
     assert.equal(report.ok, false);
-    assert.equal(report.findings.some((f) => f.code === "extract-key-mismatch"), true);
+    const mismatch = report.findings.find((f) => f.code === "extract-key-mismatch");
+    assert.ok(mismatch);
+    // The word list carries nouns; the article is the sentence's, and it
+    // has to agree with the noun it was given.
+    assert.match(mismatch.detail, /^an effect-extract key was pinned/);
     assert.equal(report.warnings.some((w) => w.code === "settlement-comparison-skipped"), true);
     assert.equal(report.counts.settlements.matched, 0);
     assert.equal(report.counts.receipts.matched, 0);

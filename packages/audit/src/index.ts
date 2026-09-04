@@ -506,6 +506,11 @@ function pluralWord(word: string): string {
   return `${word}s`;
 }
 
+/** "a rail key", "an effect-extract key": the article follows the noun. */
+function withArticle(word: string): string {
+  return `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`;
+}
+
 function pushDuplicateRefs(
   items: Array<{ ref: string; id: string; side: string }>,
   findings: Finding[],
@@ -1394,8 +1399,8 @@ export function audit(input: AuditInput): AuditReport {
           id: "extract",
           detail:
             encodeRefusal !== null
-              ? `a ${w.extractKey} was pinned but the extract body was refused: ${encodeRefusal} - not a signature verdict`
-              : `a ${w.extractKey} was pinned but the extract signature does not verify against the key it carries`,
+              ? `${withArticle(w.extractKey)} was pinned but the extract body was refused: ${encodeRefusal} - not a signature verdict`
+              : `${withArticle(w.extractKey)} was pinned but the extract signature does not verify against the key it carries`,
         });
       } else {
         const carriedDer = toSpkiDer(input.extract.publicKeyPem);
@@ -1474,7 +1479,7 @@ export function audit(input: AuditInput): AuditReport {
       code: "unauthenticated-extract",
       id: "extract",
       detail: input.trust
-        ? `a ${w.extractKey} was pinned but no extract was supplied, so there is nothing to check it against; completeness guarantee is conditional`
+        ? `${withArticle(w.extractKey)} was pinned but no extract was supplied, so there is nothing to check it against; completeness guarantee is conditional`
         : `${w.extract} is unsigned; completeness guarantee is conditional`,
       severity: "warn",
     });
