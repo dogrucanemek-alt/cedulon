@@ -24,7 +24,7 @@ a finding fails that file. `docs/DECISION_PROFILE.md` is the
 decision-side note.
 
 B. The tree now carries `DecisionRecordClaims` and `SignedDecisionRecord`
-(`packages/core/src/decision-record.ts`, CWT `-70501`…`-70512`, content
+(`packages/core/src/decision-record.ts`, CWT `-70501`…`-70513` after D, content
 type `application/cedulon-decision-record+cbor`) and
 `@cedulon/effect-extract` (`EffectRow` / `EffectExtractClaims`).
 `decisionRecordHash` hashes the COSE Sign1 bytes, the same input
@@ -47,10 +47,11 @@ round-trips a record it did not mint.
 C. `DECISION_PROFILE` binds allow to an effect row on `effectHash`, and
 treats deny/defer as the aborted class. Four codes join the catalogue:
 `decision-without-effect`, `effect-without-decision`,
-`effect-against-refusal`, `effect-mismatch`. `FINDING_CODES` is 54; the
-schema enum lists the same 54. `interop/mizan-ig` turns two proposed
-JSONL files into that audit. The tree now carries eighteen conformance
-cases and four offline fixtures; unproven until the live bridge log is
+`effect-against-refusal`, `effect-mismatch`; a fifth,
+`effect-class-mismatch`, joins in D, and `FINDING_CODES` is 55; the
+schema enum lists the same 55. `interop/mizan-ig` turns two proposed
+JSONL files into that audit. The tree now carries twenty conformance
+cases (two of them from D) and four offline fixtures; unproven until the live bridge log is
 measured and only `fromBridgeLine` / `fromMetaLine` have to move.
 `AuditInput.trust` on this profile is the effect-extract signer;
 `issuerTrust` is the decider. `terms()` is empty: policy binding is not

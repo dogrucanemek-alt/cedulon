@@ -145,7 +145,17 @@ describe("release.yml names the public packages", () => {
       .map((d) => d.slice("@cedulon/".length));
     publicPackages.set(pkg.name.slice("@cedulon/".length), deps);
   }
-  const loops = [...yml.matchAll(/for p in ((?:[a-z0-9-]+ )+[a-z0-9-]+); do/g)].map((m) => m[1]!.split(" "));
+  // Comment lines are dropped before matching, so a correct loop written in
+  // a comment cannot stand in for a wrong one in the run block; and a loop
+  // whose list is a variable is a loop this guard cannot read, so it fails
+  // rather than passing on whatever the literal ones say.
+  const runLines = yml.split("\n").filter((l) => !/^\s*#/.test(l));
+  const loopLines = runLines.filter((l) => /\bfor p in /.test(l));
+  const loops = loopLines.map((l) => {
+    const m = /for p in ((?:[a-z0-9-]+ )+[a-z0-9-]+); do/.exec(l);
+    assert.ok(m, `a package loop this guard cannot read: ${l.trim()}`);
+    return m![1]!.split(" ");
+  });
 
   it("every public workspace package is in every publish loop, and nothing else is", () => {
     assert.ok(loops.length >= 2, "expected the publish loop and the readback loop");
@@ -168,6 +178,7 @@ describe("release.yml names the public packages", () => {
     for (const loop of loops) {
       for (const [name, deps] of publicPackages) {
         for (const dep of deps) {
+          assert.ok(loop.includes(dep), `@cedulon/${name} depends on @cedulon/${dep}, which no loop publishes`);
           assert.ok(
             loop.indexOf(dep) < loop.indexOf(name),
             `@cedulon/${name} depends on @cedulon/${dep} but the loop sends ${name} first`,
