@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -121,5 +121,59 @@ describe("release.yml static shape", () => {
   it("the bundle check does not reach for python", () => {
     assert.doesNotMatch(yml, /python3/, "manifest check still depends on python3");
     assert.match(yml, /unzip -p "\$bundle" manifest\.json/, "manifest is not read with unzip");
+  });
+});
+
+describe("release.yml names the public packages", () => {
+  // The two loops were typed by hand when there were eight public packages.
+  // A ninth (effect-extract) landed with the decision profile, audit began
+  // importing it at runtime, and the loops still said eight: a tag would
+  // have published an audit that cannot install. Compare the loops to the
+  // workspace instead of trusting the hand that edits both.
+  const publicPackages = new Map<string, string[]>();
+  for (const dir of readdirSync(join(root, "packages"))) {
+    let raw: string;
+    try {
+      raw = readFileSync(join(root, "packages", dir, "package.json"), "utf8");
+    } catch {
+      continue;
+    }
+    const pkg = JSON.parse(raw) as { name?: string; private?: boolean; dependencies?: Record<string, string> };
+    if (!pkg.name || pkg.private) continue;
+    const deps = Object.keys(pkg.dependencies ?? {})
+      .filter((d) => d.startsWith("@cedulon/"))
+      .map((d) => d.slice("@cedulon/".length));
+    publicPackages.set(pkg.name.slice("@cedulon/".length), deps);
+  }
+  const loops = [...yml.matchAll(/for p in ((?:[a-z0-9-]+ )+[a-z0-9-]+); do/g)].map((m) => m[1]!.split(" "));
+
+  it("every public workspace package is in every publish loop, and nothing else is", () => {
+    assert.ok(loops.length >= 2, "expected the publish loop and the readback loop");
+    const expected = [...publicPackages.keys()].sort();
+    for (const loop of loops) {
+      assert.deepEqual([...loop].sort(), expected, `loop "${loop.join(" ")}" is not the public workspace`);
+    }
+  });
+
+  it("a package that has never been published stops the run before the first publish", () => {
+    const publish = yml.indexOf("- name: send them in dependency order");
+    const exists = yml.indexOf("- name: every package already exists on npm");
+    assert.ok(exists >= 0, "no pre-flight step asking npm whether each package exists");
+    assert.ok(exists < publish, "the existence check runs after the publish loop, too late to stop it");
+    assert.match(yml.slice(exists, publish), /npm view "@cedulon\/\$p" version/, "the check does not ask npm");
+    assert.match(yml.slice(exists, publish), /\[ "\$fail" = 0 \]/, "the check does not fail the job");
+  });
+
+  it("each loop publishes a package after every @cedulon dependency it has", () => {
+    for (const loop of loops) {
+      for (const [name, deps] of publicPackages) {
+        for (const dep of deps) {
+          assert.ok(
+            loop.indexOf(dep) < loop.indexOf(name),
+            `@cedulon/${name} depends on @cedulon/${dep} but the loop sends ${name} first`,
+          );
+        }
+      }
+    }
   });
 });

@@ -248,6 +248,15 @@ function npmViewVersion(pkg: string): string | { skipped: string } {
     }).trim();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // A registry that answers 404 is not offline: it answered, and the
+    // answer is that the package does not exist. The offline pattern used
+    // to swallow it because npm prints the registry URL in the 404 text,
+    // and a public workspace package that had never been published passed
+    // this guard as "skipped" on every run. That is the case the guard is
+    // for.
+    if (/E404|404 Not Found/.test(msg)) {
+      throw new Error(`${pkg} is a public workspace package and npm has never published it (404)`);
+    }
     const offline = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|network|ECONNREFUSED|registry\.npmjs/i.test(msg);
     if (offline) return { skipped: msg };
     throw err;

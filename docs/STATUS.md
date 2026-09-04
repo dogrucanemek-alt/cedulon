@@ -64,6 +64,23 @@ it; and `requestHash` is still the SHA-256 of the six-field canonical
 document in lowercase hex, the digest the posted `-03` named a hash for
 without naming the octets.
 
+The tree is ahead of npm in one way that matters for the next tag. The
+decision profile brought a ninth public package, `@cedulon/effect-extract`,
+at `0.12.0` in the workspace and never published: `npm view` answers 404
+on 5 September 2026. `@cedulon/audit` on the default branch imports it at
+runtime, so an audit published from this tree would not install until
+effect-extract is on npm ahead of it. Two things hid that. The release
+workflow's publish loops were typed by hand at eight packages, and the
+post-release guard that compares every public package with npm read the
+404 as "offline" and skipped, on every run, green. Both are repaired: the
+loops are compared with the workspace by a test, a 404 fails the guard by
+name, and the workflow now asks npm whether every package exists before it
+sends anything, because a package that has never been published cannot go
+out through trusted publishing (the publisher is configured on a settings
+page the package has only after a first publish). The first publish of
+effect-extract is therefore a step by hand, before the next tag; until it
+is done, `test:post-release` is red on that package and says so.
+
 `0.11.0` was the release before it, published on npm with a provenance
 attestation. Checked from the published packages
 rather than from this tree: a clean install of `@cedulon/mcp-server@0.11.0` in

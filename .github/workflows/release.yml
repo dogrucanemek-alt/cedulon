@@ -1,7 +1,7 @@
-# Publishes the eight public packages from a tag, with no token on anyone's
+# Publishes the nine public packages from a tag, with no token on anyone's
 # laptop. npm trusted publishing exchanges the workflow's OIDC identity for a
 # short-lived credential, so there is nothing long-lived to leak and no
-# one-time password to type eight times.
+# one-time password to type nine times.
 #
 # One-time setup on npmjs.com, per package: Settings -> Trusted publisher ->
 # GitHub Actions, repository dogrucanemek-alt/cedulon, workflow release.yml.
@@ -79,12 +79,33 @@ jobs:
       - run: npm run guard:claims
       - run: npm run guard:crlf
 
+      # A package that has never been published cannot go out through
+      # trusted publishing: the publisher is configured on the package's own
+      # settings page, which exists only after a first publish. Checked
+      # before anything is sent, so a missing package fails here rather than
+      # halfway through the loop with the first packages at the new version
+      # and audit still at the old one. effect-extract entered the workspace
+      # with the decision profile and had never been published when this
+      # step was written.
+      - name: every package already exists on npm
+        run: |
+          fail=0
+          for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
+            if npm view "@cedulon/$p" version >/dev/null 2>&1; then
+              echo "  @cedulon/$p exists"
+            else
+              echo "  @cedulon/$p has never been published; publish it once by hand and configure its trusted publisher before tagging"
+              fail=1
+            fi
+          done
+          [ "$fail" = 0 ]
+
       # Dependency order. Reversed, npm cannot resolve what it is asked to
       # install. base-extract and mcp-guard are private and stay unshipped.
       - name: send them in dependency order
         run: |
           set -e
-          for p in cose core receipts manifest checkpoint x402-adapter audit mcp-server; do
+          for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
             echo "=== @cedulon/$p ==="
             npm publish -w "@cedulon/$p" --provenance
           done
@@ -100,7 +121,7 @@ jobs:
       - name: the registry answers with this version
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          for p in cose core receipts manifest checkpoint x402-adapter audit mcp-server; do
+          for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
             got=""
             for attempt in 1 2 3 4 5 6 7 8 9 10; do
               got=$(npm view "@cedulon/$p" version 2>/dev/null || echo "")
