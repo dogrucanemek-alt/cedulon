@@ -29,6 +29,7 @@ describe("mizan-ig offline adapter", () => {
     assert.equal(allow.requestHash, sha256Text("hello"));
     assert.equal(allow.effectHash, sha256Text("hi"));
     assert.equal(allow.policyHash, policy);
+    assert.equal(allow.effectClass, "ig-dm-reply");
 
     const deny = fromBridgeLine(
       { id: "x2", receivedAt: 1, from: "u", text: "no", verdict: "silent", reason: "out" },
@@ -36,6 +37,7 @@ describe("mizan-ig offline adapter", () => {
     );
     assert.equal(deny.decision, "deny");
     assert.equal(deny.effectHash, null);
+    assert.equal(deny.effectClass, "ig-dm-reply");
 
     const defer = fromBridgeLine(
       { id: "x3", receivedAt: 1, from: "u", text: "ask", verdict: "ask-boss", reason: "boss" },

@@ -4,9 +4,11 @@ import type { RailSettlement } from "@cedulon/x402-adapter";
 
 /**
  * Content-binding result for one record against one counterparty row.
- * `detail` is the finding text when the bind fails; the caller picks the code.
+ * `detail` is the finding text when the bind fails. `code` is the
+ * finding the profile wants for this failure; omitted, the reconciler
+ * uses `profile.codes.bindFailure`.
  */
-export type BindResult = { ok: true } | { ok: false; detail: string };
+export type BindResult = { ok: true } | { ok: false; detail: string; code?: string };
 
 /** Finding shape the profile may emit. Codes stay in the caller's catalogue. */
 export type ProfileFinding = {

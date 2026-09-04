@@ -19,7 +19,9 @@ import { hashClaimRefusal } from "./types.ts";
  * CWT private-use labels for a Decision Record.
  * -70401..-70402 are already the countersignature claims
  * (`packages/receipts/src/index.ts:41-43`). This block starts at -70501
- * so the two maps never share a number.
+ * so the two maps never share a number. Labels are -70501…-70513.
+ * The thirteen labels are always present; a nullable claim carries
+ * CBOR null.
  */
 export const DECISION_RECORD_CLAIM = {
   decider: -70501,
@@ -34,6 +36,7 @@ export const DECISION_RECORD_CLAIM = {
   timestampMs: -70510,
   nonce: -70511,
   prevRecordHash: -70512,
+  effectClass: -70513,
 } as const;
 
 export type DecisionKind = "allow" | "deny" | "defer";
@@ -53,6 +56,11 @@ export type DecisionRecordClaims = {
   timestampMs: number;
   nonce: string;
   prevRecordHash: string | null;
+  /**
+   * Class of the effect this decision allows, in the channel's vocabulary.
+   * Required on allow; a refusal may name what it refused.
+   */
+  effectClass: string | null;
 };
 
 export type SignedDecisionRecord = {
@@ -89,6 +97,7 @@ export function decisionRecordToCbor(claims: DecisionRecordClaims): Uint8Array {
       [DECISION_RECORD_CLAIM.timestampMs, claims.timestampMs],
       [DECISION_RECORD_CLAIM.nonce, claims.nonce],
       [DECISION_RECORD_CLAIM.prevRecordHash, claims.prevRecordHash],
+      [DECISION_RECORD_CLAIM.effectClass, claims.effectClass],
     ]),
   );
 }
@@ -125,6 +134,7 @@ export function decisionRecordFromCbor(bytes: Uint8Array): DecisionRecordClaims 
     timestampMs: ts,
     nonce: text(DECISION_RECORD_CLAIM.nonce),
     prevRecordHash: textOrNull(DECISION_RECORD_CLAIM.prevRecordHash),
+    effectClass: textOrNull(DECISION_RECORD_CLAIM.effectClass),
   };
 }
 
@@ -152,6 +162,9 @@ function assertDecisionRecordClaims(claims: DecisionRecordClaims): void {
     }
     if (claims.effectHash === null) {
       throw new Error("allow-requires-effect-hash");
+    }
+    if (claims.effectClass === null || claims.effectClass === "") {
+      throw new Error("allow-requires-effect-class");
     }
   } else if (claims.effectHash !== null) {
     // A refusal binds to the absence of a row, never to a hash. A hash on

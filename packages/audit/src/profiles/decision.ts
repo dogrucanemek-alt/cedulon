@@ -37,6 +37,13 @@ export const DECISION_PROFILE: ReconciliationProfile<SignedDecisionRecord, Effec
         detail: `effect ${row.ref} hash ${row.effectHash} != decision ${record.claims.effectHash}`,
       };
     }
+    if (row.effectClass !== record.claims.effectClass) {
+      return {
+        ok: false,
+        code: "effect-class-mismatch",
+        detail: `effect ${row.ref} class ${row.effectClass} != decision ${record.claims.effectClass}`,
+      };
+    }
     return { ok: true };
   },
   aggregate(ref, records, rows) {

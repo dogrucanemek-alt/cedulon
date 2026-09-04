@@ -35,6 +35,7 @@ function base(over: Partial<DecisionRecordClaims> = {}): DecisionRecordClaims {
     timestampMs: NOW,
     nonce: "n-rec".padEnd(16, "-"),
     prevRecordHash: null,
+    effectClass: "ig-dm-reply",
     ...over,
   };
 }
@@ -92,6 +93,14 @@ describe("decision record: signed, chained, not a token", () => {
       () => signDecisionRecord(base({ effectHash: null }), k.privateKeyPem, k.publicKeyPem),
       /allow-requires-effect-hash/,
     );
+    assert.throws(
+      () => signDecisionRecord(base({ effectClass: null }), k.privateKeyPem, k.publicKeyPem),
+      /allow-requires-effect-class/,
+    );
+    assert.throws(
+      () => signDecisionRecord(base({ effectClass: "" }), k.privateKeyPem, k.publicKeyPem),
+      /allow-requires-effect-class/,
+    );
     const deny = signDecisionRecord(
       base({ decision: "deny", ref: null, effectHash: null, reasonCode: "silent" }),
       k.privateKeyPem,
@@ -104,6 +113,20 @@ describe("decision record: signed, chained, not a token", () => {
       k.publicKeyPem,
     );
     assert.equal(verifyDecisionRecord(defer, k.publicKeyPem), true);
+    const denyNamed = signDecisionRecord(
+      base({ decision: "deny", ref: null, effectHash: null, effectClass: "ig-dm-reply", reasonCode: "silent" }),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    assert.equal(denyNamed.claims.effectClass, "ig-dm-reply");
+    assert.equal(verifyDecisionRecord(denyNamed, k.publicKeyPem), true);
+    const denyBare = signDecisionRecord(
+      base({ decision: "deny", ref: null, effectHash: null, effectClass: null, reasonCode: "silent" }),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    assert.equal(denyBare.claims.effectClass, null);
+    assert.equal(verifyDecisionRecord(denyBare, k.publicKeyPem), true);
   });
 
   it("under a pin the signature is checked against the pin; the carried key is a surface", () => {
@@ -182,6 +205,8 @@ describe("decision record: signed, chained, not a token", () => {
     };
     assert.equal(verifyDecisionRecord(below(base({ ref: null }))), false, "allow without ref");
     assert.equal(verifyDecisionRecord(below(base({ effectHash: null }))), false, "allow without effectHash");
+    assert.equal(verifyDecisionRecord(below(base({ effectClass: null }))), false, "allow without effectClass");
+    assert.equal(verifyDecisionRecord(below(base({ effectClass: "" }))), false, "allow with empty effectClass");
     assert.equal(verifyDecisionRecord(below(base({ requestHash: "not-a-hash" }))), false, "malformed requestHash");
     assert.equal(verifyDecisionRecord(below(base({ prevRecordHash: "AA" }))), false, "malformed prevRecordHash");
     assert.equal(verifyDecisionRecord(below(base({ decision: "deny", effectHash: H }))), false, "deny with effectHash");

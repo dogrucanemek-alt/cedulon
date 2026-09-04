@@ -72,6 +72,7 @@ export function fromBridgeLine(line, policyHash) {
     timestampMs: toMs(line.receivedAt),
     nonce: String(line.id).padEnd(16, "-"),
     prevRecordHash: null,
+    effectClass: "ig-dm-reply",
   };
 }
 

@@ -11,6 +11,7 @@ import {
   decisionRecordToCbor,
   generateDecisionRecordKeys,
   signDecisionRecord,
+  verifyDecisionRecord,
   type DecisionRecordClaims,
   type SignedDecisionRecord,
 } from "@cedulon/core";
@@ -49,6 +50,7 @@ function claims(over: Partial<DecisionRecordClaims> = {}): DecisionRecordClaims 
     timestampMs: MID,
     nonce: "n-dec".padEnd(16, "-"),
     prevRecordHash: null,
+    effectClass: "ig-dm-reply",
     ...over,
   };
 }
@@ -380,6 +382,31 @@ describe("decision profile conformance", () => {
     assert.equal(report.findings.some((f) => f.code === "issuer-key-mismatch"), false);
     assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), false);
   });
+
+  it("19: allow + effect, only the row class changes → effect-class-mismatch", () => {
+    // Case 6's shape: same ref, same hash. The row class is the only
+    // field that moves. The record names the channel class; a different
+    // class on the extract is CLASS SUBSTITUTION, not a content swap.
+    const rec = record({ nonce: "n-19".padEnd(16, "-") });
+    const report = run([rec], [row({ effectClass: "ig-comment-reply" })]);
+    assert.equal(report.findings.filter((f) => f.code === "effect-class-mismatch").length, 1);
+    assert.equal(report.findings.filter((f) => f.code === "effect-mismatch").length, 0);
+    assert.equal(report.ok, false);
+    assert.equal(report.counts.receipts.matched, 1);
+    assert.equal(report.counts.settlements.matched, 1);
+  });
+
+  it("20: an allow record without effectClass, signed below the API, is refused, not passed", () => {
+    // Same path as case 15: the decider's signer applying the rules is
+    // not evidence. An allow that names ref and effectHash but not a
+    // class must fail at the verifier, and the audit must not attest it.
+    const rec = recordBelowApi({ nonce: "n-20".padEnd(16, "-"), effectClass: null });
+    assert.equal(verifyDecisionRecord(rec), false);
+    const report = run([rec], []);
+    assert.equal(report.ok, false);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.findings.some((f) => f.id === rec.claims.nonce), true, report.findings.map((f) => f.code).join(","));
+  });
 });
 
 const SPEND_VOCAB = /\b(settlements?|receipts?|rails?|payees?|beneficiar(y|ies)|spend)\b/i;
@@ -406,7 +433,7 @@ function spendSentences(report: ReportLike, label: string): string[] {
 }
 
 describe("decision profile: no spend vocabulary", () => {
-  it("seventeen cases, four IG fixtures, and the one-sided paths carry no spend words", () => {
+  it("nineteen cases, four IG fixtures, and the one-sided paths carry no spend words", () => {
     const hits: string[] = [];
     const seen = new Set<string>();
 
@@ -415,7 +442,7 @@ describe("decision profile: no spend vocabulary", () => {
       for (const item of [...report.findings, ...report.warnings]) seen.add(item.code);
     };
 
-    // The seventeen conformance cases. Case 14 is a spend-profile audit of the
+    // The nineteen conformance cases. Case 14 is a spend-profile audit of the
     // wrong document; its sentences stay in spend words and are not this check.
     take("1", run([sharedAllow], [sharedRow]));
     take("2", run([record({ nonce: "n-2".padEnd(16, "-") })], []));
@@ -523,6 +550,24 @@ describe("decision profile: no spend vocabulary", () => {
         trust: PIN,
       }),
     );
+    const rec18 = record({ nonce: "n-18".padEnd(16, "-") });
+    const swapped18: SignedDecisionRecord = {
+      ...rec18,
+      publicKeyPem: generateDecisionRecordKeys().publicKeyPem,
+    };
+    take(
+      "18",
+      audit({
+        receipts: [swapped18],
+        checkpoints: [checkpoint([rec18])],
+        issuerTrust: { publicKeyPem: decider.publicKeyPem },
+        profile: DECISION_PROFILE,
+        extract: extract([row()]),
+        trust: PIN,
+      }),
+    );
+    take("19", run([record({ nonce: "n-19".padEnd(16, "-") })], [row({ effectClass: "ig-comment-reply" })]));
+    take("20", run([recordBelowApi({ nonce: "n-20".padEnd(16, "-"), effectClass: null })], []));
 
     for (const name of ["normal-day", "replay-storm", "leaked-refusal", "wrong-text"] as const) {
       take(`ig:${name}`, runFixture(join(IG_FIXTURES, name)) as ReportLike);

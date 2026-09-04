@@ -155,7 +155,8 @@
             "decision-without-effect",
             "effect-without-decision",
             "effect-against-refusal",
-            "effect-mismatch"
+            "effect-mismatch",
+            "effect-class-mismatch"
           ]
         },
         "id": { "type": "string", "minLength": 1 },

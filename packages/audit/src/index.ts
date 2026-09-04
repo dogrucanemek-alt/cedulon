@@ -122,6 +122,7 @@ export const FINDING_CODES = [
   "effect-without-decision",
   "effect-against-refusal",
   "effect-mismatch",
+  "effect-class-mismatch",
 ] as const;
 
 export type FindingCode = (typeof FINDING_CODES)[number];
@@ -764,7 +765,7 @@ function classifySettlementMatches(
     const bound = profile.bind(r, s);
     if (!bound.ok) {
       findings.push({
-        code: profile.codes.bindFailure as FindingCode,
+        code: (bound.code ?? profile.codes.bindFailure) as FindingCode,
         id: ref,
         detail: bound.detail,
       });
