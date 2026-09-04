@@ -4,7 +4,7 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
-## 0.13.0 (prepared, not published)
+## 0.13.0: the decision profile, nine packages, and a tag that stops on a package npm has never seen
 
 A. The five money-shaped axes behind `audit()` now sit on
 `ReconciliationProfile` (`packages/audit/src/profile.ts`). Today's spend

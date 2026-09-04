@@ -104,8 +104,8 @@ exposed as settings. It installs the released npm package rather than packing
 the working tree, so the bundle holds what npm would have given you, and the
 version must already be released. The result lands in `build/` and is a release
 artifact, not source. Released bundles are attached to the matching GitHub
-release, with the bundle's SHA-256 in the release notes; `v0.12.0` carries
-`cedulon-0.12.0.mcpb`, and `v0.11.0` the one before it.
+release, with the bundle's SHA-256 in the release notes; `v0.13.0` carries
+`cedulon-0.13.0.mcpb`, and `v0.12.0` the one before it.
 
 `smithery.yaml` is the older ecosystem format and is not submitted; Smithery's
 current instructions take an HTTPS endpoint or an `.mcpb` bundle.

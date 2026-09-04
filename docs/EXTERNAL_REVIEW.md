@@ -593,3 +593,23 @@ finding, `guarantee` is `"unconditional"`, `scope` is the extract
 window. The report does not say a log was not asked. If the witness
 is optional, the claim that the chain controls equivocation has to
 narrow in the -01 text.
+
+## Round 9 — release gate for 0.13.0, 5 Sep 2026
+
+Origin. A read-only pass by an outside model over the three commits that
+had not been read by anyone but the author: the nine-package release
+path (9955382, 9eee4c8) and the version bump (096972d). Ten attack items,
+two FIX, nine NOTE.
+
+FIX-1: UPGRADING's 0.13.0 section said 54 codes and eighteen cases in C
+and 55 and twenty in D, so the rendered release notes contradicted
+themselves. FIX-2: STATUS carried a second 0.13.0 prepared paragraph from
+the profile's first merge, with the old counts and a typo. NOTE-4: the
+new workflow guard could be evaded by literal loops in comment lines and
+a loop over a shell variable in the run block. All three closed in
+3637b62; the second pass reconstructed the evasion and watched the guard
+fail on it and pass on the checked-in file. Published as 0.13.0 on 5
+September 2026 (22:50 UTC, nine packages, provenance on all nine, the MCP
+Registry and the bundle produced by the tagged run itself; the bundle job
+needed a rerun because two tarballs were not yet served ten seconds after
+the publish).
