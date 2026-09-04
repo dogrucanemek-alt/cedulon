@@ -17,12 +17,29 @@ export type ProfileFinding = {
 };
 
 /**
+ * Report English for one population. `audit()` builds shared sentences from
+ * these words so a decision report cannot say "rail" and a spend report
+ * stays the sentences the golden file already holds.
+ */
+export type ProfileWords = {
+  record: string;
+  row: string;
+  extract: string;
+  extractKey: string;
+  scope: string;
+  account: string;
+  rail: string;
+  issuer: string;
+};
+
+/**
  * The five money (or money-shaped) axes a reconciler asks of a population.
  * Spend starts as `SignedReceipt` / `RailSettlement`. A later profile may
  * bind different record and row types; this file does not invent them.
  */
 export type ReconciliationProfile<Rec, Row> = {
   id: string;
+  words: ProfileWords;
   recordRef(record: Rec): string | null;
   /** Whether this record is expected to have a counterparty row. */
   expectsRow(record: Rec): boolean;
@@ -145,6 +162,16 @@ function spendTerms(record: SignedReceipt, manifestTerms: unknown): string[] {
 /** Today's spend reconciler, moved behind the seam. Texts and order unchanged. */
 export const SPEND_PROFILE: ReconciliationProfile<SignedReceipt, RailSettlement> = {
   id: "spend",
+  words: {
+    record: "receipt",
+    row: "settlement",
+    extract: "rail extract",
+    extractKey: "rail key",
+    scope: "settlement path",
+    account: "account",
+    rail: "rail",
+    issuer: "issuer",
+  },
   recordRef(record) {
     return record.claims.x402PaymentRef;
   },

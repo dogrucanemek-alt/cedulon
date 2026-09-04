@@ -34,8 +34,20 @@ Copied from `packages/audit/src/profile.ts`. If this block and that file
 disagree, the file is right.
 
 ```
+export type ProfileWords = {
+  record: string;
+  row: string;
+  extract: string;
+  extractKey: string;
+  scope: string;
+  account: string;
+  rail: string;
+  issuer: string;
+};
+
 export type ReconciliationProfile<Rec, Row> = {
   id: string;
+  words: ProfileWords;
   recordRef(record: Rec): string | null;
   expectsRow(record: Rec): boolean;
   rowKey(row: Row): string;
@@ -55,6 +67,12 @@ export type ReconciliationProfile<Rec, Row> = {
   counterpartyUnbound(rows: Row[], manifestPayeeBound: boolean): string | null;
 };
 ```
+
+`words` is the report dialect (`record`, `row`, `extract`, `extractKey`,
+`scope`, `account`, `rail`, `issuer`). Shared sentences in `audit()` are
+built from it; spend keeps today's English, decision uses
+`decision record` / `effect` / `effect extract` / `effect-extract key` /
+`effect path` / `decider` / `channel` / `decider`.
 
 The three `…Detail` sentences belong to the profile. The first cut of the
 seam kept them in the match walk, and a spend audit of an aborted receipt

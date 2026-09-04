@@ -54,7 +54,7 @@ import {
   type EffectRow,
   type SignedEffectExtract,
 } from "@cedulon/effect-extract";
-import { SPEND_PROFILE, type ReconciliationProfile } from "./profile.ts";
+import { SPEND_PROFILE, type ProfileWords, type ReconciliationProfile } from "./profile.ts";
 import { DECISION_PROFILE } from "./profiles/decision.ts";
 
 export { DEFAULT_CLOCK_SKEW_MS };
@@ -62,6 +62,7 @@ export {
   SPEND_PROFILE,
   type BindResult,
   type ProfileFinding,
+  type ProfileWords,
   type ReconciliationProfile,
 } from "./profile.ts";
 export { DECISION_PROFILE } from "./profiles/decision.ts";
@@ -501,8 +502,12 @@ export function findReceiptChainBreak(
   return null;
 }
 
+function pluralWord(word: string): string {
+  return `${word}s`;
+}
+
 function pushDuplicateRefs(
-  items: Array<{ ref: string; id: string; side: "receipt" | "settlement" }>,
+  items: Array<{ ref: string; id: string; side: string }>,
   findings: Finding[],
 ): Set<string> {
   const seen = new Map<string, number>();
@@ -650,12 +655,12 @@ function classifySettlementMatches(
   );
 
   const receiptItems = settled
-    .map((r) => ({ ref: profile.recordRef(r), id: r.claims.nonce, side: "receipt" as const, receipt: r }))
+    .map((r) => ({ ref: profile.recordRef(r), id: r.claims.nonce, side: profile.words.record, receipt: r }))
     .filter((x): x is typeof x & { ref: string } => x.ref !== null);
   const settlementItems = settlements.map((s) => ({
     ref: s.ref,
     id: s.ref,
-    side: "settlement" as const,
+    side: profile.words.row,
     settlement: s,
   }));
 
@@ -734,7 +739,7 @@ function classifySettlementMatches(
           code: "boundary-deferred",
           id: ref,
           severity: "warn",
-          detail: `settlement ${s.ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than settlement-without-receipt`,
+          detail: `${profile.words.row} ${s.ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.rowWithoutRecord}`,
         });
       } else {
         counts.settlements.unmatched += 1;
@@ -789,7 +794,7 @@ function classifySettlementMatches(
           code: "boundary-deferred",
           id: r.claims.nonce,
           severity: "warn",
-          detail: `receipt nonce=${r.claims.nonce} ref=${ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than receipt-without-settlement`,
+          detail: `${profile.words.record} nonce=${r.claims.nonce} ref=${ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.recordWithoutRow}`,
         });
       } else {
         counts.receipts.unmatched += 1;
@@ -825,6 +830,7 @@ export function findWindowCoverage(
   receipts: PresentedRecord[],
   checkpoints: SignedCheckpoint[],
   pop: Population = "spend",
+  words: ProfileWords = SPEND_PROFILE.words,
 ): Finding[] {
   const findings: Finding[] = [];
   const ordered = [...checkpoints].sort((a, b) => a.claims.epoch - b.claims.epoch);
@@ -857,13 +863,13 @@ export function findWindowCoverage(
       findings.push({
         code: "window-coverage",
         id: r.claims.nonce,
-        detail: `receipt nonce=${r.claims.nonce} ts=${r.claims.timestampMs} is in no checkpoint window`,
+        detail: `${words.record} nonce=${r.claims.nonce} ts=${r.claims.timestampMs} is in no checkpoint window`,
       });
     } else if (hits.length > 1) {
       findings.push({
         code: "window-coverage",
         id: r.claims.nonce,
-        detail: `receipt nonce=${r.claims.nonce} is in ${hits.length} checkpoint windows`,
+        detail: `${words.record} nonce=${r.claims.nonce} is in ${hits.length} checkpoint windows`,
       });
     }
   }
@@ -877,6 +883,7 @@ export function findCheckpointTotalMismatches(
     records: PresentedRecord[]
   ) => Record<string, string>,
   pop: Population = "spend",
+  words: ProfileWords = SPEND_PROFILE.words,
 ): Finding[] {
   const findings: Finding[] = [];
   for (const cp of checkpoints) {
@@ -902,7 +909,7 @@ export function findCheckpointTotalMismatches(
       findings.push({
         code: "checkpoint-total-mismatch",
         id: `epoch-${cp.claims.epoch}`,
-        detail: `checkpoint epoch ${cp.claims.epoch} totals ${JSON.stringify(cp.claims.totals)} != receipts ${JSON.stringify(expected)}`,
+        detail: `checkpoint epoch ${cp.claims.epoch} totals ${JSON.stringify(cp.claims.totals)} != ${pluralWord(words.record)} ${JSON.stringify(expected)}`,
       });
     }
     if (inWindow.length !== cp.claims.receiptCount) {
@@ -1301,6 +1308,7 @@ export function audit(input: AuditInput): AuditReport {
   assertAuditBounds(input);
   const profile = (input.profile ?? SPEND_PROFILE) as ReconciliationProfile<PresentedRecord, PresentedRow>;
   const pop = populationOf(profile);
+  const w = profile.words;
   const findings: Finding[] = [...findMalformedHashClaims(input)];
   const warnings: Finding[] = [];
 
@@ -1317,7 +1325,7 @@ export function audit(input: AuditInput): AuditReport {
       findings.push({
         code: "extract-settlement-mismatch",
         id: "extract",
-        detail: `caller supplied ${input.settlements.length} settlement(s) that differ from the ${extractRows(input.extract, pop).length} in the signed extract; the extract is authoritative`,
+        detail: `caller supplied ${input.settlements.length} ${w.row}(s) that differ from the ${extractRows(input.extract, pop).length} in the signed extract; the extract is authoritative`,
       });
     }
 
@@ -1336,7 +1344,7 @@ export function audit(input: AuditInput): AuditReport {
         findings.push({
           code: "extract-scope-mismatch",
           id: row.ref,
-          detail: `settlement ${row.ref} at ${row.timestampMs} is outside the declared window ${input.extract.body.windowStartMs}..${input.extract.body.windowEndMs}`,
+          detail: `${w.row} ${row.ref} at ${row.timestampMs} is outside the declared window ${input.extract.body.windowStartMs}..${input.extract.body.windowEndMs}`,
         });
       }
     }
@@ -1357,10 +1365,10 @@ export function audit(input: AuditInput): AuditReport {
         code: "unauthenticated-extract",
         id: "extract",
         detail: signatureVerifies
-          ? "no verifier-supplied rail key; the signature proves internal consistency, not that the named rail produced the extract, so the completeness guarantee is conditional"
+          ? `no verifier-supplied ${w.extractKey}; the signature proves internal consistency, not that the named ${w.rail} produced the extract, so the completeness guarantee is conditional`
           : encodeRefusal !== null
-            ? `rail extract body was refused: ${encodeRefusal} - not a signature verdict; no rail key was pinned and the completeness guarantee is conditional`
-            : "rail extract signature failed and no rail key was pinned; completeness guarantee is conditional",
+            ? `${w.extract} body was refused: ${encodeRefusal} - not a signature verdict; no ${w.extractKey} was pinned and the completeness guarantee is conditional`
+            : `${w.extract} signature failed and no ${w.extractKey} was pinned; completeness guarantee is conditional`,
         severity: "warn",
       });
     } else {
@@ -1377,7 +1385,7 @@ export function audit(input: AuditInput): AuditReport {
         findings.push({
           code: "trust-key-unreadable",
           id: "extract",
-          detail: "the pinned rail key could not be read as a public key; supply PEM or base64 SPKI",
+          detail: `the pinned ${w.extractKey} could not be read as a public key; supply PEM or base64 SPKI`,
         });
       } else if (!signatureVerifies) {
         extractRejected = true;
@@ -1386,8 +1394,8 @@ export function audit(input: AuditInput): AuditReport {
           id: "extract",
           detail:
             encodeRefusal !== null
-              ? `a rail key was pinned but the extract body was refused: ${encodeRefusal} - not a signature verdict`
-              : "a rail key was pinned but the extract signature does not verify against the key it carries",
+              ? `a ${w.extractKey} was pinned but the extract body was refused: ${encodeRefusal} - not a signature verdict`
+              : `a ${w.extractKey} was pinned but the extract signature does not verify against the key it carries`,
         });
       } else {
         const carriedDer = toSpkiDer(input.extract.publicKeyPem);
@@ -1396,7 +1404,7 @@ export function audit(input: AuditInput): AuditReport {
           findings.push({
             code: "extract-key-mismatch",
             id: "extract",
-            detail: "rail extract is signed by a key other than the pinned rail key",
+            detail: `${w.extract} is signed by a key other than the pinned ${w.extractKey}`,
           });
         }
       }
@@ -1406,28 +1414,28 @@ export function audit(input: AuditInput): AuditReport {
         findings.push({
           code: "extract-scope-mismatch",
           id: "extract",
-          detail: `rail extract covers account ${coveredAccount}, not the expected ${t.accountId}`,
+          detail: `${w.extract} covers ${w.account} ${coveredAccount}, not the expected ${t.accountId}`,
         });
       }
       if (t.railId !== undefined && coveredRail !== t.railId) {
         findings.push({
           code: "extract-scope-mismatch",
           id: "extract",
-          detail: `rail extract covers rail ${coveredRail}, not the expected ${t.railId}`,
+          detail: `${w.extract} covers ${w.rail} ${coveredRail}, not the expected ${t.railId}`,
         });
       }
       if (t.windowStartMs !== undefined && body.windowStartMs > t.windowStartMs) {
         findings.push({
           code: "extract-scope-mismatch",
           id: "extract",
-          detail: `rail extract starts at ${body.windowStartMs}, after the expected window start ${t.windowStartMs}`,
+          detail: `${w.extract} starts at ${body.windowStartMs}, after the expected window start ${t.windowStartMs}`,
         });
       }
       if (t.windowEndMs !== undefined && body.windowEndMs < t.windowEndMs) {
         findings.push({
           code: "extract-scope-mismatch",
           id: "extract",
-          detail: `rail extract ends at ${body.windowEndMs}, before the expected window end ${t.windowEndMs}`,
+          detail: `${w.extract} ends at ${body.windowEndMs}, before the expected window end ${t.windowEndMs}`,
         });
       }
       if (t.windowStartMs === undefined || t.windowEndMs === undefined) {
@@ -1450,13 +1458,13 @@ export function audit(input: AuditInput): AuditReport {
         // at. A verifier that names neither leaves the extract to say whose
         // money it accounted for and which way out it watched.
         const unstated = [
-          t.accountId === undefined ? "account" : undefined,
-          t.railId === undefined ? "rail" : undefined,
+          t.accountId === undefined ? w.account : undefined,
+          t.railId === undefined ? w.rail : undefined,
         ].filter((axis) => axis !== undefined);
         warnings.push({
           code: "unstated-audit-scope",
           id: "extract",
-          detail: `no audit ${unstated.join(" or ")} was stated, so the extract defines the settlement path it reports on; completeness guarantee is conditional`,
+          detail: `no audit ${unstated.join(" or ")} was stated, so the extract defines the ${w.scope} it reports on; completeness guarantee is conditional`,
           severity: "warn",
         });
       }
@@ -1466,8 +1474,8 @@ export function audit(input: AuditInput): AuditReport {
       code: "unauthenticated-extract",
       id: "extract",
       detail: input.trust
-        ? "a rail key was pinned but no extract was supplied, so there is nothing to check it against; completeness guarantee is conditional"
-        : "rail extract is unsigned; completeness guarantee is conditional",
+        ? `a ${w.extractKey} was pinned but no extract was supplied, so there is nothing to check it against; completeness guarantee is conditional`
+        : `${w.extract} is unsigned; completeness guarantee is conditional`,
       severity: "warn",
     });
   }
@@ -1571,7 +1579,7 @@ export function audit(input: AuditInput): AuditReport {
         code: "unauthenticated-issuer",
         id: "issuer",
         detail:
-          "no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional",
+          `no verifier-supplied ${w.issuer} key; ${w.record} and checkpoint signatures prove internal consistency, not that the named ${w.issuer} produced them. Without one there is no way to tell a ${w.record} from this ${w.issuer} apart from any other, so every ${w.record} submitted is weighed as one set and the completeness guarantee is conditional`,
         severity: "warn",
       });
     }
@@ -1613,14 +1621,14 @@ export function audit(input: AuditInput): AuditReport {
         findings.push({
           code: "issuer-key-mismatch",
           id: "receipts",
-          detail: `${foreign.length} receipts are signed by a key other than the pinned issuer key, so none of them is coverage for any settlement; first is nonce=${foreign[0].claims.nonce}`,
+          detail: `${foreign.length} ${pluralWord(w.record)} are signed by a key other than the pinned ${w.issuer} key, so none of them is coverage for any ${w.row}; first is nonce=${foreign[0].claims.nonce}`,
         });
       } else {
         for (const r of foreign) {
           findings.push({
             code: "issuer-key-mismatch",
             id: r.claims.nonce,
-            detail: `receipt nonce=${r.claims.nonce} is signed by a key other than the pinned issuer key, so it is not coverage for ${profile.recordRef(r) ?? "any settlement"}`,
+            detail: `${w.record} nonce=${r.claims.nonce} is signed by a key other than the pinned ${w.issuer} key, so it is not coverage for ${profile.recordRef(r) ?? `any ${w.row}`}`,
           });
         }
       }
@@ -1629,7 +1637,7 @@ export function audit(input: AuditInput): AuditReport {
           findings.push({
             code: "issuer-key-mismatch",
             id: `epoch-${cp.claims.epoch}`,
-            detail: `checkpoint epoch ${cp.claims.epoch} is signed by a key other than the pinned issuer key`,
+            detail: `checkpoint epoch ${cp.claims.epoch} is signed by a key other than the pinned ${w.issuer} key`,
           });
         }
       }
@@ -1642,7 +1650,7 @@ export function audit(input: AuditInput): AuditReport {
             code: "carried-key-mismatch",
             id: r.claims.nonce,
             severity: "warn",
-            detail: `receipt nonce=${r.claims.nonce} verifies under a pinned issuer key but the carried publicKeyPem is not that key`,
+            detail: `${w.record} nonce=${r.claims.nonce} verifies under a pinned ${w.issuer} key but the carried publicKeyPem is not that key`,
           });
         }
       }
@@ -1653,7 +1661,7 @@ export function audit(input: AuditInput): AuditReport {
             code: "carried-key-mismatch",
             id: `epoch-${cp.claims.epoch}`,
             severity: "warn",
-            detail: `checkpoint epoch ${cp.claims.epoch} verifies under a pinned issuer key but the carried publicKeyPem is not that key`,
+            detail: `checkpoint epoch ${cp.claims.epoch} verifies under a pinned ${w.issuer} key but the carried publicKeyPem is not that key`,
           });
         }
       }
@@ -1777,7 +1785,7 @@ export function audit(input: AuditInput): AuditReport {
       id: "extract",
       severity: "warn",
       detail:
-        "the presented extract was refused by the pinned rail key, so its rows were not reconciled against the receipts; no settlement finding in this report was read out of that document",
+        `the presented extract was refused by the pinned ${w.extractKey}, so its rows were not reconciled against the ${pluralWord(w.record)}; no ${w.row} finding in this report was read out of that document`,
     });
     matchCounts = unreconciledCounts(inScope, reconciled, profile);
   } else {
@@ -1849,9 +1857,9 @@ export function audit(input: AuditInput): AuditReport {
     if (chain) findings.push(chain);
   }
   findings.push(
-    ...findCheckpointTotalMismatches(attested, attestedCheckpoints, (recs) => profile.checkpointTotals(recs), pop),
+    ...findCheckpointTotalMismatches(attested, attestedCheckpoints, (recs) => profile.checkpointTotals(recs), pop, w),
   );
-  findings.push(...findWindowCoverage(attested, attestedCheckpoints, pop));
+  findings.push(...findWindowCoverage(attested, attestedCheckpoints, pop, w));
 
   // A witness only adds evidence once the verifier has named the log. Until then
   // its inclusion receipts are a log anyone could have invented, and letting them
@@ -1968,12 +1976,12 @@ export function audit(input: AuditInput): AuditReport {
     warnings.push(f);
   }
   const hard = findings.filter((f) => f.severity !== "warn");
-  const missing = hard.filter((f) => f.code === "settlement-without-receipt");
+  const missing = hard.filter((f) => f.code === profile.codes.rowWithoutRecord);
   const summary =
     hard.length === 0
       ? "audit: balanced"
       : missing.length > 0
-        ? `audit: ${missing.length} settlement without receipt → FAIL`
+        ? `audit: ${missing.length} ${w.row} without ${w.record} → FAIL`
         : `audit: ${hard.length} finding(s) → FAIL`;
   // A scope record (`counterparty-unbound`) names what was not bound; it is
   // not a doubt about the evidence that was authenticated.

@@ -15,7 +15,9 @@ profile also owns the three one-sided match sentences
 (`counterpartyUnbound`, null on a profile that has none), and the
 population: `audit()` reads every presented document as the profile's
 record and row types, never by the shape of the body, so a rail extract
-carrying an extra `effects` member is still a rail extract. The tree
+carrying an extra `effects` member is still a rail extract. Report
+sentences that both profiles can emit are built from
+`ReconciliationProfile.words`; the spend list is today's English. The tree
 now carries `tests/spend-golden.test.ts` (fifteen cases generated from
 the pre-seam source); unproven until a change that should have shifted
 a finding fails that file. `docs/DECISION_PROFILE.md` is the

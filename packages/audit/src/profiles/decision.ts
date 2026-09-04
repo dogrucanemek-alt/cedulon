@@ -11,6 +11,16 @@ import type { ProfileFinding, ReconciliationProfile } from "../profile.ts";
  */
 export const DECISION_PROFILE: ReconciliationProfile<SignedDecisionRecord, EffectRow> = {
   id: "decision",
+  words: {
+    record: "decision record",
+    row: "effect",
+    extract: "effect extract",
+    extractKey: "effect-extract key",
+    scope: "effect path",
+    account: "decider",
+    rail: "channel",
+    issuer: "decider",
+  },
   recordRef(record) {
     return record.claims.ref;
   },

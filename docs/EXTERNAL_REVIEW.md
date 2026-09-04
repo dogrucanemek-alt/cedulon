@@ -537,3 +537,11 @@ wrong effect-extract key and a wrong decider key. Seventeen cases now.
 Two smaller defaults were closed on the same pass: the IG adapter hashed
 an empty string for an allow line with no `replyText`, and now refuses
 the line; and the golden regeneration flag is refused under CI.
+
+Dialect pass, same day. Shared report sentences now come from
+`ReconciliationProfile.words`. Spend keeps today's English
+(`tests/fixtures/spend-golden.json` sha256 unchanged). Decision reports
+say decision record / effect / effect extract / effect-extract key /
+effect path / decider / channel. Twenty-three sentences moved; spend-only
+paths (manifest/terms, countersign/payee, `settled-without-ref`) stayed.
+The watcher is `tests/decision-profile.test.ts` ("no spend vocabulary").
