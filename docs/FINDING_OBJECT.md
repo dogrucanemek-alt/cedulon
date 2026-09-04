@@ -60,6 +60,11 @@ is a promise of the package, not of the schema.
 }
 ```
 
+Decision-profile codes (0.13.0 prepared, not published):
+`decision-without-effect` (allow, no row), `effect-without-decision`
+(row, no record), `effect-against-refusal` (deny/defer and a row on
+the same ref; the worst), `effect-mismatch` (allow, row, hash differs).
+
 Unknown properties on a finding are allowed. The schema says so. A
 producer may add `ref`, `amount`, or a language tag without a version
 bump, as long as it does not rename or reuse `code` / `id` / `detail`.

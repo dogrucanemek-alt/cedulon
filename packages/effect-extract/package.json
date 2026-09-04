@@ -1,7 +1,7 @@
 {
-  "name": "@cedulon/audit",
+  "name": "@cedulon/effect-extract",
   "version": "0.12.0",
-  "description": "Reconcile a rail extract against the Cedulon receipt chain.",
+  "description": "Signed effect extract: the counterparty record for a Decision Record.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
@@ -10,15 +10,15 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dogrucanemek-alt/cedulon.git",
-    "directory": "packages/audit"
+    "directory": "packages/effect-extract"
   },
-  "homepage": "https://github.com/dogrucanemek-alt/cedulon/tree/master/packages/audit",
+  "homepage": "https://github.com/dogrucanemek-alt/cedulon/tree/master/packages/effect-extract",
   "bugs": {
     "url": "https://github.com/dogrucanemek-alt/cedulon/issues"
   },
   "keywords": [
     "cedulon",
-    "audit"
+    "effect-extract"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json"
@@ -40,12 +40,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/checkpoint": "^0.12.0",
     "@cedulon/core": "^0.12.0",
-    "@cedulon/cose": "^0.12.0",
-    "@cedulon/effect-extract": "^0.12.0",
-    "@cedulon/manifest": "^0.12.0",
-    "@cedulon/receipts": "^0.12.0",
-    "@cedulon/x402-adapter": "^0.12.0"
+    "@cedulon/cose": "^0.12.0"
   }
 }

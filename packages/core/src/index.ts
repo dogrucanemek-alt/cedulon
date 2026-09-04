@@ -12,6 +12,20 @@ export {
   type DecisionTokenClaims,
   type SignedDecisionToken,
 } from "./decision-token.ts";
+export {
+  DECISION_RECORD_CLAIM,
+  decisionRecordFromCbor,
+  decisionRecordHash,
+  decisionRecordToCbor,
+  findDecisionRecordChainBreak,
+  generateDecisionRecordKeys,
+  signDecisionRecord,
+  verifyDecisionRecord,
+  type DecisionKind,
+  type DecisionRecordChainBreak,
+  type DecisionRecordClaims,
+  type SignedDecisionRecord,
+} from "./decision-record.ts";
 export { failClosedEvaluate, naivePayAlwaysAllow } from "./fail-closed.ts";
 export type {
   AllowDecision,

@@ -8,6 +8,7 @@ export {
   findEquivocation,
   redactCheckpointTotals,
   signCheckpoint,
+  totalsFromDecisionRecords,
   totalsFromReceipts,
   verifyCheckpoint,
   verifyCheckpointUnderPin,

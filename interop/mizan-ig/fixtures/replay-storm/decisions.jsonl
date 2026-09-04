@@ -1,0 +1,5 @@
+{"id":"s01","receivedAt":1700003600000,"from":"user-s01","text":"in-s01","verdict":"reply","reason":"in-scope","replyText":"out-s01"}
+{"id":"s02","receivedAt":1700003660000,"from":"user-s02","text":"in-s02","verdict":"reply","reason":"in-scope","replyText":"out-s02"}
+{"id":"s03","receivedAt":1700003720000,"from":"user-s03","text":"in-s03","verdict":"reply","reason":"in-scope","replyText":"out-s03"}
+{"id":"s04","receivedAt":1700003780000,"from":"user-s04","text":"in-s04","verdict":"reply","reason":"in-scope","replyText":"out-s04"}
+{"id":"s05","receivedAt":1700003840000,"from":"user-s05","text":"in-s05","verdict":"reply","reason":"in-scope","replyText":"out-s05"}

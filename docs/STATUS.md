@@ -564,4 +564,18 @@ in the opening paragraph until that job is measured again.
 Not measured on this host: a second Windows user reading the file, and
 PID reuse on a stale lock. `demo:unguarded` remains the intentional hole.
 
+0.13.0 (prepared, not published). The tree now carries a decision
+reconciliation profile on the existing `audit()` (`DECISION_PROFILE`,
+`docs/DECISION_PROFILE.md`): Decision Record, Effect Extract, four new
+finding codes, seventeen conformance cases, and an offline IG koba
+(`interop/mizan-ig`). Measured in this tree: the spend golden file is
+unchanged byte for byte; `MatchCounts.aborted` counts deny+defer; an
+absent extract still fails (same as spend, draft-abak -01, 3 September);
+`fromBridgeLine` / `fromMetaLine` are the only field map. Not measured:
+a live WhatsApp/IG bridge log, an independent effect signer that is not
+a test key, and policy-document binding (`terms()` returns empty). The
+tree now carries that profile; unproven until a reader who did not write
+the branch runs the cases against a measured log. This is not a
+published npm release.
+
 To reproduce any of the above, see `docs/RUN_AS_VERIFIER.md`.

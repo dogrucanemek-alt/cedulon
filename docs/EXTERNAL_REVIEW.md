@@ -444,3 +444,104 @@ Known, not closed:
 
 - MCP `cedulon_audit` still does not carry a layer-2 input (`packages/mcp-server/src/session.ts` `audit()`, `src/index.ts` tool schema). A caller on that surface cannot present candidate bytes and a proof.
 - JSON `receiptHash` still hashes `canonical({claims, signature})` (`packages/receipts/src/index.ts` `receiptHash`) rather than the signed COSE octets spec `{#hash-inputs}` names. New receipts MUST use COSE; the JSON path is legacy.
+
+## Round 7 - decision profile, 2026-09-04
+
+Origin. The 1 September population probe (`interop/abak-00`) applied
+draft-abak-agent-control-delivery-evidence-00 Section 6 to the spend
+reconciler and found two holes that `counts` later named (Round 5). The
+draft-abak -01 review, 3 September, recorded that an absent extract is
+a FAIL from absence. The same triangle — issuer record, independent
+counterparty, declared population — is the one a decision needs: who
+decided, what was effected, over which window.
+
+What this tree now carries (0.13.0 prepared, not published):
+
+- a `ReconciliationProfile` seam; spend behaviour held by
+  `tests/spend-golden.test.ts` (byte for byte)
+- `DecisionRecordClaims` / `decisionRecordHash` (COSE Sign1 bytes) and
+  `@cedulon/effect-extract`
+- `DECISION_PROFILE` and four codes (`decision-without-effect`,
+  `effect-without-decision`, `effect-against-refusal`, `effect-mismatch`)
+- seventeen conformance cases (`tests/decision-profile.test.ts`)
+- an offline IG koba (`interop/mizan-ig`) over proposed JSONL
+
+Known, not closed:
+
+- FAIL from absence when no extract is presented (same as spend;
+  draft-abak -01 review, 3 September)
+- counter names remain spend dialect (`receipts`, `settlements`,
+  `aborted`, `settled`)
+- effect-signer independence is a pin the verifier states; Meta does
+  not sign. Until B is an independent process, `guarantee` is
+  conditional
+- IG / WhatsApp-bridge log field names were not measured on Hetzner;
+  only `fromBridgeLine` / `fromMetaLine` should move when they are
+- policy-document binding is not exercised (`terms()` returns `[]`)
+- Decision Record CWT block is `-70501`…`-70512`, not the `-70401` the
+  task first named (countersign already holds `-70401`/`-70402`)
+- `CTY_DECISION_RECORD` and the effect-extract media type are not in
+  the posted IANA table (spec text is a separate decision)
+- README and the site were not updated; those are external claims
+
+Gate, same day. The branch was read and re-run from a second worktree, and
+the golden file was run against the pre-seam source (`45bb020`): it passed
+there, so it does record the old behaviour. One spend sentence had still
+moved. An aborted receipt that kept its ref, presented beside a row on that
+ref, read "effect … against a refusal" instead of "settlement … has no spend
+receipt"; the golden's `aborted` case carried no ref, so the branch the seam
+added was never exercised. The three one-sided sentences now live on the
+profile, the golden gained `aborted-with-ref` (regenerated from `45bb020`,
+red on the branch before the fix), and the twelve conformance cases assert
+their counters. Two documentation sentences were corrected: the effect
+extract refuses a row outside its window whole, where a rail extract is
+accepted and the row is named; and the decision chain break borrows the
+spend code.
+
+A second sentence had moved, found while an outside model was reading the
+same diff. The seam told a rail extract from an effect extract by whether
+the body carried `effects`, and a record from a decision record by whether
+the claims carried `decision`. A rail may add members, so a rail extract
+with an extra `effects` member, balanced on the base commit, was refused
+on the branch as a malformed effect extract. The population is now the
+profile's call: under `SPEND_PROFILE` every document is read as spend,
+under `DECISION_PROFILE` as decision. The golden file gained
+`rail-extra-member-effects` (regenerated from `45bb020`, red on the
+branch before the fix) and the conformance cases gained a thirteenth, a
+rail extract presented to the decision profile, which is refused.
+
+Second eye, same day. An outside model read the branch at `3e5f066` with
+the whole diff and the two fix commits, ran the suite (528 tests, the same
+counts), and returned seven blocking items. Four held under measurement
+and are closed here. `verifyDecisionRecord` checked the signature and the
+payload against the carried claims but not the claim rules the signer
+applies, so an allow record with no `ref`, signed below the API by the
+pinned decider, verified true, was attested, and the audit said ok; the
+verifier now re-applies those rules on the decoded payload, and a record
+that fails them under the pinned key walks the chain and is named. An
+effect extract presented to the spend profile threw on an absent
+`settlements` array before any report existed; it is now refused the way
+a rail extract is refused on the decision profile. The spend
+`counterparty-unbound` warning fired on every decision audit that carried
+an extract, in spend words; the counterparty axis is now the profile's,
+and the decision profile has none. The documents said twelve cases where
+the tree had thirteen. Three did not hold as stated: a deny carrying an
+`effectHash` was not a hole (the profile binds refusals to the absence of
+a row, and a row on that ref is `effect-against-refusal` either way), but
+the stricter grammar is the simpler one, so signer and verifier now
+refuse it; the IG adapter reads the directory it is given, which is what
+a command-line adapter does; and swapping the two test key pairs
+wholesale cannot break a fixture that signs and pins with the same
+constants, though the point under it was real, so the cases gained a
+wrong effect-extract key and a wrong decider key. Seventeen cases now.
+Two smaller defaults were closed on the same pass: the IG adapter hashed
+an empty string for an allow line with no `replyText`, and now refuses
+the line; and the golden regeneration flag is refused under CI.
+
+Dialect pass, same day. Shared report sentences now come from
+`ReconciliationProfile.words`. Spend keeps today's English
+(`tests/fixtures/spend-golden.json` sha256 unchanged). Decision reports
+say decision record / effect / effect extract / effect-extract key /
+effect path / decider / channel. Twenty-three sentences moved; spend-only
+paths (manifest/terms, countersign/payee, `settled-without-ref`) stayed.
+The watcher is `tests/decision-profile.test.ts` ("no spend vocabulary").

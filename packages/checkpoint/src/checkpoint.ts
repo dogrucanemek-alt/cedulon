@@ -54,6 +54,19 @@ export function sha256Hex(data: string | Buffer): string {
   return createHash("sha256").update(data).digest("hex");
 }
 
+export function totalsFromDecisionRecords(
+  records: ReadonlyArray<{ claims: { decision: string } }>,
+): Record<string, string> {
+  const acc = { allow: 0, deny: 0, defer: 0 };
+  for (const r of records) {
+    const d = r.claims.decision;
+    if (d === "allow" || d === "deny" || d === "defer") {
+      acc[d] += 1;
+    }
+  }
+  return { allow: String(acc.allow), deny: String(acc.deny), defer: String(acc.defer) };
+}
+
 export function totalsFromReceipts(receipts: SignedReceipt[]): Record<string, string> {
   const acc = new Map<string, bigint>();
   for (const r of receipts) {
@@ -70,20 +83,22 @@ export function totalsFromReceipts(receipts: SignedReceipt[]): Record<string, st
   return out;
 }
 
-export function buildCheckpointClaims(
+export function buildCheckpointClaims<T = SignedReceipt>(
   epoch: number,
-  receipts: SignedReceipt[],
+  receipts: T[],
   startMs: number,
   endMs: number,
   prevCheckpointHash: string | null,
+  totalsFn: (records: T[]) => Record<string, string> = totalsFromReceipts as (records: T[]) => Record<string, string>,
+  headHashFn: (record: T) => string = receiptHash as (record: T) => string,
 ): CheckpointClaims {
   return {
     epoch,
     startMs,
     endMs,
     receiptCount: receipts.length,
-    chainHeadHash: receipts.length === 0 ? null : receiptHash(receipts[receipts.length - 1]),
-    totals: totalsFromReceipts(receipts),
+    chainHeadHash: receipts.length === 0 ? null : headHashFn(receipts[receipts.length - 1]),
+    totals: totalsFn(receipts),
     prevCheckpointHash,
   };
 }

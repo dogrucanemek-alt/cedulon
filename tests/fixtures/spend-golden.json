@@ -1,0 +1,717 @@
+{
+  "aborted": {
+    "counts": {
+      "receipts": {
+        "aborted": 1,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 0,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 0,
+        "rows": 0,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [],
+    "guarantee": "unconditional",
+    "ok": true,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: balanced",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "aborted-with-ref": {
+    "counts": {
+      "receipts": {
+        "aborted": 1,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 0,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 1,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "settlement-without-receipt",
+        "detail": "settlement r-abref 1 USD has no spend receipt",
+        "id": "r-abref"
+      }
+    ],
+    "guarantee": "unconditional",
+    "ok": false,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: 1 settlement without receipt → FAIL",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "closing-boundary-carried": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 1,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 0,
+        "rows": 0,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [],
+    "guarantee": "unconditional",
+    "ok": true,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: balanced",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "duplicate-ref": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 2,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 2,
+        "matched": 0,
+        "repeated": 2,
+        "settled": 2,
+        "submitted": 2,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 2,
+        "rows": 2,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "duplicate-ref",
+        "detail": "receipt ref r-dup appears 2 times",
+        "id": "r-dup"
+      },
+      {
+        "code": "duplicate-ref",
+        "detail": "settlement ref r-dup appears 2 times",
+        "id": "r-dup"
+      }
+    ],
+    "guarantee": "unconditional",
+    "ok": false,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: 2 finding(s) → FAIL",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "extract-absent": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 1,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 0,
+        "rows": 0,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "receipt-without-settlement",
+        "detail": "receipt nonce=n-abs----------- ref=r-abs is not on the rail extract",
+        "id": "n-abs-----------"
+      }
+    ],
+    "guarantee": "conditional",
+    "ok": false,
+    "summary": "audit: 1 finding(s) → FAIL",
+    "warnings": [
+      {
+        "code": "unauthenticated-extract",
+        "detail": "rail extract is unsigned; completeness guarantee is conditional",
+        "id": "extract",
+        "severity": "warn"
+      }
+    ]
+  },
+  "issuer-only": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 1,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 0,
+        "rows": 0,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "receipt-without-settlement",
+        "detail": "receipt nonce=n2-------------- ref=r2 is not on the rail extract",
+        "id": "n2--------------"
+      }
+    ],
+    "guarantee": "unconditional",
+    "ok": false,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: 1 finding(s) → FAIL",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "malformed-amount": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 0,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 0,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 0,
+        "submitted": 0,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 2,
+        "rows": 2,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "duplicate-ref",
+        "detail": "settlement ref dup appears 2 times",
+        "id": "dup"
+      },
+      {
+        "code": "malformed-amount",
+        "detail": "ref dup carries the amount \"1.5\", which is not an integer",
+        "id": "dup"
+      }
+    ],
+    "guarantee": "conditional",
+    "ok": false,
+    "summary": "audit: 2 finding(s) → FAIL",
+    "warnings": [
+      {
+        "code": "unauthenticated-extract",
+        "detail": "rail extract is unsigned; completeness guarantee is conditional",
+        "id": "extract",
+        "severity": "warn"
+      }
+    ]
+  },
+  "manifest-terms-mismatch": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 1,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 1,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "manifest-terms-mismatch",
+        "detail": "the receipt carries the hash of this Trade Manifest but departs from it: amount 2 against manifest 1. A gate applying MUST-T8-2 and MUST-T3-3 would have refused this payment",
+        "id": "r-terms"
+      }
+    ],
+    "guarantee": "unconditional",
+    "ok": false,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: 1 finding(s) → FAIL",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "matching": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 1,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 1,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [],
+    "guarantee": "unconditional",
+    "ok": true,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: balanced",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "opening-boundary-deferred": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 0,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 0,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 0,
+        "submitted": 0,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 1,
+        "matched": 0,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [],
+    "guarantee": "conditional",
+    "ok": true,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: balanced",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      },
+      {
+        "code": "boundary-deferred",
+        "detail": "settlement r-open sits inside the opening δ (300000 ms) and is unmatched; deferred rather than settlement-without-receipt",
+        "id": "r-open",
+        "severity": "warn"
+      }
+    ]
+  },
+  "rail-extra-member-effects": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 1,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 1,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [],
+    "guarantee": "unconditional",
+    "ok": true,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: balanced",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "settlement-without-receipt": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 0,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 0,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 0,
+        "submitted": 0,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 1,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "settlement-without-receipt",
+        "detail": "settlement r5 1 USD has no spend receipt",
+        "id": "r5"
+      }
+    ],
+    "guarantee": "unconditional",
+    "ok": false,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: 1 settlement without receipt → FAIL",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "substitution-amount": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 1,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 1,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "settlement-mismatch",
+        "detail": "settlement r3 2 USD != receipt 1 USD",
+        "id": "r3"
+      }
+    ],
+    "guarantee": "unconditional",
+    "ok": false,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: 1 finding(s) → FAIL",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "substitution-currency": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 1,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 1,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 0,
+        "unreconciled": 0
+      }
+    },
+    "findings": [
+      {
+        "code": "settlement-mismatch",
+        "detail": "settlement r4 1 EUR != receipt 1 USD",
+        "id": "r4"
+      }
+    ],
+    "guarantee": "unconditional",
+    "ok": false,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: 1 finding(s) → FAIL",
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  },
+  "wrong-rail-key": {
+    "counts": {
+      "receipts": {
+        "aborted": 0,
+        "attested": 1,
+        "carried": 0,
+        "deferred": 0,
+        "inScope": 1,
+        "matched": 0,
+        "repeated": 0,
+        "settled": 1,
+        "submitted": 1,
+        "unmatched": 0,
+        "unreconciled": 1
+      },
+      "settlements": {
+        "deferred": 0,
+        "matched": 0,
+        "repeated": 0,
+        "rows": 1,
+        "unmatched": 0,
+        "unreconciled": 1
+      }
+    },
+    "findings": [
+      {
+        "code": "extract-key-mismatch",
+        "detail": "a rail key was pinned but the extract signature does not verify against the key it carries",
+        "id": "extract"
+      }
+    ],
+    "guarantee": "conditional",
+    "ok": false,
+    "scope": {
+      "accountId": "acct",
+      "railId": "rail",
+      "windowEndMs": 1700003600000,
+      "windowStartMs": 1700000000000
+    },
+    "summary": "audit: 1 finding(s) → FAIL",
+    "warnings": [
+      {
+        "code": "settlement-comparison-skipped",
+        "detail": "the presented extract was refused by the pinned rail key, so its rows were not reconciled against the receipts; no settlement finding in this report was read out of that document",
+        "id": "extract",
+        "severity": "warn"
+      },
+      {
+        "code": "counterparty-unbound",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found",
+        "id": "counterparty",
+        "severity": "warn"
+      }
+    ]
+  }
+}
