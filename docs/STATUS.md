@@ -78,8 +78,18 @@ name, and the workflow now asks npm whether every package exists before it
 sends anything, because a package that has never been published cannot go
 out through trusted publishing (the publisher is configured on a settings
 page the package has only after a first publish). The first publish of
-effect-extract is therefore a step by hand, before the next tag; until it
-is done, `test:post-release` is red on that package and says so.
+effect-extract was therefore a step by hand, and it is done:
+`@cedulon/effect-extract@0.12.0` went to npm on 4 September 2026 at
+21:59 UTC from the author's login, without a provenance attestation, with
+`gitHead` `9955382` (the tree that repaired the release path, not
+`abd7abc`, which the other eight carry). Checked from the registry rather
+than from this tree: `npm view` answers `0.12.0` with shasum
+`6fc71529cafb442c47339af31412b21fd62cbcca`, a clean install in an empty
+folder imports it and lists its seven exports, and `test:post-release` is
+green on all nine. What remains before the next tag is the ninth
+package's trusted publisher on npmjs.com, not yet configured as this is
+written: the pre-flight step now passes, and the publish of that one
+package would still fail with a permission error until it is.
 
 `0.11.0` was the release before it, published on npm with a provenance
 attestation. Checked from the published packages
