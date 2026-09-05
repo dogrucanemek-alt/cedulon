@@ -154,7 +154,8 @@ Brand names come from `packages/core/src/brand.ts` only.
 Citation metadata is in `CITATION.cff`. The archived -00 release is
 published as https://doi.org/10.5281/zenodo.22099792. The posted decision
 profile, draft-dogru-cedulon-decision-profile-02, is deposited on its own as
-https://doi.org/10.5281/zenodo.22337735 (all versions)
+https://doi.org/10.5281/zenodo.22337734 (all versions; the posted -02 text is
+https://doi.org/10.5281/zenodo.22339342)
 
 ## Privacy Policy
 
