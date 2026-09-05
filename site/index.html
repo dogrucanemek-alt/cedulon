@@ -86,6 +86,39 @@
         </div>
       </div>
 
+      <h2>The same audit for decisions</h2>
+      <p>
+        A spend is one kind of effect. The companion profile applies the same reconciliation to a decision log:
+        a Decision Record is a signed allow, deny or defer over a request hash and a policy hash, and an Effect
+        Extract is what the channel actually carried. The audit pairs the two by reference and by content hash,
+        and publishes the counts that have to close.
+      </p>
+      <div class="columns three">
+        <div class="col">
+          <h3>A refusal followed by the effect it refused</h3>
+          <p>
+            Spend audits have no word for it: an aborted receipt and a settlement under its reference read as
+            "settlement without receipt". Here it is a finding with its own name.
+            <span class="seal bad">effect-against-refusal → FAIL</span>
+          </p>
+        </div>
+        <div class="col">
+          <h3>The class of the effect is under the signature</h3>
+          <p>
+            An allow names what it allowed and what kind of thing it is. A row that carries the allowed hash
+            under another class is <span class="mono">effect-class-mismatch</span>, not a match.
+          </p>
+        </div>
+        <div class="col">
+          <h3>One fixture, two independent readers</h3>
+          <p>
+            A frozen leaked-refusal fixture was read by this audit and by a second reader written elsewhere in
+            its own vocabulary; both refused it. The run, its digests and its limits are in the
+            <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/EXTERNAL_REVIEW.md">external review log</a>.
+          </p>
+        </div>
+      </div>
+
       <h2>Gated spend (repository API)</h2>
       <pre><code>import { PolicyEngine } from "@cedulon/core";
 import { generateReceiptKeys } from "@cedulon/receipts";
