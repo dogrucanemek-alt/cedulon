@@ -152,7 +152,9 @@ Brand names come from `packages/core/src/brand.ts` only.
 ## How to cite
 
 Citation metadata is in `CITATION.cff`. The archived -00 release is
-published as https://doi.org/10.5281/zenodo.22099792
+published as https://doi.org/10.5281/zenodo.22099792. The posted decision
+profile, draft-dogru-cedulon-decision-profile-01, is deposited on its own as
+https://doi.org/10.5281/zenodo.22337735
 
 ## Privacy Policy
 
