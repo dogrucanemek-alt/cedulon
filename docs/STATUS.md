@@ -28,7 +28,7 @@ Nothing here holds a wallet or signs a transaction.
 
 `draft-dogru-cedulon` is posted on the IETF datatracker through `-08`
 (2 September 2026), alongside the companion decision profile,
-`draft-dogru-cedulon-decision-profile-01` (4 September 2026), and the two
+`draft-dogru-cedulon-decision-profile-02` (5 September 2026), and the two
 `-00` direction seeds.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the

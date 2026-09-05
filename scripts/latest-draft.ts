@@ -72,3 +72,23 @@ export function latestPostedRevision(specDir: string): string {
   }
   return revisions[revisions.length - 1]!;
 }
+
+/**
+ * The newest posted revision of one companion draft, by the same rule as
+ * `latestPostedRevision`: the archive text carried beside the source. A
+ * companion opened for its next posting has a `.md` and no `.txt`, and a
+ * page that names it would be naming a datatracker revision that is not
+ * there yet.
+ */
+export function latestPostedCompanionRevision(specDir: string, name: string): string {
+  const re = new RegExp(`^draft-dogru-cedulon-${name}-(\\d+)\\.txt$`);
+  const revisions = readdirSync(specDir)
+    .map((f) => re.exec(f))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => m[1]!)
+    .sort((a, b) => Number(a) - Number(b));
+  if (revisions.length === 0) {
+    throw new Error(`no draft-dogru-cedulon-${name}-NN.txt under spec/`);
+  }
+  return revisions[revisions.length - 1]!;
+}

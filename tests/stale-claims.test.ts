@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import { loadVectors } from "../conformance/run.ts";
-import { companionDraftPaths, latestDraftRevision, latestPostedRevision } from "../scripts/latest-draft.ts";
+import { companionDraftPaths, latestDraftRevision, latestPostedCompanionRevision, latestPostedRevision } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p: string): string => readFileSync(join(root, p), "utf8");
@@ -627,15 +627,21 @@ describe("claims that describe something outside their own file", () => {
     }
   });
 
-  it("the README and the site name every companion draft at its newest revision", () => {
+  it("the README and the site name every companion draft at its newest posted revision", () => {
     // The core draft got this guard twice, once per page. A companion that
     // is posted and then revised has the same drift: the page that named -00
     // by hand still says -00 at -01. Compare both pages to the tree for each
-    // companion beside the core, the way the core check does.
+    // companion beside the core, the way the core check does. The revision
+    // to name is the newest POSTED one, the one with archive text beside its
+    // source: a revision opened for the next posting has no datatracker
+    // page yet, and a README that named it would be claiming one. Keyed on
+    // the source, this check went red the moment -02 was opened, with the
+    // pages still true (5 September).
     const pages = { "README.md": read("README.md"), "site/spec.html": read("site/spec.html") };
     for (const path of companionDraftPaths(root)) {
       const m = /draft-dogru-cedulon-([a-z][a-z-]*)-(\d+)\.md$/.exec(path)!;
-      const [name, newest] = [m[1], m[2]];
+      const name = m[1]!;
+      const posted = latestPostedCompanionRevision(join(root, "spec"), name);
       for (const [page, text] of Object.entries(pages)) {
         assert.ok(
           text.includes(`draft-dogru-cedulon-${name}`),
@@ -644,11 +650,30 @@ describe("claims that describe something outside their own file", () => {
         for (const hit of text.matchAll(new RegExp(`draft-dogru-cedulon-${name}-(\\d+)`, "g"))) {
           assert.equal(
             hit[1],
-            newest,
-            `${page} names draft-dogru-cedulon-${name}-${hit[1]}; the newest revision in spec/ is -${newest}`,
+            posted,
+            `${page} names draft-dogru-cedulon-${name}-${hit[1]}; the newest posted revision in spec/ is -${posted}`,
           );
         }
       }
+    }
+  });
+
+  it("RED then GREEN: a companion's posted revision is its newest archive text, and an opened revision with no text is not posted", () => {
+    // Same discipline as the core: posted means the archive text is carried
+    // beside the source. Shown on a synthetic spec/ so the fixture does not
+    // pin a live revision number.
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-spec-"));
+    try {
+      assert.throws(() => latestPostedCompanionRevision(dir, "decision-profile"), /no draft-dogru-cedulon-decision-profile-NN\.txt/);
+      writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-01.md"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-01.txt"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-02.md"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-08.txt"), "");
+      assert.equal(latestPostedCompanionRevision(dir, "decision-profile"), "01");
+      writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-02.txt"), "");
+      assert.equal(latestPostedCompanionRevision(dir, "decision-profile"), "02");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 

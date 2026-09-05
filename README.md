@@ -138,8 +138,8 @@ packages/base-extract   read-only Base Sepolia USDC → RailExtract
 examples/demo           runaway, dispute, bypass, audit CLI
 spec/                   draft-dogru-cedulon-08 (posted 2 September 2026),
                         -07, -06, -05, -04, -03, -02, -01, -00;
-                        draft-dogru-cedulon-decision-profile-01 (posted
-                        4 September 2026), -00: decisions against effects
+                        draft-dogru-cedulon-decision-profile-02 (posted
+                        5 September 2026), -01, -00: decisions against effects
                         on the same reconciler; and the direction seeds
                         draft-dogru-cedulon-reattestation-00 and
                         draft-dogru-cedulon-streaming-00
@@ -153,8 +153,8 @@ Brand names come from `packages/core/src/brand.ts` only.
 
 Citation metadata is in `CITATION.cff`. The archived -00 release is
 published as https://doi.org/10.5281/zenodo.22099792. The posted decision
-profile, draft-dogru-cedulon-decision-profile-01, is deposited on its own as
-https://doi.org/10.5281/zenodo.22337735
+profile, draft-dogru-cedulon-decision-profile-02, is deposited on its own as
+https://doi.org/10.5281/zenodo.22337735 (all versions)
 
 ## Privacy Policy
 
