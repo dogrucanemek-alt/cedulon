@@ -11,6 +11,7 @@ import { latestDraftPath } from "../scripts/latest-draft.ts";
 import {
   PUBLISHED_MARKERS,
   checkClaimAgainstText,
+  classifyLiveClaim,
   publishedClaims,
   type PublishedClaim,
 } from "../scripts/published-as-guard.ts";
@@ -141,6 +142,44 @@ describe("published-as claims", () => {
     }
   });
 
+  it("RED then GREEN: a live claim at a pinned commit is stale, agrees, or reports that the world moved", () => {
+    // Nicholas Templeman, 5 September: a test that asserts what the
+    // registry serves right now, from inside a pinned commit, goes red
+    // for anyone who arrives after the next release, and the output
+    // alone cannot say whether they found a defect or arrived late.
+    // The claim splits in two. "The version STATUS names was
+    // published" holds forever at that commit. "And it is the latest"
+    // is true today. When the world has moved past this checkout, the
+    // second kind reports a third state instead of failing.
+    const published = ["0.5.0", "0.6.0", "0.12.0", "0.13.0"];
+    // The 0.6.0 shape: this checkout shipped 0.6.0 and STATUS still says
+    // 0.5.0. The world did not move past the checkout; the checkout is
+    // wrong. Red.
+    const stale = classifyLiveClaim({ named: "0.5.0", live: "0.6.0", workspace: "0.6.0", published });
+    assert.equal(stale.state, "stale");
+    assert.match(stale.message, /0\.5\.0/);
+    assert.match(stale.message, /0\.6\.0/);
+    // A claim of a publish that has not happened. Red.
+    const early = classifyLiveClaim({ named: "0.13.0", live: "0.12.0", workspace: "0.13.0", published: ["0.12.0"] });
+    assert.equal(early.state, "stale");
+    assert.match(early.message, /never published|not published/);
+    // A version STATUS names that no registry ever served. Red, even
+    // though the world is ahead of the checkout.
+    const phantom = classifyLiveClaim({ named: "0.0.0", live: "0.13.0", workspace: "0.12.0", published });
+    assert.equal(phantom.state, "stale");
+    // da7bf9b, run after 0.13.0 shipped: STATUS at that commit names
+    // 0.12.0, the workspace is 0.12.0, 0.12.0 was published, and the
+    // registry now serves 0.13.0. The pin is fine; the world moved.
+    const moved = classifyLiveClaim({ named: "0.12.0", live: "0.13.0", workspace: "0.12.0", published });
+    assert.equal(moved.state, "world-moved");
+    assert.match(moved.message, /world moved/);
+    assert.match(moved.message, /0\.12\.0/);
+    assert.match(moved.message, /0\.13\.0/);
+    // Today, at the release commit. Green.
+    const agrees = classifyLiveClaim({ named: "0.13.0", live: "0.13.0", workspace: "0.13.0", published });
+    assert.equal(agrees.state, "agrees");
+  });
+
   it("RED then GREEN: STATUS published-on-npm is the workspace version is on npm latest for every public package", (t) => {
     // Offline stale-claims.ts reads this number from STATUS itself.
     // This test is the floor: the number STATUS names must be the
@@ -151,13 +190,18 @@ describe("published-as claims", () => {
     const names = publicPackageNames();
     assert.ok(names.length > 0, "no public package under packages/");
     const latestByPackage = new Map<string, string>();
+    let publishedEverywhere: Set<string> | undefined;
     for (const name of names) {
-      const viewed = npmViewVersion(name);
-      if (typeof viewed !== "string") {
+      const viewed = npmViewPublished(name);
+      if ("skipped" in viewed) {
         t.skip(`STATUS↔npm latest skipped: npm view failed (${viewed.skipped})`);
         return;
       }
-      latestByPackage.set(name, viewed);
+      latestByPackage.set(name, viewed.latest);
+      // A version counts as published only if every public package has it.
+      publishedEverywhere = publishedEverywhere
+        ? new Set(viewed.versions.filter((v) => publishedEverywhere!.has(v)))
+        : new Set(viewed.versions);
     }
     const unique = [...new Set(latestByPackage.values())];
     assert.equal(
@@ -166,6 +210,8 @@ describe("published-as claims", () => {
       `npm latest disagrees across public packages: ${[...latestByPackage.entries()].map(([n, v]) => `${n}@${v}`).join(", ")}`,
     );
     const npmLatest = unique[0]!;
+    const workspace = workspaceVersion();
+    const published = [...(publishedEverywhere ?? [])];
 
     const living = readFileSync(join(root, "docs", "STATUS.md"), "utf8");
     const drifted = living.replace(
@@ -174,7 +220,7 @@ describe("published-as claims", () => {
     );
     assert.notEqual(drifted, living, "fixture did not change the published-on-npm version");
     assert.throws(
-      () => assertStatusPublishedMatchesNpm(drifted, npmLatest),
+      () => judgeStatusPublishedOnNpm(drifted, npmLatest, workspace, published),
       (err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         assert.match(message, /0\.0\.0/, `red message omitted STATUS's number: ${message}`);
@@ -186,7 +232,18 @@ describe("published-as claims", () => {
         return true;
       },
     );
-    assertStatusPublishedMatchesNpm(living, npmLatest);
+    // The 0.6.0 shape stays red at this checkout: a tree whose own
+    // version is the one npm serves cannot say the world moved.
+    const shipped = living.replace(
+      /published on npm at `\d+\.\d+\.\d+`/,
+      "published on npm at `0.0.0`",
+    );
+    assert.throws(() => judgeStatusPublishedOnNpm(shipped, workspace, workspace, [...published, workspace]));
+    const verdict = judgeStatusPublishedOnNpm(living, npmLatest, workspace, published);
+    if (verdict.state === "world-moved") {
+      t.skip(verdict.message);
+      return;
+    }
   });
 
   it("the MCP Registry version STATUS names is the one the registry serves", async (t) => {
@@ -200,21 +257,35 @@ describe("published-as claims", () => {
     // 0.9.0 on 1 September and every sentence here about the gap
     // became false with nothing red. This test is the third thing
     // that has to agree, and it asks the registry.
-    const live = await registryLatestVersion();
-    if (typeof live !== "string") {
+    const listing = await registryVersions();
+    if ("skipped" in listing) {
       // The registry host has failed to answer before, and a check
       // that goes red when someone else's service is down measures
       // their uptime rather than our claim.
-      t.skip(`MCP Registry did not answer: ${live.skipped}`);
+      t.skip(`MCP Registry did not answer: ${listing.skipped}`);
       return;
     }
     const status = readFileSync(join(root, "docs", "STATUS.md"), "utf8");
     const named = status.match(/where `(\d+\.\d+\.\d+)` is the current version \(`isLatest`\)/);
     assert.ok(named, "docs/STATUS.md no longer names the registry isLatest version");
+    // Two claims. "The registry has served the version STATUS names" holds
+    // at this commit forever. "And it is the isLatest one" is true today;
+    // once the listing has moved past this checkout, that is reported as
+    // the world moving, not as a defect in the pin.
+    const verdict = classifyLiveClaim({
+      named: named[1]!,
+      live: listing.latest,
+      workspace: workspaceVersion(),
+      published: listing.versions,
+    });
+    if (verdict.state === "world-moved") {
+      t.skip(verdict.message);
+      return;
+    }
     assert.equal(
-      named[1],
-      live,
-      `docs/STATUS.md says the MCP Registry serves ${named[1]}; the registry serves ${live}`,
+      verdict.state,
+      "agrees",
+      `docs/STATUS.md says the MCP Registry serves ${named[1]}; ${verdict.message}`,
     );
   });
 });
@@ -235,17 +306,26 @@ function publicPackageNames(): string[] {
   return names.sort();
 }
 
-function npmViewVersion(pkg: string): string | { skipped: string } {
+function npmViewPublished(pkg: string): { latest: string; versions: string[] } | { skipped: string } {
   // Same npm CLI path as tarballText (execFileSync, timeout, win32
-  // shell, offline skip). This question is the latest dist-tag, not
-  // the tarball bytes of a pinned version.
+  // shell, offline skip). Two questions in one call: the latest
+  // dist-tag (today's claim) and the version list (what was ever
+  // published, which a pinned commit may name without being latest).
   try {
-    return execFileSync("npm", ["view", pkg, "version"], {
+    const out = execFileSync("npm", ["view", pkg, "dist-tags.latest", "versions", "--json"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 60_000,
       shell: process.platform === "win32",
-    }).trim();
+    });
+    const parsed = JSON.parse(out) as unknown;
+    const row = (Array.isArray(parsed) ? parsed[0] : parsed) as
+      | { "dist-tags.latest"?: string; versions?: string[] | string }
+      | undefined;
+    const latest = row?.["dist-tags.latest"];
+    const versions = Array.isArray(row?.versions) ? row.versions : row?.versions ? [row.versions] : [];
+    if (!latest) throw new Error(`npm view ${pkg} answered without a latest dist-tag: ${out.slice(0, 200)}`);
+    return { latest, versions };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // A registry that answers 404 is not offline: it answered, and the
@@ -263,10 +343,30 @@ function npmViewVersion(pkg: string): string | { skipped: string } {
   }
 }
 
-async function registryLatestVersion(): Promise<string | { skipped: string }> {
+function workspaceVersion(): string {
+  // The version this checkout is, read from the public packages. They
+  // are bumped together; disagreement is its own defect.
+  const versions = new Set<string>();
+  for (const dir of readdirSync(join(root, "packages"))) {
+    let raw: string;
+    try {
+      raw = readFileSync(join(root, "packages", dir, "package.json"), "utf8");
+    } catch {
+      continue;
+    }
+    const pkg = JSON.parse(raw) as { name?: string; private?: boolean; version?: string };
+    if (!pkg.name || pkg.private || !pkg.version) continue;
+    versions.add(pkg.version);
+  }
+  assert.equal(versions.size, 1, `public packages disagree on their version: ${[...versions].join(", ")}`);
+  return [...versions][0]!;
+}
+
+async function registryVersions(): Promise<{ latest: string; versions: string[] } | { skipped: string }> {
   // The listing is a second distribution channel with its own host.
-  // Same shape as npmViewVersion: answer, or a skip reason, never a
-  // silent pass.
+  // Same shape as npmViewPublished: answer, or a skip reason, never a
+  // silent pass. One search answers both questions: every version the
+  // listing carries for this server, and which of them is isLatest.
   try {
     const url =
       "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.dogrucanemek-alt/cedulon";
@@ -286,18 +386,26 @@ async function registryLatestVersion(): Promise<string | { skipped: string }> {
     });
     const version = latest?.server?.version;
     if (!version) return { skipped: "no isLatest entry for this server in the registry response" };
-    return version;
+    const versions = [...new Set(ours.map((s) => s.server?.version).filter((v): v is string => !!v))];
+    return { latest: version, versions };
   } catch (err) {
     return { skipped: err instanceof Error ? err.message : String(err) };
   }
 }
 
-function assertStatusPublishedMatchesNpm(status: string, npmLatest: string): void {
+function judgeStatusPublishedOnNpm(
+  status: string,
+  npmLatest: string,
+  workspace: string,
+  published: readonly string[],
+): { state: "agrees" | "world-moved"; message: string } {
   const named = status.match(/published on npm at `(\d+\.\d+\.\d+)`/);
   assert.ok(named, "docs/STATUS.md no longer names the published version as published on npm at `X`");
-  assert.equal(
-    named[1],
-    npmLatest,
-    `docs/STATUS.md says published on npm at ${named[1]}; npm latest is ${npmLatest}`,
-  );
+  const verdict = classifyLiveClaim({ named: named[1]!, live: npmLatest, workspace, published });
+  if (verdict.state === "stale") {
+    throw new Error(
+      `docs/STATUS.md says published on npm at ${named[1]}; npm latest is ${npmLatest} (${verdict.message})`,
+    );
+  }
+  return { state: verdict.state, message: verdict.message };
 }

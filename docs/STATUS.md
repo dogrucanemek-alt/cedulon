@@ -478,7 +478,15 @@ earlier revision of this paragraph asserted the listing could not have moved
 between two readings. It could, and it did: the entry sat at `0.7.0` for two
 releases and then caught up in one push. What is stated here is the reading and
 its date; whether the numbers still agree is a question for the registry, and
-`tests/published-as.test.ts` asks it rather than trusting this sentence.
+`tests/published-as.test.ts` asks it rather than trusting this sentence. That
+test asks two things and keeps them apart: whether the version this page names
+was ever served, which holds at this commit forever, and whether it is the one
+served today, which a pinned commit cannot promise. At a commit the listing has
+moved past, the second reports "this pin is fine, the world moved" instead of a
+failure; a checkout whose own version is the one being served still fails when
+this page names the one before it. Nicholas Templeman reproduced `da7bf9b` on 5
+September, after 0.13.0 shipped, and got the red that told him nothing about
+which of the two had failed; that is the run this distinction comes from.
 
 `release.yml` still sends packages to npm from the tag. It now also carries an
 MCP Registry step (`mcp-publisher login github-oidc` then `publish`) after the
