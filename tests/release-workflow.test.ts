@@ -81,6 +81,25 @@ describe("release.yml static shape", () => {
     assert.doesNotMatch(jobs.get("publish")!, /contents:\s*write/);
   });
 
+  // v0.13.0 (5 September): the npm readback saw the version in the
+  // metadata and let the release job start, but the tarballs of two
+  // packages answered 404 for about eight minutes behind the CDN, so the
+  // bundle's npm install failed and the release needed a manual rerun.
+  // The readback asks for the bytes, not only the number, and the bundle
+  // job asks again before it builds.
+  it("the npm readback probes each tarball, and the release job waits for the tarballs before building", () => {
+    const jobs = jobBodies(yml);
+    const publish = jobs.get("publish");
+    const release = jobs.get("release");
+    assert.ok(publish && release, "release.yml has no publish and release jobs");
+    assert.match(publish, /dist\.tarball/, "the readback does not read dist.tarball");
+    assert.match(publish, /curl .*-I .*tarball/, "the readback does not HEAD the tarball URL");
+    const build = release.indexOf("npm run mcpb");
+    const probe = release.indexOf("dist.tarball");
+    assert.ok(build > 0, "the release job does not build the bundle");
+    assert.ok(probe > 0 && probe < build, "the release job builds the bundle before it has probed the tarballs");
+  });
+
   it("the bundle step refuses a manifest that is not the tag", () => {
     assert.match(yml, /manifest\.json/, "bundle step does not open manifest.json");
     assert.match(

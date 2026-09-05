@@ -133,6 +133,27 @@ jobs:
             [ "$got" = "$tag" ] || { echo "registry still says ${got:-nothing} after 10 attempts, tag says $tag"; exit 1; }
           done
 
+      # v0.13.0: the metadata said 0.13.0 while two tarballs answered 404
+      # behind the CDN for about eight minutes, and the bundle job's npm
+      # install failed on them. The version is a number; the install needs
+      # the bytes. Same bound: ten asks, fifteen seconds apart.
+      - name: every tarball of this version answers
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
+            tarball=$(npm view "@cedulon/$p@$tag" dist.tarball 2>/dev/null || echo "")
+            [ -n "$tarball" ] || { echo "@cedulon/$p@$tag names no tarball"; exit 1; }
+            code=""
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$tarball" || echo "000")
+              [ "$code" = "200" ] && break
+              echo "  @cedulon/$p tarball -> HTTP $code (attempt $attempt, waiting)"
+              sleep 15
+            done
+            echo "  @cedulon/$p tarball -> HTTP $code"
+            [ "$code" = "200" ] || { echo "tarball for @cedulon/$p@$tag still answers $code after 10 attempts"; exit 1; }
+          done
+
       # test:post-release used to sit here. It compares STATUS with npm and is
       # red on every tagged run by design, because STATUS moves after the
       # publish; the first tag that carried the registry and bundle steps
@@ -259,7 +280,26 @@ jobs:
       - run: npm ci
 
       # Builds from the published npm package, not the working tree, so this
-      # job depends on publish having completed the npm readback.
+      # job depends on publish having completed the npm readback. The
+      # readback probed the tarballs once; a CDN can still answer 404 to
+      # this runner after answering 200 to that one, so it asks again here,
+      # right before the install that needs them.
+      - name: every tarball of this version answers from this runner
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
+            tarball=$(npm view "@cedulon/$p@$tag" dist.tarball 2>/dev/null || echo "")
+            [ -n "$tarball" ] || { echo "@cedulon/$p@$tag names no tarball"; exit 1; }
+            code=""
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$tarball" || echo "000")
+              [ "$code" = "200" ] && break
+              echo "  @cedulon/$p tarball -> HTTP $code (attempt $attempt, waiting)"
+              sleep 15
+            done
+            [ "$code" = "200" ] || { echo "tarball for @cedulon/$p@$tag still answers $code after 10 attempts"; exit 1; }
+          done
+
       - name: build the desktop bundle
         run: npm run mcpb
 
