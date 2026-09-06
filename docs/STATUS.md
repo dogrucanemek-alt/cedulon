@@ -26,7 +26,7 @@ one of the 128 came back as `settlement-without-receipt`, at
 operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 
-`draft-dogru-cedulon` is posted on the IETF datatracker through `-08`
+`draft-dogru-cedulon` is posted on the IETF datatracker through `-09`
 (2 September 2026), alongside the companion decision profile,
 `draft-dogru-cedulon-decision-profile-02` (5 September 2026), and the two
 `-00` direction seeds.
