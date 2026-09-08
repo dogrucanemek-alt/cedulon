@@ -4,6 +4,7 @@ abbrev: Cedulon
 docname: draft-dogru-cedulon-10
 date: 2026-09-08
 category: info
+submissiontype: independent
 ipr: trust200902
 area: sec
 workgroup:
@@ -48,6 +49,7 @@ informative:
   RFC7942:
   RFC9110:
   RFC9421:
+  RFC4846:
   CEDULON-DT:
     title: "Cedulon: An Audit Layer for Agent-to-Agent Commerce"
     author:
@@ -2270,20 +2272,22 @@ Observability:
 
 # IANA Considerations {#iana}
 
-This document requests the registration of six media types in the
-"Media Types" registry {{RFC6838}}, in the standards tree, each
-carrying the `+cbor` structured syntax suffix that {{RFC8949}}
-registers. Each names one of the COSE_Sign1 objects this document
+This document is an Independent Submission {{RFC4846}}, and a
+standards tree registration requires IETF approval, which this stream
+does not carry. It therefore requests the **provisional**
+registration of six media types in the "Media Types" registry
+{{RFC6838}}, under the procedure of {{RFC6838}} Section 5.2.1, which
+is available to an Internet-Draft, each carrying the `+cbor`
+structured syntax suffix that {{RFC8949}} registers. Each names one of the COSE_Sign1 objects this document
 defines and is carried as the COSE `content type` header parameter
 (label 3) of that object ({{cose-profile}}). The value is a normative
 check inside a protected header (`MUST-T4-8`, `MUST-T6-5`), which is
 why the names cannot stay unregistered while that check stands.
-Registration in the standards tree requires IETF approval; until
-then, an implementation outside a closed deployment should treat
-these names as placeholders that a registration may change. The
-provisional registration procedure of {{RFC6838}} Section 5.2.1 is
-available to an Internet-Draft, and a provisional entry, if one is
-made, is superseded by the registration this section requests.
+A provisional entry is superseded by a permanent registration in the
+standards tree, which the later Standards Track revision named in
+{{evolution}} would request. Until that registration is made, an
+implementation outside a closed deployment should treat these names
+as ones a registration may change.
 
 The claim labels this document assigns inside the CBOR claim sets,
 `-70001` through `-70402` ({{receipt-labels}}, {{countersign}}), lie
@@ -2655,11 +2659,21 @@ revision of this document, which is the right home for a record that
 changes when a reader writes rather than when the protocol does. The
 measured figures stay here, in the section that makes the claim.
 
-The `submissiontype` setting is removed from the front matter. It
-declared an IETF stream for a document that is an individual
-submission with no stream assigned, which the Datatracker's
-submission-time checker reported against -09; the stream is set where
-the document is posted, not in its source.
+The stream is now declared. -09 said `submissiontype: IETF`, which
+the Datatracker's submission-time checker reported against, because
+the document is not a working-group item and carries no IETF stream.
+This revision says `independent`: the intended route is the
+Independent Submissions Editor {{RFC4846}}, as an Informational RFC.
+
+That declaration reaches {{iana}}. A standards tree media type
+registration requires IETF approval, which the Independent Submission
+stream does not carry, so the six templates are requested as
+provisional registrations under {{RFC6838}} Section 5.2.1 rather than
+as the permanent entries -09 asked for. Nothing about the names, the
+templates or the `content type` check changes; what changes is which
+registry state this document can reach on its own. The permanent
+registration belongs to the Standards Track revision {{evolution}}
+names, and a provisional entry is superseded by it.
 
 
 ## Changes from -08 {#changes-08}
@@ -2711,9 +2725,12 @@ one.
 
 # Evolution and Future Work (Informative) {#evolution}
 
-This document is submitted as Informational. The author's intended
-eventual track, if the work is taken up, is a Standards Track profile
-of COSE {{RFC9052}} and CWT {{RFC8392}} for agent-spend receipts.
+This document is submitted to the Independent Submissions Editor
+{{RFC4846}} as Informational. The author's intended eventual track, if
+the work is taken up, is a Standards Track profile of COSE {{RFC9052}}
+and CWT {{RFC8392}} for agent-spend receipts, which is where the
+standards tree registrations {{iana}} leaves provisional would be
+requested.
 
 This section is a direction, not a commitment. The structures below
 are reserved in name only. Normative wire formats, tests, and
