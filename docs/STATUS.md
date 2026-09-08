@@ -27,7 +27,7 @@ operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 
 `draft-dogru-cedulon` is posted on the IETF datatracker through `-09`
-(2 September 2026), alongside the companion decision profile,
+(6 September 2026; `-08` was 2 September), alongside the companion decision profile,
 `draft-dogru-cedulon-decision-profile-03` (6 September 2026), and the two
 `-00` direction seeds.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
@@ -648,5 +648,71 @@ in the opening paragraph until that job is measured again.
 
 Not measured on this host: a second Windows user reading the file, and
 PID reuse on a stale lock. `demo:unguarded` remains the intentional hole.
+
+## The reader record behind each revision
+
+`-10` moved this account out of the draft's Implementation Status
+section, which had grown to carry it revision by revision. It lives
+here because it changes when a reader writes, not when the protocol
+does, and correcting it should not need a new revision of the draft.
+The draft keeps the measured figures and the claims they support.
+
+Every revision has been driven by what a reader found rather than by a
+plan.
+
+- `-01` closed a bypass of the completeness claim and a gap about which
+  key an extract is checked against.
+- `-02` repaired a defect reported against `-01` and independently
+  confirmed by a second reader: the object carrying the T11 guarantee
+  was neither profiled for registration nor read during verification.
+- `-03` answered a question asked against the posted `-02`: should the
+  profile accept a pinned witness key and report an absent or
+  mismatched pin explicitly. `-02` already required a verifier to take
+  the public key from an authenticated channel and to reject a `kid`
+  that did not match it; what it did not carry was the verification
+  algorithm, the separate root inputs, and the error semantics.
+  Following that question into the implementation found the same
+  omission for the Spend Receipt, the epoch checkpoint and the Decision
+  Token. T12 came from no reader and no adversary: it was found while
+  writing the task for one of them, in the ordering the implementation
+  itself used.
+- `-04` answered a first-failure list filed by an independent reader who
+  ran the Appendix A vectors against the exact archive bytes of the
+  posted `-03` before reading the text: eight points where an
+  implementation could no longer be built from the text alone, one
+  question, and three mechanical defects. Eighteen decision points were
+  read out of `-03` by someone working from the words alone, and eight
+  of them had two defensible answers; five of those eight were the same
+  defect in different clothes.
+- `-05` added two decoder rules, each the named refusal of a surface
+  the posted `-04` left implicit, and turned the placeholder table of
+  its IANA section into registration requests. The outside run that
+  produced the list recorded its own conditions: Linux x86_64, Python
+  3.14.4, cbor2 6.1.4, cryptography 50.0.1, against archive bytes
+  SHA-256 `661755c600aede25451ce3a67df4a45d0d964c7b9196dc725dd310723eb8a49f`.
+  Reading the posted `-05`, the same reader rebuilt the regenerated
+  receipt vector from the text alone and obtained the published 307
+  octets byte for byte, SHA-256
+  `0f1fe8859faf25de906b08142674f1270656d8ea7bfc00853c2fc6e9d3f5a10b`,
+  against archive bytes SHA-256
+  `fc8962b3daeed9f8e5b1c2b7d26d605c14873d9de1cbf35743ce59af2c7aa62e`.
+  That reader had read parts of the public repository and its package
+  metadata, says so, and for that reason does not describe the pass as
+  clean-room.
+- `-06` and `-07` came from readers implementing from the posted text.
+
+The requirements `-03` and `-04` added came out of five adversarial
+rounds against the implementation, each asking a reviewer to break the
+code rather than read it, with the reviewer barred from changing it.
+Four of those rounds found a defect inside the previous round's repair
+rather than in the original code, which is why neither this file nor
+the draft describes the result as settled.
+
+The CI sentence in the draft has been corrected once per reader who
+measured it. An independent runner reported the first platform
+distinction back from a Linux run after the text claimed otherwise, and
+a reader re-running the frozen claims pointed out that an earlier
+wording, "the whole suite", counted a post-release job that the
+pre-release run deliberately excludes.
 
 To reproduce any of the above, see `docs/RUN_AS_VERIFIER.md`.
