@@ -2,7 +2,7 @@
 title: "Cedulon Core: Spend Receipts and Rail Reconciliation for Agent Commerce"
 abbrev: Cedulon Core
 docname: draft-dogru-cedulon-core-00
-date: 2026-09-08
+date: 2026-09-09
 category: info
 submissiontype: independent
 ipr: trust200902
@@ -237,7 +237,9 @@ looping agent can drain a rail that has already accepted a valid
 signature. A counterparty can ship the wrong artifact. A transparency
 log, if used at all, is proprietary.
 
-Cedulon fills that gap. It does not clear funds, hold custody, or
+Cedulon fills that gap. The name is from cedule, the older legal
+word for a written schedule or note.
+It does not clear funds, hold custody, or
 operate a payment facilitator. An optional escrow actor is defined only
 as a third-party role interface ({{escrow-role}}). Implementations of
 this specification MUST NOT take custody of funds or operate escrow
@@ -249,9 +251,10 @@ routine, and signing the artifacts on both sides is Grigg's
 triple-entry idea {{GRIGG}}. Neither is claimed here. What this
 document contributes is an open wire profile for that control in a
 setting where the parties are software: a COSE receipt shape, an
-extract shape, a checkpoint chain, and a verification algorithm
-precise enough that two implementations reach the same finding on the
-same evidence. The novelty is interoperability, not the idea.
+extract shape, and a verification algorithm precise enough that two
+implementations reach the same finding on the same evidence. The
+checkpoint chain that carries the same discipline over epochs is in
+{{CEDULON-CHECKPOINT}}. The novelty is interoperability, not the idea.
 
 Neighbor drafts are complementary, not substitutes.
 draft-bates-atp {{BATES-ATP}} covers tamper-evident causal lineage as
@@ -1228,7 +1231,7 @@ one settlement reference, for instance - cannot be attributed to
 anyone and are reported as conditions of the submission rather than
 as failures of a party.
 
-# Reconciliation and Epoch Checkpoints {#reconciliation}
+# Reconciliation {#reconciliation}
 
 Completeness is the property that, given an authenticated rail
 extract, every settlement in the extract has a matching settled Spend
@@ -1852,7 +1855,7 @@ The verification algorithm states that distinction by behaviour
 
 ## T11: Checkpoint suppression or rollback
 
-T11 (checkpoint zinciri ve witness): bkz. {{CEDULON-CHECKPOINT}}.
+T11 (checkpoint chain and witness): see {{CEDULON-CHECKPOINT}}.
 The two identities that the core label set and the reconciliation
 conditionality depend on remain here.
 
@@ -2128,7 +2131,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 548 of 548,
+  this revision describes, all three assert every case, 559 of 559,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.

@@ -117,8 +117,9 @@ An allow is computed; the request is then swapped (payee, amount)
 before the rail sees it; or a second payment uses the same allow.
 
 The adapter pays only the exact fields hashed into the single-use
-decision. Defined in {{CEDULON-CORE}}: MUST-T6-1, MUST-T6-2,
-MUST-T6-4, MUST-T6-5, MUST-T6-6.
+decision, and the settlement it records cannot be stamped after the
+authority it was recorded under expired. Defined in {{CEDULON-CORE}}:
+MUST-T6-1, MUST-T6-2, MUST-T6-4, MUST-T6-5, MUST-T6-6, MUST-T6-7.
 
 # T7: Signing-key leakage
 
