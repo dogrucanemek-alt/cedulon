@@ -15,6 +15,72 @@
     <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="stylesheet" href="styles.css">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Cedulon",
+      "description": "Cedulon is the open audit layer for agent-to-agent payments. Every spend carries a signed receipt, receipts chain to epoch checkpoints, and the chain is reconciled against the payment rail's own extract, so a spend that left no receipt becomes a finding.",
+      "applicationCategory": "SecurityApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "url": "https://cedulon.com",
+      "codeRepository": "https://github.com/dogrucanemek-alt/cedulon",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "publisher": {
+        "@type": "Organization",
+        "name": "VERAX Teknoloji Limited Şirketi",
+        "url": "https://verax-ai.com"
+      }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What does Cedulon actually do?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Cedulon sits above payment rails such as x402 and AP2 as an audit layer. It writes a signed spend receipt, a chained epoch checkpoint, and a reconciliation of the rail extract. If a spend left no receipt, the gap is the finding. The design is specified in IETF Internet-Drafts and published as open source under Apache-2.0."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can anyone verify a spend receipt?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A signed spend record checks as valid or tampered. That is the easy half. A spend that never issued a receipt leaves no object to verify, and the books can still look clean. The companion audit compares the rail extract to the receipt chain so a missing receipt becomes a finding."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Cedulon take custody of funds?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Cedulon does not take custody and does not operate escrow. An optional third-party escrow role may appear in the protocol as an interface. This repository uses mock keys and a mock rail. The published packages do not touch money: no real wallets and no network rails."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I attach Cedulon to Claude or Cursor?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The gated spend and extract audit are five MCP tools on stdio, published on npm as @cedulon/mcp-server. Point Claude Desktop, Claude Code, or Cursor at that package. There is nothing to clone or build. A five-minute path is in the repository Quickstart document."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What does Cedulon not prove?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Cedulon does not take custody and does not operate escrow. It does not judge delivery quality beyond a hash compare against the manifest acceptance criteria. Payment rails may succeed even if Cedulon is skipped. Production key storage is out of scope in this repository. Completeness checking does not replace prevention."
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div class="wrap">
@@ -168,6 +234,18 @@ const result = gatedSettle(engine, {
         <li>Paper: <em>Two ledgers, one window: integrity of a mediator's record does not establish its completeness</em>, <a href="https://doi.org/10.5281/zenodo.22071429">10.5281/zenodo.22071429</a>, CC BY 4.0</li>
         <li>Author: Emek Can Doğru, ORCID <a href="https://orcid.org/0009-0005-4823-4468">0009-0005-4823-4468</a></li>
       </ul>
+
+      <h2 id="faq">Questions</h2>
+      <h3>What does Cedulon actually do?</h3>
+      <p>Cedulon sits above payment rails such as x402 and AP2 as an audit layer. It writes a signed spend receipt, a chained epoch checkpoint, and a reconciliation of the rail extract. If a spend left no receipt, the gap is the finding. The design is specified in IETF Internet-Drafts and published as open source under Apache-2.0.</p>
+      <h3>Can anyone verify a spend receipt?</h3>
+      <p>A signed spend record checks as valid or tampered. That is the easy half. A spend that never issued a receipt leaves no object to verify, and the books can still look clean. The companion audit compares the rail extract to the receipt chain so a missing receipt becomes a finding.</p>
+      <h3>Does Cedulon take custody of funds?</h3>
+      <p>Cedulon does not take custody and does not operate escrow. An optional third-party escrow role may appear in the protocol as an interface. This repository uses mock keys and a mock rail. The published packages do not touch money: no real wallets and no network rails.</p>
+      <h3>How do I attach Cedulon to Claude or Cursor?</h3>
+      <p>The gated spend and extract audit are five MCP tools on stdio, published on npm as @cedulon/mcp-server. Point Claude Desktop, Claude Code, or Cursor at that package. There is nothing to clone or build. A five-minute path is in the repository Quickstart document.</p>
+      <h3>What does Cedulon not prove?</h3>
+      <p>Cedulon does not take custody and does not operate escrow. It does not judge delivery quality beyond a hash compare against the manifest acceptance criteria. Payment rails may succeed even if Cedulon is skipped. Production key storage is out of scope in this repository. Completeness checking does not replace prevention.</p>
 
       <footer class="colophon">
         <p><a href="https://github.com/dogrucanemek-alt/cedulon">Source</a> · <a href="spec.html">Draft</a> · <a href="verify.html">Run as a verifier</a> · <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Quickstart</a> · <a href="privacy.html">Privacy</a></p>

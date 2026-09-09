@@ -1,0 +1,34 @@
+# Cedulon
+
+> Agents can already pay on open rails such as x402 and AP2. Cedulon sits
+> above those rails as an audit layer: a signed spend receipt, a chained
+> epoch checkpoint, and a reconciliation of the rail extract. If a spend
+> left no receipt, the gap is the finding.
+
+## What it does
+
+- Category: open audit layer for agent-to-agent payments, sitting above rails such as x402 and AP2.
+- A signed spend receipt (COSE_Sign1, Ed25519).
+- A chained epoch checkpoint (totals and previous hash).
+- A reconciliation audit that compares the rail extract to the receipt chain.
+- Fail-closed policy: a missing or throwing policy engine denies.
+- The same gated spend and extract audit are five MCP tools on stdio, published as `@cedulon/mcp-server`.
+- License: Apache-2.0. Source: https://github.com/dogrucanemek-alt/cedulon
+
+## How to verify
+
+- A signed spend record checks as valid or tampered.
+- The companion audit compares the rail extract to the receipt chain. A bypass in this repository prints `audit: 1 settlement without receipt → FAIL`.
+- A third party can reproduce this without trusting the vendor: `docs/RUN_AS_VERIFIER.md`.
+- Internet-Draft: https://datatracker.ietf.org/doc/draft-dogru-cedulon/
+- Home: https://cedulon.com
+
+## Scope — what this deliberately does not claim
+
+- Cedulon is not a payment rail. It sits above x402 and AP2. (README.md)
+- Nothing here touches money: no real wallets and no network rails, the repository uses mock fixtures. (README.md)
+- Cedulon does not take custody and does not operate escrow. (THREAT_MODEL.md)
+- Production key storage is out of scope. (THREAT_MODEL.md)
+- Delivery verification is a hash compare against the manifest acceptance criteria. Cedulon does not judge quality beyond that hash. (THREAT_MODEL.md)
+- Rails (x402 facilitators, card networks) may succeed even if Cedulon is skipped. (THREAT_MODEL.md)
+- Completeness does not replace prevention. (THREAT_MODEL.md)

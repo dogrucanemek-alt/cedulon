@@ -1,0 +1,10 @@
+# cedulon.com
+# All crawlers welcome, including AI search and answer engines.
+# We want to be readable, quotable and correctable.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://cedulon.com/sitemap.xml
+
+# Machine-readable summary for AI systems: https://cedulon.com/llms.txt
