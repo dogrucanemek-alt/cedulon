@@ -17,9 +17,16 @@ export type IdentityHit = {
   why: string;
 };
 
+const DOCNAME = /^docname:\s*draft-dogru-cedulon(?:-([a-z][a-z-]*))?-(\d+)\s*$/m;
+
 export function draftRevision(md: string): string | null {
-  const m = md.match(/^docname:\s*draft-dogru-cedulon-(\d+)\s*$/m);
-  return m ? m[1] : null;
+  const m = md.match(DOCNAME);
+  return m ? m[2] : null;
+}
+
+export function draftSeries(md: string): string | null {
+  const m = md.match(DOCNAME);
+  return m ? (m[1] ?? "") : null;
 }
 
 export function identityHits(md: string): IdentityHit[] {

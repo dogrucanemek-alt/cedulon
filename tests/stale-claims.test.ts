@@ -7,7 +7,13 @@ import { fileURLToPath } from "node:url";
 
 import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import { loadVectors } from "../conformance/run.ts";
-import { companionDraftPaths, latestDraftRevision, latestPostedCompanionRevision, latestPostedRevision } from "../scripts/latest-draft.ts";
+import {
+  assertFamilyIdentities,
+  reportFamilyIdentities,
+  tableDefinedIds,
+} from "../scripts/core00-identity.ts";
+import { assertStepRefs, stepRefFailures } from "../scripts/core00-step-refs.ts";
+import { companionDraftPaths, core00FamilyPaths, latestDraftRevision, latestPostedCompanionRevision, latestPostedRevision } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p: string): string => readFileSync(join(root, p), "utf8");
@@ -282,6 +288,99 @@ const DRAFT = `spec/draft-dogru-cedulon-${latestDraftRevision(join(root, "spec")
  * the prose gets looked at. A wrong sentence about an unchanged fact still
  * needs a reader.
  */
+
+/**
+ * The `-00` family is a fresh start. A sentence that tells a first-time
+ * reader what `-03` said, or what the posted `-05` left out, is the
+ * previous numbered series arguing with itself. Acknowledgments name
+ * the people who read those postings; they are not this document
+ * debating its own earlier text, and they stay out of the scan.
+ * "withdrawn" alone is not the criterion: a living rule can use that
+ * word (authorised terms cannot be withdrawn by reporting them later).
+ * "numbered" alone is not either: steps are numbered for reference,
+ * and kramdown attributes use `{:numbered="false"}`. Only the adjacent
+ * shape `-0N numbered` is a revision arguing with itself.
+ */
+const REVISION_ARGUMENT_VERBS =
+  /\b(said|stated|asserted|called|described|named|used|left|carried|had)\b/i;
+const REVISION_TOKEN = /(?<![0-9])-0[1-9]\b/g;
+const POSTED_REVISION = /posted\s+-0\d\b/i;
+const EARLIER_REVISION = /earlier revisions?\b/i;
+const NUMBERED_REVISION = /(?<![0-9])-0[1-9]\s+numbered\b/i;
+
+function acknowledgmentsSpan(md: string): { start: number; end: number } | null {
+  const lines = md.split(/\n/);
+  let start = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^# Acknowledgments\b/.test(lines[i]!)) start = i;
+    else if (start >= 0 && /^# /.test(lines[i]!) && !/^# Acknowledgments\b/.test(lines[i]!)) {
+      return { start, end: i };
+    }
+  }
+  return start >= 0 ? { start, end: lines.length } : null;
+}
+
+export type RevisionArgumentHit = { line: number; text: string; why: string };
+
+function revisionArgumentHits(md: string): RevisionArgumentHit[] {
+  const lines = md.split(/\n/);
+  const ack = acknowledgmentsSpan(md);
+  const inAck = (i: number): boolean => ack !== null && i >= ack.start && i < ack.end;
+  const hits: RevisionArgumentHit[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (inAck(i)) continue;
+    const text = lines[i]!;
+    if (POSTED_REVISION.test(text)) {
+      hits.push({
+        line: i + 1,
+        text,
+        why: "posted -0N names an earlier revision of this family",
+      });
+    }
+    if (EARLIER_REVISION.test(text)) {
+      hits.push({
+        line: i + 1,
+        text,
+        why: "earlier revision argues with a prior draft",
+      });
+    }
+    const window = `${text}\n${lines[i + 1] ?? ""}`;
+    const numbered = new RegExp(NUMBERED_REVISION.source, "gi");
+    let n: RegExpExecArray | null;
+    while ((n = numbered.exec(window))) {
+      if (n.index > text.length) continue;
+      hits.push({
+        line: i + 1,
+        text,
+        why: "-0N numbered names an earlier revision of this family",
+      });
+    }
+    const token = new RegExp(REVISION_TOKEN.source, "g");
+    let m: RegExpExecArray | null;
+    while ((m = token.exec(window))) {
+      if (m.index > text.length) continue;
+      const around = window.slice(Math.max(0, m.index - 48), m.index + m[0].length + 64);
+      if (REVISION_ARGUMENT_VERBS.test(around)) {
+        hits.push({
+          line: i + 1,
+          text,
+          why: `${m[0]} sits beside a reporting verb`,
+        });
+      }
+    }
+  }
+  return hits;
+}
+
+function assertNoRevisionArguments(docs: Record<string, string>): void {
+  const fails: string[] = [];
+  for (const [name, text] of Object.entries(docs)) {
+    for (const h of revisionArgumentHits(text)) {
+      fails.push(`${name}:${h.line}: ${h.why} :: ${h.text.trim()}`);
+    }
+  }
+  if (fails.length > 0) throw new Error(fails.join("\n"));
+}
 
 const WIN32_GUARD = 'process.platform === "win32"';
 
@@ -913,6 +1012,62 @@ describe("claims that describe something outside their own file", () => {
     assertTermsSplitAligned(read("docs/UPGRADING.md"), read("docs/STATUS.md"));
   });
 
+  it("the -00 family defines each numbered-inventory MUST in exactly one document", () => {
+    const inventory = tableDefinedIds(read(DRAFT)).filter((id) => id.startsWith("MUST-"));
+    assert.equal(core00FamilyPaths(root).length, 3, "expected core, checkpoint and threats under spec/");
+    const docs = {
+      core: read("spec/draft-dogru-cedulon-core-00.md"),
+      checkpoint: read("spec/draft-dogru-cedulon-checkpoint-00.md"),
+      threats: read("spec/draft-dogru-cedulon-threats-00.md"),
+    };
+    assertFamilyIdentities(docs, inventory);
+  });
+
+  it("RED: dropping a MUST identity from the family is refused before the living files are accepted", () => {
+    const inventory = tableDefinedIds(read(DRAFT)).filter((id) => id.startsWith("MUST-"));
+    const docs = {
+      core: read(`spec/draft-dogru-cedulon-core-00.md`).replace("| MUST-T1-1 |", "| MUST-T99-1 |"),
+      checkpoint: read(`spec/draft-dogru-cedulon-checkpoint-00.md`),
+      threats: read(`spec/draft-dogru-cedulon-threats-00.md`),
+    };
+    assert.notEqual(docs.core, read(`spec/draft-dogru-cedulon-core-00.md`), "fixture did not drop MUST-T1-1");
+    assert.throws(
+      () => assertFamilyIdentities(docs, inventory),
+      /MUST-T1-1 is in the numbered inventory but defined in no family document/,
+    );
+    const report = reportFamilyIdentities(docs, inventory);
+    assert.ok(report.missing.includes("MUST-T1-1"), JSON.stringify(report.missing));
+  });
+
+  it("the -00 family step citations resolve in the document they name", () => {
+    const docs = {
+      core: read("spec/draft-dogru-cedulon-core-00.md"),
+      checkpoint: read("spec/draft-dogru-cedulon-checkpoint-00.md"),
+    };
+    assertStepRefs(docs);
+  });
+
+  it("RED: a broken cross-document step number is refused before the living files are accepted", () => {
+    const living = {
+      core: read("spec/draft-dogru-cedulon-core-00.md"),
+      checkpoint: read("spec/draft-dogru-cedulon-checkpoint-00.md"),
+    };
+    const drifted = living.checkpoint.replace(
+      "step 6 of {{CEDULON-CORE}}",
+      "step 99 of {{CEDULON-CORE}}",
+    );
+    assert.notEqual(drifted, living.checkpoint, "fixture did not break the core step-6 citation");
+    assert.throws(
+      () => assertStepRefs({ core: living.core, checkpoint: drifted }),
+      /step 99 of \{\{CEDULON-CORE\}\} → step 99 is not defined in core/,
+    );
+    const report = stepRefFailures({ core: living.core, checkpoint: drifted });
+    assert.ok(
+      report.some((f) => /step 99 is not defined in core/.test(f)),
+      JSON.stringify(report),
+    );
+  });
+
   it("GREEN: the same check still holds while a version is prepared and not yet published", () => {
     const livingUp = read("docs/UPGRADING.md");
     const livingSt = read("docs/STATUS.md");
@@ -922,5 +1077,60 @@ describe("claims that describe something outside their own file", () => {
     assert.match(prepared.upgrading, /prepared, not published/);
     assert.match(prepared.status, /is prepared in this tree/);
     assertTermsSplitAligned(prepared.upgrading, prepared.status);
+  });
+
+  it("RED: a -00 family sentence that argues with a posted earlier revision is refused", () => {
+    const living = {
+      core: read("spec/draft-dogru-cedulon-core-00.md"),
+      checkpoint: read("spec/draft-dogru-cedulon-checkpoint-00.md"),
+      threats: read("spec/draft-dogru-cedulon-threats-00.md"),
+    };
+    const drifted = living.core.replace(
+      "The unprotected header MUST be empty",
+      "The posted -05 said the header empty. The unprotected header MUST be empty",
+    );
+    assert.notEqual(drifted, living.core, "fixture did not inject a posted-revision argument");
+    assert.match(living.core, /authorised cannot be withdrawn by reporting it/, "false-positive anchor missing");
+    assert.match(living.core, /They are numbered\s+for reference/, "false-positive anchor missing");
+    assert.throws(
+      () => assertNoRevisionArguments({ ...living, core: drifted }),
+      /posted -0N names an earlier revision of this family/,
+    );
+    const hits = revisionArgumentHits(drifted);
+    assert.ok(
+      hits.some((h) => /posted -0N/.test(h.why)),
+      JSON.stringify(hits),
+    );
+  });
+
+  it("RED: a -00 family sentence that numbers an earlier revision is refused", () => {
+    const living = {
+      core: read("spec/draft-dogru-cedulon-core-00.md"),
+      checkpoint: read("spec/draft-dogru-cedulon-checkpoint-00.md"),
+      threats: read("spec/draft-dogru-cedulon-threats-00.md"),
+    };
+    const drifted = living.core.replace(
+      "A verifier MUST perform all of these steps",
+      "-04 numbered this requirement MAY-T8-9. A verifier MUST perform all of these steps",
+    );
+    assert.notEqual(drifted, living.core, "fixture did not inject a numbered-revision argument");
+    assert.match(living.core, /They are numbered\s+for reference/, "false-positive anchor missing");
+    assert.throws(
+      () => assertNoRevisionArguments({ ...living, core: drifted }),
+      /-0N numbered names an earlier revision of this family/,
+    );
+    const hits = revisionArgumentHits(drifted);
+    assert.ok(
+      hits.some((h) => /-0N numbered/.test(h.why)),
+      JSON.stringify(hits),
+    );
+  });
+
+  it("GREEN: the -00 family does not argue with earlier revisions of itself", () => {
+    assertNoRevisionArguments({
+      core: read("spec/draft-dogru-cedulon-core-00.md"),
+      checkpoint: read("spec/draft-dogru-cedulon-checkpoint-00.md"),
+      threats: read("spec/draft-dogru-cedulon-threats-00.md"),
+    });
   });
 });

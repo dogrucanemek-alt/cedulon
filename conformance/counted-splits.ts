@@ -22,5 +22,10 @@
  * split. Both directions are proved by fixtures in tests/stale-claims.ts, which
  * build a synthetic entry rather than borrowing a live one, so the proof does
  * not depend on a divergence existing.
+ *
+ * The T11 requirement rows live in `draft-dogru-cedulon-checkpoint-00`
+ * except MUST-T11-1 and MUST-T11-12, which remain in the core table.
+ * A living split against those identities would be registered here
+ * the same way as any other; there is none today.
  */
 export const COUNTED_SPLITS: Record<string, string> = {};

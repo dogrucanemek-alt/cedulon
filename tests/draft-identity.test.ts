@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { draftRevision, identityHits } from "../scripts/draft-identity-guard.ts";
-import { latestDraftPath, latestDraftRevision } from "../scripts/latest-draft.ts";
+import { core00FamilyPaths, latestDraftPath, latestDraftRevision } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 // The draft under guard is the newest revision in the tree; the computation
@@ -49,5 +49,36 @@ describe("draft identity", () => {
       [],
       hits.map((h) => `${h.line}: ${h.why} :: ${h.text}`).join("\n"),
     );
+  });
+
+  it("RED then GREEN: a named-series -00 that still says This -10 is refused", () => {
+    const probe = [
+      "---",
+      "docname: draft-dogru-cedulon-core-00",
+      "---",
+      "This -10 is not an IETF working-group item.",
+    ].join("\n");
+    const red = identityHits(probe);
+    assert.ok(
+      red.some((h) => h.why.includes("calls itself -10")),
+      `expected a hit on This -10, got ${JSON.stringify(red)}`,
+    );
+    const green = identityHits(
+      ["---", "docname: draft-dogru-cedulon-core-00", "---", "This -00 is not an IETF working-group item."].join("\n"),
+    );
+    assert.deepEqual(green, [], JSON.stringify(green));
+  });
+
+  it("each -00 family document's docname matches the voice of the document", () => {
+    for (const path of core00FamilyPaths(root)) {
+      const md = readFileSync(path, "utf8");
+      const hits = identityHits(md);
+      assert.ok(draftRevision(md), `${path} has no parseable docname`);
+      assert.deepEqual(
+        hits,
+        [],
+        hits.map((h) => `${path}:${h.line}: ${h.why} :: ${h.text}`).join("\n"),
+      );
+    }
   });
 });
