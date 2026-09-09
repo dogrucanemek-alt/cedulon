@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import { loadVectors } from "../conformance/run.ts";
 import {
+  NEW_IN_CORE_00,
   assertFamilyIdentities,
   reportFamilyIdentities,
   tableDefinedIds,
@@ -1021,6 +1022,9 @@ describe("claims that describe something outside their own file", () => {
       threats: read("spec/draft-dogru-cedulon-threats-00.md"),
     };
     assertFamilyIdentities(docs, inventory);
+    const report = reportFamilyIdentities(docs, inventory);
+    assert.deepEqual(report.missing, []);
+    assert.deepEqual(report.extra, [...NEW_IN_CORE_00]);
   });
 
   it("RED: dropping a MUST identity from the family is refused before the living files are accepted", () => {
@@ -1037,6 +1041,48 @@ describe("claims that describe something outside their own file", () => {
     );
     const report = reportFamilyIdentities(docs, inventory);
     assert.ok(report.missing.includes("MUST-T1-1"), JSON.stringify(report.missing));
+  });
+
+  it("RED: an extra MUST identity that is not on NEW_IN_CORE_00 is refused", () => {
+    const inventory = tableDefinedIds(read(DRAFT)).filter((id) => id.startsWith("MUST-"));
+    const living = read("spec/draft-dogru-cedulon-core-00.md");
+    const injected = living.replace(
+      /(\| MUST-T6-7 \|[^\n]*\n)/,
+      "$1| MUST-T99-1 | invented identity, not on NEW_IN_CORE_00. |\n",
+    );
+    assert.notEqual(injected, living, "fixture did not inject MUST-T99-1");
+    assert.match(injected, /\| MUST-T6-7 \|/, "fixture must leave the promised row in place");
+    const docs = {
+      core: injected,
+      checkpoint: read("spec/draft-dogru-cedulon-checkpoint-00.md"),
+      threats: read("spec/draft-dogru-cedulon-threats-00.md"),
+    };
+    assert.throws(
+      () => assertFamilyIdentities(docs, inventory),
+      /MUST-T99-1 is defined in the family but not in the numbered inventory/,
+    );
+    const report = reportFamilyIdentities(docs, inventory);
+    assert.ok(report.extra.includes("MUST-T99-1"), JSON.stringify(report.extra));
+    assert.ok(report.extra.includes("MUST-T6-7"), JSON.stringify(report.extra));
+  });
+
+  it("RED: dropping the promised MUST-T6-7 row is refused before the living files are accepted", () => {
+    const inventory = tableDefinedIds(read(DRAFT)).filter((id) => id.startsWith("MUST-"));
+    const living = read("spec/draft-dogru-cedulon-core-00.md");
+    const stripped = living.replace(/^\| MUST-T6-7 \|[^\n]*\n/m, "");
+    assert.notEqual(stripped, living, "fixture did not drop MUST-T6-7");
+    assert.doesNotMatch(stripped, /^\| MUST-T6-7 \|/m, "fixture left the promised row");
+    const docs = {
+      core: stripped,
+      checkpoint: read("spec/draft-dogru-cedulon-checkpoint-00.md"),
+      threats: read("spec/draft-dogru-cedulon-threats-00.md"),
+    };
+    assert.throws(
+      () => assertFamilyIdentities(docs, inventory),
+      /MUST-T6-7 is promised on NEW_IN_CORE_00 and is not defined in draft-dogru-cedulon-core-00/,
+    );
+    const report = reportFamilyIdentities(docs, inventory);
+    assert.equal(report.definedBy.get("MUST-T6-7"), undefined, JSON.stringify([...report.definedBy.keys()]));
   });
 
   it("the -00 family step citations resolve in the document they name", () => {

@@ -7,12 +7,18 @@
  * MUST-T11-1 and MUST-T11-12 stay in the core table (label set and
  * reconciliation conditionality). Every other T11 row belongs in the
  * checkpoint companion.
+ *
+ * The mechanical split is finished. The `-00` series may now carry a
+ * MUST the numbered inventory does not, but only by name, on this
+ * list. A new identity that is not listed is still a defect. A name
+ * that leaves the family is still a defect: `missing` stays hard.
  */
 
 export const TABLE_ID = /^\|\s*((?:MUST|SHOULD|MAY)-T\d+-[\da-z]+)\s*\|/gm;
 export const MUST_ID = /MUST-T\d+-[\da-z]+/g;
 export const CORE_TABLE_T11 = ["MUST-T11-1", "MUST-T11-12"] as const;
-export const EXPECTED_MUST_COUNT = 91;
+export const NEW_IN_CORE_00 = ["MUST-T6-7"] as const;
+export const EXPECTED_MUST_COUNT = 92;
 
 export function tableDefinedIds(text: string): string[] {
   return [...text.matchAll(TABLE_ID)].map((m) => m[1]!);
@@ -93,7 +99,17 @@ export function identityFailures(report: IdentityReport): string[] {
     fails.push(`${id} is in the numbered inventory but defined in no family document`);
   }
   for (const id of report.extra) {
-    fails.push(`${id} is defined in the family but not in the numbered inventory`);
+    if (!(NEW_IN_CORE_00 as readonly string[]).includes(id)) {
+      fails.push(`${id} is defined in the family but not in the numbered inventory`);
+    }
+  }
+  for (const id of NEW_IN_CORE_00) {
+    const docs = report.definedBy.get(id) ?? [];
+    if (!docs.includes("draft-dogru-cedulon-core-00")) {
+      fails.push(
+        `${id} is promised on NEW_IN_CORE_00 and is not defined in draft-dogru-cedulon-core-00`,
+      );
+    }
   }
   for (const id of report.coreT11Wrong) {
     fails.push(`${id} must be defined in draft-dogru-cedulon-core-00 and is not`);

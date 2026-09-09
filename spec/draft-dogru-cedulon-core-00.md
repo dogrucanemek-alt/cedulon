@@ -1744,6 +1744,22 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 | MUST-T6-4 | An allow Decision Token MUST be COSE_Sign1 with CWT private-use labels -70301..-70305 (`requestHash`, `policyHash`, `expiryMs`, `nonce`, `singleUseId`) and content type `application/cedulon-decision+cbor`. |
 | MUST-T6-5 | A party that accepts a Decision Token MUST reject a failed signature, a `kid` or content-type mismatch, a claim-map mismatch, or an expired `expiryMs`. The token is expired when the evaluation time is strictly greater than `expiryMs`; at exactly `expiryMs` it is not. |
 | MUST-T6-6 | A consumer of a Decision Token MUST verify it against its own issuing key and MUST NOT accept a token it cannot check that way. The consumer issued the token, so asking the token which key to check it against is a question that answers itself. |
+| MUST-T6-7 | A party that records a settlement under a Decision Token MUST refuse it when that settlement's `timestampMs` is strictly greater than the token's `expiryMs`. At exactly `expiryMs` the settlement remains inside the token's authority; the boundary is the one `SHOULD-T6-3` states. The recording party holds both values and makes the comparison then. |
+
+A later verifier cannot make this comparison. Decision Tokens are not
+among the inputs {{verification}} enumerates: the extract, the
+receipts, the manifests, the checkpoints, and the witness receipts.
+The rule is written on the party that can apply it. Verification does
+not repeat it.
+
+This revision adds `MUST-T6-7`. Pablo Etcheverry found that nothing
+compared a settlement's clock to the clock of the decision that
+authorised it, so a settlement that appeared to predate its decision
+still verified. The complete repair - carrying the decision's issuance
+time on the token and binding the receipt to it, so a later verifier
+can detect an effect that predates its decision - is a Standards Track
+revision's work and is not done here. No new claim label is added;
+`MUST-T6-4` still names the same five labels.
 
 ## T7: Signing-key leakage
 
