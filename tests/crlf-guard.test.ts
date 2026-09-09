@@ -40,10 +40,14 @@ describe("crlf-guard", () => {
   it("reads spec/ and does not rewrite it", () => {
     const spec = trackedFiles(root).filter((f) => f.startsWith("spec/"));
     assert.ok(spec.length > 0, "expected frozen drafts to be tracked");
+    // An empty working tree is not the criterion. This scan must not
+    // write; an uncommitted spec edit that was already there is not a
+    // rewrite. Compare the spec diff to itself across the scan.
+    const before = execFileSync("git", ["diff", "--", "spec"], { cwd: root, encoding: "utf8" });
     const hits = findCarriageReturns(root).filter((h) => h.file.startsWith("spec/"));
     assert.deepEqual(hits, []);
-    const diff = execFileSync("git", ["diff", "--", "spec"], { cwd: root, encoding: "utf8" });
-    assert.equal(diff, "");
+    const after = execFileSync("git", ["diff", "--", "spec"], { cwd: root, encoding: "utf8" });
+    assert.equal(after, before);
   });
 
   it("the gate script is the same scan (exit 0)", () => {
