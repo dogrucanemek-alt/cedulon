@@ -2839,7 +2839,7 @@ the posted -02: whether the profile should accept a pinned witness key
 and report an absent or mismatched pin explicitly. It should, and the
 same question turned out to be unanswered for three further objects.
 
-Iman Schrock and Pablo Play ran the -00 implementation against the
+Iman Schrock and Pablo Etcheverry ran the -00 implementation against the
 pinned commit and reported the defects that produced -01. Iman Schrock
 found the two extract-binding defects, proposed the repair -01 adopts,
 later reran the posted -01 from a clean clone against its own pinned
@@ -2847,7 +2847,7 @@ commit, and is also the author of {{SCHROCK}}, cited here as adjacent
 work. He is the reader whose independent implementation of the Signed
 Statement identity is noted in {{impl-status}}, and he asked for it to
 be kept separate from any cross-implementation claim about Cedulon;
-that separation is his and is recorded here as he stated it. Pablo Play found that a repeated reference hid the unaccounted
+that separation is his and is recorded here as he stated it. Pablo Etcheverry found that a repeated reference hid the unaccounted
 amount, filed a written reproduction, and re-ran that reproduction
 against the pinned commit to confirm the figures quoted from it. He
 later took up a standing invitation to break the implementation and

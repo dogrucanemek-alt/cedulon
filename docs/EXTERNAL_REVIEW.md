@@ -43,7 +43,7 @@ stays `conditional` and states why. With a pin, a key that does not match is
 
 ### 3. A repeated ref hid the amount that was unaccounted for — fixed
 
-Reported by Pablo Play, with a written repro in
+Reported by Pablo Etcheverry, with a written repro in
 [issue #1](https://github.com/dogrucanemek-alt/cedulon/issues/1).
 
 A settlement injected under an existing receipt's ref sent both entries down
@@ -140,7 +140,7 @@ passed, all 97 tests passed, and the audit exposed the conditional guarantee
 and its warning as described. Iman declined the offer to add the attached test
 file, on the grounds that cases 18–25 already cover both findings.
 
-Pablo Play re-ran the original repro against the same commit before filing
+Pablo Etcheverry re-ran the original repro against the same commit before filing
 issue #1, so the issue records the behaviour before and after the fix rather
 than the original report alone. The output now names the gap:
 `ref x402-real settled 8 USD against 1 USD receipted; 7 USD unaccounted`.
