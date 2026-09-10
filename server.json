@@ -4,7 +4,7 @@
   "title": "Cedulon",
   "description": "Policy-gated agent spend with signed receipts and rail-extract audit",
   "version": "0.13.0",
-  "websiteUrl": "https://github.com/dogrucanemek-alt/cedulon",
+  "websiteUrl": "https://cedulon.com",
   "repository": {
     "url": "https://github.com/dogrucanemek-alt/cedulon",
     "source": "github",
