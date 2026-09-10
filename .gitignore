@@ -27,3 +27,7 @@ spec/*.html
 # are deleted once the finding becomes a real test; twice now they have been
 # swept into a commit by `git add tests`.
 tests/_probe_*
+
+# written by every pre-release run; never committed, so a stale copy
+# cannot stand in for a run that did not happen
+.suite-count.xml
