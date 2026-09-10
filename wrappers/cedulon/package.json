@@ -1,0 +1,36 @@
+{
+  "name": "cedulon",
+  "version": "1.0.0",
+  "description": "Launcher for the Cedulon MCP server (@cedulon/mcp-server).",
+  "keywords": [
+    "cedulon",
+    "mcp",
+    "agent-commerce",
+    "audit",
+    "spend-policy"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://cedulon.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogrucanemek-alt/cedulon.git",
+    "directory": "wrappers/cedulon"
+  },
+  "bugs": {
+    "url": "https://github.com/dogrucanemek-alt/cedulon/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "cedulon": "bin/cli.cjs"
+  },
+  "files": [
+    "bin/cli.cjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@cedulon/mcp-server": "^0.13.0"
+  }
+}
