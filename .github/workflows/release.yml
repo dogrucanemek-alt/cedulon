@@ -11,27 +11,41 @@
 # The MCP Registry and GitHub Release bundle steps sit after npm publish,
 # the npm readback, and the post-release suite. A tag that reached npm and
 # then failed those later steps is still a completed npm release; the later
-# steps do not roll it back. The tree now carries the step; it is unproven
-# until the next tag runs it.
+# steps do not roll it back. finish mode exists to complete those leftover
+# steps on the same version — it does not publish to npm.
 name: release
 
-# Tags only. A manual dispatch used to be accepted and ran the publish steps
-# with github.ref on a branch: the tag guard was skipped, npm publish ran,
-# and the run was green with nothing checked. There is no second way in.
+# The tag path is unchanged: push of v* runs publish, then registry, then
+# the GitHub release. A manual dispatch used to be a second publish path
+# (github.ref on a branch, tag guard skipped, npm publish ran). Dispatch is
+# back only as finish: it attaches the registry entry and the desktop
+# bundle to a version already on npm. There is still no second way to publish.
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "finish = complete the MCP Registry entry and GitHub release for a version already on npm. Does not publish to npm."
+        required: true
+        type: choice
+        options:
+          - finish
+      version:
+        description: "Already-published version to finish, without the v prefix (e.g. 0.13.1)"
+        required: true
+        type: string
 
-# Default is read. id-token: write is only on publish (npm trusted publishing
-# and mcp-publisher login github-oidc). contents: write is only on release
-# (gh release create / upload).
+# Default is read. id-token: write is only on publish and finish (npm
+# trusted publishing and mcp-publisher login github-oidc). contents: write
+# is only on release (gh release create / upload).
 permissions:
   contents: read
 
 jobs:
   publish:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -111,47 +125,75 @@ jobs:
           done
 
       # Read back from the registry rather than from this checkout.
-      # The registry is read-after-write eventual, not immediate. 0.8.0 published
-      # cleanly and this step still failed: six packages answered with the new
-      # version and `audit` was still serving the old one two seconds after its
-      # own publish returned success. Asking once turns a propagation delay into
-      # a red release, and a red that means nothing is how a team learns to
-      # ignore reds. So it asks again, with a bound, and fails only when the
-      # registry has had time and still disagrees.
+      # The registry is read-after-write eventual, not immediate. A fixed
+      # sleep then one ask is how v0.13.1 reached npm and still went red:
+      # npm's own publish reply said the package "may take a few minutes to
+      # become available", fifteen seconds was not that, and the leftover
+      # registry and GitHub release steps were skipped. A per-package
+      # attempt cap of ten (150s) is the same defect with more sleeps.
+      # Shared 480s bound: npm said "a few minutes"; v0.13.0 tarballs were
+      # 404 for about eight minutes behind the CDN. All nine packages are
+      # asked (v0.8.0: six answered, audit still served the old version).
+      # Asking only the last package in the publish order would have
+      # missed that. Fail stays red; the message points at finish mode.
       - name: the registry answers with this version
         run: |
+          set -e
           tag="${GITHUB_REF_NAME#v}"
+          deadline=$((SECONDS + 480))
           for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
             got=""
-            for attempt in 1 2 3 4 5 6 7 8 9 10; do
-              got=$(npm view "@cedulon/$p" version 2>/dev/null || echo "")
-              [ "$got" = "$tag" ] && break
-              echo "  @cedulon/$p -> ${got:-no answer} (attempt $attempt, waiting)"
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              got=$(npm view "@cedulon/$p@$tag" version 2>/dev/null || echo "")
+              if [ "$got" = "$tag" ]; then
+                echo "  @cedulon/$p@$tag -> $got"
+                break
+              fi
+              echo "  @cedulon/$p@$tag -> ${got:-no answer} (waiting, ${SECONDS}s elapsed of 480)"
               sleep 15
             done
-            echo "  @cedulon/$p -> $got"
-            [ "$got" = "$tag" ] || { echo "registry still says ${got:-nothing} after 10 attempts, tag says $tag"; exit 1; }
+            if [ "$got" != "$tag" ]; then
+              echo "@cedulon/$p@$tag was published but npm has not served this version after ${SECONDS}s."
+              echo "Re-run this workflow in finish mode with version=$tag — finish does not publish to npm."
+              exit 1
+            fi
           done
 
       # v0.13.0: the metadata said 0.13.0 while two tarballs answered 404
       # behind the CDN for about eight minutes, and the bundle job's npm
       # install failed on them. The version is a number; the install needs
-      # the bytes. Same bound: ten asks, fifteen seconds apart.
+      # the bytes. Same shared 480s bound as the version readback.
       - name: every tarball of this version answers
         run: |
+          set -e
           tag="${GITHUB_REF_NAME#v}"
+          deadline=$((SECONDS + 480))
           for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
-            tarball=$(npm view "@cedulon/$p@$tag" dist.tarball 2>/dev/null || echo "")
-            [ -n "$tarball" ] || { echo "@cedulon/$p@$tag names no tarball"; exit 1; }
+            tarball=""
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              tarball=$(npm view "@cedulon/$p@$tag" dist.tarball 2>/dev/null || echo "")
+              [ -n "$tarball" ] && break
+              echo "  @cedulon/$p@$tag names no tarball yet (waiting, ${SECONDS}s elapsed of 480)"
+              sleep 15
+            done
+            [ -n "$tarball" ] || {
+              echo "@cedulon/$p@$tag names no tarball after ${SECONDS}s."
+              echo "Re-run this workflow in finish mode with version=$tag — finish does not publish to npm."
+              exit 1
+            }
             code=""
-            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            while [ "$SECONDS" -lt "$deadline" ]; do
               code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$tarball" || echo "000")
               [ "$code" = "200" ] && break
-              echo "  @cedulon/$p tarball -> HTTP $code (attempt $attempt, waiting)"
+              echo "  @cedulon/$p tarball -> HTTP $code (waiting, ${SECONDS}s elapsed of 480)"
               sleep 15
             done
             echo "  @cedulon/$p tarball -> HTTP $code"
-            [ "$code" = "200" ] || { echo "tarball for @cedulon/$p@$tag still answers $code after 10 attempts"; exit 1; }
+            [ "$code" = "200" ] || {
+              echo "tarball for @cedulon/$p@$tag still answers $code after ${SECONDS}s."
+              echo "Re-run this workflow in finish mode with version=$tag — finish does not publish to npm."
+              exit 1
+            }
           done
 
       # test:post-release used to sit here. It compares STATUS with npm and is
@@ -200,7 +242,7 @@ jobs:
       # Official readback: GET /v0.1/servers/{name}/versions/{version} on
       # https://registry.modelcontextprotocol.io (docs/reference/api/official-registry-api.md).
       # isLatest is _meta.io.modelcontextprotocol.registry/official.isLatest
-      # (openapi.yaml). Same 10 x 15s bound as the npm readback.
+      # (openapi.yaml). Same shared 480s bound as the npm readback.
       - name: the MCP Registry answers with this version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -210,7 +252,8 @@ jobs:
           url="https://registry.modelcontextprotocol.io/v0.1/servers/${encoded}/versions/${tag}"
           got=""
           latest=""
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          deadline=$((SECONDS + 480))
+          while [ "$SECONDS" -lt "$deadline" ]; do
             body=$(curl -fsS "$url" || echo "")
             if [ -n "$body" ]; then
               got=$(printf '%s' "$body" | node -e '
@@ -231,14 +274,141 @@ jobs:
               latest=${got#* }
               [ "$ver" = "$tag" ] && [ "$latest" = "true" ] && break
             fi
-            echo "  MCP Registry -> ${got:-no answer} (attempt $attempt, waiting)"
+            echo "  MCP Registry -> ${got:-no answer} (waiting, ${SECONDS}s elapsed of 480)"
             sleep 15
           done
           echo "  MCP Registry -> $got"
           ver=${got%% *}
           latest=${got#* }
           [ "$ver" = "$tag" ] && [ "$latest" = "true" ] || {
-            echo "MCP Registry still says version=${ver:-nothing} isLatest=${latest:-nothing} after 10 attempts, tag says $tag"
+            echo "MCP Registry still says version=${ver:-nothing} isLatest=${latest:-nothing} after ${SECONDS}s, tag says $tag"
+            echo "Re-run this workflow in finish mode with version=$tag — finish does not publish to npm."
+            exit 1
+          }
+
+  # finish does the leftover half of a tag run that already reached npm:
+  # the MCP Registry entry and (via the release job) the desktop bundle.
+  # It does not publish to npm. v0.13.1 is the case it exists for.
+  finish:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'finish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: resolve the version this run finishes
+        id: ver
+        run: |
+          set -e
+          raw="${{ github.event.inputs.version }}"
+          V="${raw#v}"
+          if [ -z "$V" ]; then
+            echo "finish mode needs the version input (e.g. 0.13.1)"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "finishing $V"
+
+      # L3: finish attaches to an existing release, it does not create one.
+      # Same shared 480s bound as the tag-path readback, because the reason
+      # to be here is often that npm has the bytes and has not served them
+      # yet. After the bound the message is the refusal, not a publish.
+      - name: this version is already on npm
+        run: |
+          set -e
+          V="${{ steps.ver.outputs.version }}"
+          deadline=$((SECONDS + 480))
+          for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
+            got=""
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              got=$(npm view "@cedulon/$p@$V" version 2>/dev/null || echo "")
+              if [ "$got" = "$V" ]; then
+                echo "  @cedulon/$p@$V -> $got"
+                break
+              fi
+              echo "  @cedulon/$p@$V -> ${got:-no answer} (waiting, ${SECONDS}s elapsed of 480)"
+              sleep 15
+            done
+            if [ "$got" != "$V" ]; then
+              echo "@cedulon/$p@$V is not on npm — finish mode attaches to an existing release, it does not create one"
+              exit 1
+            fi
+          done
+
+      - name: install pinned mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: "1.8.1"
+          MCP_PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+        run: |
+          set -e
+          arch=$(uname -m)
+          [ "$arch" = "x86_64" ] || { echo "pinned linux_amd64 digest; runner is $arch"; exit 1; }
+          curl -fsSL -o mcp-publisher_linux_amd64.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "$MCP_PUBLISHER_SHA256  mcp-publisher_linux_amd64.tar.gz" | sha256sum -c -
+          tar -xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
+
+      - name: publish server.json to the MCP Registry
+        run: |
+          set -e
+          tag="${{ steps.ver.outputs.version }}"
+          sj=$(node -p "require('./server.json').version")
+          if [ "$sj" != "$tag" ]; then
+            echo "server.json is $sj, finish mode was asked for $tag; refusing to publish"
+            exit 1
+          fi
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
+      - name: the MCP Registry answers with this version
+        run: |
+          set -e
+          tag="${{ steps.ver.outputs.version }}"
+          encoded="io.github.dogrucanemek-alt%2Fcedulon"
+          url="https://registry.modelcontextprotocol.io/v0.1/servers/${encoded}/versions/${tag}"
+          got=""
+          latest=""
+          deadline=$((SECONDS + 480))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            body=$(curl -fsS "$url" || echo "")
+            if [ -n "$body" ]; then
+              got=$(printf '%s' "$body" | node -e '
+                let raw = "";
+                process.stdin.on("data", (c) => { raw += c; });
+                process.stdin.on("end", () => {
+                  try {
+                    const b = JSON.parse(raw);
+                    const v = b.server && b.server.version ? b.server.version : "";
+                    const latest = b._meta && b._meta["io.modelcontextprotocol.registry/official"] && b._meta["io.modelcontextprotocol.registry/official"].isLatest === true;
+                    process.stdout.write(v + " " + (latest ? "true" : "false"));
+                  } catch {
+                    process.stdout.write(" ");
+                  }
+                });
+              ')
+              ver=${got%% *}
+              latest=${got#* }
+              [ "$ver" = "$tag" ] && [ "$latest" = "true" ] && break
+            fi
+            echo "  MCP Registry -> ${got:-no answer} (waiting, ${SECONDS}s elapsed of 480)"
+            sleep 15
+          done
+          echo "  MCP Registry -> $got"
+          ver=${got%% *}
+          latest=${got#* }
+          [ "$ver" = "$tag" ] && [ "$latest" = "true" ] || {
+            echo "MCP Registry still says version=${ver:-nothing} isLatest=${latest:-nothing} after ${SECONDS}s, finish was asked for $tag"
             exit 1
           }
 
@@ -247,7 +417,7 @@ jobs:
   # job is the reminder that it has not been yet.
   post-release:
     needs: publish
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -263,41 +433,73 @@ jobs:
       - run: npm run test:post-release
 
   release:
-    needs: publish
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [publish, finish]
+    if: |
+      always() && !cancelled() && (
+        (startsWith(github.ref, 'refs/tags/') && needs.publish.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'finish' && needs.finish.result == 'success')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
 
+      - name: resolve the version this run finishes
+        id: ver
+        run: |
+          set -e
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            raw="${{ github.event.inputs.version }}"
+            V="${raw#v}"
+            if [ -z "$V" ]; then
+              echo "finish mode needs the version input (e.g. 0.13.1)"
+              exit 1
+            fi
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+
       - run: npm ci
 
       # Builds from the published npm package, not the working tree, so this
-      # job depends on publish having completed the npm readback. The
+      # job depends on publish having completed the npm readback (tag path)
+      # or finish having seen the version on npm (finish path). The
       # readback probed the tarballs once; a CDN can still answer 404 to
       # this runner after answering 200 to that one, so it asks again here,
       # right before the install that needs them.
       - name: every tarball of this version answers from this runner
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          set -e
+          tag="${{ steps.ver.outputs.version }}"
+          deadline=$((SECONDS + 480))
           for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
-            tarball=$(npm view "@cedulon/$p@$tag" dist.tarball 2>/dev/null || echo "")
-            [ -n "$tarball" ] || { echo "@cedulon/$p@$tag names no tarball"; exit 1; }
-            code=""
-            for attempt in 1 2 3 4 5 6 7 8 9 10; do
-              code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$tarball" || echo "000")
-              [ "$code" = "200" ] && break
-              echo "  @cedulon/$p tarball -> HTTP $code (attempt $attempt, waiting)"
+            tarball=""
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              tarball=$(npm view "@cedulon/$p@$tag" dist.tarball 2>/dev/null || echo "")
+              [ -n "$tarball" ] && break
+              echo "  @cedulon/$p@$tag names no tarball yet (waiting, ${SECONDS}s elapsed of 480)"
               sleep 15
             done
-            [ "$code" = "200" ] || { echo "tarball for @cedulon/$p@$tag still answers $code after 10 attempts"; exit 1; }
+            [ -n "$tarball" ] || { echo "@cedulon/$p@$tag names no tarball after ${SECONDS}s"; exit 1; }
+            code=""
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$tarball" || echo "000")
+              [ "$code" = "200" ] && break
+              echo "  @cedulon/$p tarball -> HTTP $code (waiting, ${SECONDS}s elapsed of 480)"
+              sleep 15
+            done
+            [ "$code" = "200" ] || { echo "tarball for @cedulon/$p@$tag still answers $code after ${SECONDS}s"; exit 1; }
           done
 
       - name: build the desktop bundle
@@ -306,7 +508,7 @@ jobs:
       - name: the manifest version is the tag
         run: |
           set -e
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${{ steps.ver.outputs.version }}"
           bundle="build/cedulon-${tag}.mcpb"
           [ -f "$bundle" ] || { echo "bundle $bundle was not produced"; exit 1; }
           ver=$(unzip -p "$bundle" manifest.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
@@ -321,7 +523,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${{ steps.ver.outputs.version }}"
+          release_tag="${{ steps.ver.outputs.tag }}"
           bundle="build/cedulon-${tag}.mcpb"
           bundle_sha=$(sha256sum "$bundle" | awk '{print $1}')
           echo "bundle sha256 $bundle_sha"
@@ -335,12 +538,12 @@ jobs:
             echo
             echo "Bundle SHA-256: $bundle_sha"
           } > "$notes"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$bundle" --clobber
+          if gh release view "$release_tag" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "$bundle" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$bundle" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$notes"
+            gh release create "$release_tag" "$bundle" --verify-tag --title "$release_tag" --notes-file "$notes"
           fi
-          gh release edit "$GITHUB_REF_NAME" --notes-file "$notes"
+          gh release edit "$release_tag" --notes-file "$notes"
           empty=$(mktemp -d)
-          gh release download "$GITHUB_REF_NAME" --pattern "cedulon-${tag}.mcpb" --dir "$empty"
+          gh release download "$release_tag" --pattern "cedulon-${tag}.mcpb" --dir "$empty"
           echo "$bundle_sha  $empty/cedulon-${tag}.mcpb" | sha256sum -c -
