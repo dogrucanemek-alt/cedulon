@@ -24,6 +24,20 @@ function jobBodies(text: string): Map<string, string> {
   return jobs;
 }
 
+function namedStep(text: string, title: string): string {
+  const start = text.indexOf(`- name: ${title}`);
+  assert.ok(start >= 0, `step "${title}" is gone`);
+  const rest = text.slice(start + 1);
+  const next = rest.search(/\n      - /);
+  return next >= 0 ? text.slice(start, start + 1 + next) : text.slice(start);
+}
+
+function onBlock(text: string): string {
+  const on = text.match(/^on:\s*\n([\s\S]*?)(?=^\S)/m);
+  assert.ok(on, "release.yml has no on: block");
+  return on[1]!;
+}
+
 describe("release.yml static shape", () => {
   it("the MCP Registry step comes after the npm readback", () => {
     const npmReadback = yml.indexOf("the registry answers with this version");
@@ -42,7 +56,7 @@ describe("release.yml static shape", () => {
     assert.match(jobs.get("post-release")!, /npm run test:post-release/, "post-release job does not run the check");
     assert.doesNotMatch(jobs.get("publish")!, /npm run test:post-release/, "publish job still runs test:post-release");
     assert.doesNotMatch(jobs.get("release")!, /npm run test:post-release/, "release job runs test:post-release");
-    assert.match(jobs.get("release")!, /^\s{4}needs:\s*publish\s*$/m, "release job must need publish only");
+    assert.match(jobs.get("release")!, /needs\.publish\.result == 'success'/, "tag-path release must still require publish success");
     assert.match(jobs.get("post-release")!, /^\s{4}needs:\s*publish\s*$/m, "post-release job must need publish only");
   });
 
@@ -111,20 +125,102 @@ describe("release.yml static shape", () => {
 
   // A workflow_dispatch run had github.ref on a branch: the tag guard was
   // skipped, npm publish ran, and the run went green with nothing checked
-  // (gate review of 25c24c3, FIX-3). The workflow answers to tags only.
-  it("the workflow is triggered by tags only, and the publish job is locked to them", () => {
-    const on = yml.match(/^on:\s*\n([\s\S]*?)(?=^\S)/m);
-    assert.ok(on, "release.yml has no on: block");
-    assert.doesNotMatch(on[1]!, /workflow_dispatch/, "workflow_dispatch would run publish steps off a branch");
-    assert.match(on[1]!, /push:\s*\n\s*tags:/, "the push trigger is not on tags");
-    // Any other trigger (workflow_call, repository_dispatch, pull_request, schedule)
-    // would be a second way in that the dispatch check above does not see.
-    const triggers = [...on[1]!.matchAll(/^  ([a-z_]+):/gm)].map((m) => m[1]);
-    assert.deepEqual(triggers, ["push"], `on: has triggers other than push: ${triggers.join(",")}`);
-    const pushKeys = [...on[1]!.matchAll(/^    ([a-z_]+):/gm)].map((m) => m[1]);
+  // (gate review of 25c24c3, FIX-3). Dispatch is back as a second *entry*,
+  // not a second publish path: it may only finish a version already on npm.
+  it("the publish job is locked to tags, and dispatch cannot publish to npm", () => {
+    const on = onBlock(yml);
+    assert.match(on, /push:\s*\n\s*tags:/, "the push trigger is not on tags");
+    const triggers = [...on.matchAll(/^  ([a-z_]+):/gm)].map((m) => m[1]);
+    assert.deepEqual(
+      triggers,
+      ["push", "workflow_dispatch"],
+      `on: has unexpected triggers: ${triggers.join(",")}`,
+    );
+    const pushBlock = on.match(/push:\s*\n([\s\S]*?)(?=^  [a-z_]+:)/m);
+    assert.ok(pushBlock, "push: block is gone");
+    const pushKeys = [...pushBlock[1]!.matchAll(/^    ([a-z_]+):/gm)].map((m) => m[1]);
     assert.deepEqual(pushKeys, ["tags"], `push: filters other than tags: ${pushKeys.join(",")}`);
-    const publish = jobBodies(yml).get("publish")!;
-    assert.match(publish, /^\s{4}if:\s*startsWith\(github\.ref, 'refs\/tags\/'\)/m, "publish job is not locked to tags at job level");
+    const jobs = jobBodies(yml);
+    const publish = jobs.get("publish")!;
+    assert.match(
+      publish,
+      /^\s{4}if:\s*github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/'\)/m,
+      "publish job is not locked to tag pushes (dispatch on a tag would republish)",
+    );
+    for (const [name, body] of jobs) {
+      if (name === "publish") {
+        assert.match(body, /npm publish -w/, "publish job lost the workspace publish loop");
+        continue;
+      }
+      assert.doesNotMatch(body, /^\s+npm publish\b/m, `${name} must not run npm publish`);
+    }
+  });
+
+  // v0.13.1: npm accepted all nine packages, then this step asked once after
+  // a fixed sleep and went red while npm was still processing. The leftover
+  // registry and GitHub release steps were skipped and the version could not
+  // be republished. The step must keep asking until a shared deadline, then
+  // fail pointing at finish mode. A single `sleep N` is the defect.
+  it("the npm version readback polls until a shared deadline, then points at finish mode", () => {
+    const step = namedStep(yml, "the registry answers with this version");
+    const deadline = step.match(/SECONDS \+ (\d+)/);
+    assert.ok(deadline, "version readback has no shared SECONDS deadline");
+    assert.ok(
+      Number(deadline[1]) >= 300,
+      `deadline ${deadline[1]}s is shorter than the delay that burned v0.13.1`,
+    );
+    assert.match(step, /while \[ "\$SECONDS" -lt "\$deadline" \]/, "version readback is not a deadline loop");
+    assert.match(step, /npm view "@cedulon\/\$p@\$tag" version/, "readback asks for latest instead of this version");
+    assert.match(step, /finish mode/, "exhausted wait does not point at finish mode");
+    assert.doesNotMatch(
+      step,
+      /for attempt in 1 2 3 4 5 6 7 8 9 10/,
+      "version readback still uses the 10-attempt bound that burned v0.13.1",
+    );
+  });
+
+  it("finish mode verifies the version is on npm and does not create one", () => {
+    const jobs = jobBodies(yml);
+    assert.ok(jobs.has("finish"), "finish job is missing");
+    const finish = jobs.get("finish")!;
+    assert.match(
+      finish,
+      /github\.event_name == 'workflow_dispatch'/,
+      "finish job is not locked to dispatch",
+    );
+    assert.match(finish, /github\.event\.inputs\.mode == 'finish'/, "finish job does not require mode=finish");
+    assert.match(
+      finish,
+      /is not on npm — finish mode attaches to an existing release, it does not create one/,
+      "finish mode lost the conarium-style refusal when the version is absent",
+    );
+    assert.doesNotMatch(finish, /^\s+npm publish\b/m, "finish job must not publish to npm");
+    assert.match(finish, /mcp-publisher publish/, "finish job does not publish the registry entry");
+    assert.match(
+      finish,
+      /format\('v\{0\}',\s*github\.event\.inputs\.version\)/,
+      "finish job does not check out the tag for the requested version",
+    );
+  });
+
+  it("the release job can run after finish without publish, and still needs publish on the tag path", () => {
+    const release = jobBodies(yml).get("release")!;
+    assert.match(release, /needs:\s*\[publish, finish\]/, "release job must need both publish and finish");
+    assert.match(release, /always\(\)/, "release job cannot run when the unused need is skipped");
+    assert.match(release, /needs\.publish\.result == 'success'/, "tag-path release lost the publish gate");
+    assert.match(release, /needs\.finish\.result == 'success'/, "finish-path release does not wait for finish");
+    assert.match(release, /github\.event\.inputs\.mode == 'finish'/, "release job has no finish-mode condition");
+    assert.doesNotMatch(release, /gh release \S+ "\$GITHUB_REF_NAME"/, "release job still names the GitHub release from github.ref");
+    assert.match(release, /steps\.ver\.outputs\.(tag|version)/, "release job does not resolve the version it attaches");
+  });
+
+  it("workflow_dispatch accepts only finish mode and a version", () => {
+    const on = onBlock(yml);
+    assert.match(on, /workflow_dispatch:/, "finish mode has no dispatch entry");
+    assert.match(on, /type:\s*choice/, "mode is not a closed choice");
+    assert.match(on, /options:\s*\n\s+-\s+finish\s*\n\s+version:/, "dispatch accepts a mode other than finish");
+    assert.match(on, /version:/, "dispatch has no version input");
+    assert.doesNotMatch(on, /options:\s*\n(?:\s+-\s+\S+\s*\n)*\s+-\s+publish\b/, "dispatch still offers a publish mode");
   });
 
   // The first awk took the first paragraph only and never touched the notes
@@ -134,7 +230,7 @@ describe("release.yml static shape", () => {
   it("release notes come from scripts/release-notes.ts and are written on both paths", () => {
     assert.match(yml, /scripts\/release-notes\.ts/, "notes are not produced by the tested script");
     assert.doesNotMatch(yml, /awk -v t=/, "the paragraph-cutting awk is still there");
-    assert.match(yml, /gh release edit "\$GITHUB_REF_NAME" --notes-file/, "the upload path does not update the notes");
+    assert.match(yml, /gh release edit "\$release_tag" --notes-file/, "the upload path does not update the notes");
   });
 
   it("the bundle check does not reach for python", () => {
