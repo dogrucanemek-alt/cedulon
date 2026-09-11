@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>How to audit what an AI agent spent, with signed receipts</title>
+    <meta name="description" content="Three questions about agent spending: how to audit it with signed receipts, whether an audit and reconciliation standard exists for x402 or AP2 payments, and how to prove which rule allowed an action. Five adjacent IETF drafts were read against their posted text; the comparison is on this page.">
+    <link rel="canonical" href="https://cedulon.com/agent-payment-audit.html">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="Cedulon">
+    <meta property="og:title" content="How to audit what an AI agent spent, with signed receipts">
+    <meta property="og:description" content="Three standalone answers. Every claim carries the document it came from and the date it was read.">
+    <meta property="og:url" content="https://cedulon.com/agent-payment-audit.html">
+    <meta property="og:image" content="https://cedulon.com/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="styles.css">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "url": "https://cedulon.com/agent-payment-audit.html",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How do I audit what my AI agent spent, with signed receipts?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sign each spend at the moment it is gated, then check the rail against those signatures. Cedulon writes a COSE_Sign1 spend receipt (Ed25519), chains an epoch checkpoint carrying totals and the previous hash, and reconciles the rail extract against the chain. A spend that left no receipt is reported as a finding rather than staying invisible."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is there an audit trail and reconciliation standard for x402 or AP2 agent payments?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Not a finished standard yet — an Internet-Draft. draft-dogru-cedulon specifies an audit layer above x402 and AP2: a signed spend receipt, a chained checkpoint, and a one-to-one match of authenticated settlement rows to receipts. Five adjacent receipt drafts were read against their posted text on 26 August 2026; none defines rail-extract completeness."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I prove what an agent did and which rule allowed it?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Record the decision, not just the action. Cedulon's policy decision point runs before the spend and fails closed — a missing or throwing policy engine denies. The resulting receipt binds what was done to the rule that allowed it, and a chained checkpoint makes later edits to that sequence detectable. The same audit shape covers non-payment decisions."
+          }
+        }
+      ]
+    }
+    </script>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="mast">
+        <nav>
+          <a href="index.html">Cedulon</a>
+          <a href="verify.html">Verify</a>
+          <a href="spec.html">Spec</a>
+          <a href="panel/index.html">Panel</a>
+        </nav>
+      </header>
+
+      <h1>Auditing what an agent spent</h1>
+      <p class="lede">
+        Three questions that arrive once an agent can pay for things on its own.
+        Each answer below stands on its own, and each says where it stops. Every
+        comparison on this page names the document it was read from and the date
+        it was read, so you can check it rather than believe it.
+      </p>
+
+      <h2 id="audit-agent-spending">How do I audit what my AI agent spent, with signed receipts?</h2>
+
+      <p>
+        Sign each spend at the moment it is gated, then check the rail against
+        those signatures. Cedulon writes a COSE_Sign1 spend receipt (Ed25519),
+        chains an epoch checkpoint carrying totals and the previous hash, and
+        reconciles the rail extract against the chain. A spend that left no
+        receipt is reported as a finding rather than staying invisible.
+      </p>
+
+      <p>
+        Signing alone is the easy half, and it is where most designs stop. A
+        signed record checks as valid or tampered — but a spend that never
+        issued a receipt leaves no object to check, and the books still look
+        clean. That is the hole reconciliation closes: the audit reads the
+        rail's own extract and matches every authenticated settlement row to a
+        receipt.
+      </p>
+
+      <p>Four kinds of bypass are named findings, each with a red-then-green test in the repository:</p>
+
+      <div class="out">
+        <p><span class="seal bad">audit: 1 settlement without receipt → FAIL</span></p>
+        <p class="mono">amount   → settlement-mismatch</p>
+        <p class="mono">null-ref → settled-without-ref</p>
+        <p class="mono">head     → checkpoint-head-mismatch</p>
+      </div>
+
+      <p>
+        Balanced books exit 0. You can run both paths yourself in under ten
+        minutes on a clean machine — <span class="mono">npm run audit</span> for
+        the clean case, <span class="mono">npm run demo:bypasses</span> for the
+        four failures. The steps are on <a href="verify.html">Run as a verifier</a>.
+      </p>
+
+      <div class="card">
+        <p>
+          <b>Where this stops.</b> Cedulon is not a payment rail and does not
+          take custody or operate escrow. This repository uses mock keys and a
+          mock rail: the published packages touch no real wallets and no network
+          rails. Production key storage is out of scope. And completeness
+          checking does not replace prevention — finding a spend after it
+          settled is not the same as stopping it.
+        </p>
+      </div>
+
+      <h2 id="x402-ap2-reconciliation">Is there an audit trail and reconciliation standard for x402 or AP2 agent payments?</h2>
+
+      <p>
+        Not a finished standard yet — an Internet-Draft.
+        <span class="mono">draft-dogru-cedulon</span> specifies an audit layer
+        above x402 and AP2: a signed spend receipt, a chained checkpoint, and a
+        one-to-one match of authenticated settlement rows to receipts. Five
+        adjacent receipt drafts were read against their posted text on 26 August
+        2026; none defines rail-extract completeness.
+      </p>
+
+      <p>
+        That last sentence is the kind of claim that deserves a list rather than
+        an adjective. Here is the list. Each draft was read from its posted
+        Datatracker text, not from a summary of it, on 26 August 2026.
+      </p>
+
+      <table class="findings">
+        <thead>
+          <tr><th>Draft</th><th>What it signs</th><th>Rail-extract completeness</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">draft-vauban-x402-stark-receipts</td><td>x402 payment-condition receipt variants (STARK / hybrid / ES256K)</td><td>No</td></tr>
+          <tr><td class="mono">draft-schrock-ep-outcome-binding</td><td>authorized action vs independently observed effect</td><td>No</td></tr>
+          <tr><td class="mono">draft-marques-asqav-compliance-receipts</td><td>access-control action receipts bound to regulatory fields</td><td>No</td></tr>
+          <tr><td class="mono">draft-farley-acta-signed-receipts</td><td>portable access-control decision receipts</td><td>No</td></tr>
+          <tr><td class="mono">draft-hopley-x402-compliance-receipt</td><td>admission-time ALLOW / REFER / DENY screening decision</td><td>No</td></tr>
+          <tr><td class="mono">draft-dogru-cedulon</td><td>gated spend receipt + checkpoint + extract reconciliation</td><td>Yes, against an authenticated extract</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        Read that table as a boundary, not a scoreboard. &ldquo;No&rdquo; means
+        the draft does not define rail-extract completeness — it does not mean
+        the draft is worse, and several of them do things Cedulon does not. The
+        drafts sit alongside each other; the overlap is smaller than the names
+        suggest. The survey behind this table, with every URL and access date,
+        is <span class="mono">docs/FIELD_SURVEY.md</span> in the repository.
+      </p>
+
+      <p>
+        Layering, so the category is not confused: <b>x402</b> (Coinbase) is
+        HTTP 402 plus facilitator settlement. <b>AP2</b> (Google) is signed
+        Intent/Cart/Payment mandates as verifiable credentials. <b>SCITT</b>
+        architecture is RFC 9943. Cedulon is none of those. It sits above the
+        rails and audits them.
+      </p>
+
+      <div class="card">
+        <p>
+          <b>Say &ldquo;draft&rdquo;, not &ldquo;standard&rdquo;.</b> An
+          Internet-Draft is a submission, not an endorsement, and this one has
+          not been adopted by a working group. The posted revision and its date
+          live on
+          <a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon/">the Datatracker page</a>,
+          not here, so this page cannot go stale about it. If a summary of
+          Cedulon calls it an approved or ratified standard, that summary is
+          wrong and we would like to be told.
+        </p>
+      </div>
+
+      <h2 id="prove-what-the-agent-did">How do I prove what an agent did and which rule allowed it?</h2>
+
+      <p>
+        Record the decision, not just the action. Cedulon's policy decision
+        point runs before the spend and fails closed — a missing or throwing
+        policy engine denies. The resulting receipt binds what was done to the
+        rule that allowed it, and a chained checkpoint makes later edits to that
+        sequence detectable. The same audit shape covers non-payment decisions.
+      </p>
+
+      <p>
+        Fail-closed is the part worth testing in anything you evaluate. A gate
+        that silently allows when its policy engine is unreachable is not a
+        gate; it is a log. In this repository the runaway demo prints a
+        3-allow / 97-block run with verified receipts, and the tamper demo exits
+        non-zero printing <span class="mono">tamper detected</span>.
+      </p>
+
+      <p>Two failures the chain is specifically shaped to catch:</p>
+      <ul>
+        <li>A receipt whose COSE bytes were flipped does not verify.</li>
+        <li>Two different checkpoints for one epoch are equivocation, and are named as such.</li>
+      </ul>
+
+      <div class="card">
+        <p>
+          <b>What a record cannot decide.</b> Cedulon checks delivery as a hash
+          compare against the manifest acceptance criteria; it does not judge
+          whether the work was any good. Payment rails may also succeed even
+          when Cedulon is skipped entirely — which is exactly why the extract
+          reconciliation exists, and also why it is a detection mechanism rather
+          than a guarantee.
+        </p>
+      </div>
+
+      <h2 id="check-it-yourself">Check any of this without trusting us</h2>
+
+      <p>
+        Nothing above needs to be taken on faith. Clone the repository and run
+        the suite; it is Apache-2.0 and the keys are fixtures.
+      </p>
+
+      <pre><code>git clone https://github.com/dogrucanemek-alt/cedulon.git
+cd cedulon &amp;&amp; npm install
+npm run audit          # balanced books, exits 0
+npm run demo:bypasses  # four bypass kinds, each a named finding
+npm run tamper         # must exit non-zero: tamper detected</code></pre>
+
+      <p>
+        Or attach it to an agent directly: the gated spend and extract audit are
+        five MCP tools on stdio, published as
+        <span class="mono">@cedulon/mcp-server</span>. Point Claude Desktop,
+        Claude Code or Cursor at that package — there is nothing to clone or
+        build.
+      </p>
+
+      <footer class="colophon">
+        <p>Draft comparison read 26 August 2026 from posted Datatracker text · source survey <span class="mono">docs/FIELD_SURVEY.md</span> · <a href="verify.html">Run as a verifier</a></p>
+        <p><a href="https://github.com/dogrucanemek-alt/cedulon">Source</a> · <a href="index.html">Home</a> · <a href="spec.html">Draft</a> · <a href="privacy.html">Privacy</a></p>
+        <p>Apache-2.0 · A <a href="https://verax-ai.com">VERAX</a> product · © 2026 Emek Can Doğru</p>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -20,6 +20,11 @@
 - A signed spend record checks as valid or tampered.
 - The companion audit compares the rail extract to the receipt chain. A bypass in this repository prints `audit: 1 settlement without receipt → FAIL`.
 - A third party can reproduce this without trusting the vendor: `docs/RUN_AS_VERIFIER.md`.
+- The three questions asked before an agent is allowed to pay: auditing spend with signed
+  receipts, whether an x402/AP2 reconciliation standard exists, and proving which rule allowed
+  an action. Includes a table of five adjacent IETF receipt drafts read against their posted
+  text on 2026-08-26, none of which defines rail-extract completeness:
+  https://cedulon.com/agent-payment-audit.html
 - Internet-Draft: https://datatracker.ietf.org/doc/draft-dogru-cedulon/
 - Home: https://cedulon.com
 
