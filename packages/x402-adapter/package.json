@@ -40,9 +40,9 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/core": "^0.13.0",
-    "@cedulon/cose": "^0.13.0",
-    "@cedulon/manifest": "^0.13.0",
-    "@cedulon/receipts": "^0.13.0"
+    "@cedulon/core": "^0.13.1",
+    "@cedulon/cose": "^0.13.1",
+    "@cedulon/manifest": "^0.13.1",
+    "@cedulon/receipts": "^0.13.1"
   }
 }

@@ -31,6 +31,6 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@cedulon/mcp-server": "^0.13.0"
+    "@cedulon/mcp-server": "^0.13.1"
   }
 }
