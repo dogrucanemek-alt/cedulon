@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/mcp-guard",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "private": true,
   "description": "Fail-closed MCP tools/call wrapper for Cedulon spend.",
   "license": "Apache-2.0",

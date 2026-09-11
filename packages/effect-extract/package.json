@@ -1,6 +1,6 @@
 {
   "name": "@cedulon/effect-extract",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Signed effect extract: the counterparty record for a Decision Record.",
   "license": "Apache-2.0",
   "type": "module",
