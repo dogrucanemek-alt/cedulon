@@ -34,6 +34,20 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.13.1` is prepared in this tree and is not a published npm release; the
+sentences below about installed artifacts stay on 0.13.0, which is what npm
+serves. It changes no source and no behaviour: the diff against 0.13.0 is version fields, an `UPGRADING` section
+and this paragraph. It exists because `server.json` named the GitHub
+repository as the project website, and the MCP registry will not accept a
+correction under a version number it already holds. Unchanged, and named here
+because the gate reads this version's own paragraph: `audit()` reports
+`manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
+usable issuer pin the departure is a finding that fails the audit, and
+without a pin the same departure is a warning that does not by itself fail it;
+and
+`requestHash` is still the SHA-256 of the six-field canonical document in
+lowercase hex, the digest the posted draft does not name.
+
 `0.13.0` is published on npm, with a provenance attestation, and it is what a
 reader now gets from an installed package: the decision profile, the second
 population on the reconciler that `docs/UPGRADING.md` describes under its
