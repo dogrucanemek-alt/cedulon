@@ -41,8 +41,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/core": "^0.13.0",
-    "@cedulon/manifest": "^0.13.0",
-    "@cedulon/x402-adapter": "^0.13.0"
+    "@cedulon/core": "^0.13.1",
+    "@cedulon/manifest": "^0.13.1",
+    "@cedulon/x402-adapter": "^0.13.1"
   }
 }

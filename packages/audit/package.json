@@ -40,12 +40,12 @@
     "access": "public"
   },
   "dependencies": {
-    "@cedulon/checkpoint": "^0.13.0",
-    "@cedulon/core": "^0.13.0",
-    "@cedulon/cose": "^0.13.0",
-    "@cedulon/effect-extract": "^0.13.0",
-    "@cedulon/manifest": "^0.13.0",
-    "@cedulon/receipts": "^0.13.0",
-    "@cedulon/x402-adapter": "^0.13.0"
+    "@cedulon/checkpoint": "^0.13.1",
+    "@cedulon/core": "^0.13.1",
+    "@cedulon/cose": "^0.13.1",
+    "@cedulon/effect-extract": "^0.13.1",
+    "@cedulon/manifest": "^0.13.1",
+    "@cedulon/receipts": "^0.13.1",
+    "@cedulon/x402-adapter": "^0.13.1"
   }
 }
