@@ -214,6 +214,62 @@ describe("release.yml static shape", () => {
     assert.match(release, /steps\.ver\.outputs\.(tag|version)/, "release job does not resolve the version it attaches");
   });
 
+  // Run 34607440005: finish found 0.13.1 already on the MCP Registry
+  // (published by hand after the tagged run never reached that step) and
+  // died on duplicate version, so the GitHub release — the leftover —
+  // never ran. Asking the registry first, and treating only that
+  // duplicate as "already done", is how finish resumes. Swallowing every
+  // 400 is not.
+  it("finish asks the MCP Registry whether this version is listed before it publishes", () => {
+    const finish = jobBodies(yml).get("finish")!;
+    const ask = finish.indexOf("registry.modelcontextprotocol.io/v0.1/servers/");
+    const publish = finish.indexOf("./mcp-publisher publish");
+    const readback = finish.indexOf("- name: the MCP Registry answers with this version");
+    assert.ok(ask >= 0, "finish job never asks the MCP Registry");
+    assert.ok(publish >= 0, "finish job lost mcp-publisher publish");
+    assert.ok(readback >= 0, "finish job lost the MCP Registry readback");
+    assert.ok(ask < publish, "finish publishes before it has asked the registry");
+    assert.ok(publish < readback, "the readback is not after the publish step");
+    assert.match(
+      finish,
+      /already lists .* skipping publish/,
+      "finish does not log why it skipped a version the registry already has",
+    );
+    const afterPublish = finish.slice(readback);
+    assert.doesNotMatch(
+      afterPublish.split("\n").slice(0, 8).join("\n"),
+      /^\s+if:/m,
+      "the finish readback is conditional and would be skipped when publish is skipped",
+    );
+  });
+
+  it("finish treats only a duplicate-version registry reply as already done", () => {
+    const finish = jobBodies(yml).get("finish")!;
+    const step = namedStep(finish, "publish server.json to the MCP Registry");
+    assert.match(
+      step,
+      /cannot publish duplicate version/,
+      "a racing duplicate publish is not recognised",
+    );
+    assert.doesNotMatch(step, /grep .*400/, "every HTTP 400 would be swallowed as a duplicate");
+    assert.doesNotMatch(step, /Bad Request/, "every Bad Request would be swallowed as a duplicate");
+    assert.doesNotMatch(
+      step,
+      /\[ "\$ec" -ne 0 \] &&/,
+      "any publisher failure would be treated as success",
+    );
+    // The assertions above forbid ways of swallowing a failure, but none of
+    // them require the step to fail at all: deleting the exit line left this
+    // suite green while every publisher error was ignored. Ask for the exit
+    // itself, so the recovery mode cannot quietly become one that reports
+    // success whatever the registry answers.
+    assert.match(
+      step,
+      /exit "\$ec"/,
+      "a publisher error other than a duplicate never leaves the step red",
+    );
+  });
+
   it("workflow_dispatch accepts only finish mode and a version", () => {
     const on = onBlock(yml);
     assert.match(on, /workflow_dispatch:/, "finish mode has no dispatch entry");

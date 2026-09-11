@@ -359,6 +359,12 @@ jobs:
           echo "$MCP_PUBLISHER_SHA256  mcp-publisher_linux_amd64.tar.gz" | sha256sum -c -
           tar -xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
 
+      # Run 34607440005: 0.13.1 was already on the registry (published by
+      # hand after the tagged run never reached this step). Publishing
+      # again returned 400 duplicate version and the GitHub release never
+      # ran. Ask the registry first; a listed version is a success, not a
+      # red. A racing publish that loses to the same duplicate is also a
+      # success. Any other publisher error stays red.
       - name: publish server.json to the MCP Registry
         run: |
           set -e
@@ -368,8 +374,40 @@ jobs:
             echo "server.json is $sj, finish mode was asked for $tag; refusing to publish"
             exit 1
           fi
-          ./mcp-publisher login github-oidc
-          ./mcp-publisher publish
+          encoded="io.github.dogrucanemek-alt%2Fcedulon"
+          url="https://registry.modelcontextprotocol.io/v0.1/servers/${encoded}/versions/${tag}"
+          code=$(curl -sS -o "$RUNNER_TEMP/mcp-reg.json" -w '%{http_code}' "$url" || echo "000")
+          listed=""
+          if [ "$code" = "200" ]; then
+            listed=$(node -e '
+              const b = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+              const v = b.server && b.server.version ? b.server.version : "";
+              const official = b._meta && b._meta["io.modelcontextprotocol.registry/official"];
+              const latest = official && official.isLatest === true;
+              process.stdout.write(v + " " + (latest ? "true" : "false"));
+            ' "$RUNNER_TEMP/mcp-reg.json")
+          fi
+          ver=${listed%% *}
+          latest=${listed#* }
+          if [ "$ver" = "$tag" ]; then
+            echo "MCP Registry already lists $tag (isLatest=${latest:-unknown}); skipping publish"
+          else
+            echo "MCP Registry does not list $tag yet (HTTP $code); publishing"
+            ./mcp-publisher login github-oidc
+            set +e
+            out=$(./mcp-publisher publish 2>&1)
+            ec=$?
+            set -e
+            printf '%s\n' "$out"
+            if [ "$ec" -eq 0 ]; then
+              echo "published $tag to the MCP Registry"
+            elif printf '%s' "$out" | grep -F -q 'cannot publish duplicate version'; then
+              echo "MCP Registry rejected $tag as a duplicate version; treating as already listed"
+            else
+              echo "mcp-publisher publish failed"
+              exit "$ec"
+            fi
+          fi
 
       - name: the MCP Registry answers with this version
         run: |
