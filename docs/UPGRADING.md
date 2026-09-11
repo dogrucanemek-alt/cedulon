@@ -4,6 +4,30 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.13.1: the registry entry points at the product site
+
+Nothing to do. No source, no interface, no behaviour changed between 0.13.0 and
+0.13.1 — the diff is version fields and this section.
+
+The release exists because one line of metadata was wrong and could not be
+corrected in place. `server.json` named the GitHub repository as the project
+website, so the MCP registry — and the directories and assistants that read it —
+never pointed anyone at cedulon.com. The fix landed in #3, but the registry
+refuses to accept a version number it already holds, and 0.13.0 was already
+published. A correction to a published entry therefore costs a version.
+
+Worth knowing before the next one: whatever `server.json` carries at tag time is
+what the registry keeps until the version after it.
+
+Unchanged, and repeated here because the gate reads each version's own section
+rather than inheriting the one before it: `audit()` reports
+`manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
+usable issuer pin the departure is a finding that fails the audit, and
+without a pin the same departure is a warning that does not by itself fail it;
+and
+`requestHash` is still the SHA-256 of the six-field canonical document in
+lowercase hex, the digest the posted draft does not name.
+
 ## 0.13.0: the decision profile, nine packages, and a tag that stops on a package npm has never seen
 
 A. The five money-shaped axes behind `audit()` now sit on
