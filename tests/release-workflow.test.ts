@@ -258,6 +258,16 @@ describe("release.yml static shape", () => {
       /\[ "\$ec" -ne 0 \] &&/,
       "any publisher failure would be treated as success",
     );
+    // The assertions above forbid ways of swallowing a failure, but none of
+    // them require the step to fail at all: deleting the exit line left this
+    // suite green while every publisher error was ignored. Ask for the exit
+    // itself, so the recovery mode cannot quietly become one that reports
+    // success whatever the registry answers.
+    assert.match(
+      step,
+      /exit "\$ec"/,
+      "a publisher error other than a duplicate never leaves the step red",
+    );
   });
 
   it("workflow_dispatch accepts only finish mode and a version", () => {
