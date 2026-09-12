@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cedulon vs other agent-payment controls, compared with dates</title>
+    <meta name="description" content="How Cedulon compares to Stripe Agent Toolkit, Coinbase AgentKit, x402, Google AP2, AWS AgentCore Payments and Vaara on signed receipts, fail-closed policy, rail-extract reconciliation, human approval, third-party verification and local records. Every cell separates what the documentation says from what we found in the code. Read 12 September 2026, including the places where they are ahead of us.">
+    <link rel="canonical" href="https://cedulon.com/compare.html">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="Cedulon">
+    <meta property="og:title" content="Cedulon vs other agent-payment controls, compared with dates">
+    <meta property="og:description" content="Docs and code kept apart in every cell. Stars, commits and capability columns all read 12 September 2026. Including the places where they are ahead of us.">
+    <meta property="og:url" content="https://cedulon.com/compare.html">
+    <meta property="og:image" content="https://cedulon.com/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="wrap wide">
+      <header class="mast">
+        <nav>
+          <a href="index.html">Cedulon</a>
+          <a href="verify.html">Verify</a>
+          <a href="spec.html">Spec</a>
+          <a href="compare.html">Compare</a>
+          <a href="panel/index.html">Panel</a>
+        </nav>
+      </header>
+
+      <p class="seal">Stars, commits and capability columns all read 12 September 2026 · re-measurable</p>
+      <h1>How Cedulon compares</h1>
+      <p class="tagline lede">Including the places where the other projects are ahead of us. Every cell says whether it comes from the project's own documents or from a function we found in its code, because those are two different kinds of evidence and a comparison written by a vendor is worth exactly as much as its verifiability.</p>
+
+      <div class="card">
+        <p><strong>Read this first.</strong> Cedulon is the smallest project on this page: 0 GitHub stars against x402's 6,606 and AP2's 3,176. Nothing here moves real money; the repository runs on mock fixtures and one read-only testnet window. If you need a payment rail, pick a rail. Cedulon is not one; it sits above x402 and AP2 as an audit layer. Keep reading only if what you need is a signed receipt per spend, a refusal when the policy engine is missing, and a reconciliation that finds the spend that left no receipt.</p>
+        <p style="margin:0"><strong>How to read a cell.</strong> <em>Docs</em> is what the project's documentation says. <em>Code</em> names the function we found producing that behaviour at the pinned commit, or says <em>not found</em> when we did not find one in the files we read. Not found is not proof of absence. Nothing was executed; this is a static reading of open code and public documents. Cedulon's own row is held to the same notation.</p>
+      </div>
+
+      <h2>The table</h2>
+      <p>Star counts, licenses and last-commit dates were read from the GitHub API on 12 September 2026 with the commands at the bottom of this page. The last-commit date is the committer date of the newest commit on the default branch. Capability columns were read the same day, from each project's documentation and from the source files linked under the table. If we got something wrong about your project, write to us and we will correct the page and note the correction.</p>
+
+      <div class="tblwrap">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th>Project</th><th>Stars</th><th>Last commit</th><th>License</th>
+            <th>Signed receipt per spend</th>
+            <th>Refuses when the policy engine is missing or faulty</th>
+            <th>Reconciles the rail's own extract</th>
+            <th>Human approval step</th>
+            <th>Third party can verify the receipt</th>
+            <th>Records stay on your machine</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="us">
+            <td data-label="Project">Cedulon</td><td data-label="Stars">0</td><td data-label="Last commit">2026-09-12</td><td data-label="License">Apache-2.0</td>
+            <td class="y" data-label="Signed receipt per spend"><b>Yes</b><small>Code: <code>signReceiptCose()</code> writes a COSE_Sign1 receipt, <code>generateReceiptKeys()</code> makes Ed25519 keys (<code>packages/receipts/src/index.ts</code>).</small></td>
+            <td class="y" data-label="Refuses when the policy engine is missing or faulty"><b>Yes</b><small>Code: <code>failClosedEvaluate()</code> returns a refusal with <code>engine-unavailable</code> when there is no engine and <code>engine-fault</code> when it throws (<code>packages/core/src/fail-closed.ts</code>).</small></td>
+            <td class="y" data-label="Reconciles the rail's own extract"><b>Yes</b><small>Code: <code>packages/audit/src/index.ts</code> reports <code>settlement-without-receipt</code>; the <code>cedulon_audit</code> tool accepts a signed rail extract as the settlement side.</small></td>
+            <td class="n" data-label="Human approval step"><b>No</b><small>Decisions are allow or deny (<code>packages/core/src/policy.ts</code>); there is no hold state and no approval queue. The payee countersignature is a key, not a person.</small></td>
+            <td class="y" data-label="Third party can verify the receipt"><b>Yes</b><small><code>cedulon_verify_receipt</code> tool; <code>docs/RUN_AS_VERIFIER.md</code> reruns the whole suite on a clean machine. Without an issuer key you hold out of band the check is self-referential, and the tool description says so.</small></td>
+            <td class="y" data-label="Records stay on your machine"><b>Yes</b><small>A stdio process over its own ledger; sections 1 to 6 of the verifier document touch no network. Not measured with packet capture.</small></td>
+          </tr>
+          <tr>
+            <td data-label="Project"><a href="https://github.com/stripe/ai">Stripe Agent Toolkit</a></td><td data-label="Stars">1,801</td><td data-label="Last commit">2026-09-11</td><td data-label="License">MIT</td>
+            <td class="q" data-label="Signed receipt per spend"><b>Not stated</b><small>Code: not found in the toolkit.</small></td>
+            <td class="q" data-label="Refuses when the policy engine is missing or faulty"><b>Different thing</b><small>Docs: restricted API key permissions. Code: <code>ToolkitCore.initialize()</code> connects to Stripe's remote MCP server; there is no local spend engine to fail closed.</small></td>
+            <td class="q" data-label="Reconciles the rail's own extract"><b>Not stated</b><small>Docs: payment data is readable through the API; automatic matching is not stated. Code: not found.</small></td>
+            <td class="q" data-label="Human approval step"><b>Recommended, not enforced</b><small>Docs: confirmation is recommended in the MCP client. Code: no mandatory approval step in the toolkit.</small></td>
+            <td class="q" data-label="Third party can verify the receipt"><b>Not stated</b><small>Code: no receipt verifier found.</small></td>
+            <td class="n" data-label="Records stay on your machine"><b>No</b><small>Remote MCP over HTTP: <code>StripeMcpClient.createTransportAndClient()</code> (<code>mcp-client.ts</code>).</small></td>
+          </tr>
+          <tr>
+            <td data-label="Project"><a href="https://github.com/coinbase/agentkit">Coinbase AgentKit</a></td><td data-label="Stars">1,309</td><td data-label="Last commit">2026-09-03</td><td data-label="License">Apache-2.0 <small>LICENSE.md says so; the GitHub API reports NOASSERTION</small></td>
+            <td class="q" data-label="Signed receipt per spend"><b>Partial</b><small>Docs: x402 payment proof. Code: <code>X402ActionProvider</code>; no separate signed outcome receipt found.</small></td>
+            <td class="q" data-label="Refuses when the policy engine is missing or faulty"><b>Partial</b><small>Docs: URL allowlist and a default 1 USDC per-request limit. Code: <code>isServiceRegistered()</code> refuses on an empty list, <code>validatePaymentLimit()</code> checks the amount (<code>x402/utils.ts</code>). Behaviour when the check itself faults is not stated.</small></td>
+            <td class="q" data-label="Reconciles the rail's own extract"><b>Not stated</b><small>Code: not found.</small></td>
+            <td class="q" data-label="Human approval step"><b>Optional</b><small>Docs: two-step flow or direct pay. Code: <code>X402ActionProvider</code> offers both; neither is mandatory.</small></td>
+            <td class="q" data-label="Third party can verify the receipt"><b>Partial</b><small>Docs: x402 payment proof. Code: no independent receipt verifier found.</small></td>
+            <td class="n" data-label="Records stay on your machine"><b>No</b><small>HTTP and wallet-provider calls.</small></td>
+          </tr>
+          <tr>
+            <td data-label="Project"><a href="https://github.com/x402-foundation/x402">x402</a> <small>foundation repository; the CDP facilitator is Coinbase-hosted</small></td><td data-label="Stars">6,606</td><td data-label="Last commit">2026-09-11</td><td data-label="License">Apache-2.0</td>
+            <td class="q" data-label="Signed receipt per spend"><b>Optional</b><small>Docs: Offer/Receipt is an optional extension. Code: <code>createReceiptJWS()</code> and <code>createReceiptEIP712()</code> (<code>offer-receipt/signing.ts</code>). Whether every CDP settlement emits one is not stated.</small></td>
+            <td class="q" data-label="Refuses when the policy engine is missing or faulty"><b>Not stated</b><small>Docs: payment signature and settlement are verified. Code: no spend-policy engine in this extension.</small></td>
+            <td class="q" data-label="Reconciles the rail's own extract"><b>Not stated</b><small>Docs: settlement returns a transaction id; a full extract sweep is not stated. Code: not found.</small></td>
+            <td class="n" data-label="Human approval step"><b>No</b><small>Machine-to-machine by design.</small></td>
+            <td class="q" data-label="Third party can verify the receipt"><b>Partial</b><small>Docs: portable JWS / EIP-712 proof. Code: signing is there; <code>verifyReceiptMatchesOffer()</code> (<code>client.ts</code>) compares fields, and its own comment says it does not verify the signature.</small></td>
+            <td class="n" data-label="Records stay on your machine"><b>No</b><small>The facilitator can be Coinbase-hosted and settlement is on chain; the receipt travels in the HTTP response, no mandatory local archive found.</small></td>
+          </tr>
+          <tr>
+            <td data-label="Project"><a href="https://github.com/google-agentic-commerce/AP2">Google AP2</a></td><td data-label="Stars">3,176</td><td data-label="Last commit">2026-04-29</td><td data-label="License">Apache-2.0</td>
+            <td class="q" data-label="Signed receipt per spend"><b>Specified</b><small>Docs: the v0.2 specification says a signed Payment Receipt MUST follow accept or decline. Code: <code>ReceiptClient.create_payment_receipt()</code> and <code>create_jwt()</code> (<code>receipt_wrapper.py</code>). Emission on every real payment path not verified.</small></td>
+            <td class="q" data-label="Refuses when the policy engine is missing or faulty"><b>Not stated</b><small>Docs: mandate verification must be deterministic. Code: <code>PaymentMandateChain.verify()</code>; a fault-to-refusal guarantee across execution paths is not stated.</small></td>
+            <td class="q" data-label="Reconciles the rail's own extract"><b>Not stated</b><small>Docs: the receipt references the mandate; rail-extract reconciliation is not stated. Code: not found.</small></td>
+            <td class="y" data-label="Human approval step"><b>Yes</b><small>Docs: human-present and pre-authorised autonomous flows. Code: the SDK verifies the mandate chain; the human interface is the integrator's.</small></td>
+            <td class="y" data-label="Third party can verify the receipt"><b>Yes</b><small>Code: <code>ReceiptClient.verify_receipt()</code> calls <code>verify_jwt()</code>; needs the issuer's public key and a reference-check callback.</small></td>
+            <td class="q" data-label="Records stay on your machine"><b>Up to you</b><small>Docs: storage is up to the implementation. Code: no mandatory local archive.</small></td>
+          </tr>
+          <tr>
+            <td data-label="Project"><a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/payments-how-it-works.html">AWS AgentCore Payments</a></td><td class="q" data-label="Stars">n/a</td><td class="q" data-label="Last commit">n/a</td><td class="q" data-label="License">Managed service</td>
+            <td class="q" data-label="Signed receipt per spend"><b>Not stated</b><small>Docs: the transaction proof is signed; a separate signed audit receipt is not stated. Code: not public.</small></td>
+            <td class="q" data-label="Refuses when the policy engine is missing or faulty"><b>Partial</b><small>Docs: over-limit and expired sessions are refused; the engine-missing case is not stated. Code: not public.</small></td>
+            <td class="q" data-label="Reconciles the rail's own extract"><b>Not stated</b><small>Docs: session ledger and transaction status; an external extract sweep is not stated.</small></td>
+            <td class="q" data-label="Human approval step"><b>Up front</b><small>Docs: the user grants the payment tool explicit authority; no per-payment confirmation is claimed.</small></td>
+            <td class="q" data-label="Third party can verify the receipt"><b>Not stated</b></td>
+            <td class="n" data-label="Records stay on your machine"><b>No</b><small>AWS-managed ledger and observability.</small></td>
+          </tr>
+          <tr>
+            <td data-label="Project"><a href="https://github.com/vaaraio/vaara">Vaara</a></td><td data-label="Stars">12</td><td data-label="Last commit">2026-09-12</td><td data-label="License">AGPL-3.0 <small>commercial option</small></td>
+            <td class="q" data-label="Signed receipt per spend"><b>Partial</b><small>Docs: action evidence, signed at export. Code: <code>extract_receipt()</code> (<code>audit/receipts.py</code>) extracts a hash-bound record; not verified as an automatic signed receipt per payment.</small></td>
+            <td class="q" data-label="Refuses when the policy engine is missing or faulty"><b>Partial</b><small>Docs: deny or escalate stops execution. Code: <code>govern.wrapper()</code> calls <code>intercept()</code>; a scorer exception records a refusal and raises. <code>shadow=True</code> does not block.</small></td>
+            <td class="q" data-label="Reconciles the rail's own extract"><b>Own trail only</b><small>Docs: gap detection inside its own trail. Code: <code>settlement/release.py</code> evaluates evidence only; no link to a rail extract found.</small></td>
+            <td class="y" data-label="Human approval step"><b>Yes</b><small>Code: <code>request_approval()</code> and <code>resolve_escalation()</code> (<code>approvals.py</code>); the review queue is optional.</small></td>
+            <td class="y" data-label="Third party can verify the receipt"><b>Yes</b><small>Code: <code>verify_signed()</code> in <code>audit/verify.py</code>, CLI <code>vaara trail verify</code>; Ed25519 public key and chain check.</small></td>
+            <td class="y" data-label="Records stay on your machine"><b>Yes</b><small>Code: <code>InterceptionPipeline.__init__()</code> defaults to <code>~/.vaara/trail/audit.db</code> (<code>pipeline.py</code>).</small></td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+
+      <h3>Files and documents read, 12 September 2026</h3>
+      <ul class="sources">
+        <li><strong>Cedulon</strong> at <a href="https://github.com/dogrucanemek-alt/cedulon/tree/e2340a2">e2340a2</a>: <code>packages/receipts/src/index.ts</code>, <code>packages/core/src/fail-closed.ts</code>, <code>packages/core/src/policy.ts</code>, <code>packages/audit/src/index.ts</code>, <code>packages/mcp-server/src/index.ts</code>, <code>docs/RUN_AS_VERIFIER.md</code>.</li>
+        <li><strong>Stripe Agent Toolkit</strong> at <a href="https://github.com/stripe/ai/tree/583467a">583467a</a>: <a href="https://github.com/stripe/ai/blob/583467a/tools/typescript/src/shared/toolkit-core.ts">toolkit-core.ts</a>, <a href="https://github.com/stripe/ai/blob/583467a/tools/typescript/src/shared/mcp-client.ts">mcp-client.ts</a>; docs <a href="https://docs.stripe.com/mcp">Stripe MCP</a>. Stripe Issuing spending controls are a separate product surface and were not credited to the toolkit.</li>
+        <li><strong>Coinbase AgentKit</strong> at <a href="https://github.com/coinbase/agentkit/tree/2e6dbaf">2e6dbaf</a>: <a href="https://github.com/coinbase/agentkit/blob/2e6dbaf/typescript/agentkit/src/action-providers/x402/x402ActionProvider.ts">x402ActionProvider.ts</a>, <a href="https://github.com/coinbase/agentkit/blob/2e6dbaf/typescript/agentkit/src/action-providers/x402/utils.ts">utils.ts</a>, <a href="https://github.com/coinbase/agentkit/blob/2e6dbaf/typescript/agentkit/src/action-providers/x402/README.md">x402 README</a>.</li>
+        <li><strong>x402</strong> at <a href="https://github.com/x402-foundation/x402/tree/04c750e">04c750e</a>: <a href="https://github.com/x402-foundation/x402/blob/04c750e/typescript/packages/extensions/src/offer-receipt/signing.ts">signing.ts</a>, <a href="https://github.com/x402-foundation/x402/blob/04c750e/typescript/packages/extensions/src/offer-receipt/client.ts">client.ts</a>, <a href="https://github.com/x402-foundation/x402/blob/04c750e/typescript/packages/extensions/src/offer-receipt/README.md">offer-receipt README</a>; docs <a href="https://docs.cdp.coinbase.com/x402/support/faq">CDP facilitator FAQ</a>. The Coinbase repository is a fork of the foundation repository; stars were not summed.</li>
+        <li><strong>Google AP2</strong> at <a href="https://github.com/google-agentic-commerce/AP2/tree/e1ea56d">e1ea56d</a>: <a href="https://github.com/google-agentic-commerce/AP2/blob/e1ea56d/code/sdk/python/ap2/sdk/receipt_wrapper.py">receipt_wrapper.py</a>, <a href="https://github.com/google-agentic-commerce/AP2/blob/e1ea56d/code/sdk/python/ap2/sdk/payment_mandate_chain.py">payment_mandate_chain.py</a>; <a href="https://github.com/google-agentic-commerce/AP2/blob/main/docs/ap2/specification.md">specification v0.2</a>. Producing a receipt model does not prove a settlement happened.</li>
+        <li><strong>AWS AgentCore Payments</strong>: <a href="https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/payments-how-it-works.html">payment lifecycle</a>. No source for the managed engine is public; the sample repository's stars were not counted as the service's.</li>
+        <li><strong>Vaara</strong> at <a href="https://github.com/vaaraio/vaara/tree/d325da1">d325da1</a>: <a href="https://github.com/vaaraio/vaara/blob/d325da1/src/vaara/govern.py">govern.py</a>, <a href="https://github.com/vaaraio/vaara/blob/d325da1/src/vaara/pipeline.py">pipeline.py</a>, <a href="https://github.com/vaaraio/vaara/blob/d325da1/src/vaara/audit/receipts.py">receipts.py</a>, <a href="https://github.com/vaaraio/vaara/blob/d325da1/src/vaara/audit/verify.py">verify.py</a>, <a href="https://github.com/vaaraio/vaara/blob/d325da1/src/vaara/approvals.py">approvals.py</a>, <a href="https://github.com/vaaraio/vaara/blob/d325da1/src/vaara/settlement/release.py">settlement/release.py</a>; <a href="https://vaara.io/">vaara.io</a>.</li>
+      </ul>
+
+      <h2>Where they are ahead of us</h2>
+      <p>Five things, stated before the parts that favour us.</p>
+      <ul class="claims">
+        <li><strong>They move value; we do not.</strong> x402, AgentKit and AP2 settle payments, on chain or through mandates. Cedulon moves nothing and never will; it is an audit layer above the rail. If you need the payment itself, they are the product and we are not.</li>
+        <li><strong>Adoption.</strong> 0 stars against 6,606, 3,176 and 1,801. No external production deployment we know of. Everything on this site is our own run or a reproducible test.</li>
+        <li><strong>Human approval.</strong> AP2 specifies a human-present flow and Vaara ships <code>request_approval()</code>. Cedulon's policy answers allow or deny and has no hold state; if you need a person in the loop, that layer has to sit above Cedulon.</li>
+        <li><strong>Scope.</strong> Vaara governs tool calls beyond payment. Stripe's toolkit spans a whole payments API with OAuth and restricted keys. Cedulon does one thing: gate a spend, sign the receipt, reconcile the extract.</li>
+        <li><strong>Receipt formats with ecosystems.</strong> x402's JWS / EIP-712 receipts and AP2's JWT receipts live inside protocols other people implement. Cedulon's COSE_Sign1 receipt is specified in an individual Internet-Draft that no working group has adopted.</li>
+      </ul>
+
+      <h2>Where we are different</h2>
+      <p>Different, not better. Each of these is a design choice with a cost attached.</p>
+      <ul class="claims">
+        <li><strong>Refusal is the default when the engine is gone.</strong> <code>failClosedEvaluate()</code> refuses for a missing engine and for a throwing one. We did not find the same guarantee stated for the others; AgentKit's empty-allowlist refusal and Vaara's scorer-exception path are the closest code we found.</li>
+        <li><strong>The second ledger.</strong> We compare the rail's own extract against the receipt chain and report <code>settlement-without-receipt</code>. A receipt chain alone reports only what it knows about itself. We did not find a rail-extract reconciliation in any project above; a chain transaction id and internal gap detection are not the same claim.</li>
+        <li><strong>A verifier document instead of a promise.</strong> <code>docs/RUN_AS_VERIFIER.md</code> reruns the whole suite on a clean machine without trusting us. Vaara's offline <code>trail verify</code> is the nearest thing on this page.</li>
+        <li><strong>Stated plainly.</strong> A Cedulon receipt proves a decision was recorded and not altered afterwards. It does not prove the money moved, and a rail may succeed even if Cedulon is skipped (THREAT_MODEL.md). That gap is exactly why the reconciliation exists.</li>
+      </ul>
+
+      <h2>Not in the table, and why</h2>
+      <ul class="claims">
+        <li><strong>Skyfire.</strong> Its features page returned HTTP 404 to us on 12 September 2026. We do not score what we could not read.</li>
+        <li><strong>Payman.</strong> The policy documentation returned HTTP 526 and the dashboard guide 404 on 12 September 2026. The rule quoted elsewhere as "no policy, no access" could not be re-read, so it is not in the table.</li>
+        <li><strong>Nekuda.</strong> The current product is a WebMCP kit for typed website tools; we did not find a payment audit engine to score.</li>
+        <li><strong>Visa Intelligent Commerce.</strong> Detailed documentation is behind restricted access; the public page describes agent tokens and their lifecycle, not enough to fill the columns.</li>
+        <li><strong>Mastercard Agent Pay.</strong> The public page describes credentials and pre-authorisation and returned HTTP 403 to our fetch; the developer toolkit on GitHub explores APIs and is not the execution engine.</li>
+      </ul>
+
+      <h2>Verify this page yourself</h2>
+      <p>Do not take the numbers on trust. They take about a minute to gather.</p>
+      <pre># Stars, license and newest commit on the default branch
+for r in dogrucanemek-alt/cedulon stripe/ai coinbase/agentkit x402-foundation/x402 \
+         google-agentic-commerce/AP2 vaaraio/vaara; do
+  gh api "repos/$r" --jq '"\(.full_name)  stars \(.stargazers_count)  \(.license.spdx_id)"'
+  gh api "repos/$r/commits?per_page=1" --jq '.[0].commit.committer.date'
+done
+
+# Read the same file we read, at the same commit
+gh api -H "Accept: application/vnd.github.raw+json" \
+  "repos/x402-foundation/x402/contents/typescript/packages/extensions/src/offer-receipt/client.ts?ref=04c750e" \
+  | grep -n "does NOT verify"
+
+# Run Cedulon as a verifier: under ten minutes, no network in sections 1 to 6
+git clone https://github.com/dogrucanemek-alt/cedulon
+cd cedulon &amp;&amp; npm install &amp;&amp; npm run test:all</pre>
+      <p>The verifier document walks through the rest: a tampered receipt reads as tampered, and one settlement with no receipt makes the audit print <code>FAIL</code>.</p>
+
+      <footer class="colophon">
+        <p>Found an error on this page, including one that favours us? <a href="mailto:e.dogru@conarium.dev">e.dogru@conarium.dev</a>. We will correct it and note the correction.</p>
+        <p>Everything on this page read 12 September 2026 · <a href="agent-payment-audit.html">Auditing what an agent spent</a> · <a href="verify.html">Run as a verifier</a> · <a href="spec.html">Draft</a></p>
+        <p><a href="https://github.com/dogrucanemek-alt/cedulon">Source</a> · <a href="index.html">Home</a> · <a href="privacy.html">Privacy</a></p>
+        <p>Apache-2.0 · A <a href="https://verax-ai.com">VERAX</a> product · © 2026 Emek Can Doğru</p>
+      </footer>
+    </div>
+  </body>
+</html>
