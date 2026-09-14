@@ -4,7 +4,6 @@ abbrev: Cedulon Threats
 docname: draft-dogru-cedulon-threats-00
 date: 2026-09-09
 category: info
-submissiontype: independent
 ipr: trust200902
 area: sec
 workgroup:
@@ -30,7 +29,7 @@ normative:
   RFC8174:
 informative:
   CEDULON-CORE:
-    title: "Cedulon Core: Spend Receipts and Rail Reconciliation for Agent Commerce"
+    title: "Spend Receipts and Payment Rail Reconciliation for AI Agents"
     author:
       - ins: E. C. Dogru
         name: Emek Can Dogru

@@ -4,7 +4,6 @@ abbrev: Cedulon Checkpoints
 docname: draft-dogru-cedulon-checkpoint-00
 date: 2026-09-09
 category: info
-submissiontype: independent
 ipr: trust200902
 area: sec
 workgroup:
@@ -38,7 +37,7 @@ normative:
   RFC9943:
 informative:
   CEDULON-CORE:
-    title: "Cedulon Core: Spend Receipts and Rail Reconciliation for Agent Commerce"
+    title: "Spend Receipts and Payment Rail Reconciliation for AI Agents"
     author:
       - ins: E. C. Dogru
         name: Emek Can Dogru
@@ -282,7 +281,7 @@ the same set of findings, so those orders are not among the
 permitted ones.
 
 These steps consume two products of {{CEDULON-CORE}} (Verification
-algorithm): the attested set that the issuer-pin step decides, and
+algorithm): the working set that the issuer-pin step decides, and
 the `ref` index that step 7 of {{CEDULON-CORE}} builds. The chain walk that
 defines issuer order is step 6 of {{CEDULON-CORE}}. A fail-severity
 finding these steps produce is a finding step 11 of {{CEDULON-CORE}}
@@ -298,7 +297,7 @@ identifiers are not an interoperability surface.
    `kid` that does not match the key obtained for the checkpoint
    issuer, on the same terms as a receipt (`MUST-T4-8`). Require
    `receiptCount`, `chainHeadHash`, and `totals` to match the
-   attested receipts in `[startMs, endMs)` as defined above
+   receipts of the working set in `[startMs, endMs)` as defined above
    (`MUST-T11-2`); a receipt step 4 of {{CEDULON-CORE}} rejected is not among them,
    or a forged receipt could satisfy a checkpoint count. The identifier `checkpoint-total-mismatch`
    SHOULD be used for a failed signature, a wrong `receiptCount`,
@@ -485,9 +484,11 @@ Reversal, refund, and partial settlement:
 
 # IANA Considerations {#iana}
 
-This document requests the **provisional**
-registration of two media types in the "Media Types" registry
-{{RFC6838}}, under the procedure of {{RFC6838}} Section 5.2.1.
+This document requests the registration of two media types in the
+"Media Types" registry {{RFC6838}}, in the standards tree.
+Registration in the standards tree requires IETF approval; the
+provisional registration procedure of {{RFC6838}} Section 5.2.1 is
+available to an Internet-Draft in the meantime.
 The names are the same names the core document {{CEDULON-CORE}}
 uses for these objects.
 
