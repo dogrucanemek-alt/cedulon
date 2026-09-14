@@ -1,5 +1,9 @@
 # Cedulon
 
+Maintained by [VERAX Teknoloji](https://verax-ai.com). Related projects:
+[Conarium](https://github.com/dogrucanemek-alt/conarium) ·
+[Tugra](https://github.com/dogrucanemek-alt/tugra).
+
 Audit layer for agent-to-agent spend: signed trade manifest, fail-closed
 policy, signed spend receipt (SCITT-anchorable).
 
