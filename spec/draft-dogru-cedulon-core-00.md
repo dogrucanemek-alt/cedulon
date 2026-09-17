@@ -1375,6 +1375,10 @@ identifiers are not an interoperability surface.
    receipt the links cannot place, MUST be reported as a break in
    the receipt chain. The identifier `receipt-chain-break` SHOULD be
    used for this condition.
+   An issuer stream that does not chain its receipts (`SHOULD-T4-5`) is
+   therefore reported as a break from its second receipt on: the SHOULD
+   states what an issuer owes, and this step states what a verifier does
+   with a stream that did not.
 7. Index the settled receipts of the working set and the extract records by `ref`. A `ref`
    that appears more than once on either side MUST be reported as a
    repeated reference (`MUST-T10-6`). The identifier `duplicate-ref`
