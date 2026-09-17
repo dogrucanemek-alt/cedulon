@@ -1234,13 +1234,14 @@ The second is the issuer pin. The step that resolves it decides the
 verify under a usable pinned issuer key - or, when no usable key is
 pinned, the whole presented set, whose members are
 presented-unattested. Every later step that walks receipts consumes
-the working set: the chain walk in step 6, the indexing
-and reconciliation in steps 7 through 9, and the `MUST-T8-9` comparison. A receipt that
-carries a key other than the pinned one is reported once and then
-excluded, which is what keeps the settlement it names visible as
-uncovered (`MUST-T4-10`); one that carries the pinned key and fails to
-verify is walked in step 6 only so the break can be named, and is
-attested nowhere; an
+the working set: the indexing and reconciliation in steps 7 through 9
+and the `MUST-T8-9` comparison. The chain walk in step 6 consumes the
+working set plus one addition named in {{issuer-root}}: a receipt that
+claims the pin and fails to verify under it is walked so the break can
+be named, and is attested nowhere. A receipt that neither claims the
+pin nor verifies under it is reported once (issuer-key-mismatch) and
+then excluded, which is what keeps the settlement it names visible as
+uncovered (`MUST-T4-10`); an
 implementation that let it back into any of those steps would let a
 forged receipt cover a settlement, satisfy a checkpoint count, or
 invent a terms charge. Two checks deliberately stay on the presented
@@ -1362,7 +1363,9 @@ identifiers are not an interoperability surface.
    is presented. In a single-window audit
    a deferred record keeps the guarantee conditional. Receipts remain
    subject to every other check regardless of window.
-6. Walk the receipts of the working set in issuer order. Issuer order is the
+6. Walk the receipts of the working set, together with any receipt that
+   claims the pin and failed to verify under it ({{issuer-root}}), in
+   issuer order. Issuer order is the
    order induced by the `prevReceiptHash` chain: the verifier
    rebuilds the chain from the links, and the order in which
    receipts were presented carries no weight. `timestampMs` is
@@ -1534,8 +1537,8 @@ something a receipt does not: a per-currency total for a whole
 window, which discloses trading volume even when every individual
 receipt is redacted (`MUST-T9-5`).
 
-The rule is the one stated in {{reconciliation}} and defined in
-{{CEDULON-CHECKPOINT}}: `totals` MAY be
+The rule is the one {{CEDULON-CHECKPOINT}} defines and
+{{reconciliation}} applies: `totals` MAY be
 withheld by signing it as null (`MUST-T11-12`), and only that form
 counts as a redaction (`MUST-T11-13`). The structural claims are not
 redactable, because a verifier that cannot read the window or the
@@ -2263,8 +2266,8 @@ ae447dc74ccb0f13383f0f43f0f67f288d61a6395e95e2038e320d
 | extract-scope-mismatch | audit fails | A record falls outside the declared window, or the extract does not cover the expected account, rail, or window |
 | extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract on `ref`, amount, currency or timestamp, which are the fields compared; the extract is authoritative. A beneficiary that differs is not part of this comparison and is reached by `beneficiary-mismatch`, against the receipt payee |
 | malformed-amount | audit fails | An amount on a `ref` already reported as repeating that could not be parsed as an integer |
-| unstated-audit-window | guarantee conditional | A usable rail pin states no period, so the extract defined its own. Where no rail key is pinned at all the period is equally unstated, and `unauthenticated-extract` is the condition reported |
-| unstated-audit-scope | guarantee conditional | A usable rail pin states no account or no rail, so the extract defined the settlement path it reported on. The same "no pin at all" case is `unauthenticated-extract` |
+| unstated-audit-window | guarantee conditional | A supplied rail pin states no period, so the extract defined its own. Where no rail key is pinned at all the period is equally unstated, and `unauthenticated-extract` is the condition reported |
+| unstated-audit-scope | guarantee conditional | A supplied rail pin states no account or no rail, so the extract defined the settlement path it reported on. The same "no pin at all" case is `unauthenticated-extract` |
 | countersign-bad | conditional | Present payee countersignature failed verify (signature, content type, or payload binding); unattributable, discarded as approval evidence. One verifiable under another key is `countersign-key-mismatch` |
 | carried-key-mismatch | conditional | An object verifies under a pinned issuer key but the key carried beside its signature is a different one; the unsigned surface was rewritten, the object stays attested ({{issuer-root}}) |
 | boundary-deferred | conditional | An unmatched item sits within the declared `clockSkewMs` of the window edge; deferred to the adjacent window rather than reported as a completeness failure (step 5) |
