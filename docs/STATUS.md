@@ -687,6 +687,42 @@ in the opening paragraph until that job is measured again.
 Not measured on this host: a second Windows user reading the file, and
 PID reuse on a stale lock. `demo:unguarded` remains the intentional hole.
 
+## Second implementation (Verax)
+
+The living draft's Implementation Status names a second
+implementation. Same author as this document; not an independent
+implementation.
+
+Verax is an MCP body at <https://github.com/verax-ai/verax>. It
+consumes `@cedulon/cose`, `@cedulon/core`, `@cedulon/effect-extract`,
+`@cedulon/checkpoint`, `@cedulon/audit` and `@cedulon/x402-adapter`,
+all at `@cedulon/*` 0.13.1, to write signed decision records, effect
+extracts and checkpoints. `@cedulon/x402-adapter` is a library in
+that tree; there is no live x402 rail.
+
+The packages `@verax-ai/body`, `@verax-ai/proxy` and
+`@verax-ai/inventory` are on npm at 0.1.1
+(<https://www.npmjs.com/package/@verax-ai/body>,
+<https://www.npmjs.com/package/@verax-ai/proxy>,
+<https://www.npmjs.com/package/@verax-ai/inventory>). The MCP
+Registry name is `io.github.verax-ai/verax`. The archived release is
+<https://doi.org/10.5281/zenodo.22811594>.
+
+Maturity is research and pilot. Witnesses are self or same-org. One
+live spend row has been reconciled against a card statement: 10.00 TRY
+on 6 September 2026. A tenant boundary has not been exercised with two
+live customers. License: Apache-2.0. Contact: the author of
+draft-dogru-cedulon.
+
+Version compatibility: Verax 0.1.1 depends on `@cedulon/*` 0.13.1.
+Those published packages implement the posted draft-dogru-cedulon-09
+profile and, from 0.13.0, the posted
+draft-dogru-cedulon-decision-profile-03. 0.13.1 changes no behaviour
+from 0.13.0.
+
+What Verax itself has not proven is recorded in that repository's
+`docs/STATUS.md`, not here.
+
 ## The reader record behind each revision
 
 `-10` moved this account out of the draft's Implementation Status
