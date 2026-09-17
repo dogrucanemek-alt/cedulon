@@ -46,8 +46,8 @@ informative:
 
 --- abstract
 
-This document records the threat narratives, attack paths and measured
-runs that sit behind the Cedulon core requirements. It does not define
+This document records the threat narratives and attack paths that sit
+behind the Cedulon core requirements. It does not define
 those requirements. T11 (checkpoint suppression) is recorded in the
 checkpoint companion, not here.
 
@@ -60,8 +60,7 @@ checkpoint companion, not here.
 The core document {{CEDULON-CORE}} is authoritative for protocol
 requirements. This document is informational. A requirement identifier
 that appears here is a citation, not a definition. The texts below
-are the narratives that used to sit in the repository threat model
-and, for T12, in the core Security Considerations. T11 lives in
+are the narratives for T1 to T10 and T12. T11 lives in
 {{CEDULON-CHECKPOINT}}, not here.
 
 # T1: Prompt injection leads to unauthorized spend
@@ -70,10 +69,11 @@ An attacker plants instructions in tool output, a web page, or a retrieved
 document. The agent then calls a spend tool outside the principal's intent.
 
 Policy is not derived from model text. The PDP evaluates structured
-fields only. A spend tool call that lacks a valid, unexpired,
-signature-verified manifest MAY proceed only as `noManifest` and MUST
-still pass limit, velocity, and scope checks. Defined in {{CEDULON-CORE}}:
-MUST-T1-1, MUST-T1-2.
+fields only. A spend tool call that presents no Trade Manifest MAY
+proceed only as `noManifest` and MUST still pass limit, velocity, and
+scope checks; a manifest the PDP cannot verify against a key supplied
+out of band is refused, and an expired one is denied. Defined in
+{{CEDULON-CORE}}: MUST-T1-1, MUST-T1-2, MUST-T3-3, MUST-T4-16.
 
 # T2: Runaway agent (loop spend)
 
@@ -125,7 +125,7 @@ MUST-T6-1, MUST-T6-2, MUST-T6-4, MUST-T6-5, MUST-T6-6, MUST-T6-7.
 Keys leak from disk, logs, or a prompt. Forged manifests or receipts
 follow.
 
-This tree ships mock keys only. The requirements still constrain any
+The companion implementation ships mock keys only. The requirements still constrain any
 later real key. MUST-T7-2, MUST-T7-5 and MUST-T7-6 are defined in
 {{CEDULON-CORE}}, including the measured-protection and symlink
 refusals; this document does not redefine them.

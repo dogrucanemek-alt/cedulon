@@ -697,9 +697,11 @@ A carried key is not an identity source and MUST NOT be used as one
 that verifies under the pinned key while carrying a different key is
 reported as `carried-key-mismatch`, a warning, and stays attested
 ({{issuer-root}}). With no pin held it is the only key present, so
-the signature check that runs against it says the object is
+any signature check that runs against it says the object is
 internally consistent and says nothing about who signed it; two
-issuers cannot be told apart in that state.
+issuers cannot be told apart in that state. A Trade Manifest with no
+pinned key is not checked against its carried key at all (Appendix B,
+`unauthenticated-manifest`).
 
 # Canonical JSON encoding {#canonical-json}
 
@@ -747,7 +749,8 @@ Three notes on the boundary of that reference:
 ## Which octets are hashed {#hash-inputs}
 
 Every hash-valued field in this document is SHA-256 {{RFC6234}} of the
-input named below. All but three are rendered as lowercase hexadecimal.
+input named below. All but two are rendered as lowercase hexadecimal, and a third
+differs in another respect.
 `kid` differs only in its rendering: the digest is computed over the
 same stated input and then truncated to its first 8 bytes, carried as
 a byte string rather than as hex ({{cose-profile}} states the same
@@ -765,7 +768,7 @@ digest value.
 | `manifestHash` | the signed COSE_Sign1 octets of the Trade Manifest |
 | `checkpointHash` | the signed COSE_Sign1 octets of the checkpoint |
 | `statementHash` | the signed COSE_Sign1 octets of the statement |
-| `acceptanceCriteriaHash` | the exact delivery bytes, as defined where the Trade Manifest is |
+| `acceptanceCriteriaHash` | the exact delivery bytes, as defined in {{trade-manifest}} |
 | `deliveredHash` | the exact bytes the payee delivered, under the same input rule as `acceptanceCriteriaHash`, computed by the payee when it countersigns |
 | `policyHash` | the UTF-8 octets of the canonical policy document |
 | `requestHash` | the UTF-8 octets of the canonical six-field request document |
@@ -1182,7 +1185,8 @@ key nothing distinguishes one submitted receipt from another, so
 conditions computed across the submitted set - two receipts claiming
 one settlement reference, for instance - cannot be attributed to
 anyone and are reported as conditions of the submission rather than
-as failures of a party.
+as failures of a party; the finding stands, only its attribution
+changes.
 
 # Reconciliation {#reconciliation}
 
@@ -1231,9 +1235,12 @@ verify under a usable pinned issuer key - or, when no usable key is
 pinned, the whole presented set, whose members are
 presented-unattested. Every later step that walks receipts consumes
 the working set: the chain walk in step 6, the indexing
-and reconciliation in steps 7 through 9, and the `MUST-T8-9` comparison. A receipt the
-pin rejects is reported once and then excluded, which is what keeps
-the settlement it names visible as uncovered (`MUST-T4-10`); an
+and reconciliation in steps 7 through 9, and the `MUST-T8-9` comparison. A receipt that
+carries a key other than the pinned one is reported once and then
+excluded, which is what keeps the settlement it names visible as
+uncovered (`MUST-T4-10`); one that carries the pinned key and fails to
+verify is walked in step 6 only so the break can be named, and is
+attested nowhere; an
 implementation that let it back into any of those steps would let a
 forged receipt cover a settlement, satisfy a checkpoint count, or
 invent a terms charge. Two checks deliberately stay on the presented
@@ -1527,7 +1534,8 @@ something a receipt does not: a per-currency total for a whole
 window, which discloses trading volume even when every individual
 receipt is redacted (`MUST-T9-5`).
 
-The rule is the one stated in {{reconciliation}}: `totals` MAY be
+The rule is the one stated in {{reconciliation}} and defined in
+{{CEDULON-CHECKPOINT}}: `totals` MAY be
 withheld by signing it as null (`MUST-T11-12`), and only that form
 counts as a redaction (`MUST-T11-13`). The structural claims are not
 redactable, because a verifier that cannot read the window or the
@@ -1556,7 +1564,7 @@ requirement text those citations refer to.
 
 An attacker plants instructions in tool output, a web page, or a retrieved
 document. The agent then calls a spend tool outside the principal's intent.
-Narratives and measured runs: {{CEDULON-THREATS}}.
+Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1569,7 +1577,7 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 
 A stuck tool loop or recursive planner issues many payments.
 Velocity and cumulative-limit counters live in the PDP, fail-closed.
-Narratives and measured runs: {{CEDULON-THREATS}}.
+Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1583,7 +1591,7 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 
 An observer replays a signed payment payload, mandate, or Cedulon decision token.
 Every gated spend carries a unique nonce; manifests expire; tokens are single-use.
-Narratives and measured runs: {{CEDULON-THREATS}}.
+Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1597,7 +1605,7 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 
 A party alters a receipt, invents a receipt, or denies a real spend.
 Receipts are signed; verification covers the signed bytes; a hash chain links them.
-Narratives and measured runs: {{CEDULON-THREATS}}.
+Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1627,7 +1635,7 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 
 The agent or an attacker calls the rail without the PDP.
 The only payment function is the adapter that calls the PDP first.
-Narratives and measured runs: {{CEDULON-THREATS}}.
+Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1640,7 +1648,7 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 
 An allow is computed; the request is then swapped before the rail sees it.
 Settlement pays only the exact fields hashed into the single-use decision.
-Narratives and measured runs: {{CEDULON-THREATS}}.
+Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1650,7 +1658,7 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 | MUST-T6-4 | An allow Decision Token MUST be COSE_Sign1 with CWT private-use labels -70301..-70305 (`requestHash`, `policyHash`, `expiryMs`, `nonce`, `singleUseId`) and content type `application/cedulon-decision+cbor`. |
 | MUST-T6-5 | A party that accepts a Decision Token MUST reject a failed signature, a `kid` or content-type mismatch, a claim-map mismatch, or an expired `expiryMs`. The token is expired when the evaluation time is strictly greater than `expiryMs`; at exactly `expiryMs` it is not. |
 | MUST-T6-6 | A consumer of a Decision Token MUST verify it against its own issuing key and MUST NOT accept a token it cannot check that way. |
-| MUST-T6-7 | A party that records a settlement under a Decision Token MUST refuse it when that settlement's `timestampMs` is strictly greater than the token's `expiryMs`. At exactly `expiryMs` the settlement remains inside the token's authority; the boundary is the one `SHOULD-T6-3` states. |
+| MUST-T6-7 | A party that records a settlement under a Decision Token MUST refuse it when that settlement's `timestampMs` is strictly greater than the token's `expiryMs`. At exactly `expiryMs` the settlement remains inside the token's authority; the boundary is the one `MUST-T6-5` states. |
 
 A later verifier cannot make this comparison. Decision Tokens are not
 among the inputs {{verification}} enumerates: the extract, the
@@ -1666,7 +1674,7 @@ document does not define. `MUST-T6-4` names the same five labels.
 ## T7: Signing-key leakage
 
 Keys leak from disk, logs, or a prompt. Forged manifests or receipts follow.
-Narratives and measured runs: {{CEDULON-THREATS}}.
+Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1681,7 +1689,7 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 
 The payee ships a different artifact, or the price exceeds the signed offer.
 The Trade Manifest binds price and an acceptance-criteria hash before payment.
-Narratives and measured runs: {{CEDULON-THREATS}}.
+Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1693,7 +1701,7 @@ Narratives and measured runs: {{CEDULON-THREATS}}.
 | SHOULD-T8-5 | Manifests SHOULD reference an AP2 mandate hash when one exists. |
 | MAY-T8-6 | Parties MAY add an optional escrow actor as a third-party role interface; an implementation of this specification MUST NOT take custody (`MUST-T8-custody`). |
 | MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
-| MUST-T8-8 | If a payee countersignature is present, a verifier MUST reject it when the signature fails, when `kid` or content type does not match the configured payee key, or when the payload is not the issuer COSE_Sign1 bytes. |
+| MUST-T8-8 | If a payee countersignature is present, a verifier MUST reject it when the signature fails, when `kid` or content type does not match the configured payee key, or when the `receiptCose` value (label -70401) is not the issuer COSE_Sign1 bytes. |
 | MUST-T8-9 | A verifier presented with a Trade Manifest MUST compare the amount, currency and settlement time of every receipt that names it, aborted ones included, against the manifest amount, currency and expiry - amount and currency on the exact-octet terms of `MUST-T8-2`, time on the boundary of `MUST-T3-3`, and, where the manifest names a `payee`, the receipt payee on the same exact-octet terms - and MUST report a receipt that departs from them. Where a usable issuer key is pinned (a pinned issuer root at least one of whose keys the verifier can decode), the comparison is made over the receipts that verify under it and a departure MUST fail the audit. Where no usable issuer key is pinned, the departure MUST still be reported and MUST NOT by itself fail the audit. Receipts that do not name the manifest are not measured against it. A Trade Manifest that a stated publisher pin refuses is not terms for this purpose: where the verifier reports `manifest-key-mismatch`, it MUST NOT read a charge out of that document's body, neither this comparison nor the acceptance-hash comparison of {{countersign}}. |
 | MAY-T8-10 | A payee MAY attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. |
 | MAY-T8-11 | An attributable countersignature MAY carry `deliveredHash`. When present and the verifier holds the Trade Manifest, the verifier MUST compare it against `acceptanceCriteriaHash` as exact octets and MUST report a mismatch as a failing finding (`delivery-mismatch`). A `deliveredHash` on an unattributable countersignature MUST be discarded with it. |
@@ -1709,7 +1717,7 @@ custody or operate escrow (`MUST-T8-custody`).
 
 A public receipt or transparency statement carries names, addresses, or full
 amounts that should stay private. Log-facing encodings offer redaction.
-See also {{privacy}}. Narratives and measured runs: {{CEDULON-THREATS}}.
+See also {{privacy}}. Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1723,7 +1731,7 @@ See also {{privacy}}. Narratives and measured runs: {{CEDULON-THREATS}}.
 
 An operator, leaked credential, or a second binary can settle on the rail
 and omit the Receipt Issuer. Completeness reconciles the extract to the receipts.
-See {{reconciliation}}. Narratives and measured runs: {{CEDULON-THREATS}}.
+See {{reconciliation}}. Narrative: {{CEDULON-THREATS}}.
 
 | ID | Requirement |
 |---|---|
@@ -1741,10 +1749,10 @@ See {{reconciliation}}. Narratives and measured runs: {{CEDULON-THREATS}}.
 | MUST-T10-12 | When an extract is supplied, the records it carries are the subject of reconciliation. A settlement list from another source MUST NOT be substituted; a disagreeing list MUST be reported as `extract-settlement-mismatch`. |
 | MUST-T10-13 | A `ref` reported as `duplicate-ref` MUST still be reconciled by aggregate amount per currency, and a shortfall MUST state the unaccounted amount. An unparseable amount MUST be reported as `malformed-amount` without aborting the audit. |
 | MUST-T10-14 | An implementation MUST surface the guarantee and any warnings in any human-readable audit report it produces, not only in a returned structure. |
-| MUST-T10-15 | A verifier that has not stated the period under audit MUST emit `unstated-audit-window` and MUST treat the guarantee as conditional. |
+| MUST-T10-15 | A verifier that supplies a rail pin but has not stated the period under audit MUST emit `unstated-audit-window` and MUST treat the guarantee as conditional; with no rail pin at all the condition reported is `unauthenticated-extract`. |
 | MUST-T10-16 | When an extract is supplied, a receipt whose `ref` appears on it is reconciled against it regardless of its own `timestampMs`; the window sieve applies only to receipts the extract does not name, and such a receipt outside the window MUST NOT be reported as a completeness failure against that extract. |
 | MUST-T10-17 | An unmatched settled receipt within the declared `clockSkewMs` of `windowEndMs`, and an unmatched settlement record within it of `windowStartMs`, MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure. A closing-edge deferral resolves against the following window's extract and hardens into the completeness finding when that extract is presented and does not name the `ref`; an opening-edge deferral resolves only against a receipt in the presented bag that names its `ref`, and a following extract does not harden it. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
-| MUST-T10-18 | A verifier that has not stated the account or the rail under audit MUST emit `unstated-audit-scope` and MUST treat the guarantee as conditional. |
+| MUST-T10-18 | A verifier that supplies a rail pin but has not stated the account or the rail under audit MUST emit `unstated-audit-scope` and MUST treat the guarantee as conditional; with no rail pin at all the condition reported is `unauthenticated-extract`. |
 | MUST-T10-19 | A report MUST name the account, rail and window the extract declared, in the printed report, in the finding object it returns, and in every other structure the implementation returns for that audit, a tool result or an export included. Where no extract was presented there is no declared population, and the structure names none. |
 | MUST-T10-20 | Where a stated rail pin refuses the presented extract and the verifier reports `extract-key-mismatch`, the verifier MUST NOT read a settlement finding out of that document's body: not a mismatch against a receipt, not money reported as unaccounted for, and not a receipt left unmatched by rows the refused document omits. The verifier MUST report `settlement-comparison-skipped` in the same result. A pinned key the verifier cannot decode is `trust-key-unreadable` and is not a refusal of the document, so it does not reach this requirement. |
 
@@ -1996,7 +2004,7 @@ Maturity:
   deliberately separate from this codebase; no independent
   implementation of the reconciliation algorithm is known to the
   author. One reader rebuilt the regenerated receipt vector of
-  {{vectors}} from this text alone, in an independent toolchain, and
+  Appendix A from this text alone, in an independent toolchain, and
   obtained the published 307 octets byte for byte, SHA-256
   `0f1fe8859faf25de906b08142674f1270656d8ea7bfc00853c2fc6e9d3f5a10b`;
   that reader had read parts of the public repository and says so, so
@@ -2162,7 +2170,8 @@ None of them reviewed this text, and any error in it is the author's.
 
 Field survey notes and the informative threat-model narrative in the
 companion repository helped shape the requirement identifiers used
-here. Those identifiers are defined in {{security}}.
+here. Those identifiers are defined in {{security}} and, for T11, in
+{{CEDULON-CHECKPOINT}}.
 
 # Appendix A. Test Vectors {#vectors}
 {:numbered="false"}

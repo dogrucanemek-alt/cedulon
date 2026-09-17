@@ -339,10 +339,10 @@ identifiers are not an interoperability surface.
     equivocation (`MUST-T11-3`). The identifier `equivocation`
     SHOULD be used for this condition. The checkpoints compared
     here are those presented **together with** any carried by
-    verified witness receipts (step 5). Comparing only the
-    presented chain cannot raise this finding: `MUST-T11-8`, applied
-    in step 2, requires that chain's epochs to be consecutive, so no
-    two of its members share an epoch. A copy recorded by a witness
+    verified witness receipts (step 5). A presented chain
+    that satisfies `MUST-T11-8` (step 2) cannot raise this finding on
+    its own, because its epochs are consecutive and no two of its
+    members share an epoch. A copy recorded by a witness
     is where the second one is found.
 5. If witness receipts were supplied, verify them against the
     out-of-band witness key ({{witness-root}}); receipts that
@@ -437,7 +437,7 @@ The remaining T11 identities are defined here.
 | ID | Requirement |
 |---|---|
 | MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the hash of the last in-window receipt in issuer order (the `prevReceiptHash` chain). Where the signed totals are null, MUST-T11-12 governs instead: there is no total to disagree with, the comparison is reported as skipped, and the count and chain-head checks still apply. |
-| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those presented together with those carried by verified witness receipts; the presented chain alone cannot satisfy this requirement, because MUST-T11-8 makes its epochs consecutive. |
+| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those presented together with those carried by verified witness receipts; a presented chain that satisfies MUST-T11-8 cannot raise it on its own, because its epochs are consecutive. |
 | MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
 | SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
 | MAY-T11-6 | A test deployment MAY use an in-process append-only log as the witness. |
