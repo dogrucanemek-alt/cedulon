@@ -189,10 +189,12 @@ informative:
 
 --- abstract
 
-This document specifies a Trade Manifest (a signed offer before
-payment), a Policy Decision Point with default deny, a Spend Receipt
-(a COSE/CWT claim set issued after a gated payment), and rail-extract
-reconciliation.
+This document addresses auditable payments for AI agents and builds
+upon state-of-the-art HTTP 402, AP2 and credit card systems. We
+specify a cryptographically secured payment reconciliation protocol
+using a Trade Manifest (a signed offer before payment), a Policy
+Decision Point with default deny, a Spend Receipt (a COSE/CWT claim
+set issued after a gated payment), and rail-extract reconciliation.
 
 --- middle
 
