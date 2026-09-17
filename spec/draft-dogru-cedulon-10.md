@@ -2632,6 +2632,68 @@ reports were computed over. That order is deliberate: -00 described
 requirements its published package did not yet carry, a reader found
 the discrepancy, and this document does not repeat it.
 
+A second implementation is named here. Same author as this document;
+not an independent implementation.
+
+Organization:
+: VERAX TEKNOLOJI LIMITED SIRKETI.
+
+Implementation:
+: Verax. An MCP body that consumes the published `@cedulon/*`
+  libraries to write signed decision records, effect extracts and
+  checkpoints. The code is a profile of this document, not a second
+  specification.
+
+Description:
+: The body admits six tools through its own gate: memory.get,
+  memory.put, message.read, message.send, spend and audit.explain.
+  Each call leaves a signed decision record; an allowed call leaves
+  an effect row that is later reconciled against that record.
+
+Level of maturity:
+: Research and pilot. Witnesses are self or same-org. There is no
+  third-party witness and no outside audit. One live spend row has
+  been reconciled against a card statement: 10.00 TRY on 6 September
+  2026. A tenant boundary has not been exercised with two live
+  customers.
+
+Coverage:
+: `@cedulon/cose` and `@cedulon/core` implement the signed decision
+  record (COSE Sign1 and the Decision Record).
+  `@cedulon/effect-extract` implements the effect extract.
+  `@cedulon/checkpoint` implements the checkpoint. `@cedulon/audit`
+  is called when a window is explained. `@cedulon/x402-adapter` is
+  present as a library; there is no live x402 rail, and the body
+  does not move money.
+
+Version compatibility:
+: Verax 0.1.1 depends on `@cedulon/*` 0.13.1. Those published
+  packages implement the posted draft-dogru-cedulon-09 profile and,
+  from 0.13.0, the posted draft-dogru-cedulon-decision-profile-03.
+  0.13.1 changes no behaviour from 0.13.0. This -10 changes no
+  requirement from -09.
+
+Licensing:
+: Apache-2.0.
+
+Implementation experience:
+: Used by its author to record tool calls and to reconcile one live
+  card charge. Gaps that remain - a third-party witness, two live
+  customers on one body, a live payment rail - are named in
+  STATUS.md in the Verax repository, not claimed here.
+
+Contact:
+: The author of this document.
+
+URL:
+: <https://github.com/verax-ai/verax>. The packages `@verax-ai/body`,
+  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.1.1
+  (<https://www.npmjs.com/package/@verax-ai/body>,
+  <https://www.npmjs.com/package/@verax-ai/proxy>,
+  <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP
+  Registry name is `io.github.verax-ai/verax`. The archived release
+  is <https://doi.org/10.5281/zenodo.22811594>.
+
 
 ## Changes from -09 {#changes-09}
 
@@ -2658,6 +2720,8 @@ STATUS.md in the repository, where it can be corrected without a
 revision of this document, which is the right home for a record that
 changes when a reader writes rather than when the protocol does. The
 measured figures stay here, in the section that makes the claim.
+
+{{impl-status}} names a second implementation (Verax, same author).
 
 The stream is now declared. -09 said `submissiontype: IETF`, which
 the Datatracker's submission-time checker reported against, because
