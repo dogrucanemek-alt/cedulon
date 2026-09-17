@@ -2,7 +2,7 @@
 title: "Spend Receipts and Payment Rail Reconciliation for AI Agents"
 abbrev: Cedulon Core
 docname: draft-dogru-cedulon-core-00
-date: 2026-09-09
+date: 2026-09-17
 category: info
 ipr: trust200902
 area: sec
@@ -2009,9 +2009,12 @@ Coverage:
   redaction. Every requirement added in the posted series {{CEDULON-DT}} is covered by a
   red-then-green case written before the text, with one exception: the
   reversal branch of `MUST-T12-4` is specified and not executed,
-  because this tree carries no authenticated external-rail path. The
-  escrow role, reversal, refund and partial settlement are not
-  implemented. The witness used in the suite is the in-process log
+  because this tree carries no authenticated external-rail path.
+  `MUST-T6-7`, the one requirement this document adds beyond that
+  series, is likewise specified and not executed: no case in the suite
+  compares a settlement's `timestampMs` to a Decision Token's
+  `expiryMs`. The escrow role, reversal, refund and partial settlement
+  are not implemented. The witness used in the suite is the in-process log
   that `MAY-T11-6` permits, a Merkle tree that issues inclusion
   proofs; tier 2 of {{CEDULON-CHECKPOINT}} (The transparency witness) is exercised against it red-then-green,
   and the implementation has not been run against a deployed
@@ -2047,7 +2050,7 @@ ought to announce.
 
 Note on distribution: everything the posted series {{CEDULON-DT}} added is in the
 published packages at version 0.9.0, and the workspace publishes
-0.13.0 as this revision is written. A reader can check a claim against
+0.13.1 as this revision is written. A reader can check a claim against
 an installed package rather than against a working tree.
 
 

@@ -2,7 +2,7 @@
 title: "Cedulon Threat Narratives"
 abbrev: Cedulon Threats
 docname: draft-dogru-cedulon-threats-00
-date: 2026-09-09
+date: 2026-09-17
 category: info
 ipr: trust200902
 area: sec
