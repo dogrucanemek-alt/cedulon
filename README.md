@@ -1,6 +1,6 @@
 # Cedulon
 
-Maintained by [VERAX Teknoloji](https://verax-ai.com). Related projects:
+Maintained by [VERAX Teknoloji](https://verax-ai.com). Start with the VERAX body: [verax-ai/verax](https://github.com/verax-ai/verax). Related projects:
 [Conarium](https://github.com/dogrucanemek-alt/conarium) ·
 [Tugra](https://github.com/dogrucanemek-alt/tugra).
 
