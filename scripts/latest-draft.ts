@@ -42,10 +42,26 @@ export function latestDraftPath(root: string): string {
 export const CORE00_FAMILY_NAMES = ["checkpoint", "core", "threats"] as const;
 
 /**
+ * Names that match the companion filename shape
+ * (`draft-dogru-cedulon-<name>-NN.md`) but are neither companions of
+ * the numbered series nor members of the `-00` family. A companion
+ * may register media types and is named at its newest posted
+ * revision; the `-00` family is the MUST-T identity inventory.
+ * `resolution` is neither. It closes a Decision Profile deferral,
+ * records no media type, and defines `MUST-RS-<n>` identities in the
+ * same family as `MUST-DP-<n>`. `companionDraftPaths` would otherwise
+ * treat the file as a companion the day it landed, and the
+ * README/posted-revision gate would demand a `.txt` that means
+ * posted. The filename stays; this list is the classification.
+ */
+export const SIDE_DRAFT_NAMES = ["resolution"] as const;
+
+/**
  * The newest revision of each companion document beside the numbered core
  * (`draft-dogru-cedulon-<name>-NN.md`). A companion may register media
  * types of its own; a check about what the tree's documents register as a
- * whole reads these beside the numbered core.
+ * whole reads these beside the numbered core. Side drafts are excluded
+ * here: they share the filename shape and nothing else.
  */
 export function companionDraftPaths(root: string): string[] {
   const specDir = join(root, "spec");
@@ -54,6 +70,28 @@ export function companionDraftPaths(root: string): string[] {
     const m = /^draft-dogru-cedulon-([a-z][a-z-]*)-(\d+)\.md$/.exec(f);
     if (m === null) continue;
     if ((CORE00_FAMILY_NAMES as readonly string[]).includes(m[1]!)) continue;
+    if ((SIDE_DRAFT_NAMES as readonly string[]).includes(m[1]!)) continue;
+    const rev = Number(m[2]);
+    if ((newest.get(m[1]) ?? -1) < rev) newest.set(m[1], rev);
+  }
+  return [...newest.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, rev]) => join(specDir, `draft-dogru-cedulon-${name}-${String(rev).padStart(2, "0")}.md`));
+}
+
+/**
+ * Newest revision of each side draft. Same filename walk as the
+ * companion and `-00` family lists; a different class, so a different
+ * function, so a check about media types or MUST-T inventory cannot
+ * pick one up by accident.
+ */
+export function sideDraftPaths(root: string): string[] {
+  const specDir = join(root, "spec");
+  const newest = new Map<string, number>();
+  for (const f of readdirSync(specDir)) {
+    const m = /^draft-dogru-cedulon-([a-z][a-z-]*)-(\d+)\.md$/.exec(f);
+    if (m === null) continue;
+    if (!(SIDE_DRAFT_NAMES as readonly string[]).includes(m[1]!)) continue;
     const rev = Number(m[2]);
     if ((newest.get(m[1]) ?? -1) < rev) newest.set(m[1], rev);
   }

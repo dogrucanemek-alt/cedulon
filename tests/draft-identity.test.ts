@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { draftRevision, identityHits } from "../scripts/draft-identity-guard.ts";
-import { core00FamilyPaths, latestDraftPath, latestDraftRevision } from "../scripts/latest-draft.ts";
+import { core00FamilyPaths, latestDraftPath, latestDraftRevision, sideDraftPaths } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 // The draft under guard is the newest revision in the tree; the computation
@@ -71,6 +71,21 @@ describe("draft identity", () => {
 
   it("each -00 family document's docname matches the voice of the document", () => {
     for (const path of core00FamilyPaths(root)) {
+      const md = readFileSync(path, "utf8");
+      const hits = identityHits(md);
+      assert.ok(draftRevision(md), `${path} has no parseable docname`);
+      assert.deepEqual(
+        hits,
+        [],
+        hits.map((h) => `${path}:${h.line}: ${h.why} :: ${h.text}`).join("\n"),
+      );
+    }
+  });
+
+  it("each side draft's docname matches the voice of the document", () => {
+    const paths = sideDraftPaths(root);
+    assert.ok(paths.length > 0, "expected at least the resolution draft under spec/");
+    for (const path of paths) {
       const md = readFileSync(path, "utf8");
       const hits = identityHits(md);
       assert.ok(draftRevision(md), `${path} has no parseable docname`);

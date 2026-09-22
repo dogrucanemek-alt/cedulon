@@ -728,6 +728,20 @@ from 0.13.0.
 What Verax itself has not proven is recorded in that repository's
 `docs/STATUS.md`, not here.
 
+## Resolution draft
+
+`draft-dogru-cedulon-resolution-00` specifies the record that closes a
+Decision Profile deferral: a Resolution Record, signed by the Decider,
+naming the deferral it resolves, the operator who approved it and the
+channel the approval arrived through. It registers no media type and
+defines no `MUST-T<n>-<m>` identity. Requirements are `MUST-RS-1`
+through `MUST-RS-9`, the same family shape as the decision profile's
+`MUST-DP-<n>`.
+
+`MUST-RS-1` through `MUST-RS-8` are implemented. `MUST-RS-9` is not implemented:
+the counts exist per deferral; there is no report that states them over a
+declared window.
+
 ## The reader record behind each revision
 
 `-10` moved this account out of the draft's Implementation Status
