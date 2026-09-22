@@ -2083,15 +2083,25 @@ Implementation:
 Description:
 : The body admits six tools through its own gate: memory.get,
   memory.put, message.read, message.send, spend and audit.explain.
-  Each call leaves a signed decision record; an allowed call leaves
-  an effect row that is later reconciled against that record.
+  An admitted call leaves a signed decision record; a retry under the
+  same reference is answered from that record rather than writing a
+  second one, and a denial the body cannot append is refused to the
+  caller instead of being recorded. An allowed call is expected to
+  leave an effect row, and the audit path reconciles the rows against
+  the records; an allow whose effect cannot be found is reported as
+  such rather than assumed to have run.
 
 Level of maturity:
 : Research and pilot. Witnesses are self or same-org. There is no
   third-party witness and no outside audit. One live spend row has
   been reconciled against a card statement: 10.00 TRY on 6 September
-  2026. A tenant boundary has not been exercised with two live
-  customers.
+  2026, a charge made by hand after the rail deferred it and an
+  operator approved it. That statement carried dates without times
+  and the rule named no descriptor, so the row was matched on the
+  wide date window by amount, currency and class; a settled rather
+  than a pending row is unproven, as is a statement holding several
+  rows of one amount. A tenant boundary has not been exercised with
+  two live customers.
 
 Coverage:
 : `@cedulon/cose` and `@cedulon/core` implement the signed decision

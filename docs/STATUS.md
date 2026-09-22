@@ -710,8 +710,13 @@ Registry name is `io.github.verax-ai/verax`. The archived release is
 
 Maturity is research and pilot. Witnesses are self or same-org. One
 live spend row has been reconciled against a card statement: 10.00 TRY
-on 6 September 2026. A tenant boundary has not been exercised with two
-live customers. License: Apache-2.0. Contact: the author of
+on 6 September 2026, a charge made by hand after the rail deferred it
+and an operator approved it. That statement carried dates without
+times and the rule named no descriptor, so the row was matched on the
+wide date window by amount, currency and class; a settled rather than
+a pending row is unproven, as is a statement holding several rows of
+one amount. A tenant boundary has not been exercised with two live
+customers. License: Apache-2.0. Contact: the author of
 draft-dogru-cedulon.
 
 Version compatibility: Verax 0.2.2 depends on `@cedulon/*` 0.13.1.
