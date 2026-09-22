@@ -29,7 +29,13 @@ Nothing here holds a wallet or signs a transaction.
 `draft-dogru-cedulon` is posted on the IETF datatracker through `-09`
 (6 September 2026; `-08` was 2 September), alongside the companion decision profile,
 `draft-dogru-cedulon-decision-profile-03` (6 September 2026), and the two
-`-00` direction seeds.
+`-00` direction seeds. The split family is posted as well:
+`draft-dogru-cedulon-core`, `-checkpoint` and `-threats` at `-00` on
+17 September 2026, and the core at `-01` on 22 September 2026, which is
+the revision that names the second implementation. The posted `-01`
+bytes are the Author Tools render of `spec/draft-dogru-cedulon-core-01.md`,
+SHA-256 `000a344cf450d1eafd27e6df1c4ed400d6433fe08c3bbd2fe89d2d821e9e404d`
+in the IETF archive.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
