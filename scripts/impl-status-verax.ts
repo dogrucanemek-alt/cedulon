@@ -1,13 +1,24 @@
 /**
- * The living draft and STATUS.md both name Verax as a second
+ * The living core document and STATUS.md both name Verax as a second
  * implementation. Those two copies have to say the same URLs and the
  * same versions; a hand-kept pair is how a DOI or a package version
  * drifts in one file and not the other.
+ *
+ * The numbered series carried the entry through an unposted -10. The
+ * living family is the split core documents, so the watcher reads the
+ * newest core file from core00FamilyPaths, not latestDraftPath. -10
+ * stays in the tree as inventory; it is no longer this check's
+ * subject. A missing entry on that core file is a failure. Silence
+ * was the defect while the watcher still read -10.
  *
  * The entry is a fact, not a claim of independence. "first", "only"
  * and "independent" (beyond the required same-author sentence) are
  * refused here so they cannot be typed in by habit.
  */
+
+import { livingCoreDraftPath } from "./latest-draft.ts";
+
+export { livingCoreDraftPath };
 
 export const REQUIRED_SENTENCE =
   "Same author as this document; not an independent implementation.";
@@ -31,7 +42,8 @@ export function extractDraftVerax(draft: string): string | null {
   const start = draft.indexOf(DRAFT_START);
   if (start < 0) return null;
   const rest = draft.slice(start);
-  const end = rest.search(/\n## /);
+  // Numbered drafts use `##`; the core family uses `#`. Either one ends the entry.
+  const end = rest.search(/\n#{1,6}[ \t]/);
   return (end < 0 ? rest : rest.slice(0, end)).trim();
 }
 

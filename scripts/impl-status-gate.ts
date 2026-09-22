@@ -1,6 +1,7 @@
 /**
  * The Implementation Status count is compared against the run that just
- * produced it.
+ * produced it. A posted revision's sentence is frozen; the living core
+ * document carries the count.
  *
  * Found 2026-09-09: core-00 said "all three assert every case, 548 of 548";
  * the real figure was 559. The same sentence had said 457 in -09 when the
@@ -28,6 +29,9 @@
  */
 
 import { readFileSync } from "node:fs";
+import { basename } from "node:path";
+
+import { livingCoreDraftPath } from "./latest-draft.ts";
 
 export type SuiteCounters = { tests: number; failures: number; skipped: number };
 
@@ -70,7 +74,7 @@ export function claimedCount(spec: string): { passed: number; total: number; sen
 export function implStatusFailures(
   spec: string,
   counters: SuiteCounters,
-  { noSkips = false }: { noSkips?: boolean } = {},
+  { noSkips = false, specPath }: { noSkips?: boolean; specPath?: string } = {},
 ): string[] {
   const failures: string[] = [];
   const claim = claimedCount(spec);
@@ -85,20 +89,24 @@ export function implStatusFailures(
     failures.push(`the run skipped ${counters.skipped} cases; the sentence claims none skipped`);
   }
   if (claim.total !== counters.tests) {
+    const named = `spec/${basename(specPath ?? livingCoreDraftPath("."))}`;
     failures.push(
       `the sentence says ${claim.total} cases, the run measured ${counters.tests}; ` +
-        `fix the sentence in spec/draft-dogru-cedulon-core-00.md`,
+        `fix the sentence in ${named}`,
     );
   }
   return failures;
 }
 
 function main(): void {
-  const [reportPath = ".suite-count.xml", specPath = "spec/draft-dogru-cedulon-core-00.md"] =
-    process.argv.slice(2);
+  const living = livingCoreDraftPath(".");
+  const [reportPath = ".suite-count.xml", specPath = living] = process.argv.slice(2);
   const counters = countersFromJUnit(readFileSync(reportPath, "utf8"));
   const noSkips = Boolean(process.env.CI);
-  const failures = implStatusFailures(readFileSync(specPath, "utf8"), counters, { noSkips });
+  const failures = implStatusFailures(readFileSync(specPath, "utf8"), counters, {
+    noSkips,
+    specPath,
+  });
   if (failures.length > 0) {
     for (const failure of failures) console.error(`impl-status: ${failure}`);
     process.exit(1);

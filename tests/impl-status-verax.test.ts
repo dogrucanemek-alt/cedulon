@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { latestDraftPath } from "../scripts/latest-draft.ts";
+import { core00FamilyPaths } from "../scripts/latest-draft.ts";
 import {
   REQUIRED_SENTENCE,
   REQUIRED_URLS,
@@ -13,15 +13,25 @@ import {
   extractStatusVerax,
   forbiddenHits,
   implStatusVeraxFailures,
+  livingCoreDraftPath,
   urlsOf,
 } from "../scripts/impl-status-verax.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const draft = readFileSync(latestDraftPath(root), "utf8");
+const draft = readFileSync(livingCoreDraftPath(root), "utf8");
 const status = readFileSync(join(root, "docs/STATUS.md"), "utf8");
 
 describe("Verax Implementation Status entries stay aligned", () => {
-  it("the living draft and STATUS.md name the same URLs and versions", () => {
+  it("the living core document is the newest core file in the family", () => {
+    const core = livingCoreDraftPath(root).replace(/\\/g, "/");
+    assert.match(core, /draft-dogru-cedulon-core-01\.md$/);
+    const familyCore = core00FamilyPaths(root)
+      .map((p) => p.replace(/\\/g, "/"))
+      .find((p) => /draft-dogru-cedulon-core-\d+\.md$/.test(p));
+    assert.equal(familyCore, core);
+  });
+
+  it("the living core document and STATUS.md name the same URLs and versions", () => {
     assert.deepEqual(implStatusVeraxFailures(draft, status), []);
     const draftUrls = urlsOf(extractDraftVerax(draft)!);
     const statusUrls = urlsOf(extractStatusVerax(status)!);
@@ -38,6 +48,26 @@ describe("Verax Implementation Status entries stay aligned", () => {
     const failures = implStatusVeraxFailures(draft, drifted);
     assert.ok(
       failures.some((f) => /URL/.test(f) || /omits/.test(f) || /22811593/.test(f)),
+      failures.join(" | "),
+    );
+  });
+
+  it("RED: a lowered Verax version in the core document is caught", () => {
+    const lowered = draft.replaceAll(VERAX_VERSION, "0.2.1");
+    const failures = implStatusVeraxFailures(lowered, status);
+    assert.ok(
+      failures.some((f) => f.includes(VERAX_VERSION)),
+      failures.join(" | "),
+    );
+  });
+
+  it("RED: a core document with no Verax entry is refused", () => {
+    const failures = implStatusVeraxFailures(
+      "# Implementation Status\n\nThis section names the companion implementation.\n",
+      status,
+    );
+    assert.ok(
+      failures.some((f) => /no Verax implementation entry/.test(f)),
       failures.join(" | "),
     );
   });

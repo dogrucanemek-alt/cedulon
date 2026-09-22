@@ -1,5 +1,5 @@
 import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 /**
  * The draft a living check should read: the newest revision in the tree.
@@ -84,6 +84,17 @@ export function core00FamilyPaths(root: string): string[] {
     }
     return join(specDir, `draft-dogru-cedulon-${name}-${String(rev).padStart(2, "0")}.md`);
   });
+}
+
+/** Newest core document in the split family; core-01 becomes this when it lands. */
+export function livingCoreDraftPath(root: string): string {
+  const path = core00FamilyPaths(root).find((p) =>
+    /^draft-dogru-cedulon-core-\d+\.md$/.test(basename(p)),
+  );
+  if (!path) {
+    throw new Error("no draft-dogru-cedulon-core-NN.md in the core family");
+  }
+  return path;
 }
 
 /**

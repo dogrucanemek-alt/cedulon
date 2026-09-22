@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -9,9 +9,11 @@ import {
   countersFromJUnit,
   implStatusFailures,
 } from "../scripts/impl-status-gate.ts";
+import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const spec = readFileSync(join(root, "spec/draft-dogru-cedulon-core-00.md"), "utf8");
+const specPath = livingCoreDraftPath(root);
+const spec = readFileSync(specPath, "utf8");
 
 
 describe("the Implementation Status count answers to a run", () => {
@@ -30,9 +32,17 @@ describe("the Implementation Status count answers to a run", () => {
     // -09 said 457 when the truth was 548; core-00 said 548 when the truth
     // was 559. Both survived because nothing compared the two.
     const { total } = claimedCount(spec);
-    const failures = implStatusFailures(spec, { tests: total - 11, failures: 0, skipped: 0 });
+    const failures = implStatusFailures(
+      spec,
+      { tests: total - 11, failures: 0, skipped: 0 },
+      { specPath },
+    );
     assert.equal(failures.length, 1, failures.join(" | "));
     assert.match(failures[0]!, /the sentence says \d+ cases, the run measured \d+/);
+    assert.match(
+      failures[0]!,
+      new RegExp(`fix the sentence in spec/${basename(specPath).replace(/\./g, "\\.")}`),
+    );
   });
 
   it("RED: on CI, 'with none skipped' has to be earned", () => {
