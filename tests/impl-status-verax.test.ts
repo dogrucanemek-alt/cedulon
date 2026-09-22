@@ -32,12 +32,12 @@ describe("Verax Implementation Status entries stay aligned", () => {
 
   it("RED: a DOI that appears in the draft and not in STATUS is caught", () => {
     const drifted = status.replace(
-      "https://doi.org/10.5281/zenodo.22811594",
+      "https://doi.org/10.5281/zenodo.22811593",
       "https://doi.org/10.5281/zenodo.00000000",
     );
     const failures = implStatusVeraxFailures(draft, drifted);
     assert.ok(
-      failures.some((f) => /URL/.test(f) || /omits/.test(f) || /22811594/.test(f)),
+      failures.some((f) => /URL/.test(f) || /omits/.test(f) || /22811593/.test(f)),
       failures.join(" | "),
     );
   });

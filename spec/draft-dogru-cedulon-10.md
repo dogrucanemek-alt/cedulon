@@ -2667,7 +2667,7 @@ Coverage:
   does not move money.
 
 Version compatibility:
-: Verax 0.1.1 depends on `@cedulon/*` 0.13.1. Those published
+: Verax 0.2.2 depends on `@cedulon/*` 0.13.1. Those published
   packages implement the posted draft-dogru-cedulon-09 profile and,
   from 0.13.0, the posted draft-dogru-cedulon-decision-profile-03.
   0.13.1 changes no behaviour from 0.13.0. This -10 changes no
@@ -2687,12 +2687,12 @@ Contact:
 
 URL:
 : <https://github.com/verax-ai/verax>. The packages `@verax-ai/body`,
-  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.1.1
+  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.2.2
   (<https://www.npmjs.com/package/@verax-ai/body>,
   <https://www.npmjs.com/package/@verax-ai/proxy>,
   <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP
   Registry name is `io.github.verax-ai/verax`. The archived release
-  is <https://doi.org/10.5281/zenodo.22811594>.
+  is <https://doi.org/10.5281/zenodo.22811593>.
 
 
 ## Changes from -09 {#changes-09}

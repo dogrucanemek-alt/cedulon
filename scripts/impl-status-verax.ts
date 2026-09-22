@@ -17,10 +17,10 @@ export const REQUIRED_URLS = [
   "https://www.npmjs.com/package/@verax-ai/body",
   "https://www.npmjs.com/package/@verax-ai/proxy",
   "https://www.npmjs.com/package/@verax-ai/inventory",
-  "https://doi.org/10.5281/zenodo.22811594",
+  "https://doi.org/10.5281/zenodo.22811593",
 ] as const;
 
-export const VERAX_VERSION = "0.1.1";
+export const VERAX_VERSION = "0.2.2";
 export const CEDULON_VERSION = "0.13.1";
 
 const DRAFT_START = "A second implementation is named here.";
