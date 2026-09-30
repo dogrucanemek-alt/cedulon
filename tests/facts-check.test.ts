@@ -28,10 +28,18 @@ describe("facts-check compares the declaration to a third party", () => {
       compareFacts(declared, {
         npmVerax: declared.veraxVersion,
         npmCedulon: declared.cedulonVersion,
-        dataciteVersion: declared.veraxVersion,
+        dataciteVersion: declared.veraxArchivedVersion,
         urlStatuses,
       }),
       [],
+    );
+  });
+
+  it("RED: a Zenodo archive that moved past the declared archived version is caught", () => {
+    const problems = compareFacts(declaredFacts(), { dataciteVersion: "9.9.9" });
+    assert.ok(
+      problems.some((line) => line.includes("9.9.9")),
+      problems.join(" | "),
     );
   });
 });

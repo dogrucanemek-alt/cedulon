@@ -24,7 +24,7 @@ const status = readFileSync(join(root, "docs/STATUS.md"), "utf8");
 describe("Verax Implementation Status entries stay aligned", () => {
   it("the living core document is the newest core file in the family", () => {
     const core = livingCoreDraftPath(root).replace(/\\/g, "/");
-    assert.match(core, /draft-dogru-cedulon-core-01\.md$/);
+    assert.match(core, /draft-dogru-cedulon-core-02\.md$/);
     const familyCore = core00FamilyPaths(root)
       .map((p) => p.replace(/\\/g, "/"))
       .find((p) => /draft-dogru-cedulon-core-\d+\.md$/.test(p));

@@ -14,6 +14,7 @@
 import {
   CEDULON_VERSION,
   REQUIRED_URLS,
+  VERAX_ARCHIVED_VERSION,
   VERAX_VERSION,
 } from "./impl-status-verax.ts";
 
@@ -22,6 +23,7 @@ export const CEDULON_PACKAGE = "@cedulon/core";
 
 export type DeclaredFacts = {
   veraxVersion: string;
+  veraxArchivedVersion: string;
   cedulonVersion: string;
   conceptDoi: string;
   urls: readonly string[];
@@ -39,6 +41,7 @@ export function declaredFacts(): DeclaredFacts {
   if (!doiUrl) throw new Error("REQUIRED_URLS has no Zenodo DOI");
   return {
     veraxVersion: VERAX_VERSION,
+    veraxArchivedVersion: VERAX_ARCHIVED_VERSION,
     cedulonVersion: CEDULON_VERSION,
     conceptDoi: doiUrl.replace("https://doi.org/", ""),
     urls: REQUIRED_URLS,
@@ -80,10 +83,10 @@ export function compareFacts(declared: DeclaredFacts, sources: FactSources): str
   }
   if (
     sources.dataciteVersion !== undefined &&
-    sources.dataciteVersion !== declared.veraxVersion
+    sources.dataciteVersion !== declared.veraxArchivedVersion
   ) {
     problems.push(
-      `${declared.conceptDoi} ${declared.veraxVersion} → ${sources.dataciteVersion}`,
+      `${declared.conceptDoi} ${declared.veraxArchivedVersion} → ${sources.dataciteVersion}`,
     );
   }
   if (sources.urlStatuses !== undefined) {
@@ -172,7 +175,7 @@ async function collectSources(declared: DeclaredFacts): Promise<{
     sources.dataciteVersion = await dataciteVersion(declared.conceptDoi);
   } catch (error) {
     fetchProblems.push(
-      `${declared.conceptDoi} ${declared.veraxVersion} → ${sourceLabel(error)}`,
+      `${declared.conceptDoi} ${declared.veraxArchivedVersion} → ${sourceLabel(error)}`,
     );
   }
 
