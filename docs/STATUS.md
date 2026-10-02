@@ -40,8 +40,10 @@ Tools render of `spec/draft-dogru-cedulon-core-01.md`, SHA-256
 in the IETF archive; the posted `-02` bytes are the render of
 `spec/draft-dogru-cedulon-core-02.md`, SHA-256
 `16c8081b086404790d6bf9fdf8a5d687a0317ab84c2210f73e3352b7d17c606f`.
-`spec/draft-dogru-cedulon-core-03.md` moves the entry to Verax 0.4.2 and
-is not posted.
+The core at `-03` was posted on 2 October 2026 (submission 169801) and
+moves the entry to Verax 0.4.2; the posted `-03` bytes are the render of
+`spec/draft-dogru-cedulon-core-03.md`, SHA-256
+`cac47317f1a9001254762e33968ef2452c5c6a24431650ee9613da37f95a3e3e`.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
