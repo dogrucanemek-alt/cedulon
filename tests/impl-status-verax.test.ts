@@ -24,7 +24,7 @@ const status = readFileSync(join(root, "docs/STATUS.md"), "utf8");
 describe("Verax Implementation Status entries stay aligned", () => {
   it("the living core document is the newest core file in the family", () => {
     const core = livingCoreDraftPath(root).replace(/\\/g, "/");
-    assert.match(core, /draft-dogru-cedulon-core-02\.md$/);
+    assert.match(core, /draft-dogru-cedulon-core-03\.md$/);
     const familyCore = core00FamilyPaths(root)
       .map((p) => p.replace(/\\/g, "/"))
       .find((p) => /draft-dogru-cedulon-core-\d+\.md$/.test(p));
@@ -57,6 +57,16 @@ describe("Verax Implementation Status entries stay aligned", () => {
     const failures = implStatusVeraxFailures(lowered, status);
     assert.ok(
       failures.some((f) => f.includes(VERAX_VERSION)),
+      failures.join(" | "),
+    );
+  });
+
+  it("RED: one stale Verax version beside a current one is caught", () => {
+    const stale = draft.replace(`on npm at ${VERAX_VERSION}`, "on npm at 0.2.1");
+    assert.notEqual(stale, draft);
+    const failures = implStatusVeraxFailures(stale, status);
+    assert.ok(
+      failures.some((f) => f.includes("on npm at 0.2.1")),
       failures.join(" | "),
     );
   });

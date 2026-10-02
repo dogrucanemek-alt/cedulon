@@ -40,6 +40,8 @@ Tools render of `spec/draft-dogru-cedulon-core-01.md`, SHA-256
 in the IETF archive; the posted `-02` bytes are the render of
 `spec/draft-dogru-cedulon-core-02.md`, SHA-256
 `16c8081b086404790d6bf9fdf8a5d687a0317ab84c2210f73e3352b7d17c606f`.
+`spec/draft-dogru-cedulon-core-03.md` moves the entry to Verax 0.4.2 and
+is not posted.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
@@ -711,7 +713,7 @@ extracts and checkpoints. `@cedulon/x402-adapter` is a library in
 that tree; there is no live x402 rail.
 
 The packages `@verax-ai/body`, `@verax-ai/proxy` and
-`@verax-ai/inventory` are on npm at 0.4.1
+`@verax-ai/inventory` are on npm at 0.4.2
 (<https://www.npmjs.com/package/@verax-ai/body>,
 <https://www.npmjs.com/package/@verax-ai/proxy>,
 <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP
@@ -729,7 +731,7 @@ one amount. A tenant boundary has not been exercised with two live
 customers. License: Apache-2.0. Contact: the author of
 draft-dogru-cedulon.
 
-Version compatibility: Verax 0.4.1 depends on `@cedulon/*` 0.13.1.
+Version compatibility: Verax 0.4.2 depends on `@cedulon/*` 0.13.1.
 Those published packages implement the posted draft-dogru-cedulon-09
 profile and, from 0.13.0, the posted
 draft-dogru-cedulon-decision-profile-03. 0.13.1 changes no behaviour
