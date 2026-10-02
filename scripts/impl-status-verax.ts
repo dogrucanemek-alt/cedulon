@@ -31,9 +31,9 @@ export const REQUIRED_URLS = [
   "https://doi.org/10.5281/zenodo.22811593",
 ] as const;
 
-export const VERAX_VERSION = "0.4.1";
+export const VERAX_VERSION = "0.4.2";
 /** The newest Verax version archived on Zenodo; it trails npm when a release is not deposited. */
-export const VERAX_ARCHIVED_VERSION = "0.4.1";
+export const VERAX_ARCHIVED_VERSION = "0.4.2";
 export const CEDULON_VERSION = "0.13.1";
 
 const DRAFT_START = "A second implementation is named here.";
@@ -113,6 +113,13 @@ export function implStatusVeraxFailures(draft: string, status: string): string[]
 
   if (!draftBlock.includes(VERAX_VERSION) || !statusBlock.includes(VERAX_VERSION)) {
     failures.push(`both entries must name Verax ${VERAX_VERSION}`);
+  }
+  // Each entry names the Verax version more than once; one stale line beside a current one
+  // still "includes" the current version, so every naming is checked.
+  for (const [label, block] of [["the draft", draftBlock], ["the STATUS", statusBlock]] as const) {
+    for (const m of flatten(block).matchAll(/(?:Verax|on npm at) (\d+\.\d+\.\d+)/g)) {
+      if (m[1] !== VERAX_VERSION) failures.push(`${label} Verax entry names ${m[0]}, not ${VERAX_VERSION}`);
+    }
   }
   if (
     !draftBlock.includes(`@cedulon/*`) ||
