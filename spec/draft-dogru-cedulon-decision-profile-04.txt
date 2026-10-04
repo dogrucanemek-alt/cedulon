@@ -1420,8 +1420,8 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    Second implementation:  Verax (https://github.com/verax-ai/verax
       (https://github.com/verax-ai/verax)), written by the author of
       this document, signs Decision Records under this profile's claim
-      set and verifies its ledgers offline.  It departed from -03 in the
-      two places this revision changes: a witness process beside the
+      set and verifies its ledgers offline.  It departed from -03 in two
+      of the places this revision changes: a witness process beside the
       Decider signs its checkpoints under a separate key (Section 4.4),
       and it signs one extract per effect row.  Since the outside runs
       below, its verifier holds every allow to a row by a rule of its

@@ -1098,7 +1098,7 @@ Maturity:
 Second implementation:
 : Verax (<https://github.com/verax-ai/verax>), written by the author of
   this document, signs Decision Records under this profile's claim set
-  and verifies its ledgers offline. It departed from -03 in the two
+  and verifies its ledgers offline. It departed from -03 in two of the
   places this revision changes: a witness process beside the Decider
   signs its checkpoints under a separate key ({{record-chain}}), and it
   signs one extract per effect row. Since the outside runs below, its
