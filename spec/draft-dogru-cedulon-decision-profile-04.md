@@ -215,7 +215,7 @@ Decider:
 : The party that decides, per request, whether the agent may act. It
   signs Decision Records, and epoch checkpoints over them unless the
   deployment names a separate checkpoint key ({{record-chain}}). Its
-  key is the issuer root of this profile ({{roots}}).
+  key or keys form the issuer root of this profile ({{roots}}).
 
 Subject:
 : The party on whose request the decision was taken, named in the
@@ -425,8 +425,9 @@ before any claim is read (`MUST-DP-4`).
 ## The Decider's chain and checkpoints {#record-chain}
 
 Decision Records chain on `prevRecordHash` the way Spend Receipts chain
-on `prevReceiptHash`, and the Decider signs epoch checkpoints over
-them with the checkpoint claim set of Section 11.1 of
+on `prevReceiptHash`, and epoch checkpoints over them, signed under
+the decider root as set out below, carry the checkpoint claim set of
+Section 11.1 of
 {{CEDULON}} unchanged: `receiptCount` is the number of
 records in the window, `chainHeadHash` is the SHA-256 of the last
 record's COSE_Sign1 octets, and `totals` is a map from the three
@@ -442,9 +443,11 @@ procedure obtains for the checkpoint issuer (Section 11.4 of
 check checkpoints against the issuer root. In this profile the decider
 root may be a set of keys in the sense of the core's `MUST-T4-12`: the
 key under which Decision Records are attested and, where the
-deployment names one, a separate key under which only checkpoints are
-attested, such as that of a process beside the Decider that signs no
-Decision Record. A deployment MUST state which key signs its
+deployment names one, a separate key under which, of the Decider's
+objects, only checkpoints are attested, such as that of a process
+beside the Decider that signs no Decision Record. Where that key also
+signs effect extracts, the extract root and the decider root share a
+key, and `MUST-DP-9` makes the guarantee conditional. A deployment MUST state which key signs its
 checkpoints; a verifier MUST hold that key out of band as part of the
 decider root and verify every checkpoint under it, and a Decision
 Record that verifies only under the checkpoint key is
@@ -760,8 +763,8 @@ root (Sections 10.1 and 9.3 of {{CEDULON}}):
 The decider root:
 : The key, or set of keys, under which Decision Records and their
   checkpoints are attested. A separate checkpoint key, where the
-  deployment names one, belongs to this root and attests checkpoints
-  only ({{record-chain}}). Everything Section 10.1 of the core states for the issuer
+  deployment names one, belongs to this root and attests no Decision
+  Record ({{record-chain}}). Everything Section 10.1 of the core states for the issuer
   root applies: a pinned key attests by signature, a carried key is
   not an identity, a record under another key is `issuer-key-mismatch`
   and covers nothing, and with no pin `unauthenticated-issuer` makes
@@ -1109,18 +1112,20 @@ Second implementation:
   Verax calls its witness, signs its checkpoints and its effect
   extracts under one key, separate from the record key and held by the
   same operator ({{record-chain}}); its vector set's README names that
-  key, as `MUST-DP-11` asks. And it signs one extract per effect row,
+  key, as `MUST-DP-11` asks; since that key also signs the effect
+  extracts, `MUST-DP-9` makes its guarantee conditional. And it signs
+  one extract per effect row,
   without yet the statement `MUST-DP-12` asks for: its index of which
-  references produced an effect is unsigned. In its repository, after
-  the outside runs below and not yet in a release, its verifier holds
+  references produced an effect is unsigned. After the outside runs
+  below, and not yet in a release, its verifier holds
   every allow to a row by a rule of its own, with the core's allowance
   measured from the newest record, rather than by the boundary rule
   alone.
 
 : Run by outside readers: a frozen set of Verax ledgers
   (`test-vectors/v1` at tag `vectors-v1`, sixteen ledgers at the time)
-  was run by two readers with verifiers of their own, and the results
-  were posted in the AUDIT BoF preparation repository
+  was run by two readers with verifiers of their own, who reported
+  their results in the AUDIT BoF preparation repository
   (<https://github.com/mirjak/audit-bof-preparation/issues/9>):
   Tymofii Pidlisnyi (Agent Passport System), with a runner in the APS
   conformance suite, a partial stage-by-stage comparison rather than a
@@ -1128,10 +1133,12 @@ Second implementation:
   with checkers written from the drafts, the RFCs, the vector set's
   README and, for two file layouts, the vector files. With the
   checkpoint verified under the witness key, that run matched 16 of 16
-  verdicts and 15 of 16 first failing stages; under -03's reading,
-  with the Decider's key, 14 of 16 verdicts. One of the matches came
-  from a rule added after reading the vector, as the run itself
-  states.
+  verdicts and 15 of 16 first failing stages, the one difference being
+  `fail-allow-while-halted`, which that checker, applying no boundary
+  allowance, fails at `effect-binding`; under -03's reading, with the
+  Decider's key, 14 of 16 verdicts. One of the matches came from a
+  rule added after reading the vector, and the run states its other
+  limits with it.
   All of those vectors were produced by one implementation; the runs
   are datapoints, not conformance.
 
