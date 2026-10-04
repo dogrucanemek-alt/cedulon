@@ -868,12 +868,15 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    window contains the item's timestampMs; a later single-row extract
    that does not contain it is not the following extract and does not
    harden the item.  Under single-row extracts alone, an allow with no
-   row therefore stays boundary-deferred and the guarantee stays
-   conditional.  A deployment that signs single-row extracts MUST state
-   so, and MUST state how a reader learns which allows should have a
-   row, for example a window extract over the audited period or a signed
-   list of the references that produced an effect (MUST-DP-12).  An
-   unsigned index is not such a statement.
+   row is therefore never hardened into decision-without-effect: near a
+   window edge it stays boundary-deferred, and outside every window it
+   is outside the extracts' scope, so a reader of single-row extracts
+   alone cannot establish that every allow had its effect.  A deployment
+   that signs single-row extracts MUST state so, and MUST state how a
+   reader learns which allows should have a row, for example a window
+   extract over the audited period or a signed list of the references
+   that produced an effect (MUST-DP-12).  An unsigned index is not such
+   a statement.
 
    The binding does not order the two clocks.  A row's timestampMs is
    checked against the window it sits in and not against the timestampMs
@@ -887,9 +890,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    and a later revision may.  The paragraph is the text form of the rule
    in Section 1.1: the silence costs a sentence here, and would cost a
    finding later.
-
-
-
 
 
 
@@ -1434,22 +1434,22 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       posted in the AUDIT BoF preparation repository
       (https://github.com/mirjak/audit-bof-preparation/issues/9
       (https://github.com/mirjak/audit-bof-preparation/issues/9)):
-      Tymofii Pidlisnyi (Agent Passport System), with the APS
-      conformance runner, stage by stage; and Roberto Locatelli
-      (cryptovalid-opencore), with checkers written from the drafts, the
-      RFCs, and the vector set's README, 16 of 16 verdicts and 15 of 16
-      first failing stages.  All of those vectors were produced by one
-      implementation; the runs are datapoints, not conformance.
+      Tymofii Pidlisnyi (Agent Passport System), with a runner in the
+      APS conformance suite, a partial stage-by-stage comparison rather
+      than a whole-ledger verdict; and Roberto Locatelli (cryptovalid-
+      opencore), with checkers written from the drafts, the RFCs, the
+      vector set's README and, for two file layouts, the vector files,
+      16 of 16 verdicts and 15 of 16 first failing stages.  All of those
+      vectors were produced by one implementation; the runs are
+      datapoints, not conformance.
 
 12.  References
 
 12.1.  Normative References
 
-   [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
-              Commerce", Work in Progress, Internet-Draft, draft-dogru-
-              cedulon-08, 2 September 2026,
-              <https://datatracker.ietf.org/doc/html/draft-dogru-
-              cedulon-08>.
+
+
+
 
 
 
@@ -1457,6 +1457,12 @@ Dogru                     Expires 8 April 2027                 [Page 26]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
 
+
+   [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
+              Commerce", Work in Progress, Internet-Draft, draft-dogru-
+              cedulon-08, 2 September 2026,
+              <https://datatracker.ietf.org/doc/html/draft-dogru-
+              cedulon-08>.
 
    [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
               Requirement Levels", BCP 14, RFC 2119,
@@ -1501,18 +1507,18 @@ Internet-Draft          Cedulon Decision Profile            October 2026
               DOI 10.17487/RFC9052, August 2022,
               <https://www.rfc-editor.org/rfc/rfc9052>.
 
-   [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
-              JSON Object Signing and Encryption (JOSE) and CBOR Object
-              Signing and Encryption (COSE)", RFC 9864,
-              DOI 10.17487/RFC9864, October 2025,
-              <https://www.rfc-editor.org/rfc/rfc9864>.
-
 
 
 Dogru                     Expires 8 April 2027                 [Page 27]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
 
+
+   [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
+              JSON Object Signing and Encryption (JOSE) and CBOR Object
+              Signing and Encryption (COSE)", RFC 9864,
+              DOI 10.17487/RFC9864, October 2025,
+              <https://www.rfc-editor.org/rfc/rfc9864>.
 
 12.2.  Informative References
 
@@ -1556,12 +1562,6 @@ Changes from -03
 
    This section is to be removed before publishing as an RFC.
 
-   *  A checkpoint may be signed under a separate key that the
-      deployment names and the verifier pins (MUST-DP-11); Terminology
-      and the decider root say so. -03 had the Decider sign checkpoints,
-      and the second implementation did not.
-
-
 
 
 
@@ -1569,6 +1569,11 @@ Dogru                     Expires 8 April 2027                 [Page 28]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
 
+
+   *  A checkpoint may be signed under a separate key that the
+      deployment names and the verifier pins (MUST-DP-11); Terminology
+      and the decider root say so. -03 had the Decider sign checkpoints,
+      and the second implementation did not.
 
    *  The context behind inputsHash is, like the request, a deployment
       statement: what is hashed, and how it is presented beside the
@@ -1611,13 +1616,8 @@ Changes from -01
       effect; the observation in [OUTCOME] is independent where the
       relying party chose an independent source, not by construction.
 
-   *  Section 11 records the companion as published at 0.13.0, one
-      fixture read by a second reader with the limits of that run, and
-      two reproductions of the suite.
 
-   *  D1 cites a measurement of the same threat on a second evidence
-      format, whose verifier accepts a refusal beside an executed
-      outcome.
+
 
 
 
@@ -1625,6 +1625,14 @@ Dogru                     Expires 8 April 2027                 [Page 29]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
 
+
+   *  Section 11 records the companion as published at 0.13.0, one
+      fixture read by a second reader with the limits of that run, and
+      two reproductions of the suite.
+
+   *  D1 cites a measurement of the same threat on a second evidence
+      format, whose verifier accepts a refusal beside an executed
+      outcome.
 
    *  Two sentences tightened after a reader's mapping: the request
       encoding is fixed and the request's fields are not (Section 4.1);
@@ -1661,8 +1669,18 @@ Acknowledgments
    finding that the spend vocabulary had no word for it.
 
    Tymofii Pidlisnyi and Roberto Locatelli ran the second
-   implementation's test vectors with verifiers of their own; the
-   changes of -04 are their findings.
+   implementation's test vectors with verifiers of their own; the first
+   three changes of -04 are their findings.
+
+
+
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 30]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
 
    Iman Schrock read -00 the day it was posted and raised the four
    points this revision answers: the fork two readers cannot see, the
@@ -1674,14 +1692,6 @@ Acknowledgments
    Pablo Etcheverry ran the suite at the posted -00 commit and asked
    three questions of it; the unordered clocks of Section 6.1 are his
    finding.  Nicholas Templeman ran the same commit after 0.13.0 shipped
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 30]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
    and showed that a claim about the present, frozen into a pinned
    commit, cannot tell a reproducer whether the code or the calendar
    failed.  Konrad Gruszka mapped the Decision Record and Effect Extract
@@ -1702,16 +1712,6 @@ Author's Address
    Emek Can Dogru
    VERAX TEKNOLOJI LIMITED SIRKETI
    Email: e.dogru@cedulon.com
-
-
-
-
-
-
-
-
-
-
 
 
 

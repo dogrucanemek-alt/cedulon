@@ -654,8 +654,10 @@ an item deferred at the closing edge of such a window is one whose
 window contains the item's `timestampMs`; a later single-row extract
 that does not contain it is not the following extract and does not
 harden the item. Under single-row extracts alone, an allow with no row
-therefore stays `boundary-deferred` and the guarantee stays
-conditional. A deployment that signs single-row extracts MUST state
+is therefore never hardened into `decision-without-effect`: near a
+window edge it stays `boundary-deferred`, and outside every window it
+is outside the extracts' scope, so a reader of single-row extracts
+alone cannot establish that every allow had its effect. A deployment that signs single-row extracts MUST state
 so, and MUST state how a reader learns which allows should have a row,
 for example a window extract over the audited period or a signed list
 of the references that produced an effect (`MUST-DP-12`). An unsigned
@@ -1109,10 +1111,12 @@ Second implementation:
   was run by two readers with verifiers of their own, and the results
   were posted in the AUDIT BoF preparation repository
   (<https://github.com/mirjak/audit-bof-preparation/issues/9>):
-  Tymofii Pidlisnyi (Agent Passport System), with the APS conformance
-  runner, stage by stage; and Roberto Locatelli (cryptovalid-opencore),
-  with checkers written from the drafts, the RFCs, and the vector
-  set's README, 16 of 16 verdicts and 15 of 16 first failing stages.
+  Tymofii Pidlisnyi (Agent Passport System), with a runner in the APS
+  conformance suite, a partial stage-by-stage comparison rather than a
+  whole-ledger verdict; and Roberto Locatelli (cryptovalid-opencore),
+  with checkers written from the drafts, the RFCs, the vector set's
+  README and, for two file layouts, the vector files, 16 of 16
+  verdicts and 15 of 16 first failing stages.
   All of those vectors were produced by one implementation; the runs
   are datapoints, not conformance.
 
@@ -1204,8 +1208,8 @@ messaging assistant's decision log beside the channel's sent log and
 finding that the spend vocabulary had no word for it.
 
 Tymofii Pidlisnyi and Roberto Locatelli ran the second
-implementation's test vectors with verifiers of their own; the changes
-of -04 are their findings.
+implementation's test vectors with verifiers of their own; the first
+three changes of -04 are their findings.
 
 Iman Schrock read -00 the day it was posted and raised the four
 points this revision answers: the fork two readers cannot see, the
