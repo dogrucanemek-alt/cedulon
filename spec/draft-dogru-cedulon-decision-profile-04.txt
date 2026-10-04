@@ -93,19 +93,19 @@ Table of Contents
    7.  Trust roots . . . . . . . . . . . . . . . . . . . . . . . . .  19
    8.  Security Considerations . . . . . . . . . . . . . . . . . . .  20
      8.1.  D1: An effect occurs against a refusal  . . . . . . . . .  20
-     8.2.  D2: Effects without decisions . . . . . . . . . . . . . .  20
-     8.3.  D3: Substitution of content . . . . . . . . . . . . . . .  20
+     8.2.  D2: Effects without decisions . . . . . . . . . . . . . .  21
+     8.3.  D3: Substitution of content . . . . . . . . . . . . . . .  21
      8.4.  D4: The Decider signs below its own rules . . . . . . . .  21
      8.5.  D5: Equivocation on the record chain  . . . . . . . . . .  21
-     8.6.  D6: The class of the effect is substituted  . . . . . . .  21
+     8.6.  D6: The class of the effect is substituted  . . . . . . .  22
      8.7.  D7: Silent defaults in capture  . . . . . . . . . . . . .  22
      8.8.  D8: The capture process is the Decider  . . . . . . . . .  22
-   9.  Privacy Considerations  . . . . . . . . . . . . . . . . . . .  22
+   9.  Privacy Considerations  . . . . . . . . . . . . . . . . . . .  23
    10. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  23
-     10.1.  application/cedulon-decision-record+cbor . . . . . . . .  23
-   11. Implementation Status . . . . . . . . . . . . . . . . . . . .  24
-   12. References  . . . . . . . . . . . . . . . . . . . . . . . . .  26
-     12.1.  Normative References . . . . . . . . . . . . . . . . . .  26
+     10.1.  application/cedulon-decision-record+cbor . . . . . . . .  24
+   11. Implementation Status . . . . . . . . . . . . . . . . . . . .  25
+   12. References  . . . . . . . . . . . . . . . . . . . . . . . . .  27
+     12.1.  Normative References . . . . . . . . . . . . . . . . . .  27
 
 
 
@@ -115,12 +115,12 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
 
      12.2.  Informative References . . . . . . . . . . . . . . . . .  28
-   Changes from -03  . . . . . . . . . . . . . . . . . . . . . . . .  28
-   Changes from -02  . . . . . . . . . . . . . . . . . . . . . . . .  29
-   Changes from -01  . . . . . . . . . . . . . . . . . . . . . . . .  29
-   Changes from -00  . . . . . . . . . . . . . . . . . . . . . . . .  30
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  30
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  31
+   Changes from -03  . . . . . . . . . . . . . . . . . . . . . . . .  29
+   Changes from -02  . . . . . . . . . . . . . . . . . . . . . . . .  30
+   Changes from -01  . . . . . . . . . . . . . . . . . . . . . . . .  30
+   Changes from -00  . . . . . . . . . . . . . . . . . . . . . . . .  31
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  31
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  32
 
 1.  Introduction
 
@@ -581,12 +581,17 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
    The key that signs a checkpoint is the key the core's verification
    procedure obtains for the checkpoint issuer (Section 11.4 of
-   [CEDULON], step 11).  In this profile it is either the decider root
-   or a separate key that the deployment names for checkpoints, such as
-   that of a process beside the Decider that signs checkpoints and
-   nothing the Decider decides.  A deployment MUST state which, and a
-   verifier MUST hold that key out of band and verify every checkpoint
-   under it (MUST-DP-11).  A separate checkpoint key held by the same
+   [CEDULON], step 11), and Section 10.1 of the core has the verifier
+   check checkpoints against the issuer root.  In this profile the
+   decider root may be a set of keys in the sense of the core's MUST-
+   T4-12: the key under which Decision Records are attested and, where
+   the deployment names one, a separate key under which only checkpoints
+   are attested, such as that of a process beside the Decider that signs
+   no Decision Record.  A deployment MUST state which key signs its
+   checkpoints; a verifier MUST hold that key out of band as part of the
+   decider root and verify every checkpoint under it, and a Decision
+   Record that verifies only under the checkpoint key is issuer-key-
+   mismatch (MUST-DP-11).  A separate checkpoint key held by the same
    operator as the decider root is a second key, not a second trust
    domain, and a report MUST NOT present it as independent of the
    Decider.  A checkpoint signer is not the witness of Section 11 of
@@ -603,13 +608,8 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    fails the rules is named by the walk rather than dropped from the
    population without a word (MUST-DP-5).
 
-   What the walk establishes is bounded by what one reader holds.  A
-   Decider can sign two successors to the same predecessor and show one
-   branch to one reader and the other branch to another; each reader
-   walks a linear chain that verifies, and neither walk names a break.
-   The earlier revision called the chain the equivocation control of
-   this profile, which overstated it and contradicted the core:
-   Section 11 of [CEDULON] states that the presented chain alone cannot
+
+
 
 
 
@@ -618,6 +618,13 @@ Dogru                     Expires 8 April 2027                 [Page 11]
 Internet-Draft          Cedulon Decision Profile            October 2026
 
 
+   What the walk establishes is bounded by what one reader holds.  A
+   Decider can sign two successors to the same predecessor and show one
+   branch to one reader and the other branch to another; each reader
+   walks a linear chain that verifies, and neither walk names a break.
+   The earlier revision called the chain the equivocation control of
+   this profile, which overstated it and contradicted the core:
+   Section 11 of [CEDULON] states that the presented chain alone cannot
    satisfy the equivocation requirement, because its epochs are
    consecutive by construction, and that the comparison which reaches a
    fork is between the presented checkpoints and the copies a witness
@@ -659,13 +666,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
                                   Table 3
 
-   Each effect row is a JSON object with exactly these members:
-
-
-
-
-
-
 
 
 
@@ -673,6 +673,8 @@ Dogru                     Expires 8 April 2027                 [Page 12]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
 
+
+   Each effect row is a JSON object with exactly these members:
 
    +=============+====================================================+
    | Member      | JSON type                                          |
@@ -720,8 +722,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       makes the whole extract malformed, refused as effect-outside-
       window before any signature is checked.  The core accepts such a
       rail extract and names the row (extract-scope-mismatch).  Here the
-      extract is the deployment's own document and a window it did not
-      keep is a document it did not produce correctly: a signer applying
 
 
 
@@ -730,6 +730,8 @@ Dogru                     Expires 8 April 2027                 [Page 13]
 Internet-Draft          Cedulon Decision Profile            October 2026
 
 
+      extract is the deployment's own document and a window it did not
+      keep is a document it did not produce correctly: a signer applying
       this schema never produces such an extract, and a verifier refuses
       one that is presented as a document, whatever else it may also
       name about its rows.  The trade is stated so it can be reversed: a
@@ -776,8 +778,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    The extract is scoped to one Decider, one channel, and one window,
    and Section 9.4 of [CEDULON] applies with the nouns renamed: a
    verifier that knows which Decider, channel, and window it audits MUST
-   check the extract against them and MUST fail closed on a mismatch
-   (extract-scope-mismatch); one that has not stated the window MUST
 
 
 
@@ -786,6 +786,8 @@ Dogru                     Expires 8 April 2027                 [Page 14]
 Internet-Draft          Cedulon Decision Profile            October 2026
 
 
+   check the extract against them and MUST fail closed on a mismatch
+   (extract-scope-mismatch); one that has not stated the window MUST
    report unstated-audit-window, one that has not stated the Decider or
    the channel MUST report unstated-audit-scope, and in either case the
    guarantee is conditional.  The strongest line this profile can print,
@@ -835,8 +837,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
 
 
-
-
 Dogru                     Expires 8 April 2027                 [Page 15]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
@@ -862,21 +862,21 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
    Some deployments sign one extract per effect row, with a window that
    holds that row alone.  Such an extract is a receipt for its row: it
-   states nothing about any other reference, and its window does not
+   states nothing about any other reference, and its window need not
    adjoin the next one.  For the boundary rule, the following extract of
    an item deferred at the closing edge of such a window is one whose
    window contains the item's timestampMs; a later single-row extract
    that does not contain it is not the following extract and does not
    harden the item.  Under single-row extracts alone, an allow with no
-   row is therefore never hardened into decision-without-effect: near a
-   window edge it stays boundary-deferred, and outside every window it
-   is outside the extracts' scope, so a reader of single-row extracts
-   alone cannot establish that every allow had its effect.  A deployment
-   that signs single-row extracts MUST state so, and MUST state how a
-   reader learns which allows should have a row, for example a window
-   extract over the audited period or a signed list of the references
-   that produced an effect (MUST-DP-12).  An unsigned index is not such
-   a statement.
+   row hardens into decision-without-effect only when another row's
+   extract happens to cover its time; otherwise it stays boundary-
+   deferred near a window edge and is outside the extracts' scope
+   elsewhere, so a reader of single-row extracts alone cannot establish
+   that every allow had its effect.  A deployment that signs single-row
+   extracts MUST state so, and MUST state how a reader learns which
+   allows should have a row, for example a window extract over the
+   audited period or a signed list of the references that produced an
+   effect (MUST-DP-12).  An unsigned index is not such a statement.
 
    The binding does not order the two clocks.  A row's timestampMs is
    checked against the window it sits in and not against the timestampMs
@@ -1024,13 +1024,15 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    This profile has two roots, filling the core's issuer root and rail
    root (Sections 10.1 and 9.3 of [CEDULON]):
 
-   The decider root:  The key under which Decision Records are attested,
-      and their checkpoints unless the deployment names a separate
-      checkpoint key (Section 4.4).  Everything Section 10.1 of the core
-      states for the issuer root applies: a pinned key attests by
-      signature, a carried key is not an identity, a record under
-      another key is issuer-key-mismatch and covers nothing, and with no
-      pin unauthenticated-issuer makes the guarantee conditional.
+   The decider root:  The key, or set of keys, under which Decision
+      Records and their checkpoints are attested.  A separate checkpoint
+      key, where the deployment names one, belongs to this root and
+      attests checkpoints only (Section 4.4).  Everything Section 10.1
+      of the core states for the issuer root applies: a pinned key
+      attests by signature, a carried key is not an identity, a record
+      under another key is issuer-key-mismatch and covers nothing, and
+      with no pin unauthenticated-issuer makes the guarantee
+      conditional.
 
    The effect-extract root:  The key under which the Effect Extract is
       attested.  Everything Section 9.3 of the core states for the rail
@@ -1040,6 +1042,29 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    used by this profile, except that a transparency witness MAY hold the
    Decider's checkpoints exactly as it holds a Receipt Issuer's, with
    the witness root and codes of the core unchanged.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 19]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
 
    What the two roots do not cover is the relation between them.  The
    profile's claim is only as strong as the independence of the party
@@ -1058,13 +1083,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    decider root are, or may be, the same party (MUST-DP-9).  The
    companion cannot measure that from the keys alone; two keys can be
    held by one hand.
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 19]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
 
 8.  Security Considerations
 
@@ -1087,6 +1105,22 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    but does not say it was refused.  A Decider SHOULD carry the
    reference on a refusal whenever the channel assigns one before the
    decision.
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 20]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
 
    The shape of the threat is not particular to this profile.  A reader
    who mapped this document's objects onto a second evidence format,
@@ -1113,15 +1147,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    open if the two sides hash different octets, which is why a
    deployment MUST state the octets once for both (Section 5.1).
 
-
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 20]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
 8.4.  D4: The Decider signs below its own rules
 
    A Decider produces a well-formed signature over a claim map that
@@ -1145,6 +1170,14 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    are recorded with a witness the verifier has pinned, a Transparency
    Service [RFC9943] being one, and the copies the witness holds are
    compared against the presented chain.  A verifier that consulted no
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 21]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
+
    witness has not measured cross-reader equivocation.  The guarantee
    its report prints is the core's, which is defined over the extract,
    the pins, and the window and does not cover suppression or
@@ -1170,14 +1203,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    mismatch (Section 6.1).  What remains open is the vocabulary: the
    class names are the channel's, this document does not fix them, and a
    deployment SHOULD state them beside its statement of what it hashes
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 21]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
    so that two readers compare the same words.
 
 8.7.  D7: Silent defaults in capture
@@ -1201,6 +1226,14 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    prove.  A verifier that holds both roots and cannot state their
    independence has a conditional result, and MUST say so.
 
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 22]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
+
 9.  Privacy Considerations
 
    A Decision Record carries no request content and no effect content:
@@ -1221,18 +1254,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    and actor identifiers are opaque to the profile but need not be
    opaque to a reader; a deployment SHOULD pseudonymize them before
    either object leaves its control.
-
-
-
-
-
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 22]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
 
 10.  IANA Considerations
 
@@ -1260,6 +1281,15 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
    No other IANA action is requested.
 
+
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 23]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
+
 10.1.  application/cedulon-decision-record+cbor
 
    Type name:  application
@@ -1282,14 +1312,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       that the rules were applied.
 
    Interoperability considerations:  The claim set is a CBOR map with
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 23]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
       the labels and types stated in Section 4.1, encoded per [RFC8949]
       Section 4.2.1.  A decoder refuses a duplicate key, an input beyond
       its stated bounds, and a non-empty unprotected header by name
@@ -1316,6 +1338,14 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
    Intended usage:  COMMON
 
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 24]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
+
    Restrictions on usage:  N/A
 
    Author:  Emek Can Dogru
@@ -1338,14 +1368,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       covering the rules and departures this document states, and four
       offline fixtures for one example channel, a direct-message reply
       log.  The two cases added with -01 were red before the claim was
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 24]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
       added: a row of a different class under a matching hash matched,
       and an allow signed without a class verified.  This revision
       changes text and adds no case; the ordering of the two clocks
@@ -1372,9 +1394,17 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       proposed line format for a direct-message bridge; the bridge's
       actual field names were not read when this revision was written,
       and the adapter is written so that only its two line-mapping
-      functions should move when they are.  No implementation of this
-      profile by another party is known to the author; the two outside
-      readers below wrote verifiers, not signers.
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 25]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
+
+      functions should move when they are.  No signer of this profile by
+      another party is known to the author; the two outside readers
+      below wrote verifiers.
 
       Read by a second reader: one frozen fixture, a leaked refusal in
       the example channel's line format, was read by this implementation
@@ -1392,16 +1422,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       precommitment; and neither reader says where the refusal failed.
 
       Reproduced: the companion's suite at the commit that posted -00
-
-
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 25]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
       was run unmodified by two readers on their own machines, one on
       the day of posting and one after 0.13.0 shipped.  The second run
       had one red, a test that asked the package registry what it served
@@ -1418,13 +1438,38 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       are that reader's as well.
 
    Second implementation:  Verax (https://github.com/verax-ai/verax
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 26]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
+
       (https://github.com/verax-ai/verax)), written by the author of
       this document, signs Decision Records under this profile's claim
       set and verifies its ledgers offline.  It departed from -03 in two
-      of the places this revision changes: a witness process beside the
-      Decider signs its checkpoints under a separate key (Section 4.4),
-      and it signs one extract per effect row.  Since the outside runs
-      below, its verifier holds every allow to a row by a rule of its
+      of the places this revision changes.  A process beside the
+      Decider, which Verax calls its witness, signs its checkpoints and
+      its effect extracts under one key, separate from the record key
+      and held by the same operator (Section 4.4); its vector set's
+      README names that key, as MUST-DP-11 asks.  And it signs one
+      extract per effect row, without yet the statement MUST-DP-12 asks
+      for: its index of which references produced an effect is unsigned.
+      In its repository, after the outside runs below and not yet in a
+      release, its verifier holds every allow to a row by a rule of its
       own, with the core's allowance measured from the newest record,
       rather than by the boundary rule alone.
 
@@ -1438,25 +1483,17 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       APS conformance suite, a partial stage-by-stage comparison rather
       than a whole-ledger verdict; and Roberto Locatelli (cryptovalid-
       opencore), with checkers written from the drafts, the RFCs, the
-      vector set's README and, for two file layouts, the vector files,
-      16 of 16 verdicts and 15 of 16 first failing stages.  All of those
-      vectors were produced by one implementation; the runs are
-      datapoints, not conformance.
+      vector set's README and, for two file layouts, the vector files.
+      With the checkpoint verified under the witness key, that run
+      matched 16 of 16 verdicts and 15 of 16 first failing stages; under
+      -03's reading, with the Decider's key, 14 of 16 verdicts.  One of
+      the matches came from a rule added after reading the vector, as
+      the run itself states.  All of those vectors were produced by one
+      implementation; the runs are datapoints, not conformance.
 
 12.  References
 
 12.1.  Normative References
-
-
-
-
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 26]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
 
    [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
               Commerce", Work in Progress, Internet-Draft, draft-dogru-
@@ -1468,6 +1505,14 @@ Internet-Draft          Cedulon Decision Profile            October 2026
               Requirement Levels", BCP 14, RFC 2119,
               DOI 10.17487/RFC2119, March 1997,
               <https://www.rfc-editor.org/rfc/rfc2119>.
+
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 27]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
 
    [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
               (SHA and SHA-based HMAC and HKDF)", RFC 6234,
@@ -1507,13 +1552,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
               DOI 10.17487/RFC9052, August 2022,
               <https://www.rfc-editor.org/rfc/rfc9052>.
 
-
-
-Dogru                     Expires 8 April 2027                 [Page 27]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
    [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
               JSON Object Signing and Encryption (JOSE) and CBOR Object
               Signing and Encryption (COSE)", RFC 9864,
@@ -1521,6 +1559,16 @@ Internet-Draft          Cedulon Decision Profile            October 2026
               <https://www.rfc-editor.org/rfc/rfc9864>.
 
 12.2.  Informative References
+
+
+
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 28]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
 
    [ABAK]     Abak, A. T., "Evidence Requirements for Agent Control
               Delivery and Outcome Reconciliation", Work in Progress,
@@ -1562,18 +1610,21 @@ Changes from -03
 
    This section is to be removed before publishing as an RFC.
 
+   *  A checkpoint may be signed under a separate key that the
+      deployment names and the verifier pins as part of the decider
+      root, a set of keys in the sense of the core's MUST-T4-12 (MUST-
+      DP-11); Terminology and the decider root say so. -03 had the
+      Decider sign checkpoints, and the second implementation did not.
 
 
 
-Dogru                     Expires 8 April 2027                 [Page 28]
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 29]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
 
-
-   *  A checkpoint may be signed under a separate key that the
-      deployment names and the verifier pins (MUST-DP-11); Terminology
-      and the decider root say so. -03 had the Decider sign checkpoints,
-      and the second implementation did not.
 
    *  The context behind inputsHash is, like the request, a deployment
       statement: what is hashed, and how it is presented beside the
@@ -1616,16 +1667,6 @@ Changes from -01
       effect; the observation in [OUTCOME] is independent where the
       relying party chose an independent source, not by construction.
 
-
-
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 29]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
    *  Section 11 records the companion as published at 0.13.0, one
       fixture read by a second reader with the limits of that run, and
       two reproductions of the suite.
@@ -1633,6 +1674,13 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    *  D1 cites a measurement of the same threat on a second evidence
       format, whose verifier accepts a refusal beside an executed
       outcome.
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 30]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
 
    *  Two sentences tightened after a reader's mapping: the request
       encoding is fixed and the request's fields are not (Section 4.1);
@@ -1672,16 +1720,6 @@ Acknowledgments
    implementation's test vectors with verifiers of their own; the first
    three changes of -04 are their findings.
 
-
-
-
-
-
-Dogru                     Expires 8 April 2027                 [Page 30]
-
-Internet-Draft          Cedulon Decision Profile            October 2026
-
-
    Iman Schrock read -00 the day it was posted and raised the four
    points this revision answers: the fork two readers cannot see, the
    class that was not under the signature, the media-type reason that
@@ -1692,6 +1730,14 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    Pablo Etcheverry ran the suite at the posted -00 commit and asked
    three questions of it; the unordered clocks of Section 6.1 are his
    finding.  Nicholas Templeman ran the same commit after 0.13.0 shipped
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 31]
+
+Internet-Draft          Cedulon Decision Profile            October 2026
+
+
    and showed that a claim about the present, frozen into a pinned
    commit, cannot tell a reproducer whether the code or the calendar
    failed.  Konrad Gruszka mapped the Decision Record and Effect Extract
@@ -1733,4 +1779,14 @@ Author's Address
 
 
 
-Dogru                     Expires 8 April 2027                 [Page 31]
+
+
+
+
+
+
+
+
+
+
+Dogru                     Expires 8 April 2027                 [Page 32]

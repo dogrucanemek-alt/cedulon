@@ -438,12 +438,17 @@ records in the window against the signed map, and a difference is
 
 The key that signs a checkpoint is the key the core's verification
 procedure obtains for the checkpoint issuer (Section 11.4 of
-{{CEDULON}}, step 11). In this profile it is either the decider root
-or a separate key that the deployment names for checkpoints, such as
-that of a process beside the Decider that signs checkpoints and
-nothing the Decider decides. A deployment MUST state which, and a
-verifier MUST hold that key out of band and verify every checkpoint
-under it (`MUST-DP-11`). A separate checkpoint key held by the same
+{{CEDULON}}, step 11), and Section 10.1 of the core has the verifier
+check checkpoints against the issuer root. In this profile the decider
+root may be a set of keys in the sense of the core's `MUST-T4-12`: the
+key under which Decision Records are attested and, where the
+deployment names one, a separate key under which only checkpoints are
+attested, such as that of a process beside the Decider that signs no
+Decision Record. A deployment MUST state which key signs its
+checkpoints; a verifier MUST hold that key out of band as part of the
+decider root and verify every checkpoint under it, and a Decision
+Record that verifies only under the checkpoint key is
+`issuer-key-mismatch` (`MUST-DP-11`). A separate checkpoint key held by the same
 operator as the decider root is a second key, not a second trust
 domain, and a report MUST NOT present it as independent of the
 Decider. A checkpoint signer is not the witness of Section 11 of
@@ -648,16 +653,17 @@ which the companion holds at five minutes.
 
 Some deployments sign one extract per effect row, with a window that
 holds that row alone. Such an extract is a receipt for its row: it
-states nothing about any other reference, and its window does not
+states nothing about any other reference, and its window need not
 adjoin the next one. For the boundary rule, the following extract of
 an item deferred at the closing edge of such a window is one whose
 window contains the item's `timestampMs`; a later single-row extract
 that does not contain it is not the following extract and does not
 harden the item. Under single-row extracts alone, an allow with no row
-is therefore never hardened into `decision-without-effect`: near a
-window edge it stays `boundary-deferred`, and outside every window it
-is outside the extracts' scope, so a reader of single-row extracts
-alone cannot establish that every allow had its effect. A deployment that signs single-row extracts MUST state
+hardens into `decision-without-effect` only when another row's extract
+happens to cover its time; otherwise it stays `boundary-deferred` near
+a window edge and is outside the extracts' scope elsewhere, so a
+reader of single-row extracts alone cannot establish that every allow
+had its effect. A deployment that signs single-row extracts MUST state
 so, and MUST state how a reader learns which allows should have a row,
 for example a window extract over the audited period or a signed list
 of the references that produced an effect (`MUST-DP-12`). An unsigned
@@ -752,9 +758,10 @@ This profile has two roots, filling the core's issuer root and rail
 root (Sections 10.1 and 9.3 of {{CEDULON}}):
 
 The decider root:
-: The key under which Decision Records are attested, and their
-  checkpoints unless the deployment names a separate checkpoint key
-  ({{record-chain}}). Everything Section 10.1 of the core states for the issuer
+: The key, or set of keys, under which Decision Records and their
+  checkpoints are attested. A separate checkpoint key, where the
+  deployment names one, belongs to this root and attests checkpoints
+  only ({{record-chain}}). Everything Section 10.1 of the core states for the issuer
   root applies: a pinned key attests by signature, a carried key is
   not an identity, a record under another key is `issuer-key-mismatch`
   and covers nothing, and with no pin `unauthenticated-issuer` makes
@@ -1060,9 +1067,8 @@ Maturity:
   line format for a direct-message bridge; the bridge's actual field
   names were not read when this revision was written, and the adapter
   is written so that only its two line-mapping functions should move
-  when they are. No implementation of this profile by another party
-  is known to the author; the two outside readers below wrote
-  verifiers, not signers.
+  when they are. No signer of this profile by another party is known
+  to the author; the two outside readers below wrote verifiers.
 
 : Read by a second reader: one frozen fixture, a leaked refusal in
   the example channel's line format, was read by this implementation
@@ -1099,12 +1105,17 @@ Second implementation:
 : Verax (<https://github.com/verax-ai/verax>), written by the author of
   this document, signs Decision Records under this profile's claim set
   and verifies its ledgers offline. It departed from -03 in two of the
-  places this revision changes: a witness process beside the Decider
-  signs its checkpoints under a separate key ({{record-chain}}), and it
-  signs one extract per effect row. Since the outside runs below, its
-  verifier holds every allow to a row by a rule of its own, with the
-  core's allowance measured from the newest record, rather than by the
-  boundary rule alone.
+  places this revision changes. A process beside the Decider, which
+  Verax calls its witness, signs its checkpoints and its effect
+  extracts under one key, separate from the record key and held by the
+  same operator ({{record-chain}}); its vector set's README names that
+  key, as `MUST-DP-11` asks. And it signs one extract per effect row,
+  without yet the statement `MUST-DP-12` asks for: its index of which
+  references produced an effect is unsigned. In its repository, after
+  the outside runs below and not yet in a release, its verifier holds
+  every allow to a row by a rule of its own, with the core's allowance
+  measured from the newest record, rather than by the boundary rule
+  alone.
 
 : Run by outside readers: a frozen set of Verax ledgers
   (`test-vectors/v1` at tag `vectors-v1`, sixteen ledgers at the time)
@@ -1115,8 +1126,12 @@ Second implementation:
   conformance suite, a partial stage-by-stage comparison rather than a
   whole-ledger verdict; and Roberto Locatelli (cryptovalid-opencore),
   with checkers written from the drafts, the RFCs, the vector set's
-  README and, for two file layouts, the vector files, 16 of 16
-  verdicts and 15 of 16 first failing stages.
+  README and, for two file layouts, the vector files. With the
+  checkpoint verified under the witness key, that run matched 16 of 16
+  verdicts and 15 of 16 first failing stages; under -03's reading,
+  with the Decider's key, 14 of 16 verdicts. One of the matches came
+  from a rule added after reading the vector, as the run itself
+  states.
   All of those vectors were produced by one implementation; the runs
   are datapoints, not conformance.
 
@@ -1128,8 +1143,9 @@ Second implementation:
 This section is to be removed before publishing as an RFC.
 
 - A checkpoint may be signed under a separate key that the deployment
-  names and the verifier pins (`MUST-DP-11`); Terminology and the
-  decider root say so. -03 had the Decider sign checkpoints, and the
+  names and the verifier pins as part of the decider root, a set of
+  keys in the sense of the core's `MUST-T4-12` (`MUST-DP-11`);
+  Terminology and the decider root say so. -03 had the Decider sign checkpoints, and the
   second implementation did not.
 - The context behind `inputsHash` is, like the request, a deployment
   statement: what is hashed, and how it is presented beside the
