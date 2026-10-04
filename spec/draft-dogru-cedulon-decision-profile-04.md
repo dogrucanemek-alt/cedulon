@@ -44,10 +44,10 @@ normative:
     author:
       - ins: E. C. Dogru
         name: Emek Can Dogru
-    date: 2026-09-02
+    date: 2026-09-06
     seriesinfo:
-      Internet-Draft: draft-dogru-cedulon-08
-    target: https://datatracker.ietf.org/doc/html/draft-dogru-cedulon-08
+      Internet-Draft: draft-dogru-cedulon-09
+    target: https://datatracker.ietf.org/doc/html/draft-dogru-cedulon-09
 informative:
   RFC7942:
   RFC9943:
@@ -1107,14 +1107,14 @@ Maturity:
 Second implementation:
 : Verax (<https://github.com/verax-ai/verax>), written by the author of
   this document, signs Decision Records under this profile's claim set
-  and verifies its ledgers offline. It departed from -03 in two of the
-  places this revision changes. A process beside the Decider, which
-  Verax calls its witness, signs its checkpoints and its effect
-  extracts under one key, separate from the record key and held by the
+  and verifies its ledgers offline. Two of this revision's changes
+  come from it. In its published test vectors, a process beside the
+  Decider, which Verax calls its witness, signs the checkpoints and
+  the effect extracts under one key, separate from the record key and held by the
   same operator ({{record-chain}}); its vector set's README names that
   key, as `MUST-DP-11` asks; since that key also signs the effect
   extracts, `MUST-DP-9` makes its guarantee conditional. And it signs
-  one extract per effect row,
+  one extract per effect row, a case -03 did not address,
   without yet the statement `MUST-DP-12` asks for: its index of which
   references produced an effect is unsigned. After the outside runs
   below, and not yet in a release, its verifier holds
@@ -1163,6 +1163,8 @@ This section is to be removed before publishing as an RFC.
   reader learns which allows should have a row (`MUST-DP-12`).
 - Implementation Status records the second implementation and two
   outside runs of its test vectors.
+- The core reference moves to -09, whose sections cited here are
+  unchanged from -08.
 
 The first three changes came from those runs: each reader found a
 place where the text and the implementation disagreed, or where the
@@ -1230,8 +1232,8 @@ it refused, as a finding with its own name, came out of watching a
 messaging assistant's decision log beside the channel's sent log and
 finding that the spend vocabulary had no word for it.
 
-Tymofii Pidlisnyi and Roberto Locatelli ran the second
-implementation's test vectors with verifiers of their own; the first
+Tymofii Pidlisnyi (Agent Passport System) and Roberto Locatelli
+(cryptovalid-opencore) ran the second implementation's test vectors with verifiers of their own; the first
 three changes of -04 are their findings.
 
 Iman Schrock read -00 the day it was posted and raised the four

@@ -1226,14 +1226,14 @@ boundary sentences of this revision are that reader's as well.</t>
   <dd>
     <t>Verax (<eref target="https://github.com/verax-ai/verax">https://github.com/verax-ai/verax</eref>), written by the author of
 this document, signs Decision Records under this profile's claim set
-and verifies its ledgers offline. It departed from -03 in two of the
-places this revision changes. A process beside the Decider, which
-Verax calls its witness, signs its checkpoints and its effect
-extracts under one key, separate from the record key and held by the
+and verifies its ledgers offline. Two of this revision's changes
+come from it. In its published test vectors, a process beside the
+Decider, which Verax calls its witness, signs the checkpoints and
+the effect extracts under one key, separate from the record key and held by the
 same operator (<xref target="record-chain"/>); its vector set's README names that
 key, as <spanx style="verb">MUST-DP-11</spanx> asks; since that key also signs the effect
 extracts, <spanx style="verb">MUST-DP-9</spanx> makes its guarantee conditional. And it signs
-one extract per effect row,
+one extract per effect row, a case -03 did not address,
 without yet the statement <spanx style="verb">MUST-DP-12</spanx> asks for: its index of which
 references produced an effect is unsigned. After the outside runs
 below, and not yet in a release, its verifier holds
@@ -1420,15 +1420,15 @@ are datapoints, not conformance.</t>
   <seriesInfo name="DOI" value="10.17487/RFC9864"/>
 </reference>
 
-<reference anchor="CEDULON" target="https://datatracker.ietf.org/doc/html/draft-dogru-cedulon-08">
+<reference anchor="CEDULON" target="https://datatracker.ietf.org/doc/html/draft-dogru-cedulon-09">
   <front>
     <title>Cedulon: An Audit Layer for Agent-to-Agent Commerce</title>
     <author initials="E. C." surname="Dogru" fullname="Emek Can Dogru">
       <organization></organization>
     </author>
-    <date year="2026" month="September" day="02"/>
+    <date year="2026" month="September" day="06"/>
   </front>
-  <seriesInfo name="Internet-Draft" value="draft-dogru-cedulon-08"/>
+  <seriesInfo name="Internet-Draft" value="draft-dogru-cedulon-09"/>
 </reference>
 
 
@@ -1537,6 +1537,8 @@ and a deployment that signs single-row extracts <bcp14>MUST</bcp14> state how a
 reader learns which allows should have a row (<spanx style="verb">MUST-DP-12</spanx>).</t>
   <t>Implementation Status records the second implementation and two
 outside runs of its test vectors.</t>
+  <t>The core reference moves to -09, whose sections cited here are
+unchanged from -08.</t>
 </list></t>
 
 <t>The first three changes came from those runs: each reader found a
@@ -1611,8 +1613,8 @@ it refused, as a finding with its own name, came out of watching a
 messaging assistant's decision log beside the channel's sent log and
 finding that the spend vocabulary had no word for it.</t>
 
-<t>Tymofii Pidlisnyi and Roberto Locatelli ran the second
-implementation's test vectors with verifiers of their own; the first
+<t>Tymofii Pidlisnyi (Agent Passport System) and Roberto Locatelli
+(cryptovalid-opencore) ran the second implementation's test vectors with verifiers of their own; the first
 three changes of -04 are their findings.</t>
 
 <t>Iman Schrock read -00 the day it was posted and raised the four
@@ -1658,8 +1660,8 @@ jf6f0cbpaedH2cuj7BUDEF8KWM/X5VX2kg4s/NC0y3H2r+fvz/4tuzj/4ae3
 P779l9fZj6/fvL44f5V9eP3+h/OL17hw1mzrngF7sW0JNviuXBfVapyVRzip
 f9KTOqJ9u7pp1wSJjyUv7P33Lx+enLzQj08fPnpsH58/eq4fnx8/emgfT57Z
 Bc8fvfDfPnv+xD6+eGwPe3H8xC548fwpbnt5/urnH9/+NMYSB7g8zs4IXbfz
-qs9+LHZlmy2aVtB31DcjfMheNut12c7KO3hAAC//MzoM3ltBHCHp8YsR4Rt/
-2ZVtVXaMpPbo13VftnXZj14x8h+mgePnsqmiXZZ0yWXfb7rxgwf0hqJvi9lV
+qs9+LHZlmy2aVtB31DcjfMheNut12c7KO3hAAC//MzoM3ltBHCHp8YvR8VN8
+2ZVtVXaMpPbo13VftnXZj14x8h+mgeMXsqmiXZZ0yWXfb7rxgwf0hqJvi9lV
 2R5VZb84olN9QMT04LJfrx7c8CB+d3pGz1489rB88fgRfzz77uyHFJDnHyvC
 x1lJPOA/tlVbrglkXQAjQY/QpFkRca/oye2O+MM8e7vtCSnKwDdAJLcA+Owo
 uzjKzqbF1QC+Z6squ2h2y6INvw4A/Ph3Abigp4xA06OZLJ04jSx9VOpeR8cn
@@ -2065,63 +2067,64 @@ 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
-+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
++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
 
 -->
 

@@ -116,11 +116,11 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
      12.2.  Informative References . . . . . . . . . . . . . . . . .  28
    Changes from -03  . . . . . . . . . . . . . . . . . . . . . . . .  29
-   Changes from -02  . . . . . . . . . . . . . . . . . . . . . . . .  29
+   Changes from -02  . . . . . . . . . . . . . . . . . . . . . . . .  30
    Changes from -01  . . . . . . . . . . . . . . . . . . . . . . . .  30
    Changes from -00  . . . . . . . . . . . . . . . . . . . . . . . .  30
    Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  31
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  31
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  32
 
 1.  Introduction
 
@@ -1427,19 +1427,20 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    Second implementation:  Verax (https://github.com/verax-ai/verax
       (https://github.com/verax-ai/verax)), written by the author of
       this document, signs Decision Records under this profile's claim
-      set and verifies its ledgers offline.  It departed from -03 in two
-      of the places this revision changes.  A process beside the
-      Decider, which Verax calls its witness, signs its checkpoints and
-      its effect extracts under one key, separate from the record key
-      and held by the same operator (Section 4.4); its vector set's
-      README names that key, as MUST-DP-11 asks; since that key also
-      signs the effect extracts, MUST-DP-9 makes its guarantee
-      conditional.  And it signs one extract per effect row, without yet
-      the statement MUST-DP-12 asks for: its index of which references
-      produced an effect is unsigned.  After the outside runs below, and
-      not yet in a release, its verifier holds every allow to a row by a
-      rule of its own, with the core's allowance measured from the
-      newest record, rather than by the boundary rule alone.
+      set and verifies its ledgers offline.  Two of this revision's
+      changes come from it.  In its published test vectors, a process
+      beside the Decider, which Verax calls its witness, signs the
+      checkpoints and the effect extracts under one key, separate from
+      the record key and held by the same operator (Section 4.4); its
+      vector set's README names that key, as MUST-DP-11 asks; since that
+      key also signs the effect extracts, MUST-DP-9 makes its guarantee
+      conditional.  And it signs one extract per effect row, a case -03
+      did not address, without yet the statement MUST-DP-12 asks for:
+      its index of which references produced an effect is unsigned.
+      After the outside runs below, and not yet in a release, its
+      verifier holds every allow to a row by a rule of its own, with the
+      core's allowance measured from the newest record, rather than by
+      the boundary rule alone.
 
       Run by outside readers: a frozen set of Verax ledgers (test-
       vectors/v1 at tag vectors-v1, sixteen ledgers at the time) was run
@@ -1449,7 +1450,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       (https://github.com/mirjak/audit-bof-preparation/issues/9)):
       Tymofii Pidlisnyi (Agent Passport System), with a runner in the
       APS conformance suite, a partial stage-by-stage comparison rather
-      than a whole-ledger verdict; and Roberto Locatelli (cryptovalid-
 
 
 
@@ -1458,6 +1458,7 @@ Dogru                     Expires 8 April 2027                 [Page 26]
 Internet-Draft          Cedulon Decision Profile            October 2026
 
 
+      than a whole-ledger verdict; and Roberto Locatelli (cryptovalid-
       opencore), with checkers written from the drafts, the RFCs, the
       vector set's README and, for two file layouts, the vector files.
       With the checkpoint verified under the witness key, that run
@@ -1476,9 +1477,9 @@ Internet-Draft          Cedulon Decision Profile            October 2026
 
    [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
               Commerce", Work in Progress, Internet-Draft, draft-dogru-
-              cedulon-08, 2 September 2026,
+              cedulon-09, 6 September 2026,
               <https://datatracker.ietf.org/doc/html/draft-dogru-
-              cedulon-08>.
+              cedulon-09>.
 
    [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
               Requirement Levels", BCP 14, RFC 2119,
@@ -1503,7 +1504,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
               May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
-
 
 
 
@@ -1610,13 +1610,13 @@ Changes from -03
    *  Implementation Status records the second implementation and two
       outside runs of its test vectors.
 
+   *  The core reference moves to -09, whose sections cited here are
+      unchanged from -08.
+
    The first three changes came from those runs: each reader found a
    place where the text and the implementation disagreed, or where the
    text was silent.
 
-Changes from -02
-
-   This section is to be removed before publishing as an RFC.
 
 
 
@@ -1625,6 +1625,10 @@ Dogru                     Expires 8 April 2027                 [Page 29]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
 
+
+Changes from -02
+
+   This section is to be removed before publishing as an RFC.
 
    *  The rule under three of this document's choices is stated once, as
       Section 1.1: a state that never crosses the boundary does not
@@ -1666,11 +1670,7 @@ Changes from -00
       effect-class-mismatch.  D6 is closed rather than named.  Claim-set
       change; a twelve-label record is refused.
 
-   *  The Decider's chain is no longer called the equivocation control
-      of the profile.  It names a break within one reader's population;
-      a fork shown to two readers is the core's witness comparison,
-      applied unchanged, and a report over an unwitnessed chain claims
-      no more (Section 4.4, D5).
+
 
 
 
@@ -1681,6 +1681,12 @@ Dogru                     Expires 8 April 2027                 [Page 30]
 
 Internet-Draft          Cedulon Decision Profile            October 2026
 
+
+   *  The Decider's chain is no longer called the equivocation control
+      of the profile.  It names a break within one reader's population;
+      a fork shown to two readers is the core's witness comparison,
+      applied unchanged, and a report over an unwitnessed chain claims
+      no more (Section 4.4, D5).
 
    *  The reason the Effect Extract has no media type is restated: the
       population is the verifier's declaration, not the document's
@@ -1698,9 +1704,10 @@ Acknowledgments
    messaging assistant's decision log beside the channel's sent log and
    finding that the spend vocabulary had no word for it.
 
-   Tymofii Pidlisnyi and Roberto Locatelli ran the second
-   implementation's test vectors with verifiers of their own; the first
-   three changes of -04 are their findings.
+   Tymofii Pidlisnyi (Agent Passport System) and Roberto Locatelli
+   (cryptovalid-opencore) ran the second implementation's test vectors
+   with verifiers of their own; the first three changes of -04 are their
+   findings.
 
    Iman Schrock read -00 the day it was posted and raised the four
    points this revision answers: the fork two readers cannot see, the
@@ -1723,13 +1730,6 @@ Acknowledgments
    after he found and closed its state form in Vaara's own consistency
    checker and read the unordered clocks of Section 6.1 as the same
    failure a third time.  Pablo Etcheverry paired the two implementation
-   cases, Vaara's third verdict and the companion's undelivered
-   refusals, as two shapes of one bug, and that pairing is how the
-   section describes them.
-
-Author's Address
-
-
 
 
 
@@ -1738,15 +1738,15 @@ Dogru                     Expires 8 April 2027                 [Page 31]
 Internet-Draft          Cedulon Decision Profile            October 2026
 
 
+   cases, Vaara's third verdict and the companion's undelivered
+   refusals, as two shapes of one bug, and that pairing is how the
+   section describes them.
+
+Author's Address
+
    Emek Can Dogru
    VERAX TEKNOLOJI LIMITED SIRKETI
    Email: e.dogru@cedulon.com
-
-
-
-
-
-
 
 
 
