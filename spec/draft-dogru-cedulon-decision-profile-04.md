@@ -100,10 +100,11 @@ matched by exactly one effect whose content hash the record named; a
 refusal must be matched by none. The Decision Record claim set, the
 Effect Extract shape, the points at which the reconciliation departs
 from the spend rules, the finding codes, and one media type are
-defined. This revision states that the binding compares content and
-reference and not the order of two clocks, corrects the boundary to
-two adjacent documents, and records the first reading of one frozen
-fixture by a second, independently written reader. The text is
+defined. This revision lets a deployment sign checkpoints under a
+separate key inside the decider root, states that single-row extracts
+are receipts rather than windows and what a deployment that signs
+them must state, and records a second implementation and two outside
+runs of its test vectors. The text is
 provisional; the companion implementation carrying this profile is
 published.
 
@@ -313,8 +314,8 @@ refused by name at signing and at verification.
 | -70513 | effectClass | tstr / null |
 
 All thirteen labels are always present; a nullable claim carries CBOR
-null when it has no value. The thirteenth label is new in this
-revision; a record with twelve is refused at verification as a claim
+null when it has no value. The thirteenth label is new in
+-01; a record with twelve is refused at verification as a claim
 set that does not have this shape, and the companion carries no
 records signed under the earlier set outside its own fixtures.
 
@@ -348,7 +349,7 @@ post. An Effect Extract row carries the same claim in the same
 vocabulary ({{extract-schema}}), so equality of the two is equality
 of class. The class is under the Decider's signature so that what the
 Decider allowed cannot be read as one class by one reader and another
-by the next without changing what was signed; the earlier revision
+by the next without changing what was signed; an earlier revision
 carried it on the row only and named the gap.
 
 `timestampMs` is the decision time in POSIX milliseconds. `nonce`
@@ -473,7 +474,7 @@ What the walk establishes is bounded by what one reader holds. A
 Decider can sign two successors to the same predecessor and show one
 branch to one reader and the other branch to another; each reader
 walks a linear chain that verifies, and neither walk names a break.
-The earlier revision called the chain the equivocation control of
+An earlier revision called the chain the equivocation control of
 this profile, which overstated it and contradicted the core: Section
 11 of {{CEDULON}} states that the presented chain alone cannot satisfy
 the equivocation requirement, because its epochs are consecutive by
@@ -563,8 +564,7 @@ The extract is signed the way a rail extract is signed: Ed25519
 body, with the signature as base64 and the signer's public key as a
 SubjectPublicKeyInfo PEM beside the body, neither inside the signed
 octets. It is a JSON document with a detached signature, not a COSE
-object, and like the rail extract it has no media type. The earlier
-revision gave as the reason that the core registers names only for
+object, and like the rail extract it has no media type. An earlier revision gave as the reason that the core registers names only for
 objects whose content type is checked inside a protected header; that
 test decides what a name must be bound to, not whether a
 representation needs one, and it is withdrawn as the reason. The
@@ -885,7 +885,7 @@ witness and gives its readers the witness key.
 
 A row of a different class under the same reference and the same
 content hash: the same text allowed as a reply and carried as a
-post. The earlier revision named this as a gap, because the record
+post. An earlier revision named this as a gap, because the record
 carried no claim for the class and a row of any class matched. The
 record now carries `effectClass` under the Decider's signature
 ({{record-labels}}), an allow without one is refused
@@ -1038,15 +1038,14 @@ Implementation:
 : The profile is carried by the core document's companion
   implementation at <https://github.com/dogrucanemek-alt/cedulon>, on
   the same reconciler that implements the core, selected by a profile
-  object rather than by a second code path. As of the commit this
-  revision was written against, the tree carries the Decision Record
+  object rather than by a second code path. As of the commit -03 was written against, the tree carries the Decision Record
   and Effect Extract objects, the profile, twenty conformance cases
   covering the rules and departures this document states, and four
   offline fixtures for one example channel, a
   direct-message reply log. The two cases added with -01 were red
   before the claim was added: a row of a different class under a
   matching hash matched, and an allow signed without a class
-  verified. This revision changes text and adds no case; the
+  verified. -03 and -04 change text and add no case; the
   ordering of the two clocks ({{binding}}) is stated, not enforced.
   The spend behaviour of the same reconciler is held byte for byte by
   a golden file of fifteen cases generated from the source before the
@@ -1070,7 +1069,7 @@ Maturity:
 
 : Not measured: a live channel log. The example adapter maps a proposed
   line format for a direct-message bridge; the bridge's actual field
-  names were not read when this revision was written, and the adapter
+  names were not read when -03 was written, and the adapter
   is written so that only its two line-mapping functions should move
   when they are. No signer of this profile by another party is known
   to the author; the two outside readers below wrote verifiers.
@@ -1104,7 +1103,7 @@ Maturity:
   which the chain walk already names as a break. The -00 text was read by
   the author of {{AEB}} and {{OUTCOME}} the day it was posted; the
   four items that reading raised were the changes of -01, and the two
-  boundary sentences of this revision are that reader's as well.
+  boundary sentences of -03 are that reader's as well.
 
 Second implementation:
 : Verax (<https://github.com/verax-ai/verax>), written by the author of
