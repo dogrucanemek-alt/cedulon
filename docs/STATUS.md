@@ -28,7 +28,7 @@ Nothing here holds a wallet or signs a transaction.
 
 `draft-dogru-cedulon` is posted on the IETF datatracker through `-09`
 (6 September 2026; `-08` was 2 September), alongside the companion decision profile,
-`draft-dogru-cedulon-decision-profile-03` (6 September 2026), and the two
+`draft-dogru-cedulon-decision-profile-04` (5 October 2026), and the two
 `-00` direction seeds. The split family is posted as well:
 `draft-dogru-cedulon-core`, `-checkpoint` and `-threats` at `-00` on
 17 September 2026, the core at `-01` on 22 September 2026, which is
