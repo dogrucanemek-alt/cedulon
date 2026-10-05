@@ -1039,14 +1039,16 @@ Implementation:
   implementation at <https://github.com/dogrucanemek-alt/cedulon>, on
   the same reconciler that implements the core, selected by a profile
   object rather than by a second code path. As of the commit -03 was written against, the tree carries the Decision Record
-  and Effect Extract objects, the profile, twenty conformance cases
-  covering the rules and departures this document states, and four
+  and Effect Extract objects, the profile, twenty conformance cases covering the rules and
+  departures -03 states, and four
   offline fixtures for one example channel, a
   direct-message reply log. The two cases added with -01 were red
   before the claim was added: a row of a different class under a
   matching hash matched, and an allow signed without a class
   verified. -03 and -04 change text and add no case; the
-  ordering of the two clocks ({{binding}}) is stated, not enforced.
+  ordering of the two clocks ({{binding}}), the checkpoint key of
+  `MUST-DP-11`, and the statement of `MUST-DP-12` are stated, not
+  enforced.
   The spend behaviour of the same reconciler is held byte for byte by
   a golden file of fifteen cases generated from the source before the
   profile seam was added.
@@ -1103,7 +1105,7 @@ Maturity:
   which the chain walk already names as a break. The -00 text was read by
   the author of {{AEB}} and {{OUTCOME}} the day it was posted; the
   four items that reading raised were the changes of -01, and the two
-  boundary sentences of -03 are that reader's as well.
+  boundary sentences of -02 are that reader's as well.
 
 Second implementation:
 : Verax (<https://github.com/verax-ai/verax>), written by the author of
@@ -1165,8 +1167,10 @@ This section is to be removed before publishing as an RFC.
   reader learns which allows should have a row (`MUST-DP-12`).
 - Implementation Status records the second implementation and two
   outside runs of its test vectors.
-- The core reference moves to -09, whose sections cited here are
-  unchanged from -08.
+- The core reference moves to -09. The sections cited here keep their
+  numbers and the text cited from them is unchanged from -08; -09
+  also adds the author's intended track to Section 19, a statement this
+  profile does not cite.
 
 The first three changes came from those runs: each reader found a
 place where the text and the implementation disagreed, or where the
