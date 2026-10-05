@@ -869,603 +869,604 @@ draft-dogru-cedulon-decision-profile-04.txt:
 834	      Records and their checkpoints are attested.  A separate checkpoint
 835	      key, where the deployment names one, belongs to this root and
 836	      attests no Decision Record (Section 4.4).  Everything Section 10.1
-837	      of the core states for the issuer root applies: a pinned key
-838	      attests by signature, a carried key is not an identity, a record
-839	      under another key is issuer-key-mismatch and covers nothing, and
-840	      with no pin unauthenticated-issuer makes the guarantee
-841	      conditional.
-
-843	   The effect-extract root:  The key under which the Effect Extract is
-844	      attested.  Everything Section 9.3 of the core states for the rail
-845	      key applies.
-
-847	   The core's payee, witness, decision-token, and manifest roots are not
-848	   used by this profile, except that a transparency witness MAY hold the
-849	   Decider's checkpoints exactly as it holds a Receipt Issuer's, with
-850	   the witness root and codes of the core unchanged.
-
-852	   What the two roots do not cover is the relation between them.  The
-853	   profile's claim is only as strong as the independence of the party
-854	   that signs the Effect Extract from the party that signs the Decision
-855	   Records.  Where the channel operator signs an export of its own log,
-856	   the extract root is that operator's key and the independence is the
-857	   operator's.  Where the channel operator signs nothing, which is the
-858	   common case for a messaging platform, the extract is produced by a
-859	   capture process the deployment runs, and the deployment is stating,
-860	   by pinning that process's key, that the process is not the Decider
-861	   and cannot be told what to omit.  The rule is not that the two roots
-862	   be independent; it is that the deployment say which case it is in,
-863	   and that the guarantee fall when independence is absent or unknown.
-864	   A deployment MUST state which of the two it has, and a verifier MUST
-865	   treat the guarantee as conditional where the extract root and the
-866	   decider root are, or may be, the same party (MUST-DP-9).  The
-867	   companion cannot measure that from the keys alone; two keys can be
-868	   held by one hand.
-
-870	8.  Security Considerations
-
-872	   The core's threat analysis (Section 16 of [CEDULON]) applies where
-873	   the nouns carry over: forgery and repudiation of a signed record
-874	   (T4), key leakage (T7), and suppression of checkpoints (T11) are the
-875	   same threats against a Decider that they are against a Receipt
-876	   Issuer, and the controls are the same.  The threats below are the
-877	   ones this population adds or sharpens.
-
-879	8.1.  D1: An effect occurs against a refusal
-
-881	   The agent, or something acting through its channel access, does what
-882	   the Decider refused.  This is the threat the profile exists for.  A
-883	   Decision Record for the refusal, with the reference it refused, and
-884	   an authenticated extract that carries an effect under that reference
-885	   make the event effect-against-refusal, and the audit fails.  A
-886	   refusal that carried no reference cannot support this finding; the
-887	   effect is then effect-without-decision, which also fails the audit
-888	   but does not say it was refused.  A Decider SHOULD carry the
-889	   reference on a refusal whenever the channel assigns one before the
-890	   decision.
-
-892	   The shape of the threat is not particular to this profile.  A reader
-893	   who mapped this document's objects onto a second evidence format,
-894	   with a signed decision predicate and a signed outcome predicate of
-895	   its own, measured that format's verifier on 4 September 2026: a
-896	   decision carrying a refusal and an outcome recording execution,
-897	   citing that decision by content root, verified clean with no warning,
-898	   because the verdict is not read on the outcome path [B7N0DE].  That
-899	   is D1 as a verifying pair rather than a finding, recorded by the
-900	   reader as a measurement of that artefact and cited here as one.
-
-902	8.2.  D2: Effects without decisions
-
-904	   Something acts on the channel that never asked.  Every such effect is
-905	   effect-without-decision.  The control is the extract's completeness,
-906	   which is the extract root's independence (Section 7); a capture
-907	   process the Decider controls can leave the effect out.
-
-909	8.3.  D3: Substitution of content
-
-911	   The Decider allows one content and the channel carries another.  The
-912	   allow's effectHash and the row's effectHash are computed over the
-913	   same octets, and a difference is effect-mismatch.  The control fails
-914	   open if the two sides hash different octets, which is why a
-915	   deployment MUST state the octets once for both (Section 5.1).
-
-917	8.4.  D4: The Decider signs below its own rules
-
-919	   A Decider produces a well-formed signature over a claim map that
-920	   breaks a rule this profile states: an allow with no reference or no
-921	   content hash, a refusal with a content hash, a hash outside the
-922	   grammar.  Every such record is a record the reconciliation cannot
-923	   close or would close wrongly.  The verifier applies the rules on the
-924	   decoded payload (MUST-DP-3) and walks the chain over every record
-925	   that claims the pin (MUST-DP-5), so the record is refused and named
-926	   rather than attested or dropped.
-
-928	8.5.  D5: Equivocation on the record chain
-
-930	   The Decider signs two decisions for one request, or two successors to
-931	   one predecessor, and offers each to a different reader.  Within one
-932	   reader's population the chain (MUST-DP-5) makes the second record
-933	   unlinkable: it names the same predecessor as the first, or none, and
-934	   the walk reports the break.  Across readers the chain sees nothing:
-935	   each holds a linear chain that verifies.  The control for that case
-936	   is the core's witness (Section 4.4): the Decider's epoch checkpoints
-937	   are recorded with a witness the verifier has pinned, a Transparency
-938	   Service [RFC9943] being one, and the copies the witness holds are
-939	   compared against the presented chain.  A verifier that consulted no
-940	   witness has not measured cross-reader equivocation.  The guarantee
-941	   its report prints is the core's, which is defined over the extract,
-942	   the pins, and the window and does not cover suppression or
-943	   equivocation beyond the presented chain when no witness was consulted
-944	   (Section 11 of [CEDULON], MUST-T11-9); measured on the companion,
-945	   such a report prints unconditional with no warning and no finding,
-946	   and is silent about the witness it was not given.  The silence is
-947	   this revision's known gap: the claim is narrowed here, in the text,
-948	   and a report line that names an unconsulted witness is a change to
-949	   the reconciler both populations share, not made in this revision.  A
-950	   deployment that needs the property records its checkpoints with a
-951	   witness and gives its readers the witness key.
-
-953	8.6.  D6: The class of the effect is substituted
-
-955	   A row of a different class under the same reference and the same
-956	   content hash: the same text allowed as a reply and carried as a post.
-957	   The earlier revision named this as a gap, because the record carried
-958	   no claim for the class and a row of any class matched.  The record
-959	   now carries effectClass under the Decider's signature (Section 4.1),
-960	   an allow without one is refused (Section 4.2), and a row whose class
-961	   differs from the allow's with the content hash equal is effect-class-
-962	   mismatch (Section 6.1).  What remains open is the vocabulary: the
-963	   class names are the channel's, this document does not fix them, and a
-964	   deployment SHOULD state them beside its statement of what it hashes
-965	   so that two readers compare the same words.
-
-967	8.7.  D7: Silent defaults in capture
-
-969	   The process that turns a channel's log into Decision Records or
-970	   Effect Extract rows fills a missing value with a default, and the
-971	   default hashes to something.  An allow with no stated content that is
-972	   hashed as the empty string produces a record that will match an empty
-973	   effect and mismatch every real one, with no finding that says the
-974	   content was never stated.  Such a process MUST refuse the line by
-975	   name rather than fill it (MUST-DP-10).  The companion's example
-976	   adapter did fill it until it was measured, and refuses it now.
-
-978	8.8.  D8: The capture process is the Decider
-
-980	   The party that produces the Effect Extract is, or answers to, the
-981	   party that signed the Decision Records.  Every finding in D1 and D2
-982	   can then be made to disappear by omission, and no signature check
-983	   detects it.  This is the independence statement of Section 7 (MUST-
-984	   DP-9), and it is a deployment fact the profile can name but not
-985	   prove.  A verifier that holds both roots and cannot state their
-986	   independence has a conditional result, and MUST say so.
-
-988	9.  Privacy Considerations
-
-990	   A Decision Record carries no request content and no effect content:
-991	   hashes of both, an opaque subject identifier, and a reason code.  The
-992	   Effect Extract carries a reference, a class, a content hash, a time,
-993	   and optionally the identifier of the party the effect reached.  The
-994	   core's Privacy Considerations (Section 15 of [CEDULON]) apply to what
-995	   a transparency witness is given.
-
-997	   Two points are specific to this population.  A content hash over a
-998	   short text is a fingerprint of that text: a reader who can guess the
-999	   message can confirm the guess.  This revision hashes the plain
-1000	   content octets, as the companion does, so that the two sides need no
-1001	   shared secret to agree; a keyed or salted construction that would
-1002	   defeat the guess is a claim-set change and is not defined here.  A
-1003	   deployment whose effects are short and guessable SHOULD treat the
-1004	   extract and the records as confidential to the audit.  The subject
-1005	   and actor identifiers are opaque to the profile but need not be
-1006	   opaque to a reader; a deployment SHOULD pseudonymize them before
-1007	   either object leaves its control.
-
-1009	10.  IANA Considerations
-
-1011	   This document requests the registration of one media type in the
-1012	   "Media Types" registry [RFC6838], in the standards tree, carrying the
-1013	   +cbor structured syntax suffix that [RFC8949] registers, on the terms
-1014	   Section 17 of [CEDULON] states for that document's six: it names the
-1015	   one COSE_Sign1 object this document defines and is checked inside
-1016	   that object's protected header, which is why the name cannot stay
-1017	   unregistered while that check stands.  The Effect Extract is a JSON
-1018	   document with a detached signature and has no media type; Section 5.2
-1019	   states why, and names the registration that would become necessary if
-1020	   that changed.  Registration in the standards tree requires IETF
-1021	   approval; until then, an implementation outside a closed deployment
-1022	   should treat the name as a placeholder that a registration may
-1023	   change.  The provisional registration procedure of [RFC6838]
-1024	   Section 5.2.1 is available to an Internet-Draft, and a provisional
-1025	   entry, if one is made, is superseded by the registration this section
-1026	   requests.
-
-1028	   The claim labels this document assigns, -70501 through -70513
-1029	   (Section 4.1), lie in the Private Use range of the "CBOR Web Token
-1030	   (CWT) Claims" registry [RFC8392], integer values less than -65536,
-1031	   and this document requests no assignment for them.
-
-1033	   No other IANA action is requested.
-
-1035	10.1.  application/cedulon-decision-record+cbor
-
-1037	   Type name:  application
-
-1039	   Subtype name:  cedulon-decision-record+cbor
-
-1041	   Required parameters:  N/A
-
-1043	   Optional parameters:  N/A
-
-1045	   Encoding considerations:  binary.  A COSE_Sign1 structure [RFC9052]
-1046	      in deterministic CBOR [RFC8949], untagged, as profiled in
-1047	      Section 4 and in Section 6 of [CEDULON].
-
-1049	   Security considerations:  See Section 8 of this document.  The object
-1050	      is signed by the party under audit; its evidentiary weight depends
-1051	      on the verifier holding the decider key out of band (Section 7)
-1052	      and on the verifier applying the claim rules of Section 4.2
-1053	      itself, never on a key the object carries or on the signer's word
-1054	      that the rules were applied.
-
-1056	   Interoperability considerations:  The claim set is a CBOR map with
-1057	      the labels and types stated in Section 4.1, encoded per [RFC8949]
-1058	      Section 4.2.1.  A decoder refuses a duplicate key, an input beyond
-1059	      its stated bounds, and a non-empty unprotected header by name
-1060	      rather than accepting it, as Section 6 of [CEDULON] requires of
-1061	      every Cedulon object.  A Decision Record and a Decision Token are
-1062	      distinct objects with distinct content types and are never
-1063	      accepted for one another.
-
-1065	   Published specification:  This document, Section 4.
-
-1067	   Applications that use this media type:  Policy decision points and
-1068	      other deciders that log the decisions they take about an agent's
-1069	      actions, and auditors that reconcile those logs against the
-1070	      channels the actions occurred on.
-
-1072	   Fragment identifier considerations:  N/A
-
-1074	   Additional information:  Deprecated alias names for this type: N/A.
-1075	      Magic number(s): N/A.  File extension(s): N/A.  Macintosh file
-1076	      type code(s): N/A.
-
-1078	   Person and email address to contact for further information:  Emek
-1079	      Can Dogru, e.dogru@cedulon.com
-
-1081	   Intended usage:  COMMON
-
-1083	   Restrictions on usage:  N/A
-
-1085	   Author:  Emek Can Dogru
-
-1087	   Change controller:  IETF
-
-1089	11.  Implementation Status
-
-1091	   This section is to be removed before publishing as an RFC.
-
-1093	   RFC 7942 [RFC7942] note.
-
-1095	   Implementation:  The profile is carried by the core document's
-1096	      companion implementation at https://github.com/dogrucanemek-alt/
-1097	      cedulon (https://github.com/dogrucanemek-alt/cedulon), on the same
-1098	      reconciler that implements the core, selected by a profile object
-1099	      rather than by a second code path.  As of the commit this revision
-1100	      was written against, the tree carries the Decision Record and
-1101	      Effect Extract objects, the profile, twenty conformance cases
-1102	      covering the rules and departures this document states, and four
-1103	      offline fixtures for one example channel, a direct-message reply
-1104	      log.  The two cases added with -01 were red before the claim was
-1105	      added: a row of a different class under a matching hash matched,
-1106	      and an allow signed without a class verified.  This revision
-1107	      changes text and adds no case; the ordering of the two clocks
-1108	      (Section 6.1) is stated, not enforced.  The spend behaviour of the
-1109	      same reconciler is held byte for byte by a golden file of fifteen
-1110	      cases generated from the source before the profile seam was added.
-
-1112	   Maturity:  Published.  The code carrying -01's claim set, the class
-1113	      under the signature and the fifth finding, was released as the
-1114	      companion's 0.13.0 on 4 September 2026, nine packages with
-1115	      provenance, after -01 was posted.  Before merge the branch was
-1116	      read twice: by the author's own gate, re-running it from a second
-1117	      worktree, and by an outside model reading the whole diff and
-1118	      barred from changing it.  The two readings found four defects in
-1119	      the first cut of this profile, each recorded in the companion's
-1120	      review log: a verifier that did not apply the signer's claim rules
-1121	      (D4), a spend-side crash on the wrong document (Section 3), a
-1122	      spend warning leaking onto decision reports, and a document that
-1123	      counted its own cases wrong.  All four were closed with a test
-1124	      that was red before the fix.  A third pass moved the report
-1125	      vocabulary onto the profile.
-
-1127	      Not measured: a live channel log.  The example adapter maps a
-1128	      proposed line format for a direct-message bridge; the bridge's
-1129	      actual field names were not read when this revision was written,
-1130	      and the adapter is written so that only its two line-mapping
-1131	      functions should move when they are.  No signer of this profile by
-1132	      another party is known to the author; the two outside readers
-1133	      below wrote verifiers.
-
-1135	      Read by a second reader: one frozen fixture, a leaked refusal in
-1136	      the example channel's line format, was read by this implementation
-1137	      and, on 4 September 2026, by an adapter written by the author of
-1138	      [OUTCOME] for that document's verifier, with the two results
-1139	      recorded side by side the next day.  This reader reported effect-
-1140	      against-refusal on the leaked row; the other reported the case as
-1141	      reconciled, divergent, and not valid.  The three fixture digests,
-1142	      both result digests, and the two verdicts are in the companion's
-1143	      external review log.  The limits are the other reader's, and they
-1144	      are kept with the record: one pinned raw fixture read through
-1145	      separately owned adapters is not native-format interoperability;
-1146	      the test keys are public and the timestamps were written after the
-1147	      fact, so the run establishes neither identity nor temporal
-1148	      precommitment; and neither reader says where the refusal failed.
-
-1150	      Reproduced: the companion's suite at the commit that posted -00
-1151	      was run unmodified by two readers on their own machines, one on
-1152	      the day of posting and one after 0.13.0 shipped.  The second run
-1153	      had one red, a test that asked the package registry what it served
-1154	      that day from inside a pinned commit; the suite now reports that
-1155	      case as the world having moved rather than as a failure, and the
-1156	      change is the reader's.  The first reader also put three probes to
-1157	      the profile: an effect dated before its decision, which is what
-1158	      Section 6.1 now states; one content hash under two allows, which
-1159	      the binding keeps apart by reference as written; and a record
-1160	      altered after signing, which the chain walk already names as a
-1161	      break.  The -00 text was read by the author of [AEB] and [OUTCOME]
-1162	      the day it was posted; the four items that reading raised were the
-1163	      changes of -01, and the two boundary sentences of this revision
-1164	      are that reader's as well.
-
-1166	   Second implementation:  Verax (https://github.com/verax-ai/verax
-1167	      (https://github.com/verax-ai/verax)), written by the author of
-1168	      this document, signs Decision Records under this profile's claim
-1169	      set and verifies its ledgers offline.  Two of this revision's
-1170	      changes come from it.  In its published test vectors, a process
-1171	      beside the Decider, which Verax calls its witness, signs the
-1172	      checkpoints and the effect extracts under one key, separate from
-1173	      the record key and held by the same operator (Section 4.4); its
-1174	      vector set's README names that key, as MUST-DP-11 asks; since that
-1175	      key also signs the effect extracts, MUST-DP-9 makes its guarantee
-1176	      conditional.  And it signs one extract per effect row, a case -03
-1177	      did not address, without yet the statement MUST-DP-12 asks for:
-1178	      its index of which references produced an effect is unsigned.
-1179	      After the outside runs below, and not yet in a release, its
-1180	      verifier holds every allow to a row by a rule of its own, with the
-1181	      core's allowance measured from the newest record, rather than by
-1182	      the boundary rule alone.
-
-1184	      Run by outside readers: a frozen set of Verax ledgers (test-
-1185	      vectors/v1 at tag vectors-v1, sixteen ledgers at the time) was run
-1186	      by two readers with verifiers of their own, who reported their
-1187	      results in the AUDIT BoF preparation repository
-1188	      (https://github.com/mirjak/audit-bof-preparation/issues/9
-1189	      (https://github.com/mirjak/audit-bof-preparation/issues/9)):
-1190	      Tymofii Pidlisnyi (Agent Passport System), with a runner in the
-1191	      APS conformance suite, a partial stage-by-stage comparison rather
-1192	      than a whole-ledger verdict; and Roberto Locatelli (cryptovalid-
-1193	      opencore), with checkers written from the drafts, the RFCs, the
-1194	      vector set's README and, for two file layouts, the vector files.
-1195	      With the checkpoint verified under the witness key, that run
-1196	      matched 16 of 16 verdicts and 15 of 16 first failing stages, the
-1197	      one difference being fail-allow-while-halted, which that checker,
-1198	      applying no boundary allowance, fails at effect-binding; under
-1199	      -03's reading, with the Decider's key, 14 of 16 verdicts.  One of
-1200	      the matches came from a rule added after reading the vector, and
-1201	      the run states its other limits with it.  All of those vectors
-1202	      were produced by one implementation; the runs are datapoints, not
-1203	      conformance.
-
-1205	12.  References
-
-1207	12.1.  Normative References
-
-1209	   [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
-1210	              Commerce", Work in Progress, Internet-Draft, draft-dogru-
-1211	              cedulon-09, 6 September 2026,
-1212	              <https://datatracker.ietf.org/doc/html/draft-dogru-
-1213	              cedulon-09>.
-
-1215	   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
-1216	              Requirement Levels", BCP 14, RFC 2119,
-1217	              DOI 10.17487/RFC2119, March 1997,
-1218	              <https://www.rfc-editor.org/rfc/rfc2119>.
-
-1220	   [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
-1221	              (SHA and SHA-based HMAC and HKDF)", RFC 6234,
-1222	              DOI 10.17487/RFC6234, May 2011,
-1223	              <https://www.rfc-editor.org/rfc/rfc6234>.
-
-1225	   [RFC6838]  Freed, N., Klensin, J., and T. Hansen, "Media Type
-1226	              Specifications and Registration Procedures", BCP 13,
-1227	              RFC 6838, DOI 10.17487/RFC6838, January 2013,
-1228	              <https://www.rfc-editor.org/rfc/rfc6838>.
-
-1230	   [RFC8032]  Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
-1231	              Signature Algorithm (EdDSA)", RFC 8032,
-1232	              DOI 10.17487/RFC8032, January 2017,
-1233	              <https://www.rfc-editor.org/rfc/rfc8032>.
-
-1235	   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
-1236	              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
-1237	              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
-
-1239	   [RFC8392]  Jones, M., Wahlstroem, E., Erdtman, S., and H. Tschofenig,
-1240	              "CBOR Web Token (CWT)", RFC 8392, DOI 10.17487/RFC8392,
-1241	              May 2018, <https://www.rfc-editor.org/rfc/rfc8392>.
-
-1243	   [RFC8785]  Rundgren, A., Jordan, B., and S. Erdtman, "JSON
-1244	              Canonicalization Scheme (JCS)", RFC 8785,
-1245	              DOI 10.17487/RFC8785, June 2020,
-1246	              <https://www.rfc-editor.org/rfc/rfc8785>.
-
-1248	   [RFC8949]  Bormann, C. and P. Hoffman, "Concise Binary Object
-1249	              Representation (CBOR)", STD 94, RFC 8949,
-1250	              DOI 10.17487/RFC8949, December 2020,
-1251	              <https://www.rfc-editor.org/rfc/rfc8949>.
-
-1253	   [RFC9052]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
-1254	              Structures and Process", STD 96, RFC 9052,
-1255	              DOI 10.17487/RFC9052, August 2022,
-1256	              <https://www.rfc-editor.org/rfc/rfc9052>.
-
-1258	   [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
-1259	              JSON Object Signing and Encryption (JOSE) and CBOR Object
-1260	              Signing and Encryption (COSE)", RFC 9864,
-1261	              DOI 10.17487/RFC9864, October 2025,
-1262	              <https://www.rfc-editor.org/rfc/rfc9864>.
-
-1264	12.2.  Informative References
-
-1266	   [ABAK]     Abak, A. T., "Evidence Requirements for Agent Control
-1267	              Delivery and Outcome Reconciliation", Work in Progress,
-1268	              Internet-Draft, draft-abak-agent-control-delivery-
-1269	              evidence-01, 4 September 2026,
-1270	              <https://datatracker.ietf.org/doc/html/draft-abak-agent-
-1271	              control-delivery-evidence-01>.
-
-1273	   [AEB]      Schrock, I., "The Action Evidence Boundary for
-1274	              Consequential Agent Effects", Work in Progress, Internet-
-1275	              Draft, draft-schrock-action-evidence-boundary-05, 31
-1276	              August 2026, <https://datatracker.ietf.org/doc/html/draft-
-1277	              schrock-action-evidence-boundary-05>.
-
-1279	   [B7N0DE]   Gruszka, K., "Mapping 4: the Cedulon Decision Record and
-1280	              Effect Extract against decision-receipt and action-outcome
-1281	              (proofbundle)", 4 September 2026,
-1282	              <https://github.com/b7n0de/proofbundle/blob/main/docs/
-1283	              SCITT_CPB_MAPPING.md>.
-
-1285	   [OUTCOME]  Schrock, I., "Outcome Binding for Authorized Actions and
-1286	              Independently Observed Effects", Work in Progress,
-1287	              Internet-Draft, draft-schrock-ep-outcome-binding-00, 28
-1288	              July 2026, <https://datatracker.ietf.org/doc/html/draft-
-1289	              schrock-ep-outcome-binding-00>.
-
-1291	   [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of Running
-1292	              Code: The Implementation Status Section", BCP 205,
-1293	              RFC 7942, DOI 10.17487/RFC7942, July 2016,
-1294	              <https://www.rfc-editor.org/rfc/rfc7942>.
-
-1296	   [RFC9943]  Birkholz, H., Delignat-Lavaud, A., Fournet, C., Deshpande,
-1297	              Y., and S. Lasker, "An Architecture for Trustworthy and
-1298	              Transparent Digital Supply Chains", RFC 9943,
-1299	              DOI 10.17487/RFC9943, June 2026,
-1300	              <https://www.rfc-editor.org/rfc/rfc9943>.
-
-1302	Changes from -03
-
-1304	   This section is to be removed before publishing as an RFC.
-
-1306	   *  A checkpoint may be signed under a separate key that the
-1307	      deployment names and the verifier pins as part of the decider root
-1308	      (MUST-DP-11).  The core's root of several keys (MUST-T4-12) is for
-1309	      rotation; the split by role is this profile's.  Terminology and
-1310	      the decider root say so. -03 had the Decider sign checkpoints, and
-1311	      the second implementation did not.
-
-1313	   *  The context behind inputsHash is, like the request, a deployment
-1314	      statement: what is hashed, and how it is presented beside the
-1315	      record.
-
-1317	   *  Single-row extracts are receipts, not windows.  The following
-1318	      extract of a closing-edge deferral is one whose window contains
-1319	      the item, and a deployment that signs single-row extracts MUST
-1320	      state how a reader learns which allows should have a row (MUST-DP-
-1321	      12).
-
-1323	   *  Implementation Status records the second implementation and two
-1324	      outside runs of its test vectors.
-
-1326	   *  The core reference moves to -09, whose sections cited here are
-1327	      unchanged from -08.
-
-1329	   The first three changes came from those runs: each reader found a
-1330	   place where the text and the implementation disagreed, or where the
-1331	   text was silent.
-
-1333	Changes from -02
-
-1335	   This section is to be removed before publishing as an RFC.
-
-1337	   *  The rule under three of this document's choices is stated once, as
-1338	      Section 1.1: a state that never crosses the boundary does not
-1339	      exist for the party relying on it, and a property the text does
-1340	      not state is one the text does not have.  The three places it was
-1341	      learned are named there, and the unordered clocks of Section 6.1
-1342	      now point to it.  No rule, claim, or finding changes.
-
-1344	Changes from -01
-
-1346	   *  The binding does not order the two clocks: a row dated before the
-1347	      record it answers binds as if it had followed it, on this profile
-1348	      and on spend alike.  Stated in Section 6.1, with no finding named;
-1349	      the Effect Extract's lack of a clock-skew member and the default
-1350	      the verifier applies are stated beside it.
-
-1352	   *  Two boundary sentences corrected: [AEB] runs from invocation to an
-1353	      authenticated reconciliation and is not only what precedes an
-1354	      effect; the observation in [OUTCOME] is independent where the
-1355	      relying party chose an independent source, not by construction.
-
-1357	   *  Section 11 records the companion as published at 0.13.0, one
-1358	      fixture read by a second reader with the limits of that run, and
-1359	      two reproductions of the suite.
-
-1361	   *  D1 cites a measurement of the same threat on a second evidence
-1362	      format, whose verifier accepts a refusal beside an executed
-1363	      outcome.
-
-1365	   *  Two sentences tightened after a reader's mapping: the request
-1366	      encoding is fixed and the request's fields are not (Section 4.1);
-1367	      MUST-DP-9 is the statement and the downgrade, not a demand for
-1368	      independence (Section 7).
-
-1370	Changes from -00
-
-1372	   *  effectClass is a claim on the Decision Record (-70513), required
-1373	      on an allow; a row of a different class under a matching hash is
-1374	      effect-class-mismatch.  D6 is closed rather than named.  Claim-set
-1375	      change; a twelve-label record is refused.
-
-1377	   *  The Decider's chain is no longer called the equivocation control
-1378	      of the profile.  It names a break within one reader's population;
-1379	      a fork shown to two readers is the core's witness comparison,
-1380	      applied unchanged, and a report over an unwitnessed chain claims
-1381	      no more (Section 4.4, D5).
-
-1383	   *  The reason the Effect Extract has no media type is restated: the
-1384	      population is the verifier's declaration, not the document's
-1385	      (Section 5.2).  The protected-header test is withdrawn as the
-1386	      reason.
-
-1388	   *  The boundary to [ABAK], [AEB], and [OUTCOME] is stated in the
-1389	      introduction.
-
-1391	Acknowledgments
-
-1393	   This profile is the first concrete instance of the generalization the
-1394	   core document reserves.  The refusal that was followed by the effect
-1395	   it refused, as a finding with its own name, came out of watching a
-1396	   messaging assistant's decision log beside the channel's sent log and
-1397	   finding that the spend vocabulary had no word for it.
-
-1399	   Tymofii Pidlisnyi (Agent Passport System) and Roberto Locatelli
-1400	   (cryptovalid-opencore) ran the second implementation's test vectors
-1401	   with verifiers of their own; the first three changes of -04 are their
-1402	   findings.
-
-1404	   Iman Schrock read -00 the day it was posted and raised the four
-1405	   points this revision answers: the fork two readers cannot see, the
-1406	   class that was not under the signature, the media-type reason that
-1407	   did not hold, and the three documents that should be cited.  The
-1408	   sentence on what an effect against a refusal does and does not
-1409	   establish is Ali Toygar Abak's, in his words.
-
-1411	   Pablo Etcheverry ran the suite at the posted -00 commit and asked
-1412	   three questions of it; the unordered clocks of Section 6.1 are his
-1413	   finding.  Nicholas Templeman ran the same commit after 0.13.0 shipped
-1414	   and showed that a claim about the present, frozen into a pinned
-1415	   commit, cannot tell a reproducer whether the code or the calendar
-1416	   failed.  Konrad Gruszka mapped the Decision Record and Effect Extract
-1417	   field by field onto his own format and measured the D1 pair on it.
-1418	   Iman Schrock corrected the two boundary sentences and read the frozen
-1419	   fixture with an adapter written for that document's verifier.
-
-1421	   The rule of Section 1.1 was named as one rule by Henri Sirkkavaara,
-1422	   after he found and closed its state form in Vaara's own consistency
-1423	   checker and read the unordered clocks of Section 6.1 as the same
-1424	   failure a third time.  Pablo Etcheverry paired the two implementation
-1425	   cases, Vaara's third verdict and the companion's undelivered
-1426	   refusals, as two shapes of one bug, and that pairing is how the
-1427	   section describes them.
-
-1429	Author's Address
-
-1431	   Emek Can Dogru
-1432	   VERAX TEKNOLOJI LIMITED SIRKETI
-1433	   Email: e.dogru@cedulon.com
+837	      of the core states for the issuer root applies, with the one
+838	      change Section 4.4 makes: a pinned key attests by signature, a
+839	      carried key is not an identity, a record under another key, the
+840	      checkpoint key included, is issuer-key-mismatch and covers
+841	      nothing, and with no pin unauthenticated-issuer makes the
+842	      guarantee conditional.
+
+844	   The effect-extract root:  The key under which the Effect Extract is
+845	      attested.  Everything Section 9.3 of the core states for the rail
+846	      key applies.
+
+848	   The core's payee, witness, decision-token, and manifest roots are not
+849	   used by this profile, except that a transparency witness MAY hold the
+850	   Decider's checkpoints exactly as it holds a Receipt Issuer's, with
+851	   the witness root and codes of the core unchanged.
+
+853	   What the two roots do not cover is the relation between them.  The
+854	   profile's claim is only as strong as the independence of the party
+855	   that signs the Effect Extract from the party that signs the Decision
+856	   Records.  Where the channel operator signs an export of its own log,
+857	   the extract root is that operator's key and the independence is the
+858	   operator's.  Where the channel operator signs nothing, which is the
+859	   common case for a messaging platform, the extract is produced by a
+860	   capture process the deployment runs, and the deployment is stating,
+861	   by pinning that process's key, that the process is not the Decider
+862	   and cannot be told what to omit.  The rule is not that the two roots
+863	   be independent; it is that the deployment say which case it is in,
+864	   and that the guarantee fall when independence is absent or unknown.
+865	   A deployment MUST state which of the two it has, and a verifier MUST
+866	   treat the guarantee as conditional where the extract root and the
+867	   decider root are, or may be, the same party (MUST-DP-9).  The
+868	   companion cannot measure that from the keys alone; two keys can be
+869	   held by one hand.
+
+871	8.  Security Considerations
+
+873	   The core's threat analysis (Section 16 of [CEDULON]) applies where
+874	   the nouns carry over: forgery and repudiation of a signed record
+875	   (T4), key leakage (T7), and suppression of checkpoints (T11) are the
+876	   same threats against a Decider that they are against a Receipt
+877	   Issuer, and the controls are the same.  The threats below are the
+878	   ones this population adds or sharpens.
+
+880	8.1.  D1: An effect occurs against a refusal
+
+882	   The agent, or something acting through its channel access, does what
+883	   the Decider refused.  This is the threat the profile exists for.  A
+884	   Decision Record for the refusal, with the reference it refused, and
+885	   an authenticated extract that carries an effect under that reference
+886	   make the event effect-against-refusal, and the audit fails.  A
+887	   refusal that carried no reference cannot support this finding; the
+888	   effect is then effect-without-decision, which also fails the audit
+889	   but does not say it was refused.  A Decider SHOULD carry the
+890	   reference on a refusal whenever the channel assigns one before the
+891	   decision.
+
+893	   The shape of the threat is not particular to this profile.  A reader
+894	   who mapped this document's objects onto a second evidence format,
+895	   with a signed decision predicate and a signed outcome predicate of
+896	   its own, measured that format's verifier on 4 September 2026: a
+897	   decision carrying a refusal and an outcome recording execution,
+898	   citing that decision by content root, verified clean with no warning,
+899	   because the verdict is not read on the outcome path [B7N0DE].  That
+900	   is D1 as a verifying pair rather than a finding, recorded by the
+901	   reader as a measurement of that artefact and cited here as one.
+
+903	8.2.  D2: Effects without decisions
+
+905	   Something acts on the channel that never asked.  Every such effect is
+906	   effect-without-decision.  The control is the extract's completeness,
+907	   which is the extract root's independence (Section 7); a capture
+908	   process the Decider controls can leave the effect out.
+
+910	8.3.  D3: Substitution of content
+
+912	   The Decider allows one content and the channel carries another.  The
+913	   allow's effectHash and the row's effectHash are computed over the
+914	   same octets, and a difference is effect-mismatch.  The control fails
+915	   open if the two sides hash different octets, which is why a
+916	   deployment MUST state the octets once for both (Section 5.1).
+
+918	8.4.  D4: The Decider signs below its own rules
+
+920	   A Decider produces a well-formed signature over a claim map that
+921	   breaks a rule this profile states: an allow with no reference or no
+922	   content hash, a refusal with a content hash, a hash outside the
+923	   grammar.  Every such record is a record the reconciliation cannot
+924	   close or would close wrongly.  The verifier applies the rules on the
+925	   decoded payload (MUST-DP-3) and walks the chain over every record
+926	   that claims the pin (MUST-DP-5), so the record is refused and named
+927	   rather than attested or dropped.
+
+929	8.5.  D5: Equivocation on the record chain
+
+931	   The Decider signs two decisions for one request, or two successors to
+932	   one predecessor, and offers each to a different reader.  Within one
+933	   reader's population the chain (MUST-DP-5) makes the second record
+934	   unlinkable: it names the same predecessor as the first, or none, and
+935	   the walk reports the break.  Across readers the chain sees nothing:
+936	   each holds a linear chain that verifies.  The control for that case
+937	   is the core's witness (Section 4.4): the Decider's epoch checkpoints
+938	   are recorded with a witness the verifier has pinned, a Transparency
+939	   Service [RFC9943] being one, and the copies the witness holds are
+940	   compared against the presented chain.  A verifier that consulted no
+941	   witness has not measured cross-reader equivocation.  The guarantee
+942	   its report prints is the core's, which is defined over the extract,
+943	   the pins, and the window and does not cover suppression or
+944	   equivocation beyond the presented chain when no witness was consulted
+945	   (Section 11 of [CEDULON], MUST-T11-9); measured on the companion,
+946	   such a report prints unconditional with no warning and no finding,
+947	   and is silent about the witness it was not given.  The silence is
+948	   this revision's known gap: the claim is narrowed here, in the text,
+949	   and a report line that names an unconsulted witness is a change to
+950	   the reconciler both populations share, not made in this revision.  A
+951	   deployment that needs the property records its checkpoints with a
+952	   witness and gives its readers the witness key.
+
+954	8.6.  D6: The class of the effect is substituted
+
+956	   A row of a different class under the same reference and the same
+957	   content hash: the same text allowed as a reply and carried as a post.
+958	   The earlier revision named this as a gap, because the record carried
+959	   no claim for the class and a row of any class matched.  The record
+960	   now carries effectClass under the Decider's signature (Section 4.1),
+961	   an allow without one is refused (Section 4.2), and a row whose class
+962	   differs from the allow's with the content hash equal is effect-class-
+963	   mismatch (Section 6.1).  What remains open is the vocabulary: the
+964	   class names are the channel's, this document does not fix them, and a
+965	   deployment SHOULD state them beside its statement of what it hashes
+966	   so that two readers compare the same words.
+
+968	8.7.  D7: Silent defaults in capture
+
+970	   The process that turns a channel's log into Decision Records or
+971	   Effect Extract rows fills a missing value with a default, and the
+972	   default hashes to something.  An allow with no stated content that is
+973	   hashed as the empty string produces a record that will match an empty
+974	   effect and mismatch every real one, with no finding that says the
+975	   content was never stated.  Such a process MUST refuse the line by
+976	   name rather than fill it (MUST-DP-10).  The companion's example
+977	   adapter did fill it until it was measured, and refuses it now.
+
+979	8.8.  D8: The capture process is the Decider
+
+981	   The party that produces the Effect Extract is, or answers to, the
+982	   party that signed the Decision Records.  Every finding in D1 and D2
+983	   can then be made to disappear by omission, and no signature check
+984	   detects it.  This is the independence statement of Section 7 (MUST-
+985	   DP-9), and it is a deployment fact the profile can name but not
+986	   prove.  A verifier that holds both roots and cannot state their
+987	   independence has a conditional result, and MUST say so.
+
+989	9.  Privacy Considerations
+
+991	   A Decision Record carries no request content and no effect content:
+992	   hashes of both, an opaque subject identifier, and a reason code.  The
+993	   Effect Extract carries a reference, a class, a content hash, a time,
+994	   and optionally the identifier of the party the effect reached.  The
+995	   core's Privacy Considerations (Section 15 of [CEDULON]) apply to what
+996	   a transparency witness is given.
+
+998	   Two points are specific to this population.  A content hash over a
+999	   short text is a fingerprint of that text: a reader who can guess the
+1000	   message can confirm the guess.  This revision hashes the plain
+1001	   content octets, as the companion does, so that the two sides need no
+1002	   shared secret to agree; a keyed or salted construction that would
+1003	   defeat the guess is a claim-set change and is not defined here.  A
+1004	   deployment whose effects are short and guessable SHOULD treat the
+1005	   extract and the records as confidential to the audit.  The subject
+1006	   and actor identifiers are opaque to the profile but need not be
+1007	   opaque to a reader; a deployment SHOULD pseudonymize them before
+1008	   either object leaves its control.
+
+1010	10.  IANA Considerations
+
+1012	   This document requests the registration of one media type in the
+1013	   "Media Types" registry [RFC6838], in the standards tree, carrying the
+1014	   +cbor structured syntax suffix that [RFC8949] registers, on the terms
+1015	   Section 17 of [CEDULON] states for that document's six: it names the
+1016	   one COSE_Sign1 object this document defines and is checked inside
+1017	   that object's protected header, which is why the name cannot stay
+1018	   unregistered while that check stands.  The Effect Extract is a JSON
+1019	   document with a detached signature and has no media type; Section 5.2
+1020	   states why, and names the registration that would become necessary if
+1021	   that changed.  Registration in the standards tree requires IETF
+1022	   approval; until then, an implementation outside a closed deployment
+1023	   should treat the name as a placeholder that a registration may
+1024	   change.  The provisional registration procedure of [RFC6838]
+1025	   Section 5.2.1 is available to an Internet-Draft, and a provisional
+1026	   entry, if one is made, is superseded by the registration this section
+1027	   requests.
+
+1029	   The claim labels this document assigns, -70501 through -70513
+1030	   (Section 4.1), lie in the Private Use range of the "CBOR Web Token
+1031	   (CWT) Claims" registry [RFC8392], integer values less than -65536,
+1032	   and this document requests no assignment for them.
+
+1034	   No other IANA action is requested.
+
+1036	10.1.  application/cedulon-decision-record+cbor
+
+1038	   Type name:  application
+
+1040	   Subtype name:  cedulon-decision-record+cbor
+
+1042	   Required parameters:  N/A
+
+1044	   Optional parameters:  N/A
+
+1046	   Encoding considerations:  binary.  A COSE_Sign1 structure [RFC9052]
+1047	      in deterministic CBOR [RFC8949], untagged, as profiled in
+1048	      Section 4 and in Section 6 of [CEDULON].
+
+1050	   Security considerations:  See Section 8 of this document.  The object
+1051	      is signed by the party under audit; its evidentiary weight depends
+1052	      on the verifier holding the decider key out of band (Section 7)
+1053	      and on the verifier applying the claim rules of Section 4.2
+1054	      itself, never on a key the object carries or on the signer's word
+1055	      that the rules were applied.
+
+1057	   Interoperability considerations:  The claim set is a CBOR map with
+1058	      the labels and types stated in Section 4.1, encoded per [RFC8949]
+1059	      Section 4.2.1.  A decoder refuses a duplicate key, an input beyond
+1060	      its stated bounds, and a non-empty unprotected header by name
+1061	      rather than accepting it, as Section 6 of [CEDULON] requires of
+1062	      every Cedulon object.  A Decision Record and a Decision Token are
+1063	      distinct objects with distinct content types and are never
+1064	      accepted for one another.
+
+1066	   Published specification:  This document, Section 4.
+
+1068	   Applications that use this media type:  Policy decision points and
+1069	      other deciders that log the decisions they take about an agent's
+1070	      actions, and auditors that reconcile those logs against the
+1071	      channels the actions occurred on.
+
+1073	   Fragment identifier considerations:  N/A
+
+1075	   Additional information:  Deprecated alias names for this type: N/A.
+1076	      Magic number(s): N/A.  File extension(s): N/A.  Macintosh file
+1077	      type code(s): N/A.
+
+1079	   Person and email address to contact for further information:  Emek
+1080	      Can Dogru, e.dogru@cedulon.com
+
+1082	   Intended usage:  COMMON
+
+1084	   Restrictions on usage:  N/A
+
+1086	   Author:  Emek Can Dogru
+
+1088	   Change controller:  IETF
+
+1090	11.  Implementation Status
+
+1092	   This section is to be removed before publishing as an RFC.
+
+1094	   RFC 7942 [RFC7942] note.
+
+1096	   Implementation:  The profile is carried by the core document's
+1097	      companion implementation at https://github.com/dogrucanemek-alt/
+1098	      cedulon (https://github.com/dogrucanemek-alt/cedulon), on the same
+1099	      reconciler that implements the core, selected by a profile object
+1100	      rather than by a second code path.  As of the commit this revision
+1101	      was written against, the tree carries the Decision Record and
+1102	      Effect Extract objects, the profile, twenty conformance cases
+1103	      covering the rules and departures this document states, and four
+1104	      offline fixtures for one example channel, a direct-message reply
+1105	      log.  The two cases added with -01 were red before the claim was
+1106	      added: a row of a different class under a matching hash matched,
+1107	      and an allow signed without a class verified.  This revision
+1108	      changes text and adds no case; the ordering of the two clocks
+1109	      (Section 6.1) is stated, not enforced.  The spend behaviour of the
+1110	      same reconciler is held byte for byte by a golden file of fifteen
+1111	      cases generated from the source before the profile seam was added.
+
+1113	   Maturity:  Published.  The code carrying -01's claim set, the class
+1114	      under the signature and the fifth finding, was released as the
+1115	      companion's 0.13.0 on 4 September 2026, nine packages with
+1116	      provenance, after -01 was posted.  Before merge the branch was
+1117	      read twice: by the author's own gate, re-running it from a second
+1118	      worktree, and by an outside model reading the whole diff and
+1119	      barred from changing it.  The two readings found four defects in
+1120	      the first cut of this profile, each recorded in the companion's
+1121	      review log: a verifier that did not apply the signer's claim rules
+1122	      (D4), a spend-side crash on the wrong document (Section 3), a
+1123	      spend warning leaking onto decision reports, and a document that
+1124	      counted its own cases wrong.  All four were closed with a test
+1125	      that was red before the fix.  A third pass moved the report
+1126	      vocabulary onto the profile.
+
+1128	      Not measured: a live channel log.  The example adapter maps a
+1129	      proposed line format for a direct-message bridge; the bridge's
+1130	      actual field names were not read when this revision was written,
+1131	      and the adapter is written so that only its two line-mapping
+1132	      functions should move when they are.  No signer of this profile by
+1133	      another party is known to the author; the two outside readers
+1134	      below wrote verifiers.
+
+1136	      Read by a second reader: one frozen fixture, a leaked refusal in
+1137	      the example channel's line format, was read by this implementation
+1138	      and, on 4 September 2026, by an adapter written by the author of
+1139	      [OUTCOME] for that document's verifier, with the two results
+1140	      recorded side by side the next day.  This reader reported effect-
+1141	      against-refusal on the leaked row; the other reported the case as
+1142	      reconciled, divergent, and not valid.  The three fixture digests,
+1143	      both result digests, and the two verdicts are in the companion's
+1144	      external review log.  The limits are the other reader's, and they
+1145	      are kept with the record: one pinned raw fixture read through
+1146	      separately owned adapters is not native-format interoperability;
+1147	      the test keys are public and the timestamps were written after the
+1148	      fact, so the run establishes neither identity nor temporal
+1149	      precommitment; and neither reader says where the refusal failed.
+
+1151	      Reproduced: the companion's suite at the commit that posted -00
+1152	      was run unmodified by two readers on their own machines, one on
+1153	      the day of posting and one after 0.13.0 shipped.  The second run
+1154	      had one red, a test that asked the package registry what it served
+1155	      that day from inside a pinned commit; the suite now reports that
+1156	      case as the world having moved rather than as a failure, and the
+1157	      change is the reader's.  The first reader also put three probes to
+1158	      the profile: an effect dated before its decision, which is what
+1159	      Section 6.1 now states; one content hash under two allows, which
+1160	      the binding keeps apart by reference as written; and a record
+1161	      altered after signing, which the chain walk already names as a
+1162	      break.  The -00 text was read by the author of [AEB] and [OUTCOME]
+1163	      the day it was posted; the four items that reading raised were the
+1164	      changes of -01, and the two boundary sentences of this revision
+1165	      are that reader's as well.
+
+1167	   Second implementation:  Verax (https://github.com/verax-ai/verax
+1168	      (https://github.com/verax-ai/verax)), written by the author of
+1169	      this document, signs Decision Records under this profile's claim
+1170	      set and verifies its ledgers offline.  Two of this revision's
+1171	      changes come from it.  In its published test vectors, a process
+1172	      beside the Decider, which Verax calls its witness, signs the
+1173	      checkpoints and the effect extracts under one key, separate from
+1174	      the record key and held by the same operator (Section 4.4); its
+1175	      vector set's README names that key, as MUST-DP-11 asks; since that
+1176	      key also signs the effect extracts, MUST-DP-9 makes its guarantee
+1177	      conditional.  And it signs one extract per effect row, a case -03
+1178	      did not address, without yet the statement MUST-DP-12 asks for:
+1179	      its index of which references produced an effect is unsigned.
+1180	      After the outside runs below, and not yet in a release, its
+1181	      verifier holds every allow to a row by a rule of its own, with the
+1182	      core's allowance measured from the newest record; it does not
+1183	      apply the core's boundary rule.
+
+1185	      Run by outside readers: a frozen set of Verax ledgers (test-
+1186	      vectors/v1 at tag vectors-v1, sixteen ledgers at the time) was run
+1187	      by two readers with verifiers of their own, who reported their
+1188	      results in the AUDIT BoF preparation repository
+1189	      (https://github.com/mirjak/audit-bof-preparation/issues/9
+1190	      (https://github.com/mirjak/audit-bof-preparation/issues/9)):
+1191	      Tymofii Pidlisnyi (Agent Passport System), with a runner in the
+1192	      APS conformance suite, a partial stage-by-stage comparison rather
+1193	      than a whole-ledger verdict; and Roberto Locatelli (cryptovalid-
+1194	      opencore), with checkers written from the drafts, the RFCs, the
+1195	      vector set's README and, for two file layouts, the vector files.
+1196	      With the checkpoint verified under the witness key, that run
+1197	      matched 16 of 16 verdicts and 15 of 16 first failing stages, the
+1198	      one difference being fail-allow-while-halted, which that checker,
+1199	      applying no boundary allowance, fails at effect-binding; under
+1200	      -03's reading, with the Decider's key, 14 of 16 verdicts.  One of
+1201	      the matches came from a rule added after reading the vector, and
+1202	      the run states its other limits with it.  All of those vectors
+1203	      were produced by one implementation; the runs are datapoints, not
+1204	      conformance.
+
+1206	12.  References
+
+1208	12.1.  Normative References
+
+1210	   [CEDULON]  Dogru, E. C., "Cedulon: An Audit Layer for Agent-to-Agent
+1211	              Commerce", Work in Progress, Internet-Draft, draft-dogru-
+1212	              cedulon-09, 6 September 2026,
+1213	              <https://datatracker.ietf.org/doc/html/draft-dogru-
+1214	              cedulon-09>.
+
+1216	   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+1217	              Requirement Levels", BCP 14, RFC 2119,
+1218	              DOI 10.17487/RFC2119, March 1997,
+1219	              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+1221	   [RFC6234]  Eastlake 3rd, D. and T. Hansen, "US Secure Hash Algorithms
+1222	              (SHA and SHA-based HMAC and HKDF)", RFC 6234,
+1223	              DOI 10.17487/RFC6234, May 2011,
+1224	              <https://www.rfc-editor.org/rfc/rfc6234>.
+
+1226	   [RFC6838]  Freed, N., Klensin, J., and T. Hansen, "Media Type
+1227	              Specifications and Registration Procedures", BCP 13,
+1228	              RFC 6838, DOI 10.17487/RFC6838, January 2013,
+1229	              <https://www.rfc-editor.org/rfc/rfc6838>.
+
+1231	   [RFC8032]  Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital
+1232	              Signature Algorithm (EdDSA)", RFC 8032,
+1233	              DOI 10.17487/RFC8032, January 2017,
+1234	              <https://www.rfc-editor.org/rfc/rfc8032>.
+
+1236	   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+1237	              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+1238	              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+1240	   [RFC8392]  Jones, M., Wahlstroem, E., Erdtman, S., and H. Tschofenig,
+1241	              "CBOR Web Token (CWT)", RFC 8392, DOI 10.17487/RFC8392,
+1242	              May 2018, <https://www.rfc-editor.org/rfc/rfc8392>.
+
+1244	   [RFC8785]  Rundgren, A., Jordan, B., and S. Erdtman, "JSON
+1245	              Canonicalization Scheme (JCS)", RFC 8785,
+1246	              DOI 10.17487/RFC8785, June 2020,
+1247	              <https://www.rfc-editor.org/rfc/rfc8785>.
+
+1249	   [RFC8949]  Bormann, C. and P. Hoffman, "Concise Binary Object
+1250	              Representation (CBOR)", STD 94, RFC 8949,
+1251	              DOI 10.17487/RFC8949, December 2020,
+1252	              <https://www.rfc-editor.org/rfc/rfc8949>.
+
+1254	   [RFC9052]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
+1255	              Structures and Process", STD 96, RFC 9052,
+1256	              DOI 10.17487/RFC9052, August 2022,
+1257	              <https://www.rfc-editor.org/rfc/rfc9052>.
+
+1259	   [RFC9864]  Jones, M.B. and O. Steele, "Fully-Specified Algorithms for
+1260	              JSON Object Signing and Encryption (JOSE) and CBOR Object
+1261	              Signing and Encryption (COSE)", RFC 9864,
+1262	              DOI 10.17487/RFC9864, October 2025,
+1263	              <https://www.rfc-editor.org/rfc/rfc9864>.
+
+1265	12.2.  Informative References
+
+1267	   [ABAK]     Abak, A. T., "Evidence Requirements for Agent Control
+1268	              Delivery and Outcome Reconciliation", Work in Progress,
+1269	              Internet-Draft, draft-abak-agent-control-delivery-
+1270	              evidence-01, 4 September 2026,
+1271	              <https://datatracker.ietf.org/doc/html/draft-abak-agent-
+1272	              control-delivery-evidence-01>.
+
+1274	   [AEB]      Schrock, I., "The Action Evidence Boundary for
+1275	              Consequential Agent Effects", Work in Progress, Internet-
+1276	              Draft, draft-schrock-action-evidence-boundary-05, 31
+1277	              August 2026, <https://datatracker.ietf.org/doc/html/draft-
+1278	              schrock-action-evidence-boundary-05>.
+
+1280	   [B7N0DE]   Gruszka, K., "Mapping 4: the Cedulon Decision Record and
+1281	              Effect Extract against decision-receipt and action-outcome
+1282	              (proofbundle)", 4 September 2026,
+1283	              <https://github.com/b7n0de/proofbundle/blob/main/docs/
+1284	              SCITT_CPB_MAPPING.md>.
+
+1286	   [OUTCOME]  Schrock, I., "Outcome Binding for Authorized Actions and
+1287	              Independently Observed Effects", Work in Progress,
+1288	              Internet-Draft, draft-schrock-ep-outcome-binding-00, 28
+1289	              July 2026, <https://datatracker.ietf.org/doc/html/draft-
+1290	              schrock-ep-outcome-binding-00>.
+
+1292	   [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of Running
+1293	              Code: The Implementation Status Section", BCP 205,
+1294	              RFC 7942, DOI 10.17487/RFC7942, July 2016,
+1295	              <https://www.rfc-editor.org/rfc/rfc7942>.
+
+1297	   [RFC9943]  Birkholz, H., Delignat-Lavaud, A., Fournet, C., Deshpande,
+1298	              Y., and S. Lasker, "An Architecture for Trustworthy and
+1299	              Transparent Digital Supply Chains", RFC 9943,
+1300	              DOI 10.17487/RFC9943, June 2026,
+1301	              <https://www.rfc-editor.org/rfc/rfc9943>.
+
+1303	Changes from -03
+
+1305	   This section is to be removed before publishing as an RFC.
+
+1307	   *  A checkpoint may be signed under a separate key that the
+1308	      deployment names and the verifier pins as part of the decider root
+1309	      (MUST-DP-11).  The core's root of several keys (MUST-T4-12) is for
+1310	      rotation; the split by role is this profile's.  Terminology and
+1311	      the decider root say so. -03 had the Decider sign checkpoints, and
+1312	      the second implementation did not.
+
+1314	   *  The context behind inputsHash is, like the request, a deployment
+1315	      statement: what is hashed, and how it is presented beside the
+1316	      record.
+
+1318	   *  Single-row extracts are receipts, not windows.  The following
+1319	      extract of a closing-edge deferral is one whose window contains
+1320	      the item, and a deployment that signs single-row extracts MUST
+1321	      state how a reader learns which allows should have a row (MUST-DP-
+1322	      12).
+
+1324	   *  Implementation Status records the second implementation and two
+1325	      outside runs of its test vectors.
+
+1327	   *  The core reference moves to -09, whose sections cited here are
+1328	      unchanged from -08.
+
+1330	   The first three changes came from those runs: each reader found a
+1331	   place where the text and the implementation disagreed, or where the
+1332	   text was silent.
+
+1334	Changes from -02
+
+1336	   This section is to be removed before publishing as an RFC.
+
+1338	   *  The rule under three of this document's choices is stated once, as
+1339	      Section 1.1: a state that never crosses the boundary does not
+1340	      exist for the party relying on it, and a property the text does
+1341	      not state is one the text does not have.  The three places it was
+1342	      learned are named there, and the unordered clocks of Section 6.1
+1343	      now point to it.  No rule, claim, or finding changes.
+
+1345	Changes from -01
+
+1347	   *  The binding does not order the two clocks: a row dated before the
+1348	      record it answers binds as if it had followed it, on this profile
+1349	      and on spend alike.  Stated in Section 6.1, with no finding named;
+1350	      the Effect Extract's lack of a clock-skew member and the default
+1351	      the verifier applies are stated beside it.
+
+1353	   *  Two boundary sentences corrected: [AEB] runs from invocation to an
+1354	      authenticated reconciliation and is not only what precedes an
+1355	      effect; the observation in [OUTCOME] is independent where the
+1356	      relying party chose an independent source, not by construction.
+
+1358	   *  Section 11 records the companion as published at 0.13.0, one
+1359	      fixture read by a second reader with the limits of that run, and
+1360	      two reproductions of the suite.
+
+1362	   *  D1 cites a measurement of the same threat on a second evidence
+1363	      format, whose verifier accepts a refusal beside an executed
+1364	      outcome.
+
+1366	   *  Two sentences tightened after a reader's mapping: the request
+1367	      encoding is fixed and the request's fields are not (Section 4.1);
+1368	      MUST-DP-9 is the statement and the downgrade, not a demand for
+1369	      independence (Section 7).
+
+1371	Changes from -00
+
+1373	   *  effectClass is a claim on the Decision Record (-70513), required
+1374	      on an allow; a row of a different class under a matching hash is
+1375	      effect-class-mismatch.  D6 is closed rather than named.  Claim-set
+1376	      change; a twelve-label record is refused.
+
+1378	   *  The Decider's chain is no longer called the equivocation control
+1379	      of the profile.  It names a break within one reader's population;
+1380	      a fork shown to two readers is the core's witness comparison,
+1381	      applied unchanged, and a report over an unwitnessed chain claims
+1382	      no more (Section 4.4, D5).
+
+1384	   *  The reason the Effect Extract has no media type is restated: the
+1385	      population is the verifier's declaration, not the document's
+1386	      (Section 5.2).  The protected-header test is withdrawn as the
+1387	      reason.
+
+1389	   *  The boundary to [ABAK], [AEB], and [OUTCOME] is stated in the
+1390	      introduction.
+
+1392	Acknowledgments
+
+1394	   This profile is the first concrete instance of the generalization the
+1395	   core document reserves.  The refusal that was followed by the effect
+1396	   it refused, as a finding with its own name, came out of watching a
+1397	   messaging assistant's decision log beside the channel's sent log and
+1398	   finding that the spend vocabulary had no word for it.
+
+1400	   Tymofii Pidlisnyi (Agent Passport System) and Roberto Locatelli
+1401	   (cryptovalid-opencore) ran the second implementation's test vectors
+1402	   with verifiers of their own; the first three changes of -04 are their
+1403	   findings.
+
+1405	   Iman Schrock read -00 the day it was posted and raised the four
+1406	   points this revision answers: the fork two readers cannot see, the
+1407	   class that was not under the signature, the media-type reason that
+1408	   did not hold, and the three documents that should be cited.  The
+1409	   sentence on what an effect against a refusal does and does not
+1410	   establish is Ali Toygar Abak's, in his words.
+
+1412	   Pablo Etcheverry ran the suite at the posted -00 commit and asked
+1413	   three questions of it; the unordered clocks of Section 6.1 are his
+1414	   finding.  Nicholas Templeman ran the same commit after 0.13.0 shipped
+1415	   and showed that a claim about the present, frozen into a pinned
+1416	   commit, cannot tell a reproducer whether the code or the calendar
+1417	   failed.  Konrad Gruszka mapped the Decision Record and Effect Extract
+1418	   field by field onto his own format and measured the D1 pair on it.
+1419	   Iman Schrock corrected the two boundary sentences and read the frozen
+1420	   fixture with an adapter written for that document's verifier.
+
+1422	   The rule of Section 1.1 was named as one rule by Henri Sirkkavaara,
+1423	   after he found and closed its state form in Vaara's own consistency
+1424	   checker and read the unordered clocks of Section 6.1 as the same
+1425	   failure a third time.  Pablo Etcheverry paired the two implementation
+1426	   cases, Vaara's third verdict and the companion's undelivered
+1427	   refusals, as two shapes of one bug, and that pairing is how the
+1428	   section describes them.
+
+1430	Author's Address
+
+1432	   Emek Can Dogru
+1433	   VERAX TEKNOLOJI LIMITED SIRKETI
+1434	   Email: e.dogru@cedulon.com
 
 
 

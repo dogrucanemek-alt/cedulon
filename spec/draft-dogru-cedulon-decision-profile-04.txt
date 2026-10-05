@@ -1034,11 +1034,12 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       Records and their checkpoints are attested.  A separate checkpoint
       key, where the deployment names one, belongs to this root and
       attests no Decision Record (Section 4.4).  Everything Section 10.1
-      of the core states for the issuer root applies: a pinned key
-      attests by signature, a carried key is not an identity, a record
-      under another key is issuer-key-mismatch and covers nothing, and
-      with no pin unauthenticated-issuer makes the guarantee
-      conditional.
+      of the core states for the issuer root applies, with the one
+      change Section 4.4 makes: a pinned key attests by signature, a
+      carried key is not an identity, a record under another key, the
+      checkpoint key included, is issuer-key-mismatch and covers
+      nothing, and with no pin unauthenticated-issuer makes the
+      guarantee conditional.
 
    The effect-extract root:  The key under which the Effect Extract is
       attested.  Everything Section 9.3 of the core states for the rail
@@ -1057,7 +1058,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    operator's.  Where the channel operator signs nothing, which is the
    common case for a messaging platform, the extract is produced by a
    capture process the deployment runs, and the deployment is stating,
-   by pinning that process's key, that the process is not the Decider
 
 
 
@@ -1066,6 +1066,7 @@ Dogru                     Expires 8 April 2027                 [Page 19]
 Internet-Draft          Cedulon Decision Profile            October 2026
 
 
+   by pinning that process's key, that the process is not the Decider
    and cannot be told what to omit.  The rule is not that the two roots
    be independent; it is that the deployment say which case it is in,
    and that the guarantee fall when independence is absent or unknown.
@@ -1113,7 +1114,6 @@ Internet-Draft          Cedulon Decision Profile            October 2026
    effect-without-decision.  The control is the extract's completeness,
    which is the extract root's independence (Section 7); a capture
    process the Decider controls can leave the effect out.
-
 
 
 
@@ -1439,8 +1439,8 @@ Internet-Draft          Cedulon Decision Profile            October 2026
       its index of which references produced an effect is unsigned.
       After the outside runs below, and not yet in a release, its
       verifier holds every allow to a row by a rule of its own, with the
-      core's allowance measured from the newest record, rather than by
-      the boundary rule alone.
+      core's allowance measured from the newest record; it does not
+      apply the core's boundary rule.
 
       Run by outside readers: a frozen set of Verax ledgers (test-
       vectors/v1 at tag vectors-v1, sixteen ledgers at the time) was run

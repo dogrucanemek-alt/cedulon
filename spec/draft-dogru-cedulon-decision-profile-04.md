@@ -766,10 +766,11 @@ The decider root:
   checkpoints are attested. A separate checkpoint key, where the
   deployment names one, belongs to this root and attests no Decision
   Record ({{record-chain}}). Everything Section 10.1 of the core states for the issuer
-  root applies: a pinned key attests by signature, a carried key is
-  not an identity, a record under another key is `issuer-key-mismatch`
-  and covers nothing, and with no pin `unauthenticated-issuer` makes
-  the guarantee conditional.
+  root applies, with the one change {{record-chain}} makes: a pinned
+  key attests by signature, a carried key is not an identity, a record
+  under another key, the checkpoint key included, is
+  `issuer-key-mismatch` and covers nothing, and with no pin
+  `unauthenticated-issuer` makes the guarantee conditional.
 
 The effect-extract root:
 : The key under which the Effect Extract is attested. Everything
@@ -1120,8 +1121,8 @@ Second implementation:
   references produced an effect is unsigned. After the outside runs
   below, and not yet in a release, its verifier holds
   every allow to a row by a rule of its own, with the core's allowance
-  measured from the newest record, rather than by the boundary rule
-  alone.
+  measured from the newest record; it does not apply the core's
+  boundary rule.
 
 : Run by outside readers: a frozen set of Verax ledgers
   (`test-vectors/v1` at tag `vectors-v1`, sixteen ledgers at the time)
