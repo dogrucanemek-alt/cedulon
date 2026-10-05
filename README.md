@@ -143,8 +143,8 @@ examples/demo           runaway, dispute, bypass, audit CLI
 spec/                   draft-dogru-cedulon-10 (latest here; in preparation,
                         not posted), -09 (posted 6 September 2026), -08,
                         -07, -06, -05, -04, -03, -02, -01, -00;
-                        draft-dogru-cedulon-decision-profile-03 (posted
-                        6 September 2026), -02, -01, -00: decisions against effects
+                        draft-dogru-cedulon-decision-profile-04 (posted
+                        5 October 2026), -03, -02, -01, -00: decisions against effects
                         on the same reconciler; and the direction seeds
                         draft-dogru-cedulon-reattestation-00 and
                         draft-dogru-cedulon-streaming-00
@@ -157,10 +157,10 @@ Brand names come from `packages/core/src/brand.ts` only.
 ## How to cite
 
 Citation metadata is in `CITATION.cff`. The archived -00 release is
-published as https://doi.org/10.5281/zenodo.22099792. The posted decision
-profile, draft-dogru-cedulon-decision-profile-03, is deposited on its own as
-https://doi.org/10.5281/zenodo.22337734 (all versions; the posted -03 text is
-https://doi.org/10.5281/zenodo.22550761)
+published as https://doi.org/10.5281/zenodo.22099792. The decision
+profile, posted at draft-dogru-cedulon-decision-profile-04, is deposited on its own
+as https://doi.org/10.5281/zenodo.22337734 (all versions; the posted -03 text is
+https://doi.org/10.5281/zenodo.22550761; -04 is not deposited yet)
 
 ## Privacy Policy
 
