@@ -440,11 +440,12 @@ records in the window against the signed map, and a difference is
 The key that signs a checkpoint is the key the core's verification
 procedure obtains for the checkpoint issuer (Section 11.4 of
 {{CEDULON}}, step 11), and Section 10.1 of the core has the verifier
-check checkpoints against the issuer root. In this profile the decider
-root may be a set of keys in the sense of the core's `MUST-T4-12`: the
-key under which Decision Records are attested and, where the
-deployment names one, a separate key under which, of the Decider's
-objects, only checkpoints are attested, such as that of a process
+check checkpoints against the issuer root. The core admits a root of
+several keys so that a key can be rotated (`MUST-T4-12`); this profile
+adds a split by role. The decider root holds the key under which
+Decision Records are attested and, where the deployment names one, a
+separate key under which, of the Decider's objects, only checkpoints
+are attested, such as that of a process
 beside the Decider that signs no Decision Record. Where that key also
 signs effect extracts, the extract root and the decider root share a
 key, and `MUST-DP-9` makes the guarantee conditional. A deployment MUST state which key signs its
@@ -1150,9 +1151,10 @@ Second implementation:
 This section is to be removed before publishing as an RFC.
 
 - A checkpoint may be signed under a separate key that the deployment
-  names and the verifier pins as part of the decider root, a set of
-  keys in the sense of the core's `MUST-T4-12` (`MUST-DP-11`);
-  Terminology and the decider root say so. -03 had the Decider sign checkpoints, and the
+  names and the verifier pins as part of the decider root
+  (`MUST-DP-11`). The core's root of several keys (`MUST-T4-12`) is for
+  rotation; the split by role is this profile's. Terminology and the
+  decider root say so. -03 had the Decider sign checkpoints, and the
   second implementation did not.
 - The context behind `inputsHash` is, like the request, a deployment
   statement: what is hashed, and how it is presented beside the

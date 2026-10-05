@@ -507,24 +507,24 @@ draft-dogru-cedulon-decision-profile-04.txt:
 472	   The key that signs a checkpoint is the key the core's verification
 473	   procedure obtains for the checkpoint issuer (Section 11.4 of
 474	   [CEDULON], step 11), and Section 10.1 of the core has the verifier
-475	   check checkpoints against the issuer root.  In this profile the
-476	   decider root may be a set of keys in the sense of the core's MUST-
-477	   T4-12: the key under which Decision Records are attested and, where
-478	   the deployment names one, a separate key under which, of the
-479	   Decider's objects, only checkpoints are attested, such as that of a
-480	   process beside the Decider that signs no Decision Record.  Where that
-481	   key also signs effect extracts, the extract root and the decider root
-482	   share a key, and MUST-DP-9 makes the guarantee conditional.  A
-483	   deployment MUST state which key signs its checkpoints; a verifier
-484	   MUST hold that key out of band as part of the decider root and verify
-485	   every checkpoint under it, and a Decision Record that verifies only
-486	   under the checkpoint key is issuer-key-mismatch (MUST-DP-11).  A
-487	   separate checkpoint key held by the same operator as the decider root
-488	   is a second key, not a second trust domain, and a report MUST NOT
-489	   present it as independent of the Decider.  A checkpoint signer is not
-490	   the witness of Section 11 of [CEDULON], which records presented
-491	   checkpoints so that a fork can be reached; naming one does not change
-492	   that role.
+475	   check checkpoints against the issuer root.  The core admits a root of
+476	   several keys so that a key can be rotated (MUST-T4-12); this profile
+477	   adds a split by role.  The decider root holds the key under which
+478	   Decision Records are attested and, where the deployment names one, a
+479	   separate key under which, of the Decider's objects, only checkpoints
+480	   are attested, such as that of a process beside the Decider that signs
+481	   no Decision Record.  Where that key also signs effect extracts, the
+482	   extract root and the decider root share a key, and MUST-DP-9 makes
+483	   the guarantee conditional.  A deployment MUST state which key signs
+484	   its checkpoints; a verifier MUST hold that key out of band as part of
+485	   the decider root and verify every checkpoint under it, and a Decision
+486	   Record that verifies only under the checkpoint key is issuer-key-
+487	   mismatch (MUST-DP-11).  A separate checkpoint key held by the same
+488	   operator as the decider root is a second key, not a second trust
+489	   domain, and a report MUST NOT present it as independent of the
+490	   Decider.  A checkpoint signer is not the witness of Section 11 of
+491	   [CEDULON], which records presented checkpoints so that a fork can be
+492	   reached; naming one does not change that role.
 
 494	   Two records that claim the same position in a chain cannot both link
 495	   to it: the second record's prevRecordHash must be the first's hash,
@@ -1339,132 +1339,133 @@ draft-dogru-cedulon-decision-profile-04.txt:
 1304	   This section is to be removed before publishing as an RFC.
 
 1306	   *  A checkpoint may be signed under a separate key that the
-1307	      deployment names and the verifier pins as part of the decider
-1308	      root, a set of keys in the sense of the core's MUST-T4-12 (MUST-
-1309	      DP-11); Terminology and the decider root say so. -03 had the
-1310	      Decider sign checkpoints, and the second implementation did not.
+1307	      deployment names and the verifier pins as part of the decider root
+1308	      (MUST-DP-11).  The core's root of several keys (MUST-T4-12) is for
+1309	      rotation; the split by role is this profile's.  Terminology and
+1310	      the decider root say so. -03 had the Decider sign checkpoints, and
+1311	      the second implementation did not.
 
-1312	   *  The context behind inputsHash is, like the request, a deployment
-1313	      statement: what is hashed, and how it is presented beside the
-1314	      record.
+1313	   *  The context behind inputsHash is, like the request, a deployment
+1314	      statement: what is hashed, and how it is presented beside the
+1315	      record.
 
-1316	   *  Single-row extracts are receipts, not windows.  The following
-1317	      extract of a closing-edge deferral is one whose window contains
-1318	      the item, and a deployment that signs single-row extracts MUST
-1319	      state how a reader learns which allows should have a row (MUST-DP-
-1320	      12).
+1317	   *  Single-row extracts are receipts, not windows.  The following
+1318	      extract of a closing-edge deferral is one whose window contains
+1319	      the item, and a deployment that signs single-row extracts MUST
+1320	      state how a reader learns which allows should have a row (MUST-DP-
+1321	      12).
 
-1322	   *  Implementation Status records the second implementation and two
-1323	      outside runs of its test vectors.
+1323	   *  Implementation Status records the second implementation and two
+1324	      outside runs of its test vectors.
 
-1325	   *  The core reference moves to -09, whose sections cited here are
-1326	      unchanged from -08.
+1326	   *  The core reference moves to -09, whose sections cited here are
+1327	      unchanged from -08.
 
-1328	   The first three changes came from those runs: each reader found a
-1329	   place where the text and the implementation disagreed, or where the
-1330	   text was silent.
+1329	   The first three changes came from those runs: each reader found a
+1330	   place where the text and the implementation disagreed, or where the
+1331	   text was silent.
 
-1332	Changes from -02
+1333	Changes from -02
 
-1334	   This section is to be removed before publishing as an RFC.
+1335	   This section is to be removed before publishing as an RFC.
 
-1336	   *  The rule under three of this document's choices is stated once, as
-1337	      Section 1.1: a state that never crosses the boundary does not
-1338	      exist for the party relying on it, and a property the text does
-1339	      not state is one the text does not have.  The three places it was
-1340	      learned are named there, and the unordered clocks of Section 6.1
-1341	      now point to it.  No rule, claim, or finding changes.
+1337	   *  The rule under three of this document's choices is stated once, as
+1338	      Section 1.1: a state that never crosses the boundary does not
+1339	      exist for the party relying on it, and a property the text does
+1340	      not state is one the text does not have.  The three places it was
+1341	      learned are named there, and the unordered clocks of Section 6.1
+1342	      now point to it.  No rule, claim, or finding changes.
 
-1343	Changes from -01
+1344	Changes from -01
 
-1345	   *  The binding does not order the two clocks: a row dated before the
-1346	      record it answers binds as if it had followed it, on this profile
-1347	      and on spend alike.  Stated in Section 6.1, with no finding named;
-1348	      the Effect Extract's lack of a clock-skew member and the default
-1349	      the verifier applies are stated beside it.
+1346	   *  The binding does not order the two clocks: a row dated before the
+1347	      record it answers binds as if it had followed it, on this profile
+1348	      and on spend alike.  Stated in Section 6.1, with no finding named;
+1349	      the Effect Extract's lack of a clock-skew member and the default
+1350	      the verifier applies are stated beside it.
 
-1351	   *  Two boundary sentences corrected: [AEB] runs from invocation to an
-1352	      authenticated reconciliation and is not only what precedes an
-1353	      effect; the observation in [OUTCOME] is independent where the
-1354	      relying party chose an independent source, not by construction.
+1352	   *  Two boundary sentences corrected: [AEB] runs from invocation to an
+1353	      authenticated reconciliation and is not only what precedes an
+1354	      effect; the observation in [OUTCOME] is independent where the
+1355	      relying party chose an independent source, not by construction.
 
-1356	   *  Section 11 records the companion as published at 0.13.0, one
-1357	      fixture read by a second reader with the limits of that run, and
-1358	      two reproductions of the suite.
+1357	   *  Section 11 records the companion as published at 0.13.0, one
+1358	      fixture read by a second reader with the limits of that run, and
+1359	      two reproductions of the suite.
 
-1360	   *  D1 cites a measurement of the same threat on a second evidence
-1361	      format, whose verifier accepts a refusal beside an executed
-1362	      outcome.
+1361	   *  D1 cites a measurement of the same threat on a second evidence
+1362	      format, whose verifier accepts a refusal beside an executed
+1363	      outcome.
 
-1364	   *  Two sentences tightened after a reader's mapping: the request
-1365	      encoding is fixed and the request's fields are not (Section 4.1);
-1366	      MUST-DP-9 is the statement and the downgrade, not a demand for
-1367	      independence (Section 7).
+1365	   *  Two sentences tightened after a reader's mapping: the request
+1366	      encoding is fixed and the request's fields are not (Section 4.1);
+1367	      MUST-DP-9 is the statement and the downgrade, not a demand for
+1368	      independence (Section 7).
 
-1369	Changes from -00
+1370	Changes from -00
 
-1371	   *  effectClass is a claim on the Decision Record (-70513), required
-1372	      on an allow; a row of a different class under a matching hash is
-1373	      effect-class-mismatch.  D6 is closed rather than named.  Claim-set
-1374	      change; a twelve-label record is refused.
+1372	   *  effectClass is a claim on the Decision Record (-70513), required
+1373	      on an allow; a row of a different class under a matching hash is
+1374	      effect-class-mismatch.  D6 is closed rather than named.  Claim-set
+1375	      change; a twelve-label record is refused.
 
-1376	   *  The Decider's chain is no longer called the equivocation control
-1377	      of the profile.  It names a break within one reader's population;
-1378	      a fork shown to two readers is the core's witness comparison,
-1379	      applied unchanged, and a report over an unwitnessed chain claims
-1380	      no more (Section 4.4, D5).
+1377	   *  The Decider's chain is no longer called the equivocation control
+1378	      of the profile.  It names a break within one reader's population;
+1379	      a fork shown to two readers is the core's witness comparison,
+1380	      applied unchanged, and a report over an unwitnessed chain claims
+1381	      no more (Section 4.4, D5).
 
-1382	   *  The reason the Effect Extract has no media type is restated: the
-1383	      population is the verifier's declaration, not the document's
-1384	      (Section 5.2).  The protected-header test is withdrawn as the
-1385	      reason.
+1383	   *  The reason the Effect Extract has no media type is restated: the
+1384	      population is the verifier's declaration, not the document's
+1385	      (Section 5.2).  The protected-header test is withdrawn as the
+1386	      reason.
 
-1387	   *  The boundary to [ABAK], [AEB], and [OUTCOME] is stated in the
-1388	      introduction.
+1388	   *  The boundary to [ABAK], [AEB], and [OUTCOME] is stated in the
+1389	      introduction.
 
-1390	Acknowledgments
+1391	Acknowledgments
 
-1392	   This profile is the first concrete instance of the generalization the
-1393	   core document reserves.  The refusal that was followed by the effect
-1394	   it refused, as a finding with its own name, came out of watching a
-1395	   messaging assistant's decision log beside the channel's sent log and
-1396	   finding that the spend vocabulary had no word for it.
+1393	   This profile is the first concrete instance of the generalization the
+1394	   core document reserves.  The refusal that was followed by the effect
+1395	   it refused, as a finding with its own name, came out of watching a
+1396	   messaging assistant's decision log beside the channel's sent log and
+1397	   finding that the spend vocabulary had no word for it.
 
-1398	   Tymofii Pidlisnyi (Agent Passport System) and Roberto Locatelli
-1399	   (cryptovalid-opencore) ran the second implementation's test vectors
-1400	   with verifiers of their own; the first three changes of -04 are their
-1401	   findings.
+1399	   Tymofii Pidlisnyi (Agent Passport System) and Roberto Locatelli
+1400	   (cryptovalid-opencore) ran the second implementation's test vectors
+1401	   with verifiers of their own; the first three changes of -04 are their
+1402	   findings.
 
-1403	   Iman Schrock read -00 the day it was posted and raised the four
-1404	   points this revision answers: the fork two readers cannot see, the
-1405	   class that was not under the signature, the media-type reason that
-1406	   did not hold, and the three documents that should be cited.  The
-1407	   sentence on what an effect against a refusal does and does not
-1408	   establish is Ali Toygar Abak's, in his words.
+1404	   Iman Schrock read -00 the day it was posted and raised the four
+1405	   points this revision answers: the fork two readers cannot see, the
+1406	   class that was not under the signature, the media-type reason that
+1407	   did not hold, and the three documents that should be cited.  The
+1408	   sentence on what an effect against a refusal does and does not
+1409	   establish is Ali Toygar Abak's, in his words.
 
-1410	   Pablo Etcheverry ran the suite at the posted -00 commit and asked
-1411	   three questions of it; the unordered clocks of Section 6.1 are his
-1412	   finding.  Nicholas Templeman ran the same commit after 0.13.0 shipped
-1413	   and showed that a claim about the present, frozen into a pinned
-1414	   commit, cannot tell a reproducer whether the code or the calendar
-1415	   failed.  Konrad Gruszka mapped the Decision Record and Effect Extract
-1416	   field by field onto his own format and measured the D1 pair on it.
-1417	   Iman Schrock corrected the two boundary sentences and read the frozen
-1418	   fixture with an adapter written for that document's verifier.
+1411	   Pablo Etcheverry ran the suite at the posted -00 commit and asked
+1412	   three questions of it; the unordered clocks of Section 6.1 are his
+1413	   finding.  Nicholas Templeman ran the same commit after 0.13.0 shipped
+1414	   and showed that a claim about the present, frozen into a pinned
+1415	   commit, cannot tell a reproducer whether the code or the calendar
+1416	   failed.  Konrad Gruszka mapped the Decision Record and Effect Extract
+1417	   field by field onto his own format and measured the D1 pair on it.
+1418	   Iman Schrock corrected the two boundary sentences and read the frozen
+1419	   fixture with an adapter written for that document's verifier.
 
-1420	   The rule of Section 1.1 was named as one rule by Henri Sirkkavaara,
-1421	   after he found and closed its state form in Vaara's own consistency
-1422	   checker and read the unordered clocks of Section 6.1 as the same
-1423	   failure a third time.  Pablo Etcheverry paired the two implementation
-1424	   cases, Vaara's third verdict and the companion's undelivered
-1425	   refusals, as two shapes of one bug, and that pairing is how the
-1426	   section describes them.
+1421	   The rule of Section 1.1 was named as one rule by Henri Sirkkavaara,
+1422	   after he found and closed its state form in Vaara's own consistency
+1423	   checker and read the unordered clocks of Section 6.1 as the same
+1424	   failure a third time.  Pablo Etcheverry paired the two implementation
+1425	   cases, Vaara's third verdict and the companion's undelivered
+1426	   refusals, as two shapes of one bug, and that pairing is how the
+1427	   section describes them.
 
-1428	Author's Address
+1429	Author's Address
 
-1430	   Emek Can Dogru
-1431	   VERAX TEKNOLOJI LIMITED SIRKETI
-1432	   Email: e.dogru@cedulon.com
+1431	   Emek Can Dogru
+1432	   VERAX TEKNOLOJI LIMITED SIRKETI
+1433	   Email: e.dogru@cedulon.com
 
 
 
