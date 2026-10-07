@@ -44,6 +44,10 @@ The core at `-03` was posted on 2 October 2026 (submission 169801) and
 moves the entry to Verax 0.4.2; the posted `-03` bytes are the render of
 `spec/draft-dogru-cedulon-core-03.md`, SHA-256
 `cac47317f1a9001254762e33968ef2452c5c6a24431650ee9613da37f95a3e3e`.
+The core at `-04` was posted on 7 October 2026 (submission 169944) and
+moves the entry to Verax 0.4.6; the posted `-04` bytes are the render of
+`spec/draft-dogru-cedulon-core-04.md`, SHA-256
+`3553ea5fa4c1f568eaedaf7aec54f105a635aec5adb7eb82cf7f8932ac811309`.
 The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
