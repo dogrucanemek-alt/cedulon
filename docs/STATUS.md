@@ -715,7 +715,7 @@ extracts and checkpoints. `@cedulon/x402-adapter` is a library in
 that tree; there is no live x402 rail.
 
 The packages `@verax-ai/body`, `@verax-ai/proxy` and
-`@verax-ai/inventory` are on npm at 0.4.2
+`@verax-ai/inventory` are on npm at 0.4.6
 (<https://www.npmjs.com/package/@verax-ai/body>,
 <https://www.npmjs.com/package/@verax-ai/proxy>,
 <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP
@@ -733,7 +733,7 @@ one amount. A tenant boundary has not been exercised with two live
 customers. License: Apache-2.0. Contact: the author of
 draft-dogru-cedulon.
 
-Version compatibility: Verax 0.4.2 depends on `@cedulon/*` 0.13.1.
+Version compatibility: Verax 0.4.6 depends on `@cedulon/*` 0.13.1.
 Those published packages implement the posted draft-dogru-cedulon-09
 profile and, from 0.13.0, the posted
 draft-dogru-cedulon-decision-profile-03. 0.13.1 changes no behaviour
