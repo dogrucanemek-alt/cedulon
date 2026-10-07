@@ -31,9 +31,9 @@ export const REQUIRED_URLS = [
   "https://doi.org/10.5281/zenodo.22811593",
 ] as const;
 
-export const VERAX_VERSION = "0.4.5";
+export const VERAX_VERSION = "0.4.6";
 /** The newest Verax version archived on Zenodo; it trails npm when a release is not deposited. */
-export const VERAX_ARCHIVED_VERSION = "0.4.5";
+export const VERAX_ARCHIVED_VERSION = "0.4.6";
 export const CEDULON_VERSION = "0.13.1";
 
 const DRAFT_START = "A second implementation is named here.";
