@@ -6,6 +6,8 @@ Maintained by [VERAX Teknoloji](https://verax-ai.com). Start with the VERAX body
 
 Listed on: [npm](https://www.npmjs.com/package/@cedulon/mcp-server) · [Glama](https://glama.ai/mcp/servers/dogrucanemek-alt/cedulon) · [MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.dogrucanemek-alt/cedulon) · [MCP Market](https://mcpmarket.com/server/cedulon) · [LobeHub](https://lobehub.com/mcp/dogrucanemek-alt-cedulon) · [Zenodo](https://doi.org/10.5281/zenodo.22099791)
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/cedulon-mcp-server-wlrk7t?v=401716e60039b84a16a3bb64317313be&variant=verified)](https://m8ven.ai/mcp/cedulon-mcp-server-wlrk7t?s=readme)
+
 Audit layer for agent-to-agent spend: signed trade manifest, fail-closed
 policy, signed spend receipt (SCITT-anchorable).
 
