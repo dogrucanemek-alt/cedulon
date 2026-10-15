@@ -1,3 +1,4 @@
+import { isValidAmountText } from "@cedulon/core";
 import { totalsFromReceipts } from "@cedulon/checkpoint";
 import type { SignedReceipt } from "@cedulon/receipts";
 import type { RailSettlement } from "@cedulon/x402-adapter";
@@ -93,6 +94,8 @@ function spendAggregate(ref: string, records: SignedReceipt[], rows: RailSettlem
   const add = (into: Map<string, bigint>, currency: string, amount: string): void => {
     let parsed: bigint;
     try {
+      // BigInt reads "0x10"; the amount grammar does not.
+      if (!isValidAmountText(amount)) throw new Error("malformed-amount");
       parsed = BigInt(amount);
     } catch {
       // An amount the audit cannot read is itself a finding. Throwing here
