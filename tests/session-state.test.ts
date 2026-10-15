@@ -157,5 +157,13 @@ describe("session state file", () => {
       allow();
     }
     assert.equal(readFileSync(statePath, "utf8"), before, "the state file was rewritten while it could not be read");
+
+    // reload() emptied the session before it read the file. A reload that
+    // fails has to leave the session as it was, or the next payment, once the
+    // file can be read again, saves an empty history over the real one.
+    assert.equal(first.receipts.length, 1, "a failed reload dropped the session's receipts");
+    assert.equal(spendOnce(first, "n1".padEnd(16, "-")).ok, true);
+    const saved = JSON.parse(readFileSync(statePath, "utf8")) as { receipts: unknown[] };
+    assert.equal(saved.receipts.length, 2, "the receipt from before the failed reload is gone from the file");
   });
 });
