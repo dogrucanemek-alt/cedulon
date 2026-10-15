@@ -700,6 +700,25 @@ describe("reconciliation gaps: following extract, per-receipt approval, totals o
     assert.equal(report.findings.some((f) => f.code === "malformed-amount" && f.id === `epoch-${cp.claims.epoch}`), true);
   });
 
+  // The repeated-ref path sums amounts per currency too, and leaned on BigInt
+  // in the same way: "0x10" against rows of 1 and 15 balanced at 16.
+  it("RED then GREEN: a repeated ref with an amount outside the grammar is malformed-amount, not a balance (MUST-T10-13)", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const bad = signReceiptUnchecked(claimsFor("ref-d", "n-dup", NOW + 10, null, "USD", "0x10"), honest.privateKeyPem, honest.publicKeyPem);
+    const report = audit({
+      receipts: [bad],
+      checkpoints: [],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [
+        { ref: "ref-d", amount: "1" },
+        { ref: "ref-d", amount: "15" },
+      ]),
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.equal(report.findings.some((f) => f.code === "malformed-amount" && f.id === "ref-d"), true);
+  });
+
   // A presented extract the pinned key refused is not evidence of anything,
   // including of which window the following extract should start at.
   it("RED then GREEN: a following extract is not measured against a presented extract the audit refused", () => {
