@@ -323,7 +323,7 @@ jobs:
             echo "finish mode needs the version input (e.g. 0.13.1)"
             exit 1
           fi
-          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "version input is not a version: $V"
             exit 1
           fi
@@ -528,7 +528,7 @@ jobs:
           else
             V="${GITHUB_REF_NAME#v}"
           fi
-          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "version is not a version: $V"
             exit 1
           fi
