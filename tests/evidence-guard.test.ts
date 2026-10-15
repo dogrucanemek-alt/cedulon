@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -268,5 +268,33 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal(reused.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW + WINDOW).ok, false);
     const fresh = reused.spend(spendArgs(nonce("reuse-next")), NOW + WINDOW + 1);
     assert.equal(fresh.ok, true, "a window whose only payment the rail refused kept it on the counters");
+
+    // A journal with no prepared row for the nonce (a file written before the
+    // journal had one) does not say when the reserve was made. Unknown is not
+    // "now": read that way, the release refunds the current window.
+    const legacyPath = statePath();
+    const legacyFirst = new CedulonSession({ statePath: legacyPath, policy });
+    const k = nonce("noprep");
+    assert.throws(
+      () => legacyFirst.submitExternal(spendArgs(k), new MockExternalRail("crash"), NOW),
+      /cedulon-rail-crash/,
+    );
+    const raw = JSON.parse(readFileSync(legacyPath, "utf8")) as { journal: JournalEntry[] };
+    raw.journal = raw.journal.filter((e) => !(e.nonce === k && e.phase === "prepared"));
+    writeFileSync(legacyPath, `${JSON.stringify(raw)}\n`);
+    const legacy = new CedulonSession({ statePath: legacyPath, keys: legacyFirst.keys, policy });
+    assert.equal(lastPhase(legacy, k), "indeterminate");
+    assert.equal(legacy.spend(spendArgs(nonce("legacy-a")), NOW + WINDOW).ok, true);
+    const legacyRail = generateExtractKeys();
+    const legacyExtract = coveringExtract(k, legacyRail, [], { start: NOW, end: NOW + 10 });
+    const legacyOut = resolveIndeterminate(
+      legacy,
+      k,
+      { extract: legacyExtract, railKeyPem: legacyRail.publicKeyPem },
+      NOW + WINDOW + 1,
+    );
+    assert.equal(legacyOut.ok, true);
+    const legacyNext = legacy.spend(spendArgs(nonce("legacy-b")), NOW + WINDOW + 2);
+    assert.equal(legacyNext.ok, false, "a reserve of unknown time refunded the current window");
   });
 });
