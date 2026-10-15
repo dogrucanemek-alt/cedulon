@@ -141,18 +141,26 @@ export class PolicyEngine {
    * The counters belong to the window they were taken in. A reserve from a
    * window that has already rolled is not in them, and taking it off would
    * give the current window room it never had.
+   * A reserve whose time is unknown is not taken off any window — refusing a
+   * payment the window could have made is recoverable, an extra payment is
+   * not. A reserve made with a clock that ran behind the window's start is
+   * judged old and stays on the counters until the window rolls; that is the
+   * safe side.
    */
   release(nonce: string, amount: bigint, reservedAtMs: number): void {
     this.store.usedNonces.delete(nonce);
-    if (reservedAtMs < this.store.counters.windowStartMs) {
-      return;
+    if (
+      typeof reservedAtMs === "number" &&
+      Number.isFinite(reservedAtMs) &&
+      reservedAtMs >= this.store.counters.windowStartMs
+    ) {
+      const c = this.store.counters;
+      this.store.counters = {
+        windowStartMs: c.windowStartMs,
+        allowedCount: Math.max(0, c.allowedCount - 1),
+        allowedSum: c.allowedSum >= amount ? c.allowedSum - amount : 0n,
+      };
     }
-    const c = this.store.counters;
-    this.store.counters = {
-      windowStartMs: c.windowStartMs,
-      allowedCount: Math.max(0, c.allowedCount - 1),
-      allowedSum: c.allowedSum >= amount ? c.allowedSum - amount : 0n,
-    };
   }
 
   consumeDecision(decisionId: string, requestHash: string, req: SpendRequest): Decision {

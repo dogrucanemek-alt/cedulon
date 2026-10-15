@@ -954,7 +954,7 @@ export class CedulonSession {
       }
       const result = rail.submit(row);
       if (result === "failed") {
-        this.engine.release(args.nonce, BigInt(args.amount), this.reservedAtMs(args.nonce, nowMs));
+        this.engine.release(args.nonce, BigInt(args.amount), this.reservedAtMs(args.nonce));
         this.appendJournal({ ...row, phase: "failed", atMs: nowMs });
         this.save();
         return { ok: false, reason: "rail-failed" };
@@ -1034,7 +1034,7 @@ export class CedulonSession {
       return { ok: false, reason: "state-io" };
     }
     if (result === "failed") {
-      this.engine.release(folded.nonce, BigInt(folded.amount), this.reservedAtMs(folded.nonce, nowMs));
+      this.engine.release(folded.nonce, BigInt(folded.amount), this.reservedAtMs(folded.nonce));
       this.appendJournal({ ...row, phase: "failed", atMs: nowMs });
       this.save();
       return { ok: false, reason: "rail-failed" };
@@ -1080,7 +1080,7 @@ export class CedulonSession {
       );
       return receipt;
     }
-    this.engine.release(folded.nonce, BigInt(folded.amount), this.reservedAtMs(folded.nonce, nowMs));
+    this.engine.release(folded.nonce, BigInt(folded.amount), this.reservedAtMs(folded.nonce));
     this.appendJournal({
       nonce: folded.nonce,
       amount: folded.amount,
@@ -1138,16 +1138,17 @@ export class CedulonSession {
     return foldJournal(this.journal).find((row) => row.nonce === nonce);
   }
 
-  private reservedAtMs(nonce: string, fallback: number): number {
+  private reservedAtMs(nonce: string): number {
     // A nonce the rail refused can be reserved again; the reserve being released
-    // is the latest one.
+    // is the latest one. A reserve with no prepared row has no known time; it is
+    // not refunded to any window.
     for (let i = this.journal.length - 1; i >= 0; i--) {
       const entry = this.journal[i];
       if (entry.nonce === nonce && entry.phase === "prepared") {
         return entry.atMs;
       }
     }
-    return fallback;
+    return Number.NEGATIVE_INFINITY;
   }
 
   private lastSubmittedAtMs(nonce: string): number | null {
@@ -1168,7 +1169,7 @@ export class CedulonSession {
     let dirty = false;
     for (const row of foldJournal(this.journal)) {
       if (row.phase === "prepared") {
-        this.engine.release(row.nonce, BigInt(row.amount), this.reservedAtMs(row.nonce, row.atMs));
+        this.engine.release(row.nonce, BigInt(row.amount), this.reservedAtMs(row.nonce));
         this.appendJournal({
           nonce: row.nonce,
           amount: row.amount,
