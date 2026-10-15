@@ -111,8 +111,8 @@ without a pin the same departure is a warning that does not by itself fail it;
 and `requestHash` is still the SHA-256 of the six-field canonical document in
 lowercase hex, the digest the posted draft does not name.
 
-`0.13.0` is published on npm, with a provenance attestation, and it is what a
-reader now gets from an installed package: the decision profile, the second
+`0.13.0` is published on npm, with a provenance attestation, and it was what a
+reader got from an installed package until 0.13.1: the decision profile, the second
 population on the reconciler that `docs/UPGRADING.md` describes under its
 heading, sections A to E. Checked from the published packages rather than
 from this tree: a clean install of `@cedulon/mcp-server@0.13.0` in an empty
@@ -555,7 +555,7 @@ forty minutes after the npm publish, because the post-release check then sat
 ahead of the registry step and failed as it does on every tagged run; the
 check has its own job now and the step ran. `server.json` is the entry it
 was published from, and the listing names `@cedulon/mcp-server` at the same
-`0.13.0`. On that
+`0.14.0`. On that
 reading the two channels are in step. The `0.11.0` listing had been pushed by
 hand the same way on 2 September at 23:59 UTC. The search endpoint
 answered a stale version for a short while after an earlier publish returned;
@@ -578,13 +578,13 @@ this page names the one before it. Nicholas Templeman reproduced `da7bf9b` on 5
 September, after 0.13.0 shipped, and got the red that told him nothing about
 which of the two had failed; that is the run this distinction comes from.
 
-`release.yml` still sends packages to npm from the tag. It now also carries an
+`release.yml` still sends packages to npm from the tag. It also carries an
 MCP Registry step (`mcp-publisher login github-oidc` then `publish`) after the
-npm readback and the post-release suite. The tree now carries the step; it is
-unproven until the next tag runs it. Until that tag runs, the registry entry
-still moves when someone runs `mcp-publisher` by hand and can lag behind npm -
-it spent half a day on `0.6.0` while npm served `0.7.0` - so when the numbers
-differ, this paragraph is where both get named. Earlier listings: `0.2.1` announced itself as `0.2.0`
+npm readback; the post-release check has a job of its own. The step ran on the
+0.13.0 and 0.14.0 tags. When a tagged run stops before it, the entry is pushed
+by `finish` mode or by hand and can lag behind npm - it spent half a day on
+`0.6.0` while npm served `0.7.0` - so when the numbers differ, this paragraph
+is where both get named. Earlier listings: `0.2.1` announced itself as `0.2.0`
 over `initialize`, because the version was written out a second time in the
 source; `0.2.2` replaced that. `tests/release-manifest.test.ts` and the version
 check in `tests/mcp-server.test.ts` compare those declarations against each
