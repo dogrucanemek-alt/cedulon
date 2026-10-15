@@ -23,6 +23,7 @@ import {
   hexToBytes,
   kidFromPublicKeyPem,
   NAMED_DECODE_REFUSALS,
+  pemSigner,
   sigStructure,
   signCoseSign1,
   verifyCoseSign1,
@@ -432,5 +433,51 @@ describe("COSE_Sign1 profile checks", () => {
     }
     assert.deepEqual([...hexToBytes("00ff")], [0, 255]);
     assert.deepEqual([...hexToBytes("")], []);
+  });
+});
+
+describe("one encoding per value: edges a second reading named", () => {
+  const refusedAs = (name: string) => (err: unknown) => err instanceof Error && err.message === name;
+
+  it("RED then GREEN: a PEM signer whose private key is not Ed25519 is refused", () => {
+    // signReceipt and friends build their signer through pemSigner; the
+    // header they write says Ed25519 whatever the private key is.
+    const k = fixtureEd25519Pems();
+    const ed448 = generateKeyPairSync("ed448");
+    const priv448 = ed448.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    assert.throws(() => pemSigner(priv448, k.publicKeyPem), refusedAs("cose-key-type"));
+    assert.equal(typeof pemSigner(k.privateKeyPem, k.publicKeyPem).sign, "function");
+  });
+
+  it("a leading byte order mark is kept, not stripped", () => {
+    assert.equal(bytesToHex(encodeCbor("﻿")), "63efbbbf");
+    assert.equal(decodeCbor(hexToBytes("63efbbbf")), "﻿");
+  });
+
+  it("a lone low surrogate is refused, and a valid astral pair is not", () => {
+    assert.throws(() => encodeCbor("\uDC00"), refusedAs("cbor-invalid-text"));
+    const astral = "😀";
+    assert.equal(decodeCbor(encodeCbor(astral)), astral);
+  });
+
+  it("a repeated key that is not next to its twin in the input is still refused", () => {
+    assert.throws(() => encodeCbor(cborMap([[1, 0], [2, 0], [1, 1]])), refusedAs("cbor-duplicate-key"));
+  });
+
+  it("map keys are ordered by their encoded bytes, not by number or by length", () => {
+    // -1 encodes as 0x20 and 1 as 0x01, so 1 comes first.
+    assert.equal(bytesToHex(encodeCbor(cborMap([[-1, 0], [1, 0]]))), "a201002000");
+    assert.throws(() => decodeCbor(hexToBytes("a220000100")), refusedAs("cbor-non-deterministic"));
+  });
+
+  it("an eight-byte head for a small integer is refused", () => {
+    assert.throws(() => decodeCbor(hexToBytes("1b0000000000000001")), refusedAs("cbor-non-deterministic"));
+  });
+
+  it("a message whose content type is the empty string verifies against the empty string only", () => {
+    const k = fixtureEd25519Pems();
+    const msg = signCoseSign1(encodeCbor(1), k.privateKeyPem, "");
+    assert.equal(verifyCoseSign1(msg, k.publicKeyPem, ""), true);
+    assert.equal(verifyCoseSign1(msg, k.publicKeyPem, CTY_RECEIPT), false);
   });
 });
