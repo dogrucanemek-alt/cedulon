@@ -678,4 +678,96 @@ describe("reconciliation gaps: following extract, per-receipt approval, totals o
     });
     assert.equal(report.findings.some((f) => f.code === "checkpoint-total-mismatch"), true);
   });
+
+  // BigInt() reads "0x10" as 16 and "01" as 1 without complaint, so leaning on
+  // it to throw lets an amount outside the grammar into the totals.
+  it("RED then GREEN: an amount outside the grammar is malformed-amount even when BigInt would read it (MUST-T10-13)", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const bad = signReceiptUnchecked(claimsFor("ref-x", "n-hex", NOW + 10, null, "USD", "0x10"), honest.privateKeyPem, honest.publicKeyPem);
+    const cp = signCheckpoint(
+      { ...buildCheckpointClaims(1, [bad], NOW, WINDOW_END, null, () => ({})), totals: { USD: "16" } },
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [bad],
+      checkpoints: [cp],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [{ ref: "ref-x", amount: "16" }]),
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.equal(report.findings.some((f) => f.code === "malformed-amount" && f.id === `epoch-${cp.claims.epoch}`), true);
+  });
+
+  // A presented extract the pinned key refused is not evidence of anything,
+  // including of which window the following extract should start at.
+  it("RED then GREEN: a following extract is not measured against a presented extract the audit refused", () => {
+    const rail = generateExtractKeys();
+    const stranger = generateExtractKeys();
+    const refused = signRailExtract(
+      { accountId: "wrong", railId: "wrong", windowStartMs: NOW, windowEndMs: NOW + 10, settlements: [] },
+      stranger.privateKeyPem,
+      stranger.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [],
+      checkpoints: [],
+      extract: refused,
+      nextExtract: extractFor(rail, "acct", WINDOW_END, WINDOW_END + 1_000, [{ ref: "r" }]),
+      trust: railPin(rail),
+    });
+    assert.equal(report.findings.some((f) => f.code === "extract-key-mismatch"), true);
+    assert.equal(report.findings.some((f) => f.code === "extract-scope-mismatch" && f.id === "nextExtract"), false);
+  });
+
+  // Guards for checks the change already makes; each has to fail if its
+  // check is removed.
+  it("a following extract for another rail does not resolve a deferred receipt", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const receipt = signReceipt(claimsFor("ref-late", "n-late", WINDOW_END - 1, null), honest.privateKeyPem, honest.publicKeyPem);
+    const next = signRailExtract(
+      {
+        accountId: "acct",
+        railId: "rail-B",
+        windowStartMs: WINDOW_END,
+        windowEndMs: WINDOW_END + 1_000,
+        settlements: [{ ref: "ref-late", amount: "1", currency: "USD", timestampMs: WINDOW_END + 1 }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [receipt],
+      checkpoints: [
+        signCheckpoint(buildCheckpointClaims(1, [receipt], NOW, WINDOW_END, null), honest.privateKeyPem, honest.publicKeyPem),
+      ],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [{ ref: "other" }]),
+      nextExtract: next,
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      trust: railPin(rail),
+    });
+    assert.equal(report.warnings.some((w) => w.code === "boundary-deferred" && w.id === receipt.claims.nonce), true);
+    assert.equal(report.findings.some((f) => f.code === "extract-scope-mismatch" && f.id === "nextExtract"), true);
+  });
+
+  it("signed totals with a currency the receipts do not have are a mismatch", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const a = signReceipt(claimsFor("ref-a", "n-eur", NOW + 10, null, "EUR"), honest.privateKeyPem, honest.publicKeyPem);
+    const extra = signCheckpoint(
+      { ...buildCheckpointClaims(1, [a], NOW, WINDOW_END, null), totals: { EUR: "1", GBP: "9" } },
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [a],
+      checkpoints: [extra],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [{ ref: "ref-a", currency: "EUR" }]),
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.equal(report.findings.some((f) => f.code === "checkpoint-total-mismatch"), true);
+  });
 });
