@@ -806,6 +806,9 @@ export class CedulonSession {
       // An empty or partial file is a holder still between the exclusive create
       // and the pid write, so it counts as held. One that stays unreadable for
       // a minute is a writer that died in between and is taken over.
+      // A lock stamped in the future, by a file system whose clock runs ahead,
+      // also counts as held; refusing for a while is recoverable, two writers
+      // are not.
       let st: { mtimeMs: number };
       try {
         st = statSync(lockPath);
@@ -813,7 +816,7 @@ export class CedulonSession {
         if ((statErr as NodeJS.ErrnoException)?.code === "ENOENT") return true;
         return false;
       }
-      if (Math.abs(Date.now() - st.mtimeMs) < UNREADABLE_LOCK_GRACE_MS) return false;
+      if (Date.now() - st.mtimeMs < UNREADABLE_LOCK_GRACE_MS) return false;
       return true;
     }
     if (typeof pid !== "number" || pid === process.pid) {
