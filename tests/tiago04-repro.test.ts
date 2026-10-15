@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import { DEFAULT_CLOCK_SKEW_MS, audit } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint } from "@cedulon/checkpoint";
 import { generateManifestKeys, manifestHash, signManifest, verifyManifest } from "@cedulon/manifest";
-import { generateReceiptKeys, signReceipt } from "@cedulon/receipts";
+import { counterSign, generateReceiptKeys, receiptHash, signReceipt, signReceiptUnchecked } from "@cedulon/receipts";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
 
 const NOW = 1_700_000_000_000;
@@ -468,5 +468,146 @@ describe("Tiago -04 K5/K7 (decided)", () => {
     );
     assert.equal(verifyManifest(signed, merchant.publicKeyPem), true);
     assert.equal(signed.body.payee, undefined);
+  });
+});
+
+describe("reconciliation gaps: following extract, per-receipt approval, totals order, unparseable amount", () => {
+  const claimsFor = (ref: string, nonce: string, ts: number, prev: string | null, currency = "USD", amount = "1") => ({
+    payer: "payer",
+    payee: "payee-1",
+    amount,
+    currency,
+    policyHash: TEST_HASH,
+    manifestHash: null,
+    noManifest: true,
+    x402PaymentRef: ref,
+    timestampMs: ts,
+    nonce: nonce.padEnd(16, "-"),
+    prevReceiptHash: prev,
+    outcome: "settled" as const,
+  });
+  const extractFor = (
+    rail: ReturnType<typeof generateExtractKeys>,
+    accountId: string,
+    start: number,
+    end: number,
+    rows: Array<{ ref: string; amount?: string; currency?: string }>,
+  ) =>
+    signRailExtract(
+      {
+        accountId,
+        railId: "rail",
+        windowStartMs: start,
+        windowEndMs: end,
+        settlements: rows.map((r) => ({ ref: r.ref, amount: r.amount ?? "1", currency: r.currency ?? "USD", timestampMs: start + 1 })),
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+  const railPin = (rail: ReturnType<typeof generateExtractKeys>) => ({
+    publicKeyPem: rail.publicKeyPem,
+    accountId: "acct",
+    railId: "rail",
+    windowStartMs: NOW,
+    windowEndMs: WINDOW_END,
+  });
+
+  // Step 5 resolves a closing-edge deferral with "the following window's
+  // extract". An extract the rail key signed for another account, or for a
+  // window that does not start where this one ends, is not that document: it
+  // resolves nothing and fails closed on the same terms as a primary extract
+  // outside the stated scope (MUST-T10-11).
+  for (const [label, accountId, start] of [
+    ["another account", "acct-B", WINDOW_END],
+    ["a window that does not follow", "acct", WINDOW_END + 50_000],
+  ] as const) {
+    it(`RED then GREEN: an extract for ${label} does not resolve a deferred receipt (MUST-T10-17)`, () => {
+      const honest = generateReceiptKeys();
+      const rail = generateExtractKeys();
+      const receipt = signReceipt(claimsFor("ref-late", "n-late", WINDOW_END - 1, null), honest.privateKeyPem, honest.publicKeyPem);
+      const report = audit({
+        receipts: [receipt],
+        checkpoints: [
+          signCheckpoint(buildCheckpointClaims(1, [receipt], NOW, WINDOW_END, null), honest.privateKeyPem, honest.publicKeyPem),
+        ],
+        extract: extractFor(rail, "acct", NOW, WINDOW_END, [{ ref: "other" }]),
+        nextExtract: extractFor(rail, accountId, start, start + 1_000, [{ ref: "ref-late" }]),
+        issuerTrust: { publicKeyPem: honest.publicKeyPem },
+        trust: railPin(rail),
+      });
+      assert.equal(
+        report.warnings.some((w) => w.code === "boundary-deferred" && w.id === receipt.claims.nonce),
+        true,
+        "the deferral must stay open",
+      );
+      assert.equal(report.findings.some((f) => f.code === "extract-scope-mismatch" && f.id === "nextExtract"), true);
+      assert.equal(report.ok, false);
+      assert.equal(report.guarantee, "conditional");
+    });
+  }
+
+  it("RED then GREEN: payee approval belongs to the receipt it was given for, not to its nonce (MUST-T4-14)", () => {
+    const honest = generateReceiptKeys();
+    const payee = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const a = signReceipt(claimsFor("ref-a", "n-same", NOW + 10, null), honest.privateKeyPem, honest.publicKeyPem);
+    const b = signReceipt(claimsFor("ref-b", "n-same", NOW + 11, receiptHash(a)), honest.privateKeyPem, honest.publicKeyPem);
+    const report = audit({
+      receipts: [counterSign(a, payee.privateKeyPem, payee.publicKeyPem, honest.publicKeyPem), b],
+      checkpoints: [
+        signCheckpoint(buildCheckpointClaims(1, [a, b], NOW, WINDOW_END, null), honest.privateKeyPem, honest.publicKeyPem),
+      ],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [{ ref: "ref-a" }, { ref: "ref-b" }]),
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      payeeTrust: { "payee-1": payee.publicKeyPem },
+    });
+    assert.equal(report.warnings.filter((w) => w.code === "countersign-missing").length, 1);
+    assert.equal(report.guarantee, "conditional");
+  });
+
+  it("RED then GREEN: checkpoint totals compare by currency, not by the order the members arrived in", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const a = signReceipt(claimsFor("ref-a", "n-eur", NOW + 10, null, "EUR"), honest.privateKeyPem, honest.publicKeyPem);
+    const b = signReceipt(claimsFor("ref-b", "n-usd", NOW + 11, receiptHash(a), "USD"), honest.privateKeyPem, honest.publicKeyPem);
+    const cp = signCheckpoint(buildCheckpointClaims(1, [a, b], NOW, WINDOW_END, null), honest.privateKeyPem, honest.publicKeyPem);
+    const base = {
+      receipts: [a, b],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [
+        { ref: "ref-a", currency: "EUR" },
+        { ref: "ref-b", currency: "USD" },
+      ]),
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    };
+    const totals = cp.claims.totals as Record<string, string>;
+    const reordered = { ...cp, claims: { ...cp.claims, totals: { USD: totals.USD, EUR: totals.EUR } } };
+    const report = audit({ ...base, checkpoints: [reordered] });
+    assert.equal(report.findings.some((f) => f.code === "checkpoint-total-mismatch"), false);
+    assert.equal(report.ok, true);
+    // A real difference is still a difference.
+    const wrong = { ...cp, claims: { ...cp.claims, totals: { EUR: "2", USD: totals.USD } } };
+    assert.equal(audit({ ...base, checkpoints: [wrong] }).findings.some((f) => f.code === "checkpoint-total-mismatch"), true);
+  });
+
+  it("RED then GREEN: an amount the audit cannot parse is malformed-amount, and the report still comes back (MUST-T10-13)", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const bad = signReceiptUnchecked(claimsFor("ref-x", "n-bad", NOW + 10, null, "USD", "1.5"), honest.privateKeyPem, honest.publicKeyPem);
+    const claims = buildCheckpointClaims(1, [bad], NOW, WINDOW_END, null, () => ({}));
+    const cp = signCheckpoint({ ...claims, totals: null }, honest.privateKeyPem, honest.publicKeyPem);
+    let report: ReturnType<typeof audit> | undefined;
+    assert.doesNotThrow(() => {
+      report = audit({
+        receipts: [bad],
+        checkpoints: [cp],
+        extract: extractFor(rail, "acct", NOW, WINDOW_END, [{ ref: "ref-x", amount: "2" }]),
+        trust: railPin(rail),
+        issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      });
+    });
+    assert.equal(report!.ok, false);
+    assert.equal(report!.findings.some((f) => f.code === "malformed-amount"), true);
   });
 });
