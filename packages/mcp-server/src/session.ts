@@ -480,16 +480,35 @@ export class CedulonSession {
    */
   reload(): { dropped: string[] } {
     const held = this.receipts.map((r) => r.claims.nonce);
-    this.receipts.length = 0;
-    this.checkpoints = [];
-    this.journal.length = 0;
-    this.sealedPrivate = null;
-    this.keyUnprotectOk = false;
-    this.ledger.restore([]);
-    this.engine.store.reset();
-    this.load();
-    this.lastSeenState = this.readStateFingerprint();
-    this.recoverJournal();
+    // A reload that fails leaves the session as it was; an emptied session that
+    // later saves writes an empty history over the real one.
+    const undo = this.snapshot();
+    const sealedPrivate = this.sealedPrivate;
+    const keyUnprotectOk = this.keyUnprotectOk;
+    const keys = { ...this.keys };
+    const issuer = this.issuer;
+    const lastSeenState = this.lastSeenState;
+    try {
+      this.receipts.length = 0;
+      this.checkpoints = [];
+      this.journal.length = 0;
+      this.sealedPrivate = null;
+      this.keyUnprotectOk = false;
+      this.ledger.restore([]);
+      this.engine.store.reset();
+      this.load();
+      this.lastSeenState = this.readStateFingerprint();
+      this.recoverJournal();
+    } catch (err) {
+      this.restore(undo);
+      this.sealedPrivate = sealedPrivate;
+      this.keyUnprotectOk = keyUnprotectOk;
+      this.keys.receiptPrivatePem = keys.receiptPrivatePem;
+      this.keys.receiptPublicPem = keys.receiptPublicPem;
+      this.issuer = issuer;
+      this.lastSeenState = lastSeenState;
+      throw err;
+    }
     const now = new Set(this.receipts.map((r) => r.claims.nonce));
     return { dropped: held.filter((nonce) => !now.has(nonce)) };
   }
