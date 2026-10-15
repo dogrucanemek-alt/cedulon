@@ -719,6 +719,31 @@ describe("reconciliation gaps: following extract, per-receipt approval, totals o
     assert.equal(report.findings.some((f) => f.code === "malformed-amount" && f.id === "ref-d"), true);
   });
 
+  // One unreadable amount makes that currency's sum unknown, not every
+  // currency's. A shortfall in another currency on the same ref is still a
+  // shortfall, and MUST-T10-13 asks for it to be stated.
+  it("RED then GREEN: a malformed amount in one currency does not hide a shortfall in another on the same ref (MUST-T10-13)", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const bad = signReceiptUnchecked(claimsFor("ref-m", "n-mix", NOW + 10, null, "USD", "0x10"), honest.privateKeyPem, honest.publicKeyPem);
+    const report = audit({
+      receipts: [bad],
+      checkpoints: [],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [
+        { ref: "ref-m", amount: "1", currency: "USD" },
+        { ref: "ref-m", amount: "5", currency: "EUR" },
+      ]),
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.equal(report.findings.some((f) => f.code === "malformed-amount" && f.id === "ref-m"), true);
+    assert.equal(
+      report.findings.some((f) => f.code === "settlement-without-receipt" && f.id === "ref-m" && /5 EUR unaccounted/.test(f.detail)),
+      true,
+      "the EUR shortfall must be stated",
+    );
+  });
+
   // A presented extract the pinned key refused is not evidence of anything,
   // including of which window the following extract should start at.
   it("RED then GREEN: a following extract is not measured against a presented extract the audit refused", () => {
