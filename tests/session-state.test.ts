@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -113,5 +114,48 @@ describe("session state file", () => {
       rmSync(link, { recursive: true, force: true });
       rmSync(real, { recursive: true, force: true });
     }
+  });
+
+  it("RED then GREEN: a state file that exists but cannot be read is refused, not started over", (t) => {
+    // Any read error was taken to mean "no state yet". A file that a virus
+    // scanner holds open, or whose permissions changed, then started the
+    // server with no receipts and a newly generated key, and the first save
+    // renamed over the file: measured on Windows, three receipts and the
+    // signing key gone. Only a file that is not there is a fresh start.
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-unreadable-"));
+    assert.throws(() => new CedulonSession({ statePath: dir }), /cedulon-state-unreadable/);
+
+    const statePath = join(dir, "state.json");
+    const first = new CedulonSession({ statePath });
+    assert.equal(spendOnce(first, "n0".padEnd(16, "-")).ok, true);
+    const before = readFileSync(statePath, "utf8");
+
+    const user = process.env.USERNAME ?? "";
+    const deny = () =>
+      process.platform === "win32"
+        ? execFileSync("icacls", [statePath, "/deny", `${user}:(RD)`], { stdio: "ignore" })
+        : chmodSync(statePath, 0o000);
+    const allow = () =>
+      process.platform === "win32"
+        ? execFileSync("icacls", [statePath, "/remove:d", user], { stdio: "ignore" })
+        : chmodSync(statePath, 0o600);
+    deny();
+    try {
+      let readable = true;
+      try {
+        readFileSync(statePath);
+      } catch {
+        readable = false;
+      }
+      if (readable) {
+        t.skip("this account can read a file whose read permission was removed (root)");
+        return;
+      }
+      assert.throws(() => new CedulonSession({ statePath }), /cedulon-state-unreadable/);
+      assert.throws(() => first.reload(), /cedulon-state-unreadable/);
+    } finally {
+      allow();
+    }
+    assert.equal(readFileSync(statePath, "utf8"), before, "the state file was rewritten while it could not be read");
   });
 });
