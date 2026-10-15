@@ -465,9 +465,13 @@ describe("one encoding per value: edges a second reading named", () => {
   });
 
   it("map keys are ordered by their encoded bytes, not by number or by length", () => {
-    // -1 encodes as 0x20 and 1 as 0x01, so 1 comes first.
+    // -1 encodes as 0x20 and 1 as 0x01, so 1 comes first (not numeric order).
     assert.equal(bytesToHex(encodeCbor(cborMap([[-1, 0], [1, 0]]))), "a201002000");
     assert.throws(() => decodeCbor(hexToBytes("a220000100")), refusedAs("cbor-non-deterministic"));
+    // 24 encodes as 0x18 0x18 and -1 as 0x20: the longer key comes first,
+    // which length-first ordering (RFC 7049 canonical) would reverse.
+    assert.equal(bytesToHex(encodeCbor(cborMap([[-1, 0], [24, 0]]))), "a21818002000");
+    assert.throws(() => decodeCbor(hexToBytes("a22000181800")), refusedAs("cbor-non-deterministic"));
   });
 
   it("an eight-byte head for a small integer is refused", () => {
