@@ -76,7 +76,10 @@ launchers `cedulon` and `cedulon-mcp` move to 1.1.0 in this tree: 1.0.0
 depends on `@cedulon/mcp-server@^0.13.0`, `@cedulon/mcp-server@0.13.1` does not
 export the `package.json` subpath the launcher resolves, and `cedulon@1.0.0`
 installs but, when run, stops with "cannot resolve" and exits 1. `release.yml` does not publish the
-launchers, and npm serves 1.0.0 until 1.1.0 is published. Unchanged, and named
+launchers; `cedulon@1.1.0` and `cedulon-mcp@1.1.0` were published by hand on
+15 October 2026, and npm now marks 1.1.0 as `latest` for both. Measured from
+npm in an empty folder: both install `@cedulon/mcp-server@0.14.0`, and each
+launcher starts the server and its `initialize` reports `0.14.0`. Unchanged, and named
 here because the gate reads this version's own paragraph: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
 introduced, where with a usable issuer pin the departure is a finding that
 fails the audit, and without a pin the same departure is a warning that does
