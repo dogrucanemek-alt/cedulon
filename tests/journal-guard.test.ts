@@ -199,6 +199,11 @@ describe("external submit order and crash recovery", () => {
     assert.equal(first.ok, false);
     assert.equal((first as { reason: string }).reason, "state-io");
     assert.deepEqual(phases(session, n), ["prepared", "submitted", "indeterminate"]);
+    assert.equal(
+      session.engine.store.usedNonces.has(n),
+      true,
+      "the reserve was given back while the outcome is unknown",
+    );
     const onDisk = (JSON.parse(readFileSync(path, "utf8")) as { journal: JournalEntry[] }).journal
       .filter((e) => e.nonce === n)
       .map((e) => e.phase);
