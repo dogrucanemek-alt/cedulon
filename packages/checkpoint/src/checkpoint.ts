@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { canonical, hashClaimRefusal } from "@cedulon/core";
+import { canonical, hashClaimRefusal, isValidAmountText } from "@cedulon/core";
 import {
   CTY_CHECKPOINT,
   asMap,
@@ -73,12 +73,24 @@ export function totalsFromReceipts(receipts: SignedReceipt[]): Record<string, st
     if (r.claims.outcome === "aborted") {
       continue;
     }
+    // BigInt accepts "0x10" and "01". The amount grammar does not, and a
+    // spelling it rejects must not be summed into the totals (MUST-T10-13).
+    if (!isValidAmountText(r.claims.amount)) {
+      throw new Error("malformed-amount");
+    }
     const prev = acc.get(r.claims.currency) ?? 0n;
     acc.set(r.claims.currency, prev + BigInt(r.claims.amount));
   }
   const out: Record<string, string> = {};
   for (const [k, v] of [...acc.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    out[k] = v.toString();
+    // [[Set]] of "__proto__" changes the prototype instead of storing the
+    // currency, so that total would vanish. Define the own property directly.
+    Object.defineProperty(out, k, {
+      value: v.toString(),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return out;
 }
@@ -114,7 +126,14 @@ function totalsFromCbor(value: CborVal): Record<string, string> {
     if (typeof k !== "string" || typeof v !== "string") {
       throw new Error("totals-types");
     }
-    out[k] = v;
+    // Same reason as totalsFromReceipts: a currency named "__proto__" must
+    // stay an own enumerable property through a decode.
+    Object.defineProperty(out, k, {
+      value: v,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return out;
 }

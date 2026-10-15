@@ -1799,7 +1799,7 @@ export function audit(input: AuditInput): AuditReport {
         ? verifyPresentedExtract(input.nextExtract, pop, input.trust.publicKeyPem)
         : verifyPresentedExtract(input.nextExtract, pop)),
   );
-  if (nextOk && input.extract && input.nextExtract) {
+  if (nextOk && input.extract && input.nextExtract && !extractRejected) {
     const next = input.nextExtract;
     const expectedAccount = extractAccountId(input.extract, pop);
     const gotAccount = extractAccountId(next, pop);
@@ -1832,13 +1832,37 @@ export function audit(input: AuditInput): AuditReport {
       nextOk = false;
     }
   }
+  // A row outside the following extract's own window is not a settlement of
+  // that window, so it cannot close a trailing deferral (MUST-T10-10). Read
+  // only after the signature and the scope comparison have both passed.
+  const nextInWindowRefs = new Set<string>();
+  let nextRowCount = 0;
+  if (nextOk && input.extract) {
+    const next = input.nextExtract!;
+    for (const row of extractRows(next, pop)) {
+      nextRowCount += 1;
+      if (row.timestampMs < next.body.windowStartMs || row.timestampMs >= next.body.windowEndMs) {
+        findings.push({
+          code: "extract-scope-mismatch",
+          id: row.ref,
+          detail: `${w.row} ${row.ref} at ${row.timestampMs} is outside the following ${w.extract}'s declared window ${next.body.windowStartMs}..${next.body.windowEndMs}`,
+        });
+      } else {
+        nextInWindowRefs.add(row.ref);
+      }
+    }
+  }
   const settlementBoundary: SettlementBoundary | undefined = input.extract
     ? {
         windowStartMs: input.extract.body.windowStartMs,
         windowEndMs: input.extract.body.windowEndMs,
         clockSkewMs: clockSkewOf(input.extract, pop),
-        ...(nextOk
-          ? { nextRefs: new Set(extractRows(input.nextExtract!, pop).map((s) => s.ref)) }
+        // A verified extract with no rows still closes the edge. One whose
+        // every row sits outside its window does not: an empty set is truthy,
+        // and attaching it would harden the deferral the out-of-window row
+        // must not close.
+        ...(nextOk && (nextRowCount === 0 || nextInWindowRefs.size > 0)
+          ? { nextRefs: nextInWindowRefs }
           : {}),
       }
     : undefined;
