@@ -74,8 +74,8 @@ bundle in one pass, the first under the workflow as #30 left it; its
 post-release job was red by design until this page named 0.14.0 as published. The unscoped
 launchers `cedulon` and `cedulon-mcp` move to 1.1.0 in this tree: 1.0.0
 depends on `@cedulon/mcp-server@^0.13.0`, `@cedulon/mcp-server@0.13.1` does not
-export the `package.json` subpath the launcher resolves, and an install of
-`cedulon@1.0.0` stops with "cannot resolve". `release.yml` does not publish the
+export the `package.json` subpath the launcher resolves, and `cedulon@1.0.0`
+installs but, when run, stops with "cannot resolve" and exits 1. `release.yml` does not publish the
 launchers, and npm serves 1.0.0 until 1.1.0 is published. Unchanged, and named
 here because the gate reads this version's own paragraph: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
 introduced, where with a usable issuer pin the departure is a finding that
