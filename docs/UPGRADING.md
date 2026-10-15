@@ -61,6 +61,14 @@ amount outside the grammar. A checkpoint built over receipts that
 `signReceipt` produced is unaffected: `signReceipt` already enforces the
 grammar.
 
+D. The unscoped launchers work. `cedulon` and `cedulon-mcp` find the server
+by resolving `@cedulon/mcp-server/package.json`, and the server's exports
+map did not list that subpath, so `cedulon@1.0.0` and `cedulon-mcp@1.0.0`
+stopped with "cannot resolve @cedulon/mcp-server" before the server started.
+`@cedulon/mcp-server` 0.14.0 exports `./package.json`, and the launchers move
+to 1.1.0, depending on `^0.14.0`. The scoped command the README documents
+(`npx -y @cedulon/mcp-server`) was never affected.
+
 Unchanged, and repeated here because the gate reads each version's own
 section: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
 introduced, where with a usable issuer pin the departure is a finding that

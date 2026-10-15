@@ -61,8 +61,10 @@ parameter. `@cedulon/audit` no longer lets a following extract for another
 account, rail or window close a deferred receipt, keys payee approval to the
 receipt rather than its nonce, compares checkpoint totals by currency, and
 reports an amount outside the grammar as `malformed-amount` instead of
-throwing or summing it. `docs/UPGRADING.md` lists each change under its own
-letter. Unchanged, and named here because the gate reads this version's own
+throwing or summing it. The unscoped launchers `cedulon` and `cedulon-mcp`
+at 1.0.0 stop with "cannot resolve" because the server did not export
+`./package.json`; 0.14.0 exports it and the launchers move to 1.1.0.
+`docs/UPGRADING.md` lists each change under its own letter. Unchanged, and named here because the gate reads this version's own
 paragraph: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
 introduced, where with a usable issuer pin the departure is a finding that
 fails the audit, and without a pin the same departure is a warning that does
