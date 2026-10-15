@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,10 +17,14 @@ import {
   decodeCoseSign1,
   decodeProtectedHeader,
   encodeCbor,
+  encodeCoseSign1,
   encodeProtectedHeader,
   fixtureEd25519Pems,
   hexToBytes,
   kidFromPublicKeyPem,
+  NAMED_DECODE_REFUSALS,
+  pemSigner,
+  sigStructure,
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
@@ -315,5 +319,169 @@ describe("COSE_Sign1 receipts", () => {
       () => signReceipt({ ...FIXTURE_CLAIMS, nonce: "short" }, k.privateKeyPem, k.publicKeyPem),
       /nonce-too-short/,
     );
+  });
+});
+
+// A message has one identity: receiptHash is SHA-256 over the transport octets,
+// and the chain, the checkpoint head and every comparison downstream read that
+// hash. A decoder that accepts a second spelling of the same value lets anyone
+// holding a receipt mint a second identity for it without the key, because the
+// signature covers the protected header and payload, not the outer array head.
+describe("one encoding per value (RFC 8949 §4.2.1)", () => {
+  const refusedAs = (name: string) => (err: unknown) => err instanceof Error && err.message === name;
+
+  it("RED then GREEN: a head longer than it needs to be is refused by name", () => {
+    for (const hex of ["1801", "190001", "1a00000001", "3800", "5800", "7800", "9800", "b800"]) {
+      assert.throws(() => decodeCbor(hexToBytes(hex)), refusedAs("cbor-non-deterministic"), hex);
+    }
+  });
+
+  it("RED then GREEN: map keys out of bytewise order are refused by name", () => {
+    assert.throws(() => decodeCbor(hexToBytes("a202000100")), refusedAs("cbor-non-deterministic"));
+  });
+
+  it("RED then GREEN: text that is not UTF-8 is refused by name, not replaced", () => {
+    for (const hex of ["61ff", "62c328", "63eda080"]) {
+      assert.throws(() => decodeCbor(hexToBytes(hex)), refusedAs("cbor-invalid-text"), hex);
+    }
+    assert.equal(decodeCbor(hexToBytes("63efbfbd")), "�");
+  });
+
+  it("RED then GREEN: a negative integer below the safe range is refused, so decode and encode agree", () => {
+    assert.throws(() => decodeCbor(hexToBytes("3b001fffffffffffff")), refusedAs("cbor-too-large"));
+    assert.equal(decodeCbor(hexToBytes("3b001ffffffffffffe")), -Number.MAX_SAFE_INTEGER);
+  });
+
+  it("RED then GREEN: a signed message re-spelled without the key does not verify, and the refusal is named", () => {
+    const k = fixtureEd25519Pems();
+    const good = bytesToHex(signCoseSign1(encodeCbor(cborMap([[1, "x"]])), k.privateKeyPem, CTY_RECEIPT));
+    assert.equal(verifyCoseSign1(hexToBytes(good), k.publicKeyPem, CTY_RECEIPT), true);
+    const protectedLen = decodeCoseSign1(hexToBytes(good)).protectedHeader.length;
+    const unprotectedAt = 2 + 2 * ((protectedLen < 24 ? 1 : 2) + protectedLen);
+    assert.equal(good.slice(unprotectedAt, unprotectedAt + 2), "a0");
+    const variants = [
+      "9804" + good.slice(2),
+      good.slice(0, unprotectedAt) + "b800" + good.slice(unprotectedAt + 2),
+    ];
+    for (const v of variants) {
+      assert.equal(verifyCoseSign1(hexToBytes(v), k.publicKeyPem, CTY_RECEIPT), false, v.slice(0, 12));
+      assert.equal(coseDecodeRefusalHex(v), "cbor-non-deterministic", v.slice(0, 12));
+    }
+  });
+
+  it("the new refusals are on the named list", () => {
+    assert.ok(NAMED_DECODE_REFUSALS.has("cbor-non-deterministic"));
+    assert.ok(NAMED_DECODE_REFUSALS.has("cbor-invalid-text"));
+  });
+
+  it("the published vectors are already in the one encoding", () => {
+    for (const hex of [VECTOR_RECEIPT_COSE_HEX, VECTOR_RECEIPT_COSE_HEX_POSTED_04, VECTOR_MANIFEST_COSE_HEX]) {
+      const msg = decodeCoseSign1(hexToBytes(hex));
+      assert.equal(bytesToHex(encodeCbor(decodeCbor(hexToBytes(hex)))), hex);
+      assert.equal(bytesToHex(encodeCbor(decodeCbor(msg.protectedHeader))), bytesToHex(msg.protectedHeader));
+      assert.equal(bytesToHex(encodeCbor(decodeCbor(msg.payload))), bytesToHex(msg.payload));
+    }
+  });
+});
+
+describe("the encoder refuses what the decoder refuses", () => {
+  it("RED then GREEN: a map with a repeated key is not encoded", () => {
+    assert.throws(() => encodeCbor(cborMap([[1, 0], [1, 1]])), (e: unknown) => e instanceof Error && e.message === "cbor-duplicate-key");
+  });
+
+  it("RED then GREEN: a string with a lone surrogate is not encoded", () => {
+    assert.throws(() => encodeCbor("\uD800"), (e: unknown) => e instanceof Error && e.message === "cbor-invalid-text");
+    assert.equal(bytesToHex(encodeCbor("�")), "63efbfbd");
+  });
+});
+
+describe("COSE_Sign1 profile checks", () => {
+  it("RED then GREEN: a key that is not Ed25519 is refused under alg -19", () => {
+    const ed448 = generateKeyPairSync("ed448");
+    const priv = ed448.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const pub = ed448.publicKey.export({ type: "spki", format: "pem" }).toString();
+    assert.throws(() => signCoseSign1(encodeCbor(1), priv, CTY_RECEIPT), (e: unknown) => e instanceof Error && e.message === "cose-key-type");
+    // A message an Ed448 key signed over a header that says -19, built by hand.
+    const protectedHeader = encodeProtectedHeader({ alg: COSE_ALG_ED25519, kid: kidFromPublicKeyPem(pub), contentType: CTY_RECEIPT });
+    const payload = encodeCbor(1);
+    const signature = new Uint8Array(sign(null, Buffer.from(sigStructure(protectedHeader, payload)), priv));
+    const msg = encodeCoseSign1({ protectedHeader, unprotected: {}, payload, signature });
+    assert.equal(verifyCoseSign1(msg, pub, CTY_RECEIPT), false);
+  });
+
+  it("RED then GREEN: a protected header that names a critical parameter is refused, even when validly signed", () => {
+    const k = fixtureEd25519Pems();
+    const protectedHeader = encodeCbor(
+      cborMap([[1, COSE_ALG_ED25519], [2, [99]], [3, CTY_RECEIPT], [4, kidFromPublicKeyPem(k.publicKeyPem)], [99, true]]),
+    );
+    const payload = encodeCbor(1);
+    const signature = new Uint8Array(sign(null, Buffer.from(sigStructure(protectedHeader, payload)), k.privateKeyPem));
+    const msg = encodeCoseSign1({ protectedHeader, unprotected: {}, payload, signature });
+    assert.equal(verifyCoseSign1(msg, k.publicKeyPem, CTY_RECEIPT), false);
+  });
+
+  it("RED then GREEN: an empty expected content type is compared, not skipped", () => {
+    const k = fixtureEd25519Pems();
+    const msg = signCoseSign1(encodeCbor(1), k.privateKeyPem, CTY_RECEIPT);
+    assert.equal(verifyCoseSign1(msg, k.publicKeyPem, ""), false);
+    assert.equal(verifyCoseSign1(msg, k.publicKeyPem), true);
+  });
+
+  it("RED then GREEN: hex with characters that are not hex digits is refused", () => {
+    for (const bad of ["01zz", "0g", "  ", "0x01"]) {
+      assert.throws(() => hexToBytes(bad), (e: unknown) => e instanceof Error && e.message === "hex-not-hex", bad);
+    }
+    assert.deepEqual([...hexToBytes("00ff")], [0, 255]);
+    assert.deepEqual([...hexToBytes("")], []);
+  });
+});
+
+describe("one encoding per value: edges a second reading named", () => {
+  const refusedAs = (name: string) => (err: unknown) => err instanceof Error && err.message === name;
+
+  it("RED then GREEN: a PEM signer whose private key is not Ed25519 is refused", () => {
+    // signReceipt and friends build their signer through pemSigner; the
+    // header they write says Ed25519 whatever the private key is.
+    const k = fixtureEd25519Pems();
+    const ed448 = generateKeyPairSync("ed448");
+    const priv448 = ed448.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    assert.throws(() => pemSigner(priv448, k.publicKeyPem), refusedAs("cose-key-type"));
+    assert.equal(typeof pemSigner(k.privateKeyPem, k.publicKeyPem).sign, "function");
+  });
+
+  it("a leading byte order mark is kept, not stripped", () => {
+    assert.equal(bytesToHex(encodeCbor("﻿")), "63efbbbf");
+    assert.equal(decodeCbor(hexToBytes("63efbbbf")), "﻿");
+  });
+
+  it("a lone low surrogate is refused, and a valid astral pair is not", () => {
+    assert.throws(() => encodeCbor("\uDC00"), refusedAs("cbor-invalid-text"));
+    const astral = "😀";
+    assert.equal(decodeCbor(encodeCbor(astral)), astral);
+  });
+
+  it("a repeated key that is not next to its twin in the input is still refused", () => {
+    assert.throws(() => encodeCbor(cborMap([[1, 0], [2, 0], [1, 1]])), refusedAs("cbor-duplicate-key"));
+  });
+
+  it("map keys are ordered by their encoded bytes, not by number or by length", () => {
+    // -1 encodes as 0x20 and 1 as 0x01, so 1 comes first (not numeric order).
+    assert.equal(bytesToHex(encodeCbor(cborMap([[-1, 0], [1, 0]]))), "a201002000");
+    assert.throws(() => decodeCbor(hexToBytes("a220000100")), refusedAs("cbor-non-deterministic"));
+    // 24 encodes as 0x18 0x18 and -1 as 0x20: the longer key comes first,
+    // which length-first ordering (RFC 7049 canonical) would reverse.
+    assert.equal(bytesToHex(encodeCbor(cborMap([[-1, 0], [24, 0]]))), "a21818002000");
+    assert.throws(() => decodeCbor(hexToBytes("a22000181800")), refusedAs("cbor-non-deterministic"));
+  });
+
+  it("an eight-byte head for a small integer is refused", () => {
+    assert.throws(() => decodeCbor(hexToBytes("1b0000000000000001")), refusedAs("cbor-non-deterministic"));
+  });
+
+  it("a message whose content type is the empty string verifies against the empty string only", () => {
+    const k = fixtureEd25519Pems();
+    const msg = signCoseSign1(encodeCbor(1), k.privateKeyPem, "");
+    assert.equal(verifyCoseSign1(msg, k.publicKeyPem, ""), true);
+    assert.equal(verifyCoseSign1(msg, k.publicKeyPem, CTY_RECEIPT), false);
   });
 });

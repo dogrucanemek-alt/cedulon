@@ -91,6 +91,12 @@ export function encodeProtectedHeader(header: ProtectedHeader): Uint8Array {
 
 export function decodeProtectedHeader(bytes: Uint8Array): ProtectedHeader {
   const map = asMap(decodeCbor(bytes));
+  // Label 2 is crit. RFC 9052 requires rejecting a critical parameter this
+  // profile does not understand, and the only labels it understands are
+  // alg, content type, and kid.
+  if (mapGet(map, 2) !== undefined) {
+    throw new Error("cose-protected-header");
+  }
   const alg = mapGet(map, COSE_HDR_ALG);
   const contentType = mapGet(map, COSE_HDR_CONTENT_TYPE);
   const kid = mapGet(map, COSE_HDR_KID);
@@ -111,6 +117,12 @@ export function signCoseSign1(
 ): Uint8Array {
   const signer =
     typeof key === "string" ? asSigner(key, publicKeyPemFromPrivate(key)) : key;
+  // The header written below always says Ed25519. crypto.sign follows the
+  // key's own type, so an Ed448 PEM or Signer would sign under a header
+  // that claims -19.
+  if (createPublicKey(signer.publicKeyPem).asymmetricKeyType !== "ed25519") {
+    throw new Error("cose-key-type");
+  }
   const protectedHeader = encodeProtectedHeader({
     alg: COSE_ALG_ED25519,
     kid: kidFromPublicKeyPem(signer.publicKeyPem),
@@ -180,10 +192,17 @@ export function verifyCoseSign1(
     if (header.alg !== COSE_ALG_ED25519) {
       return false;
     }
+    // crypto.verify trusts the key type, not the header. An Ed448 key would
+    // accept an Ed448 signature on a message whose alg label says -19.
+    if (createPublicKey(publicKeyPem).asymmetricKeyType !== "ed25519") {
+      return false;
+    }
     if (!bytesEqual(header.kid, kidFromPublicKeyPem(publicKeyPem))) {
       return false;
     }
-    if (expectedContentType && header.contentType !== expectedContentType) {
+    // "" is a content type the caller asked to compare. Skipping an empty
+    // string would verify a receipt against a type that was not asked for.
+    if (expectedContentType !== undefined && header.contentType !== expectedContentType) {
       return false;
     }
     const toBeSigned = sigStructure(msg.protectedHeader, msg.payload);

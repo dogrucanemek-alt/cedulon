@@ -26,6 +26,12 @@ const MT_TSTR = 3;
 const MT_ARRAY = 4;
 const MT_MAP = 5;
 
+// fatal: ill-formed UTF-8 must not become U+FFFD, or those octets and the
+// encoding of U+FFFD would be one string while a receipt hash still names
+// the original octets. ignoreBOM: a leading EF BB BF is U+FEFF, and dropping
+// it would make the decoded text a different value than the bytes.
+const utf8Decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
 export function encodeCbor(value: CborVal): Uint8Array {
   return Buffer.concat(encodeParts(value));
 }
@@ -44,6 +50,12 @@ function encodeParts(value: CborVal): Buffer[] {
     return [encodeInt(value)];
   }
   if (typeof value === "string") {
+    // A lone surrogate is not a Unicode scalar value. Encoding it would
+    // replace it with U+FFFD, so the bytes would decode to different text
+    // than the text that was offered for signing.
+    if (/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(value)) {
+      throw new Error("cbor-invalid-text");
+    }
     const utf8 = Buffer.from(value, "utf8");
     return [head(MT_TSTR, utf8.length), utf8];
   }
@@ -58,6 +70,14 @@ function encodeParts(value: CborVal): Buffer[] {
       return { key, val };
     });
     entries.sort((a, b) => compareEncodedKeys(a.key, b.key));
+    // Two entries with the same encoded key are one key written twice.
+    // Emitting that map would put a receipt hash on bytes this decoder
+    // refuses to read back.
+    for (let i = 1; i < entries.length; i += 1) {
+      if (entries[i].key.equals(entries[i - 1].key)) {
+        throw new Error("cbor-duplicate-key");
+      }
+    }
     const parts: Buffer[] = [head(MT_MAP, entries.length)];
     for (const e of entries) {
       parts.push(e.key, e.val);
@@ -139,6 +159,19 @@ export function decodeCbor(bytes: Uint8Array): CborVal {
   if (r.offset !== r.bytes.length) {
     throw new Error("cbor-trailing");
   }
+  // One value has one encoding (RFC 8949 §4.2.1). A longer head or a map
+  // whose keys are out of bytewise order is a second spelling, and
+  // receiptHash is SHA-256 of these octets, so the second spelling is a
+  // second identity.
+  const again = encodeCbor(value);
+  if (again.length !== r.bytes.length) {
+    throw new Error("cbor-non-deterministic");
+  }
+  for (let i = 0; i < again.length; i += 1) {
+    if (again[i] !== r.bytes[i]) {
+      throw new Error("cbor-non-deterministic");
+    }
+  }
   return value;
 }
 
@@ -164,7 +197,14 @@ function readVal(r: Reader, depth: number): CborVal {
   }
   const n = readLength(r, ai);
   if (major === MT_UINT) return n;
-  if (major === MT_NINT) return -1 - n;
+  // -1 - MAX_SAFE_INTEGER is not a safe integer, so a negative that wide
+  // cannot round-trip through the encoder. Refuse it before the subtraction.
+  if (major === MT_NINT) {
+    if (n >= Number.MAX_SAFE_INTEGER) {
+      throw new Error("cbor-too-large");
+    }
+    return -1 - n;
+  }
   if (major === MT_BSTR || major === MT_TSTR) {
     if (n > CBOR_MAX_STRING) {
       throw new Error("cbor-too-large");
@@ -174,7 +214,14 @@ function readVal(r: Reader, depth: number): CborVal {
     }
     const slice = r.bytes.subarray(r.offset, r.offset + n);
     r.offset += n;
-    return major === MT_TSTR ? slice.toString("utf8") : new Uint8Array(slice);
+    if (major === MT_BSTR) {
+      return new Uint8Array(slice);
+    }
+    try {
+      return utf8Decoder.decode(slice);
+    } catch {
+      throw new Error("cbor-invalid-text");
+    }
   }
   if (major === MT_ARRAY) {
     if (n > CBOR_MAX_ELEMENTS) {
@@ -275,6 +322,11 @@ export function hexToBytes(hex: string): Uint8Array {
   if (hex !== hex.toLowerCase()) {
     throw new Error("hex-not-lowercase");
   }
+  // Buffer.from(..., "hex") drops characters that are not hex digits, so
+  // "01zz" and "01" would be the same bytes and the same receipt hash.
+  if (!/^[0-9a-f]*$/.test(hex)) {
+    throw new Error("hex-not-hex");
+  }
   return Uint8Array.from(Buffer.from(hex, "hex"));
 }
 
@@ -287,6 +339,12 @@ export const NAMED_DECODE_REFUSALS: ReadonlySet<string> = new Set([
   "cbor-too-large",
   "cbor-too-deep",
   "cbor-duplicate-key",
+  // Two writings of one value are two identities. receiptHash is SHA-256 of
+  // the transport octets, so a second spelling mints a second hash.
+  "cbor-non-deterministic",
+  // Ill-formed text replaced with U+FFFD would be a second writing of a
+  // well-formed string, while the receipt hash still names the octets.
+  "cbor-invalid-text",
   // A non-empty unprotected header is a shape refusal of the profile, not a
   // signature verdict; without this entry the decoder named it and the
   // public name path returned null, which is the "kept the bound, lost the
