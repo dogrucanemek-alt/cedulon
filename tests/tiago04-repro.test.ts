@@ -616,4 +616,66 @@ describe("reconciliation gaps: following extract, per-receipt approval, totals o
     assert.equal(report!.ok, false);
     assert.equal(report!.findings.some((f) => f.code === "malformed-amount"), true);
   });
+
+  // MUST-T10-10 asks this of the presented extract's rows. A row the following
+  // extract carries outside its own window says nothing about that window, so
+  // it cannot close a deferral either.
+  it("RED then GREEN: a following-extract row outside that extract's own window does not resolve a deferred receipt (MUST-T10-10)", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const receipt = signReceipt(claimsFor("ref-late", "n-late", WINDOW_END - 1, null), honest.privateKeyPem, honest.publicKeyPem);
+    const next = signRailExtract(
+      {
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: WINDOW_END,
+        windowEndMs: WINDOW_END + 1_000,
+        settlements: [{ ref: "ref-late", amount: "1", currency: "USD", timestampMs: WINDOW_END + 50_000 }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [receipt],
+      checkpoints: [
+        signCheckpoint(buildCheckpointClaims(1, [receipt], NOW, WINDOW_END, null), honest.privateKeyPem, honest.publicKeyPem),
+      ],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [{ ref: "other" }]),
+      nextExtract: next,
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      trust: railPin(rail),
+    });
+    assert.equal(
+      report.warnings.some((w) => w.code === "boundary-deferred" && w.id === receipt.claims.nonce),
+      true,
+      "the deferral must stay open",
+    );
+    assert.equal(report.findings.some((f) => f.code === "extract-scope-mismatch" && f.id === "ref-late"), true);
+    assert.equal(report.ok, false);
+  });
+
+  // A currency is a string the issuer chose. Written into a plain object with
+  // ordinary assignment, "__proto__" sets the prototype instead of a member,
+  // and that currency's money disappears from the totals on both sides.
+  it("RED then GREEN: a currency spelled like an object property still counts in checkpoint totals", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const r = signReceipt(claimsFor("ref-p", "n-p", NOW + 10, null, "__proto__", "7"), honest.privateKeyPem, honest.publicKeyPem);
+    const totals = buildCheckpointClaims(1, [r], NOW, WINDOW_END, null).totals as Record<string, string>;
+    assert.deepEqual(Object.keys(totals), ["__proto__"]);
+    assert.equal(totals["__proto__"], "7");
+    const signedEmpty = signCheckpoint(
+      { ...buildCheckpointClaims(1, [r], NOW, WINDOW_END, null), totals: {} },
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [r],
+      checkpoints: [signedEmpty],
+      extract: extractFor(rail, "acct", NOW, WINDOW_END, [{ ref: "ref-p", amount: "7", currency: "__proto__" }]),
+      trust: railPin(rail),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.equal(report.findings.some((f) => f.code === "checkpoint-total-mismatch"), true);
+  });
 });
