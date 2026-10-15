@@ -586,8 +586,14 @@ describe("reconciliation gaps: following extract, per-receipt approval, totals o
     const report = audit({ ...base, checkpoints: [reordered] });
     assert.equal(report.findings.some((f) => f.code === "checkpoint-total-mismatch"), false);
     assert.equal(report.ok, true);
-    // A real difference is still a difference.
-    const wrong = { ...cp, claims: { ...cp.claims, totals: { EUR: "2", USD: totals.USD } } };
+    // A real difference is still a difference. It has to be signed: totals
+    // changed after signing are a checkpoint that does not verify, which is
+    // a different finding.
+    const wrong = signCheckpoint(
+      { ...buildCheckpointClaims(1, [a, b], NOW, WINDOW_END, null), totals: { EUR: "2", USD: totals.USD } },
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
     assert.equal(audit({ ...base, checkpoints: [wrong] }).findings.some((f) => f.code === "checkpoint-total-mismatch"), true);
   });
 
