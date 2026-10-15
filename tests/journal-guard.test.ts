@@ -181,6 +181,43 @@ describe("external submit order and crash recovery", () => {
     assert.equal((out as { reason: string }).reason, "state-io");
   });
 
+  it("RED then GREEN: a rail that throws leaves the payment indeterminate in this session, not stuck", () => {
+    // A payment handed to a rail the issuer does not control, with no answer
+    // back, is indeterminate (MUST-T12-4). The live session wrote `submitted`
+    // and stopped there; only a restart folded it into `indeterminate`, so
+    // retry and resolve answered not-indeterminate until the server restarted.
+    const path = statePath();
+    const session = new CedulonSession({ statePath: path });
+    const n = nonce("throw");
+    const throwing: ExternalRail = {
+      idempotentSubmit: true,
+      submit() {
+        throw new Error("rail-unavailable");
+      },
+    };
+    const first = submitExternal(session, spendArgs(n), throwing, NOW);
+    assert.equal(first.ok, false);
+    assert.equal((first as { reason: string }).reason, "state-io");
+    assert.deepEqual(phases(session, n), ["prepared", "submitted", "indeterminate"]);
+    const onDisk = (JSON.parse(readFileSync(path, "utf8")) as { journal: JournalEntry[] }).journal
+      .filter((e) => e.nonce === n)
+      .map((e) => e.phase);
+    assert.equal(onDisk.at(-1), "indeterminate", "the indeterminate row was not written to the state file");
+
+    // A retry that throws again writes `submitted` again, and must not stop there either.
+    const again = session.retryIndeterminate(n, throwing, NOW + 1);
+    assert.equal(again.ok, false);
+    assert.equal(phases(session, n).at(-1), "indeterminate");
+
+    // The payment can be finished in the same session.
+    const settled = session.retryIndeterminate(
+      n,
+      new MockExternalRail("settled", { idempotentSubmit: true }),
+      NOW + 2,
+    );
+    assert.equal(settled.ok, true, "the payment stayed stuck until a restart");
+  });
+
   it("a rail that answers settled cuts a settled receipt on the existing wire", () => {
     const path = statePath();
     const session = new CedulonSession({ statePath: path });
