@@ -1834,8 +1834,9 @@ export function audit(input: AuditInput): AuditReport {
   }
   // A row outside the following extract's own window is not a settlement of
   // that window, so it cannot close a trailing deferral (MUST-T10-10). Rows are
-  // read once that extract's signature verifies; the scope comparison above is
-  // skipped when the presented extract was refused, but such a row is still reported.
+  // read when that extract's signature verifies and, if the presented extract
+  // was accepted, its scope matches; if the presented extract was refused the
+  // scope is not compared, and such a row is still reported.
   const nextInWindowRefs = new Set<string>();
   let nextRowCount = 0;
   if (nextOk && input.extract) {
