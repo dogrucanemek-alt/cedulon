@@ -258,5 +258,15 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     const second = session.spend(spendArgs(nonce("newwin-b")), NOW + WINDOW + 2);
     assert.equal(second.ok, false, "a second payment in a window that allows one");
     assert.equal((second as { reason: string }).reason, "velocity");
+
+    // A nonce the rail refused is free again, and its second reserve is in the
+    // window it was taken in. Reading the first reserve's time instead left the
+    // second one on the counters: a window that paid nothing refused a payment.
+    const reused = new CedulonSession({ statePath: statePath(), policy });
+    const m = nonce("reuse");
+    assert.equal(reused.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW).ok, false);
+    assert.equal(reused.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW + WINDOW).ok, false);
+    const fresh = reused.spend(spendArgs(nonce("reuse-next")), NOW + WINDOW + 1);
+    assert.equal(fresh.ok, true, "a window whose only payment the rail refused kept it on the counters");
   });
 });
