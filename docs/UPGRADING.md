@@ -66,8 +66,9 @@ section: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
 introduced, where with a usable issuer pin the departure is a finding that
 fails the audit, and without a pin the same departure is a warning that
 does not by itself fail it; and `requestHash` is still the SHA-256 of the
-six-field canonical document in lowercase hex, the digest the posted draft
-does not name.
+six-field canonical document in lowercase hex, the digest the posted core-04
+names in Section 9 (MUST-T6-1). The 0.13.1 section below says the posted
+draft did not name it; the posted core-04 does.
 
 ## 0.13.1: the registry entry points at the product site
 
