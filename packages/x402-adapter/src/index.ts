@@ -172,9 +172,13 @@ export function gatedSettle(
     if (isManifestExpired(input.manifest, nowMs)) {
       return deny402(input.req, "expired-manifest");
     }
+    // Terms that name a payee are terms for that payee (MUST-T8-9); a payment
+    // to anyone else is not the payment they describe.
     if (
       input.manifest.body.amount !== input.req.amount.toString() ||
-      input.manifest.body.currency !== input.req.currency
+      input.manifest.body.currency !== input.req.currency ||
+      (typeof input.manifest.body.payee === "string" &&
+        input.manifest.body.payee !== input.req.payee)
     ) {
       return deny402(input.req, "manifest-mismatch");
     }
