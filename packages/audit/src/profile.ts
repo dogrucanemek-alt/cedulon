@@ -1,3 +1,4 @@
+import { isValidAmountText } from "@cedulon/core";
 import { totalsFromReceipts } from "@cedulon/checkpoint";
 import type { SignedReceipt } from "@cedulon/receipts";
 import type { RailSettlement } from "@cedulon/x402-adapter";
@@ -89,15 +90,17 @@ type SpendTerms = {
 
 function spendAggregate(ref: string, records: SignedReceipt[], rows: RailSettlement[]): ProfileFinding[] {
   const findings: ProfileFinding[] = [];
-  let malformed = false;
+  const malformed = new Set<string>();
   const add = (into: Map<string, bigint>, currency: string, amount: string): void => {
     let parsed: bigint;
     try {
+      // BigInt reads "0x10"; the amount grammar does not.
+      if (!isValidAmountText(amount)) throw new Error("malformed-amount");
       parsed = BigInt(amount);
     } catch {
       // An amount the audit cannot read is itself a finding. Throwing here
       // would take down the whole report over one bad row.
-      malformed = true;
+      malformed.add(currency);
       findings.push({
         code: "malformed-amount",
         id: ref,
@@ -116,14 +119,13 @@ function spendAggregate(ref: string, records: SignedReceipt[], rows: RailSettlem
   for (const record of records) {
     add(receiptedByCurrency, record.claims.currency, record.claims.amount);
   }
-  if (malformed) {
-    return findings;
-  }
   // Walk both sides: a currency that appears only among the receipts is a
   // receipt with nothing settled behind it, and iterating the settled side
   // alone would report nothing at all for it.
   const currencies = new Set([...settledByCurrency.keys(), ...receiptedByCurrency.keys()]);
   for (const currency of currencies) {
+    // An unreadable amount makes that currency's total unknown, not the others'.
+    if (malformed.has(currency)) continue;
     const settled = settledByCurrency.get(currency) ?? 0n;
     const receipted = receiptedByCurrency.get(currency) ?? 0n;
     if (settled > receipted) {

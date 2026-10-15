@@ -882,6 +882,17 @@ export function findWindowCoverage(
   return findings;
 }
 
+/**
+ * The signature is verified over the canonical form. Key order is a
+ * transport detail: another implementation may present the same totals
+ * with its members in a different order.
+ */
+function sameTotals(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => Object.prototype.hasOwnProperty.call(b, key) && a[key] === b[key]);
+}
+
 export function findCheckpointTotalMismatches(
   receipts: PresentedRecord[],
   checkpoints: SignedCheckpoint[],
@@ -910,8 +921,21 @@ export function findCheckpointTotalMismatches(
       pop === "spend"
         ? receiptsInWindow(orderByIssuerChain(receipts as SignedReceipt[]).ordered, cp)
         : inWindow;
-    const expected = totalsFn(inWindow);
-    if (cp.claims.totals !== null && JSON.stringify(expected) !== JSON.stringify(cp.claims.totals)) {
+    // MUST-T10-13: an amount that cannot be read is a finding. It must not
+    // abort the audit. Only the totals comparison is skipped for this
+    // checkpoint; receiptCount and the chain head still run below.
+    let expected: Record<string, string> | undefined;
+    try {
+      expected = totalsFn(inWindow);
+    } catch (err) {
+      const message = err instanceof Error && err.message !== "" ? err.message : "unreadable";
+      findings.push({
+        code: "malformed-amount",
+        id: `epoch-${cp.claims.epoch}`,
+        detail: `a record in checkpoint epoch ${cp.claims.epoch}'s window has an amount that could not be read as an integer, so the totals were not compared: ${message}`,
+      });
+    }
+    if (expected !== undefined && cp.claims.totals !== null && !sameTotals(expected, cp.claims.totals)) {
       findings.push({
         code: "checkpoint-total-mismatch",
         id: `epoch-${cp.claims.epoch}`,
@@ -1100,7 +1124,9 @@ function findCountersignFindings(input: {
   const warnings: Finding[] = [];
   const findings: Finding[] = [];
   const countersigned = input.receipts.filter((r) => r.counterCoseHex);
-  const approved = new Set<string>();
+  // Approval belongs to the receipt it was given for. A second receipt that
+  // only shares the nonce does not inherit it (MUST-T4-14 speaks per receipt).
+  const approved = new Set<SignedReceipt>();
   for (const r of countersigned) {
     const pinned = input.payeeTrust?.[r.claims.payee];
     const v = verifiesOrRefusal(() => verifyCounterSignature(r), r.counterCoseHex);
@@ -1129,14 +1155,14 @@ function findCountersignFindings(input: {
       });
       continue;
     }
-    approved.add(r.claims.nonce);
+    approved.add(r);
   }
   // Naming a payee key is the verifier saying it expects that payee's word on
   // these payments. A garbage or foreign countersignature is not that word, so
   // the expectation stays open - otherwise appending junk would delete the
   // question the pin asked.
   for (const r of input.receipts) {
-    if (isSettled(r) && input.payeeTrust?.[r.claims.payee] !== undefined && !approved.has(r.claims.nonce)) {
+    if (isSettled(r) && input.payeeTrust?.[r.claims.payee] !== undefined && !approved.has(r)) {
       warnings.push({
         code: "countersign-missing",
         id: r.claims.nonce,
@@ -1157,7 +1183,7 @@ function findCountersignFindings(input: {
   const acceptance = input.manifest?.body.acceptanceCriteriaHash;
   if (typeof acceptance === "string") {
     for (const r of input.receipts) {
-      if (!approved.has(r.claims.nonce)) {
+      if (!approved.has(r)) {
         continue;
       }
       const delivered = countersignDeliveredHashHex(r);
@@ -1764,19 +1790,81 @@ export function audit(input: AuditInput): AuditReport {
       warnings.push({ ...clash, severity: "warn" });
     }
   }
-  const nextOk = Boolean(
+  // A signed extract may still be another account's, or a window that does
+  // not start where this one ends. Step 5 only authorises resolving against
+  // the following window's extract.
+  let nextOk = Boolean(
     input.nextExtract &&
       (input.trust
         ? verifyPresentedExtract(input.nextExtract, pop, input.trust.publicKeyPem)
         : verifyPresentedExtract(input.nextExtract, pop)),
   );
+  if (nextOk && input.extract && input.nextExtract && !extractRejected) {
+    const next = input.nextExtract;
+    const expectedAccount = extractAccountId(input.extract, pop);
+    const gotAccount = extractAccountId(next, pop);
+    const expectedRail = extractRailId(input.extract, pop);
+    const gotRail = extractRailId(next, pop);
+    const scopeGaps: Finding[] = [];
+    if (gotAccount !== expectedAccount) {
+      scopeGaps.push({
+        code: "extract-scope-mismatch",
+        id: "nextExtract",
+        detail: `following ${w.extract} covers ${w.account} ${gotAccount}, not the expected ${expectedAccount}`,
+      });
+    }
+    if (gotRail !== expectedRail) {
+      scopeGaps.push({
+        code: "extract-scope-mismatch",
+        id: "nextExtract",
+        detail: `following ${w.extract} covers ${w.rail} ${gotRail}, not the expected ${expectedRail}`,
+      });
+    }
+    if (next.body.windowStartMs !== input.extract.body.windowEndMs) {
+      scopeGaps.push({
+        code: "extract-scope-mismatch",
+        id: "nextExtract",
+        detail: `following ${w.extract} starts at ${next.body.windowStartMs}, not at the expected window start ${input.extract.body.windowEndMs}`,
+      });
+    }
+    if (scopeGaps.length > 0) {
+      findings.push(...scopeGaps);
+      nextOk = false;
+    }
+  }
+  // A row outside the following extract's own window is not a settlement of
+  // that window, so it cannot close a trailing deferral (MUST-T10-10). Rows are
+  // read when that extract's signature verifies and, if the presented extract
+  // was accepted, its scope matches; if the presented extract was refused the
+  // scope is not compared, and such a row is still reported.
+  const nextInWindowRefs = new Set<string>();
+  let nextRowCount = 0;
+  if (nextOk && input.extract) {
+    const next = input.nextExtract!;
+    for (const row of extractRows(next, pop)) {
+      nextRowCount += 1;
+      if (row.timestampMs < next.body.windowStartMs || row.timestampMs >= next.body.windowEndMs) {
+        findings.push({
+          code: "extract-scope-mismatch",
+          id: row.ref,
+          detail: `${w.row} ${row.ref} at ${row.timestampMs} is outside the following ${w.extract}'s declared window ${next.body.windowStartMs}..${next.body.windowEndMs}`,
+        });
+      } else {
+        nextInWindowRefs.add(row.ref);
+      }
+    }
+  }
   const settlementBoundary: SettlementBoundary | undefined = input.extract
     ? {
         windowStartMs: input.extract.body.windowStartMs,
         windowEndMs: input.extract.body.windowEndMs,
         clockSkewMs: clockSkewOf(input.extract, pop),
-        ...(nextOk
-          ? { nextRefs: new Set(extractRows(input.nextExtract!, pop).map((s) => s.ref)) }
+        // A verified extract with no rows still closes the edge. One whose
+        // every row sits outside its window does not: an empty set is truthy,
+        // and attaching it would harden the deferral the out-of-window row
+        // must not close.
+        ...(nextOk && (nextRowCount === 0 || nextInWindowRefs.size > 0)
+          ? { nextRefs: nextInWindowRefs }
           : {}),
       }
     : undefined;
