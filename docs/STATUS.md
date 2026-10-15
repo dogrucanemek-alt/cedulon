@@ -72,10 +72,11 @@ true, and the GitHub release carries the desktop bundle with its SHA-256 in
 the notes. The tagged run published, read back, registered and attached the
 bundle in one pass, the first under the workflow as #30 left it; its
 post-release job was red by design until this paragraph moved. The unscoped
-launchers `cedulon` and `cedulon-mcp` move to 1.1.0 in this tree, because
-1.0.0 can only install a 0.13 server, which does not export the subpath the
-launcher resolves, and stops with "cannot resolve"; they are published by
-hand, and npm serves 1.0.0 until they are. Unchanged, and named
+launchers `cedulon` and `cedulon-mcp` move to 1.1.0 in this tree: 1.0.0
+depends on `@cedulon/mcp-server@^0.13.0`, `@cedulon/mcp-server@0.13.1` does not
+export the `package.json` subpath the launcher resolves, and an install of
+`cedulon@1.0.0` stops with "cannot resolve". `release.yml` does not publish the
+launchers, and npm serves 1.0.0 until 1.1.0 is published. Unchanged, and named
 here because the gate reads this version's own paragraph: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
 introduced, where with a usable issuer pin the departure is a finding that
 fails the audit, and without a pin the same departure is a warning that does
