@@ -227,4 +227,36 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal(session.engine.store.usedNonces.has(n), true);
     assert.equal(session.receipts.length, 0);
   });
+
+  it("RED then GREEN: a reservation released after its window closed does not refund the next window", () => {
+    // The reserve was taken in one window. By the time the extract proves the
+    // payment never happened, the window has rolled and the counters belong
+    // to payments made since. Taking the old reserve off them gave the new
+    // window one payment more than maxPayments allows.
+    const WINDOW = 60_000;
+    const policy = { ...new CedulonSession({ statePath: null }).engine.policy, maxPayments: 1, windowMs: WINDOW };
+    const path = statePath();
+    const first = new CedulonSession({ statePath: path, policy });
+    const n = nonce("oldwin");
+    assert.throws(
+      () => first.submitExternal(spendArgs(n), new MockExternalRail("crash"), NOW),
+      /cedulon-rail-crash/,
+    );
+    const session = new CedulonSession({ statePath: path, keys: first.keys, policy });
+    assert.equal(lastPhase(session, n), "indeterminate");
+
+    // The next window: one payment, which is all the policy allows.
+    assert.equal(session.spend(spendArgs(nonce("newwin-a")), NOW + WINDOW).ok, true);
+
+    const rail = generateExtractKeys();
+    const extract = coveringExtract(n, rail, [], { start: NOW, end: NOW + 10 });
+    const out = resolveIndeterminate(session, n, { extract, railKeyPem: rail.publicKeyPem }, NOW + WINDOW + 1);
+    assert.equal(out.ok, true);
+    assert.equal((out as { released?: true }).released, true);
+    assert.equal(session.engine.store.usedNonces.has(n), false, "the nonce itself is free again");
+
+    const second = session.spend(spendArgs(nonce("newwin-b")), NOW + WINDOW + 2);
+    assert.equal(second.ok, false, "a second payment in a window that allows one");
+    assert.equal((second as { reason: string }).reason, "velocity");
+  });
 });
