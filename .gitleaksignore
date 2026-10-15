@@ -1,0 +1,8 @@
+# Findings in history that are not secrets, by gitleaks fingerprint.
+# Both files hold fixed test keys and say so ("Test keys. They protect
+# nothing"); they keep COSE hashes byte-stable across runs.
+a4d975c3cbef17a236640f5bada051593a855b50:interop/mizan-ig/test-keys.mjs:private-key:9
+a4d975c3cbef17a236640f5bada051593a855b50:interop/mizan-ig/test-keys.mjs:private-key:16
+adea6c3f2dc9aaca4f104d27a18a7af025ba531e:tests/spend-golden.test.ts:private-key:31
+adea6c3f2dc9aaca4f104d27a18a7af025ba531e:tests/spend-golden.test.ts:private-key:37
+adea6c3f2dc9aaca4f104d27a18a7af025ba531e:tests/spend-golden.test.ts:private-key:47

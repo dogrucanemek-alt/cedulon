@@ -1,0 +1,7 @@
+# Secret scan configuration for .github/workflows/security-scan.yml.
+# The default gitleaks rules apply. Known non-secrets in history are listed by
+# fingerprint in .gitleaksignore; anything else that matches fails the scan.
+title = "cedulon"
+
+[extend]
+useDefault = true

@@ -52,8 +52,10 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
@@ -297,10 +299,11 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
@@ -308,12 +311,20 @@ jobs:
 
       - name: resolve the version this run finishes
         id: ver
+        # The input reaches the shell through env, never as expression text
+        # inside the script, and must look like a version before any later
+        # step uses it.
+        env:
+          RAW_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -e
-          raw="${{ github.event.inputs.version }}"
-          V="${raw#v}"
+          V="${RAW_VERSION#v}"
           if [ -z "$V" ]; then
             echo "finish mode needs the version input (e.g. 0.13.1)"
+            exit 1
+          fi
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "version input is not a version: $V"
             exit 1
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
@@ -325,9 +336,11 @@ jobs:
       # to be here is often that npm has the bytes and has not served them
       # yet. After the bound the message is the refusal, not a publish.
       - name: this version is already on npm
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -e
-          V="${{ steps.ver.outputs.version }}"
+          V="$VERSION"
           deadline=$((SECONDS + 480))
           for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
             got=""
@@ -366,9 +379,11 @@ jobs:
       # red. A racing publish that loses to the same duplicate is also a
       # success. Any other publisher error stays red.
       - name: publish server.json to the MCP Registry
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -e
-          tag="${{ steps.ver.outputs.version }}"
+          tag="$VERSION"
           sj=$(node -p "require('./server.json').version")
           if [ "$sj" != "$tag" ]; then
             echo "server.json is $sj, finish mode was asked for $tag; refusing to publish"
@@ -410,9 +425,11 @@ jobs:
           fi
 
       - name: the MCP Registry answers with this version
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -e
-          tag="${{ steps.ver.outputs.version }}"
+          tag="$VERSION"
           encoded="io.github.dogrucanemek-alt%2Fcedulon"
           url="https://registry.modelcontextprotocol.io/v0.1/servers/${encoded}/versions/${tag}"
           got=""
@@ -461,8 +478,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
@@ -482,10 +501,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', github.event.inputs.version) || github.ref }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
@@ -493,17 +513,24 @@ jobs:
 
       - name: resolve the version this run finishes
         id: ver
+        # Same rule as in finish: the input arrives through env and is
+        # checked before it becomes an output. The tag path is checked too.
+        env:
+          RAW_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -e
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            raw="${{ github.event.inputs.version }}"
-            V="${raw#v}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            V="${RAW_VERSION#v}"
             if [ -z "$V" ]; then
               echo "finish mode needs the version input (e.g. 0.13.1)"
               exit 1
             fi
           else
             V="${GITHUB_REF_NAME#v}"
+          fi
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "version is not a version: $V"
+            exit 1
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "tag=v$V" >> "$GITHUB_OUTPUT"
@@ -517,9 +544,11 @@ jobs:
       # this runner after answering 200 to that one, so it asks again here,
       # right before the install that needs them.
       - name: every tarball of this version answers from this runner
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -e
-          tag="${{ steps.ver.outputs.version }}"
+          tag="$VERSION"
           deadline=$((SECONDS + 480))
           for p in cose core receipts manifest checkpoint x402-adapter effect-extract audit mcp-server; do
             tarball=""
@@ -544,9 +573,11 @@ jobs:
         run: npm run mcpb
 
       - name: the manifest version is the tag
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -e
-          tag="${{ steps.ver.outputs.version }}"
+          tag="$VERSION"
           bundle="build/cedulon-${tag}.mcpb"
           [ -f "$bundle" ] || { echo "bundle $bundle was not produced"; exit 1; }
           ver=$(unzip -p "$bundle" manifest.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
@@ -559,10 +590,12 @@ jobs:
       - name: attach the bundle to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          RELEASE_TAG: ${{ steps.ver.outputs.tag }}
         run: |
           set -e
-          tag="${{ steps.ver.outputs.version }}"
-          release_tag="${{ steps.ver.outputs.tag }}"
+          tag="$VERSION"
+          release_tag="$RELEASE_TAG"
           bundle="build/cedulon-${tag}.mcpb"
           bundle_sha=$(sha256sum "$bundle" | awk '{print $1}')
           echo "bundle sha256 $bundle_sha"
