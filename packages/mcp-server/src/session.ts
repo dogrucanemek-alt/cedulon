@@ -1139,7 +1139,15 @@ export class CedulonSession {
   }
 
   private reservedAtMs(nonce: string, fallback: number): number {
-    return this.journal.find((e) => e.nonce === nonce && e.phase === "prepared")?.atMs ?? fallback;
+    // A nonce the rail refused can be reserved again; the reserve being released
+    // is the latest one.
+    for (let i = this.journal.length - 1; i >= 0; i--) {
+      const entry = this.journal[i];
+      if (entry.nonce === nonce && entry.phase === "prepared") {
+        return entry.atMs;
+      }
+    }
+    return fallback;
   }
 
   private lastSubmittedAtMs(nonce: string): number | null {
