@@ -252,6 +252,11 @@ function resolveTmpdirPrefix(input: string): string {
   return input;
 }
 
+// The claim is an exclusive create followed by a write of the pid. A file that
+// cannot be read yet is most likely a holder between those two steps. One that
+// has stayed unreadable for a minute is a writer that died in between.
+const UNREADABLE_LOCK_GRACE_MS = 60_000;
+
 export class CedulonSession {
   readonly engine: PolicyEngine;
   readonly ledger = new RailLedger();
@@ -798,7 +803,17 @@ export class CedulonSession {
       pid = (parseIJson(readFileSync(lockPath, "utf8")) as { pid?: unknown }).pid;
     } catch (err) {
       if (err instanceof Error && err.message === "json-duplicate-key") throw err;
-      // A lock we cannot read says nothing about who holds it.
+      // An empty or partial file is a holder still between the exclusive create
+      // and the pid write, so it counts as held. One that stays unreadable for
+      // a minute is a writer that died in between and is taken over.
+      let st: { mtimeMs: number };
+      try {
+        st = statSync(lockPath);
+      } catch (statErr) {
+        if ((statErr as NodeJS.ErrnoException)?.code === "ENOENT") return true;
+        return false;
+      }
+      if (Math.abs(Date.now() - st.mtimeMs) < UNREADABLE_LOCK_GRACE_MS) return false;
       return true;
     }
     if (typeof pid !== "number" || pid === process.pid) {
