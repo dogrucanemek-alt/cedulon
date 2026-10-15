@@ -198,10 +198,11 @@ jobs:
             }
           done
 
-      # test:post-release used to sit here. It compares STATUS with npm and is
-      # red on every tagged run by design, because STATUS moves after the
-      # publish; the first tag that carried the registry and bundle steps
-      # (v0.12.0) never reached them for that reason. It has its own job now.
+      # test:post-release used to sit here. It compares STATUS with npm
+      # and with the MCP Registry listing and is red on every tagged run
+      # by design, because STATUS moves after the publish; the first tag
+      # that carried the registry and bundle steps (v0.12.0) never
+      # reached them for that reason. It has its own job now.
 
       # mcp-publisher 1.8.1. Digest from the release checksums file:
       # https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/registry_1.8.1_checksums.txt
@@ -467,9 +468,10 @@ jobs:
             exit 1
           }
 
-  # The STATUS-versus-npm check, on its own so its expected red on the tagged
-  # run blocks nothing: STATUS is moved by hand after the publish and this
-  # job is the reminder that it has not been yet.
+  # The STATUS-versus-npm and STATUS-versus-registry checks, in a job
+  # of their own so their expected red on the tagged run blocks nothing:
+  # STATUS is moved by hand after the publish and this job is the
+  # reminder that it has not been yet.
   post-release:
     needs: publish
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
