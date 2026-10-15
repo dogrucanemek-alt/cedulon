@@ -106,6 +106,7 @@ describe("session state file", () => {
     // A file system whose clock runs ahead stamps a fresh lock in the future.
     // Measuring its age in either direction reads it as old and steals it.
     const ahead = new Date(Date.now() + 10 * 60_000);
+    writeFileSync(lockPath, "");
     utimesSync(lockPath, ahead, ahead);
     const skewed = spendOnce(session, "n-ahead".padEnd(16, "-"));
     assert.equal(skewed.ok, false, "a lock stamped ahead of this clock was taken over");
