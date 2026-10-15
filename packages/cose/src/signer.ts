@@ -1,4 +1,4 @@
-import { sign } from "node:crypto";
+import { createPrivateKey, sign } from "node:crypto";
 
 /**
  * Process-local signing. The first implementation is a PEM pair; a KMS
@@ -12,6 +12,10 @@ export type Signer = {
 };
 
 export function pemSigner(privateKeyPem: string, publicKeyPem: string): Signer {
+  // The header always says Ed25519; crypto.sign follows the private key's own type.
+  if (createPrivateKey(privateKeyPem).asymmetricKeyType !== "ed25519") {
+    throw new Error("cose-key-type");
+  }
   return {
     publicKeyPem,
     sign(payload: Uint8Array): Uint8Array {
