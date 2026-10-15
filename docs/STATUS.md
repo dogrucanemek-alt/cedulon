@@ -71,7 +71,7 @@ and its `@cedulon/cose` refuses the non-shortest head `18 01` as
 true, and the GitHub release carries the desktop bundle with its SHA-256 in
 the notes. The tagged run published, read back, registered and attached the
 bundle in one pass, the first under the workflow as #30 left it; its
-post-release job was red by design until this paragraph moved. The unscoped
+post-release job was red by design until this page named 0.14.0 as published. The unscoped
 launchers `cedulon` and `cedulon-mcp` move to 1.1.0 in this tree: 1.0.0
 depends on `@cedulon/mcp-server@^0.13.0`, `@cedulon/mcp-server@0.13.1` does not
 export the `package.json` subpath the launcher resolves, and an install of
@@ -94,7 +94,7 @@ packages rather than from this tree, on 11 September 2026: a clean install of
 `@cedulon/mcp-server@0.13.1` in an empty folder pulls nine `@cedulon` packages,
 `@cedulon/audit@0.13.1` among them, and answers `initialize` reporting
 `0.13.1`; `@cedulon/checkpoint@0.13.1` exports `strictHexBytes`. The MCP
-Registry listing answers `0.13.1` with `isLatest` true, and its `websiteUrl` is
+Registry listing answered `0.13.1` with `isLatest` true until 0.14.0, and its `websiteUrl` is
 `https://cedulon.com` — the entry named the GitHub repository until this
 release. The desktop bundle for this version is described where the bundle is
 described, further down, rather than a second time here. The
