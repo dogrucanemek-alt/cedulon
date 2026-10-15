@@ -138,9 +138,15 @@ export class PolicyEngine {
    * Give back a reservation `evaluate` took. Used when a journal row dies
    * before the rail is called (`prepared` without `submitted`). A row that
    * reached `submitted` must not come through here — that nonce stays burned.
+   * The counters belong to the window they were taken in. A reserve from a
+   * window that has already rolled is not in them, and taking it off would
+   * give the current window room it never had.
    */
-  release(nonce: string, amount: bigint): void {
+  release(nonce: string, amount: bigint, reservedAtMs: number): void {
     this.store.usedNonces.delete(nonce);
+    if (reservedAtMs < this.store.counters.windowStartMs) {
+      return;
+    }
     const c = this.store.counters;
     this.store.counters = {
       windowStartMs: c.windowStartMs,

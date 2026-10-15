@@ -954,7 +954,7 @@ export class CedulonSession {
       }
       const result = rail.submit(row);
       if (result === "failed") {
-        this.engine.release(args.nonce, BigInt(args.amount));
+        this.engine.release(args.nonce, BigInt(args.amount), this.reservedAtMs(args.nonce, nowMs));
         this.appendJournal({ ...row, phase: "failed", atMs: nowMs });
         this.save();
         return { ok: false, reason: "rail-failed" };
@@ -1034,7 +1034,7 @@ export class CedulonSession {
       return { ok: false, reason: "state-io" };
     }
     if (result === "failed") {
-      this.engine.release(folded.nonce, BigInt(folded.amount));
+      this.engine.release(folded.nonce, BigInt(folded.amount), this.reservedAtMs(folded.nonce, nowMs));
       this.appendJournal({ ...row, phase: "failed", atMs: nowMs });
       this.save();
       return { ok: false, reason: "rail-failed" };
@@ -1080,7 +1080,7 @@ export class CedulonSession {
       );
       return receipt;
     }
-    this.engine.release(folded.nonce, BigInt(folded.amount));
+    this.engine.release(folded.nonce, BigInt(folded.amount), this.reservedAtMs(folded.nonce, nowMs));
     this.appendJournal({
       nonce: folded.nonce,
       amount: folded.amount,
@@ -1138,6 +1138,10 @@ export class CedulonSession {
     return foldJournal(this.journal).find((row) => row.nonce === nonce);
   }
 
+  private reservedAtMs(nonce: string, fallback: number): number {
+    return this.journal.find((e) => e.nonce === nonce && e.phase === "prepared")?.atMs ?? fallback;
+  }
+
   private lastSubmittedAtMs(nonce: string): number | null {
     let at: number | null = null;
     for (const entry of this.journal) {
@@ -1156,7 +1160,7 @@ export class CedulonSession {
     let dirty = false;
     for (const row of foldJournal(this.journal)) {
       if (row.phase === "prepared") {
-        this.engine.release(row.nonce, BigInt(row.amount));
+        this.engine.release(row.nonce, BigInt(row.amount), this.reservedAtMs(row.nonce, row.atMs));
         this.appendJournal({
           nonce: row.nonce,
           amount: row.amount,
