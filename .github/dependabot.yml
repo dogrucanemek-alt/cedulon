@@ -1,0 +1,16 @@
+# Action version updates, once a month, as one pull request. Actions stay
+# pinned to a commit; the version comment beside it moves too. A release has
+# to be a week old before it is proposed, so one that turns out bad has time
+# to be withdrawn. Nothing merges by itself. Security updates are separate
+# and this file does not slow them down.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
