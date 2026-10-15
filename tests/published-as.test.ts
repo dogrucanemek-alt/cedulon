@@ -257,9 +257,11 @@ describe("published-as claims", () => {
     // 0.9.0 on 1 September and every sentence here about the gap
     // became false with nothing red. This test is the third thing
     // that has to agree, and it asks the registry.
-    // This runs in test:post-release, not test:pre-release. The pre-release gate
-    // claims none skipped and this host has timed out. The trade: drift between
-    // STATUS and the listing is now caught on a tag push or when test:post-release is run by hand, not on every PR.
+    // This runs in test:post-release, not test:pre-release. The
+    // pre-release gate claims none skipped and this host has timed
+    // out. The trade: drift between STATUS and the listing is now
+    // caught on a tag push or when test:post-release is run by hand,
+    // not on every PR.
     const listing = await registryVersions();
     if ("skipped" in listing) {
       // The registry host has failed to answer before, and a check

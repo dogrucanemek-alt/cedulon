@@ -386,7 +386,13 @@ describe("pre-release and post-release split", () => {
     assert.ok(closeAt >= 0, 'describe("published-as claims" does not close');
     const describeBody = describeText.slice(0, closeAt + "\n});".length);
 
+    const networkCalls = ["tarballText(", "npmViewPublished(", "registryVersions(", "fetch("];
+    // This one asks for a pinned version, which holds forever at this
+    // commit, so it stays in the pre-release suite.
+    const pinnedVersionException = ["the draft's 'published as' list is in the tarball at that version"];
+
     let count = 0;
+    const titles: string[] = [];
     for (const hit of describeBody.matchAll(/\n  it\(/g)) {
       const from = describeBody.slice(hit.index! + hit[0].indexOf("it("));
       const nextIt = from.indexOf("\n  it(", 1);
@@ -397,13 +403,18 @@ describe("pre-release and post-release split", () => {
       const body = from.slice(0, end);
       const title = /"([^"]*)"/.exec(from.slice("it(".length));
       assert.ok(title, "an it( has no double-quoted title");
-      if (!body.includes("registryVersions(") && !body.includes("npmViewPublished(")) continue;
-      count += 1;
+      titles.push(title[1]!);
+      if (!networkCalls.some((call) => body.includes(call))) continue;
+      const namedPostRelease = new RegExp(skip[1]!).test(title[1]!);
+      if (namedPostRelease) count += 1;
       assert.ok(
-        new RegExp(skip[1]!).test(title[1]!),
-        `"${title[1]}" asks a live "latest" and would run in test:pre-release; name it into the post-release pattern`,
+        namedPostRelease || pinnedVersionException.includes(title[1]!),
+        `"${title[1]}" reaches the network and is neither in the post-release pattern nor a pinned-version check; place it`,
       );
     }
-    assert.ok(count >= 2, "expected at least two live-latest checks inside published-as claims");
+    for (const name of pinnedVersionException) {
+      assert.ok(titles.includes(name), `the pinned-version exception "${name}" no longer names a test`);
+    }
+    assert.ok(count >= 3, "expected at least three live-latest checks inside published-as claims");
   });
 });
