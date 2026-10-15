@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -61,6 +62,23 @@ describe("unpublished packages are packable", () => {
         files.includes("dist/index.js"),
         `${name} tarball must include the compiled entry (got: ${files.join(", ")})`,
       );
+    });
+  }
+});
+
+// The unscoped launchers (cedulon, cedulon-mcp) find the server by resolving
+// "@cedulon/mcp-server/package.json" from their own location and reading its
+// bin. An exports map that does not list "./package.json" refuses that
+// subpath, and the launcher stops with "cannot resolve" before the server
+// starts; cedulon@1.0.0 on npm does exactly that against mcp-server 0.13.1.
+describe("the unscoped launchers can find the server", () => {
+  for (const launcher of ["cedulon", "cedulon-mcp"] as const) {
+    it(`RED then GREEN: ${launcher} resolves @cedulon/mcp-server/package.json the way its bin does`, () => {
+      const fromLauncher = createRequire(join(root, "wrappers", launcher, "bin", "cli.cjs"));
+      const resolved = fromLauncher.resolve("@cedulon/mcp-server/package.json");
+      const pkg = JSON.parse(readFileSync(resolved, "utf8")) as { name: string; bin?: Record<string, string> };
+      assert.equal(pkg.name, "@cedulon/mcp-server");
+      assert.equal(typeof pkg.bin?.["cedulon-mcp"], "string");
     });
   }
 });

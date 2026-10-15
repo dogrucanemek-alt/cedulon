@@ -52,6 +52,26 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.14.0` is prepared in this tree and is not a published npm release; the tag
+publishes it, and this paragraph is brought up to what was published once the
+registry answers. It refuses things 0.13.1 accepted. `@cedulon/cose` reads one encoding per value, so a second spelling
+of a signed receipt no longer verifies under a second `receiptHash`, and it
+refuses a key that is not Ed25519 and a protected header that names a critical
+parameter. `@cedulon/audit` no longer lets a following extract for another
+account, rail or window close a deferred receipt, keys payee approval to the
+receipt rather than its nonce, compares checkpoint totals by currency, and
+reports an amount outside the grammar as `malformed-amount` instead of
+throwing or summing it. The unscoped launchers `cedulon` and `cedulon-mcp`
+at 1.0.0 stop with "cannot resolve" because the server did not export
+`./package.json`; 0.14.0 exports it and the launchers move to 1.1.0.
+`docs/UPGRADING.md` lists each change under its own letter. Unchanged, and named here because the gate reads this version's own
+paragraph: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
+introduced, where with a usable issuer pin the departure is a finding that
+fails the audit, and without a pin the same departure is a warning that does
+not by itself fail it; and `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted core-04
+names in Section 9 (MUST-T6-1).
+
 `0.13.1` is published on npm across all nine packages, and it is what an
 installed package now answers. It changes no source and no behaviour: the diff
 against 0.13.0 is version fields, an `UPGRADING` section and this paragraph. It

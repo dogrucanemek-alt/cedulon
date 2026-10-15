@@ -4,6 +4,80 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.14.0: one encoding per value, and a verifier that closes what it used to let through
+
+This release refuses things 0.13.1 accepted. Each change is in the
+verifier's favour: an audit that passed on 0.13.1 can fail on 0.14.0, and
+where it does, the input was one the profile never allowed.
+
+A. `@cedulon/cose` reads one encoding per value. `receiptHash` is SHA-256
+over the transport octets, and 0.13.1 accepted a second spelling of a
+signed message: a longer head on the outer array, or `b8 00` for the empty
+unprotected map, verified under the same signature with a different hash.
+Anyone holding a receipt could mint that second identity without the key.
+`decodeCbor` now re-encodes what it read and refuses the input unless the
+bytes are the same (`cbor-non-deterministic`); it refuses text that is not
+UTF-8 instead of replacing it (`cbor-invalid-text`) and a negative integer
+below the safe range (`cbor-too-large`). Both new names are on
+`NAMED_DECODE_REFUSALS`, so an audit reports them as decoder refusals, not
+as signature failures. `encodeCbor` refuses a map with a repeated key and a
+string with a lone surrogate; `hexToBytes` refuses characters that are not
+hex digits (`hex-not-hex`).
+
+What to do: nothing, if your bytes come from this encoder; every vector in
+the repository and both Appendix A vectors were already in the one
+encoding. If you produce Cedulon COSE with another CBOR encoder, it has to
+emit deterministic CBOR (RFC 8949 §4.2.1); a second spelling is refused now.
+
+B. `@cedulon/cose` checks the key. The header always says Ed25519 (-19),
+while `crypto.sign` and `crypto.verify` follow the key, so an Ed448 key
+signed and verified under -19. `signCoseSign1` and `pemSigner` refuse a key
+that is not Ed25519 (`cose-key-type`) and `verifyCoseSign1` returns false
+for one. A protected header that names a critical parameter (label 2) is
+refused, as RFC 9052 requires for parameters the profile does not
+understand. An empty expected content type is compared instead of skipped.
+
+C. `@cedulon/audit` closes four places where its result did not match
+Section 12:
+
+- A following extract closes a deferred closing-edge receipt only if it is
+  for the same account and rail, starts where the presented extract ends,
+  and carries the ref on a row inside its own window. Anything else is
+  `extract-scope-mismatch` (id `nextExtract`, or the row's ref) and is not
+  used.
+- Payee approval belongs to the receipt it was given for. 0.13.1 keyed it
+  by nonce, so one countersignature covered a second settled receipt with
+  the same nonce and the guarantee went unconditional (MUST-T4-14).
+- Checkpoint totals compare by currency, so the same signed totals
+  presented with their members in another order no longer fail.
+- An amount outside the grammar is `malformed-amount` and the report still
+  comes back. 0.13.1 threw out of `audit()` on `"1.5"`, and summed `"0x10"`
+  as 16. One unreadable amount on a repeated ref no longer hides another
+  currency's shortfall on that ref (MUST-T10-13).
+
+`@cedulon/checkpoint` keeps a currency named `"__proto__"` as a member of
+its totals instead of dropping it, and `totalsFromReceipts` refuses an
+amount outside the grammar. A checkpoint built over receipts that
+`signReceipt` produced is unaffected: `signReceipt` already enforces the
+grammar.
+
+D. The unscoped launchers work. `cedulon` and `cedulon-mcp` find the server
+by resolving `@cedulon/mcp-server/package.json`, and the server's exports
+map did not list that subpath, so `cedulon@1.0.0` and `cedulon-mcp@1.0.0`
+stopped with "cannot resolve @cedulon/mcp-server" before the server started.
+`@cedulon/mcp-server` 0.14.0 exports `./package.json`, and the launchers move
+to 1.1.0, depending on `^0.14.0`. The scoped command the README documents
+(`npx -y @cedulon/mcp-server`) was never affected.
+
+Unchanged, and repeated here because the gate reads each version's own
+section: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
+introduced, where with a usable issuer pin the departure is a finding that
+fails the audit, and without a pin the same departure is a warning that
+does not by itself fail it; and `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted core-04
+names in Section 9 (MUST-T6-1). The 0.13.1 section below says the posted
+draft did not name it; the posted core-04 does.
+
 ## 0.13.1: the registry entry points at the product site
 
 Nothing to do. No source, no interface, no behaviour changed between 0.13.0 and
