@@ -359,3 +359,51 @@ describe("release.yml names the public packages", () => {
     }
   });
 });
+
+describe("pre-release and post-release split", () => {
+  // The registry host timed out on 15 October 2026 four times, and the
+  // skip broke the "none skipped" sentence. A check against a moving
+  // "latest" belongs to the job that runs after a publish. The pattern
+  // is declared in two scripts and this test is the third thing that
+  // compares them.
+  it("RED then GREEN: a check that asks what is latest right now runs only in test:post-release", () => {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    const pre = pkg.scripts?.["test:pre-release"] ?? "";
+    const post = pkg.scripts?.["test:post-release"] ?? "";
+    const skip = /--test-skip-pattern="([^"]+)"/.exec(pre);
+    const named = /--test-name-pattern="([^"]+)"/.exec(post);
+    assert.ok(skip, 'test:pre-release is missing --test-skip-pattern="..."');
+    assert.ok(named, 'test:post-release is missing --test-name-pattern="..."');
+    assert.equal(skip[1], named[1], "the two scripts must carry the same list");
+
+    const source = readFileSync(join(root, "tests", "published-as.test.ts"), "utf8");
+    const describeAt = source.indexOf('describe("published-as claims"');
+    assert.ok(describeAt >= 0, 'describe("published-as claims" is missing');
+    const describeText = source.slice(describeAt);
+    const closeAt = describeText.search(/\n\}\);/);
+    assert.ok(closeAt >= 0, 'describe("published-as claims" does not close');
+    const describeBody = describeText.slice(0, closeAt + "\n});".length);
+
+    let count = 0;
+    for (const hit of describeBody.matchAll(/\n  it\(/g)) {
+      const from = describeBody.slice(hit.index! + hit[0].indexOf("it("));
+      const nextIt = from.indexOf("\n  it(", 1);
+      const nextClose = from.indexOf("\n});");
+      let end = from.length;
+      if (nextIt >= 0) end = Math.min(end, nextIt);
+      if (nextClose >= 0) end = Math.min(end, nextClose);
+      const body = from.slice(0, end);
+      const title = /"([^"]*)"/.exec(from.slice("it(".length));
+      assert.ok(title, "an it( has no double-quoted title");
+      if (!body.includes("registryVersions(") && !body.includes("npmViewPublished(")) continue;
+      count += 1;
+      assert.ok(
+        new RegExp(skip[1]!).test(title[1]!),
+        `"${title[1]}" asks a live "latest" and would run in test:pre-release; name it into the post-release pattern`,
+      );
+    }
+    assert.ok(count >= 2, "expected at least two live-latest checks inside published-as claims");
+  });
+});
