@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { PolicyEngine } from "@cedulon/core";
 import { generateManifestKeys, signManifest, verifyManifest } from "@cedulon/manifest";
 import { generateReceiptKeys, verifyReceipt } from "@cedulon/receipts";
-import { gatedSettle } from "@cedulon/x402-adapter";
+import { gatedSettle, unguardedSettle } from "@cedulon/x402-adapter";
 
 describe("replay and manifest expiry", () => {
   it("rejects reused nonce", () => {
@@ -165,6 +165,30 @@ describe("replay and manifest expiry", () => {
     assert.equal(pay(named, "payee-A", "pay-named").status, 200);
     // A manifest that names no payee leaves the payee to the request, as before.
     assert.equal(pay(unnamed, "payee-B", "pay-unnamed").status, 200);
+
+    // The unguarded path skips the policy gate, not the manifest: the hash it
+    // writes is the same claim (case 62). Terms that do not describe the
+    // payment are refused there too - payee, amount or currency.
+    const loose = (manifest: typeof named, payee: string, amount: bigint, n: string) =>
+      unguardedSettle(
+        {
+          req: { amount, currency: "USD", payee, nonce: n.padEnd(16, "-"), nowMs },
+          payer: "buyer",
+          manifest,
+          manifestTrust: mk.publicKeyPem,
+          paymentHeader: "mock",
+        },
+        keys,
+        nowMs,
+      );
+    const looseOther = loose(named, "payee-B", 1n, "loose-other");
+    assert.equal(looseOther.status, 402, "the unguarded path wrote payee-A's terms into a receipt that pays payee-B");
+    if (looseOther.status === 402) {
+      assert.equal(looseOther.reason, "manifest-mismatch");
+    }
+    const looseAmount = loose(unnamed, "payee-B", 2n, "loose-amount");
+    assert.equal(looseAmount.status, 402, "the unguarded path wrote terms for 1 into a receipt for 2");
+    assert.equal(loose(named, "payee-A", 1n, "loose-named").status, 200);
   });
 
   it("noManifest payment is flagged on receipt", () => {
