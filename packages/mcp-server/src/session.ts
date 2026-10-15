@@ -1206,9 +1206,16 @@ export class CedulonSession {
     let raw: string;
     try {
       raw = readFileSync(this.statePath, "utf8");
-    } catch {
-      this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
-      return;
+    } catch (err) {
+      // Only a file that is not there is a fresh start; a file that exists and
+      // cannot be read (permissions, a scanner holding it, a directory) is the
+      // same as one that does not parse — starting from zero would rename over
+      // it on the first save and drop every receipt and the key.
+      if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+        this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
+        return;
+      }
+      throw new Error("cedulon-state-unreadable", { cause: err });
     }
     let parsed: Persisted;
     try {
