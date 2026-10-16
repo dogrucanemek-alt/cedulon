@@ -52,9 +52,9 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
-`0.15.0` is prepared in this tree and is not a published npm release; the tag
-publishes it, and this paragraph is brought up to what was published once the
-registry answers. It refuses things 0.14.0 accepted. `@cedulon/mcp-server`
+`0.15.0` is published on npm across all nine packages, each with a SLSA v1
+provenance attestation and reporting `gitHead` `065f713`, and it is what an
+installed package now answers. It refuses things 0.14.0 accepted. `@cedulon/mcp-server`
 refuses a state file it cannot read instead of starting empty with a new key,
 and a `reload()` that fails leaves the session as it was; it no longer takes
 the state lock from a holder that is still writing it; a rail that throws,
@@ -64,10 +64,27 @@ releases an indeterminate payment only if its window covers every submit since
 the reserve. `@cedulon/core`'s `release` takes the time the reserve was made,
 so a reserve given back after its window rolled no longer refunds the next
 window. `@cedulon/x402-adapter` refuses a payment to anyone other than the
-payee a manifest names, on the gated and the unguarded path. The launchers
-`cedulon` and `cedulon-mcp` move to 1.2.0 and `^0.15.0`. `docs/UPGRADING.md`
-lists each change under its own letter. Unchanged, and named here because the
-gate reads this version's own paragraph: `audit()` reports
+payee a manifest names, on the gated and the unguarded path.
+`docs/UPGRADING.md` lists each change under its own letter. Measured from the
+published packages rather than from this tree, on 16 October 2026: a clean
+install of `@cedulon/mcp-server@0.15.0` in an empty folder pulls nine
+`@cedulon` packages, all at `0.15.0`, answers `initialize` reporting `0.15.0`,
+and its session refuses a directory as its state path with
+`cedulon-state-unreadable`. The MCP Registry lists `0.15.0` with `isLatest`
+true, and the GitHub release carries the desktop bundle with its SHA-256 in
+the notes; the bundle downloaded from the release hashes to that value. The
+tagged run published, read back, registered and attached the bundle in one
+pass; its post-release job was red by design until this page named 0.15.0 as
+published, and the MCP Registry check, which now runs in that job and not
+before the tag, was red with it for the same reason. The launchers `cedulon`
+and `cedulon-mcp` move to 1.2.0 and depend on `^0.15.0`: a `^0.14.0` range does
+not accept 0.15.0, so 1.1.0 kept installing 0.14.0. `release.yml` does not
+publish the launchers; `cedulon@1.2.0` and `cedulon-mcp@1.2.0` were published by
+hand on 16 October 2026, from the tarballs tested before publishing (same
+shasum), and npm now marks 1.2.0 as `latest` for both. Measured from npm in an
+empty folder: both install `@cedulon/mcp-server@0.15.0`, and each launcher
+starts the server and its `initialize` reports `0.15.0`. Unchanged, and named
+here because the gate reads this version's own paragraph: `audit()` reports
 `manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
 usable issuer pin the departure is a finding that fails the audit, and
 without a pin the same departure is a warning that does not by itself fail it; and
@@ -75,8 +92,8 @@ without a pin the same departure is a warning that does not by itself fail it; a
 lowercase hex, the digest the posted core-04 names in Section 9 (MUST-T6-1).
 
 `0.14.0` is published on npm across all nine packages, each with a SLSA v1
-provenance attestation and reporting `gitHead` `1cf81cd`, and it is what an
-installed package now answers. It refuses things 0.13.1 accepted.
+provenance attestation and reporting `gitHead` `1cf81cd`, and it was what an
+installed package answered until 0.15.0. It refuses things 0.13.1 accepted.
 `@cedulon/cose` reads one encoding per value, so a second spelling of a signed
 receipt no longer verifies under a second `receiptHash`, and it refuses a key
 that is not Ed25519 and a protected header that names a critical parameter.
@@ -99,7 +116,7 @@ depends on `@cedulon/mcp-server@^0.13.0`, `@cedulon/mcp-server@0.13.1` does not
 export the `package.json` subpath the launcher resolves, and `cedulon@1.0.0`
 installs but, when run, stops with "cannot resolve" and exits 1. `release.yml` does not publish the
 launchers; `cedulon@1.1.0` and `cedulon-mcp@1.1.0` were published by hand on
-15 October 2026, and npm now marks 1.1.0 as `latest` for both. Measured from
+15 October 2026, and npm marked 1.1.0 as `latest` for both until 1.2.0. Measured from
 npm in an empty folder: both install `@cedulon/mcp-server@0.14.0`, and each
 launcher starts the server and its `initialize` reports `0.14.0`. Unchanged, and named
 here because the gate reads this version's own paragraph: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
@@ -396,7 +413,7 @@ false` for a departure the pinned key does attest. A clean install of
 `@cedulon/core@0.6.0` returns a 64-character lowercase hex digest from
 `requestHashOf`, matching the value the conformance run records.
 
-Nine packages are published on npm at `0.14.0`, so the server runs without a
+Nine packages are published on npm at `0.15.0`, so the server runs without a
 clone: `npx -y @cedulon/mcp-server`. 0.5.0 carries `MUST-T4-17` and
 `MUST-T8-9`, and it breaks: an audit that used to return a clean
 unconditional result over a receipt carrying the hash of terms it departs from
@@ -416,12 +433,12 @@ reports rather than refuses, and names the external-rail bound on T12 in the
 draft. The extract-evidence exits from `indeterminate` are built and red-then-green: authenticated presence settles late, authenticated full-window absence releases the authority. The reversing-entry branch of `MUST-T12-4` still has no evidence object, so T12-4 is executed for the extract branch and open for the reversal branch.
 
 Checked from npm rather than from this tree: a clean install of
-`@cedulon/mcp-server@0.14.0` answers `initialize` reporting `0.14.0`, lists
+`@cedulon/mcp-server@0.15.0` answers `initialize` reporting `0.15.0`, lists
 five tools, and names `counts` on `cedulon_audit` and `cedulon_export_ledger`;
-the install pulls nine `@cedulon` packages, and `@cedulon/audit@0.14.0`
+the install pulls nine `@cedulon` packages, and `@cedulon/audit@0.15.0`
 declares `@cedulon/effect-extract` among its dependencies, which
 `@cedulon/audit@0.12.0` did not. A clean install of
-`@cedulon/checkpoint@0.14.0` exports `strictHexBytes`,
+`@cedulon/checkpoint@0.15.0` exports `strictHexBytes`,
 `validInclusionProof`, `verifyInclusionEnvelope` and `verifyInclusion`, and
 nothing named `verifyInclusionReceipt`; a clean pack of `@cedulon/audit@0.12.0`
 reads its layer-2 candidate through `strictHexBytes` and its proof through
@@ -494,9 +511,14 @@ this sentence staying true. Both build to `dist` like the other packages;
 they are packable and unpublished. `demo:live` imports `base-extract`.
 
 `npm run mcpb` packs the released package into an `.mcpb` bundle for one-click
-desktop install. The 0.14.0 bundle was built and unpacked: its manifest states
-`0.14.0` and the server inside it installs `@cedulon/mcp-server@^0.14.0`. Every
-`@cedulon` package inside it reads `0.14.0`, nine of them, with no older copy left beside them. The builder installs the published version rather than the
+desktop install. The 0.15.0 bundle was built and unpacked: its manifest states
+`0.15.0` and the server inside it installs `@cedulon/mcp-server@^0.15.0`. Every
+`@cedulon` package inside it reads `0.15.0`, nine of them, with no older copy left beside them.
+It is attached to the GitHub release `v0.15.0` as `cedulon-0.15.0.mcpb`,
+4,006,298 bytes, SHA-256
+`7ab770a8bd1085e866ba8c85dc88e595ee4660bfad629db03dc0a9d752e3be27`, built and
+attached by the tagged run's release job; on 16 October it was downloaded back
+through the GitHub CLI, hashed the same, and unpacked for the counts above. The builder installs the published version rather than the
 working tree, so it refuses to build a version npm does not have; that is what
 keeps the bundle honest about what a user receives.
 
@@ -565,11 +587,12 @@ checking before a build and not after. The 0.5.0 build ran against `5b080e6`,
 started, and listed five tools.
 
 The server is listed in the MCP Registry as `io.github.dogrucanemek-alt/cedulon`,
-where `0.14.0` is the current version (`isLatest`), read back from the registry
-API rather than from the publish command's own output, on 15 October 2026.
+where `0.15.0` is the current version (`isLatest`), read back from the registry
+API rather than from the publish command's own output, on 16 October 2026.
 That entry was pushed by the tagged run's own registry step through its OIDC
-login, at 14:20 UTC, in the same run that published the nine packages to npm
-and read them back. The entry before it was `0.13.1`, pushed by hand, hours
+login, at 09:01 UTC, in the same run that published the nine packages to npm
+and read them back. The `0.14.0` entry before it was pushed the same way on
+15 October at 14:20 UTC. Before that, `0.13.1` was pushed by hand, hours
 after `0.13.1` reached npm, because the tagged run died at the readback and
 never got to its registry step; the `finish` dispatch mode then found the
 version already listed and skipped the publish rather than failing on it. The
