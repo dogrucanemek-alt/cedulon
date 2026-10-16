@@ -57,8 +57,9 @@ publishes it, and this paragraph is brought up to what was published once the
 registry answers. It refuses things 0.14.0 accepted. `@cedulon/mcp-server`
 refuses a state file it cannot read instead of starting empty with a new key,
 and a `reload()` that fails leaves the session as it was; it no longer takes
-the state lock from a holder that is still writing it; a rail that throws
-leaves the payment indeterminate in the live session; and an empty extract
+the state lock from a holder that is still writing it; a rail that throws,
+other than with the test double's two crash messages, leaves the payment
+indeterminate in the live session; and an empty extract
 releases an indeterminate payment only if its window covers every submit since
 the reserve. `@cedulon/core`'s `release` takes the time the reserve was made,
 so a reserve given back after its window rolled no longer refunds the next
