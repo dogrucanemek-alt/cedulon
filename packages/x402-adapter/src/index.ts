@@ -35,6 +35,14 @@ function manifestVerdict(
   return { ok, refusal: ok ? null : coseDecodeRefusalHex(manifest.coseHex) };
 }
 
+function manifestTermsMismatch(manifest: SignedManifest, req: SpendRequest): boolean {
+  return (
+    manifest.body.amount !== req.amount.toString() ||
+    manifest.body.currency !== req.currency ||
+    (typeof manifest.body.payee === "string" && manifest.body.payee !== req.payee)
+  );
+}
+
 export {
   RailLedger,
   DEFAULT_CLOCK_SKEW_MS,
@@ -172,10 +180,9 @@ export function gatedSettle(
     if (isManifestExpired(input.manifest, nowMs)) {
       return deny402(input.req, "expired-manifest");
     }
-    if (
-      input.manifest.body.amount !== input.req.amount.toString() ||
-      input.manifest.body.currency !== input.req.currency
-    ) {
+    // Terms that name a payee are terms for that payee (MUST-T8-9); a payment
+    // to anyone else is not the payment they describe.
+    if (manifestTermsMismatch(input.manifest, input.req)) {
       return deny402(input.req, "manifest-mismatch");
     }
     input.req.manifestHash = manifestHash(input.manifest);
@@ -245,6 +252,11 @@ function issue(
     }
     if (!verdict.ok) {
       return deny402(input.req, "manifest-bad-sig");
+    }
+    // The hash a receipt carries claims these terms; terms that do not describe
+    // this payment are not written into it, on either path.
+    if (manifestTermsMismatch(input.manifest, input.req)) {
+      return deny402(input.req, "manifest-mismatch");
     }
   }
   const policyHash = engine
