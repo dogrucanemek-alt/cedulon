@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -155,6 +155,52 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal((released as { released?: true }).released, true);
   });
 
+  it("RED then GREEN: absence has to cover every submit, not only the last one", () => {
+    // Submitted at NOW, retried at NOW + 100, both times with no answer. The
+    // rail may have taken either attempt. An extract that covers only the
+    // retry and shows nothing proves nothing about the first, and releasing
+    // on it hands back the authority for a payment that may have moved
+    // (MUST-T12-4).
+    const n = nonce("twosub");
+    const { session, path, keys, policy } = crashToIndeterminate(n, NOW);
+    assert.throws(
+      () => retryIndeterminate(session, n, new MockExternalRail("crash", { idempotentSubmit: true }), NOW + 100),
+      /cedulon-rail-crash/,
+    );
+    const restarted = new CedulonSession({ statePath: path, keys, policy });
+    assert.equal(lastPhase(restarted, n), "indeterminate");
+
+    const rail = generateExtractKeys();
+    const lastOnly = coveringExtract(n, rail, [], { start: NOW + 50, end: NOW + 200 });
+    const out = resolveIndeterminate(restarted, n, { extract: lastOnly, railKeyPem: rail.publicKeyPem }, NOW + 201);
+    assert.equal(out.ok, false, "an extract over the retry alone released a payment the first submit may have made");
+    assert.equal(out.reason, "window-not-covering");
+    assert.equal(restarted.engine.store.usedNonces.has(n), true);
+
+    // Covering both submits, the same empty extract is the absence it claims to be.
+    const both = coveringExtract(n, rail, [], { start: NOW, end: NOW + 200 });
+    const released = resolveIndeterminate(restarted, n, { extract: both, railKeyPem: rail.publicKeyPem }, NOW + 202);
+    assert.equal(released.ok, true);
+    assert.equal((released as { released?: true }).released, true);
+
+    // A nonce the rail refused is free, and its earlier submit belongs to the
+    // reserve that ended there. Only the submits since the latest reserve
+    // count; an earlier use must not make a covering extract fall short.
+    const reusePath = statePath();
+    const reuseFirst = new CedulonSession({ statePath: reusePath });
+    const m = nonce("reused");
+    assert.equal(reuseFirst.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW).ok, false);
+    assert.throws(
+      () => reuseFirst.submitExternal(spendArgs(m), new MockExternalRail("crash"), NOW + 1000),
+      /cedulon-rail-crash/,
+    );
+    const reuse = new CedulonSession({ statePath: reusePath, keys: reuseFirst.keys, policy: reuseFirst.engine.policy });
+    assert.equal(lastPhase(reuse, m), "indeterminate");
+    const sinceReserve = coveringExtract(m, rail, [], { start: NOW + 1000, end: NOW + 1010 });
+    const freed = resolveIndeterminate(reuse, m, { extract: sinceReserve, railKeyPem: rail.publicKeyPem }, NOW + 1011);
+    assert.equal(freed.ok, true, "a submit from the nonce's earlier, failed use held back a covering extract");
+  });
+
   it("RED then GREEN: a matching extract row cuts a late settled receipt; audit is clean", () => {
     const n = nonce("hit");
     const path = statePath();
@@ -226,5 +272,75 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal(lastPhase(session, n), "indeterminate");
     assert.equal(session.engine.store.usedNonces.has(n), true);
     assert.equal(session.receipts.length, 0);
+  });
+
+  it("RED then GREEN: a reservation released after its window closed does not refund the next window", () => {
+    // The reserve was taken in one window. By the time the extract proves the
+    // payment never happened, the window has rolled and the counters belong
+    // to payments made since. Taking the old reserve off them gave the new
+    // window one payment more than maxPayments allows.
+    const WINDOW = 60_000;
+    const policy = { ...new CedulonSession({ statePath: null }).engine.policy, maxPayments: 1, windowMs: WINDOW };
+    const path = statePath();
+    const first = new CedulonSession({ statePath: path, policy });
+    const n = nonce("oldwin");
+    assert.throws(
+      () => first.submitExternal(spendArgs(n), new MockExternalRail("crash"), NOW),
+      /cedulon-rail-crash/,
+    );
+    const session = new CedulonSession({ statePath: path, keys: first.keys, policy });
+    assert.equal(lastPhase(session, n), "indeterminate");
+
+    // The next window: one payment, which is all the policy allows.
+    assert.equal(session.spend(spendArgs(nonce("newwin-a")), NOW + WINDOW).ok, true);
+
+    const rail = generateExtractKeys();
+    const extract = coveringExtract(n, rail, [], { start: NOW, end: NOW + 10 });
+    const out = resolveIndeterminate(session, n, { extract, railKeyPem: rail.publicKeyPem }, NOW + WINDOW + 1);
+    assert.equal(out.ok, true);
+    assert.equal((out as { released?: true }).released, true);
+    assert.equal(session.engine.store.usedNonces.has(n), false, "the nonce itself is free again");
+
+    const second = session.spend(spendArgs(nonce("newwin-b")), NOW + WINDOW + 2);
+    assert.equal(second.ok, false, "a second payment in a window that allows one");
+    assert.equal((second as { reason: string }).reason, "velocity");
+
+    // A nonce the rail refused is free again, and its second reserve is in the
+    // window it was taken in. Reading the first reserve's time instead left the
+    // second one on the counters: a window that paid nothing refused a payment.
+    const reused = new CedulonSession({ statePath: statePath(), policy });
+    const m = nonce("reuse");
+    assert.equal(reused.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW).ok, false);
+    assert.equal(reused.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW + WINDOW).ok, false);
+    const fresh = reused.spend(spendArgs(nonce("reuse-next")), NOW + WINDOW + 1);
+    assert.equal(fresh.ok, true, "a window whose only payment the rail refused kept it on the counters");
+
+    // A journal with no prepared row for the nonce (a file written before the
+    // journal had one) does not say when the reserve was made. Unknown is not
+    // "now": read that way, the release refunds the current window.
+    const legacyPath = statePath();
+    const legacyFirst = new CedulonSession({ statePath: legacyPath, policy });
+    const k = nonce("noprep");
+    assert.throws(
+      () => legacyFirst.submitExternal(spendArgs(k), new MockExternalRail("crash"), NOW),
+      /cedulon-rail-crash/,
+    );
+    const raw = JSON.parse(readFileSync(legacyPath, "utf8")) as { journal: JournalEntry[] };
+    raw.journal = raw.journal.filter((e) => !(e.nonce === k && e.phase === "prepared"));
+    writeFileSync(legacyPath, `${JSON.stringify(raw)}\n`);
+    const legacy = new CedulonSession({ statePath: legacyPath, keys: legacyFirst.keys, policy });
+    assert.equal(lastPhase(legacy, k), "indeterminate");
+    assert.equal(legacy.spend(spendArgs(nonce("legacy-a")), NOW + WINDOW).ok, true);
+    const legacyRail = generateExtractKeys();
+    const legacyExtract = coveringExtract(k, legacyRail, [], { start: NOW, end: NOW + 10 });
+    const legacyOut = resolveIndeterminate(
+      legacy,
+      k,
+      { extract: legacyExtract, railKeyPem: legacyRail.publicKeyPem },
+      NOW + WINDOW + 1,
+    );
+    assert.equal(legacyOut.ok, true);
+    const legacyNext = legacy.spend(spendArgs(nonce("legacy-b")), NOW + WINDOW + 2);
+    assert.equal(legacyNext.ok, false, "a reserve of unknown time refunded the current window");
   });
 });
