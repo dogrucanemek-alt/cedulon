@@ -105,7 +105,7 @@ Apache-2.0 licensed.
 
 const pkg = (name) => ({
   name,
-  version: '1.1.0',
+  version: '1.2.0',
   description: `Launcher for the Cedulon MCP server (${TARGET_PKG}).`,
   keywords: ['cedulon', 'mcp', 'agent-commerce', 'audit', 'spend-policy'],
   license: 'Apache-2.0',
