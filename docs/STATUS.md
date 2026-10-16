@@ -11,8 +11,8 @@ symbolic links, so nothing skips there; on a Windows machine without that
 privilege the four symbolic-link cases skip with a stated reason rather
 than returning silently, so a local green run names what it did not
 cover. The CI sentence above is the last hosted count; it is not restated
-as a new total here. While the workspace
-version is ahead of npm, `npm run test:all` also carries one deliberate red -
+as a new total here. Between a version bump and its publish,
+`npm run test:all` also carries one deliberate red -
 the gate that refuses to call a prepared version published; `npm run
 test:pre-release` is the green one until the publish. `docs/RUN_AS_VERIFIER.md`
 carries the exact output of each demo, and part of the suite checks that file
@@ -80,8 +80,9 @@ before the tag, was red with it for the same reason. The launchers `cedulon`
 and `cedulon-mcp` move to 1.2.0 and depend on `^0.15.0`: a `^0.14.0` range does
 not accept 0.15.0, so 1.1.0 kept installing 0.14.0. `release.yml` does not
 publish the launchers; `cedulon@1.2.0` and `cedulon-mcp@1.2.0` were published by
-hand on 16 October 2026, from the tarballs tested before publishing (same
-shasum), and npm now marks 1.2.0 as `latest` for both. Measured from npm in an
+hand on 16 October 2026; npm's shasum for each equals that of the tarball
+installed into an empty folder and run before publishing, and npm now marks
+1.2.0 as `latest` for both. Measured from npm in an
 empty folder: both install `@cedulon/mcp-server@0.15.0`, and each launcher
 starts the server and its `initialize` reports `0.15.0`. Unchanged, and named
 here because the gate reads this version's own paragraph: `audit()` reports
@@ -106,12 +107,12 @@ published packages rather than from this tree, on 15 October 2026: a clean
 install of `@cedulon/mcp-server@0.14.0` in an empty folder pulls nine
 `@cedulon` packages, all at `0.14.0`, answers `initialize` reporting `0.14.0`,
 and its `@cedulon/cose` refuses the non-shortest head `18 01` as
-`cbor-non-deterministic`. The MCP Registry lists `0.14.0` with `isLatest`
-true, and the GitHub release carries the desktop bundle with its SHA-256 in
+`cbor-non-deterministic`. The MCP Registry listed `0.14.0` with `isLatest`
+true until 0.15.0, and the GitHub release carries the desktop bundle with its SHA-256 in
 the notes. The tagged run published, read back, registered and attached the
 bundle in one pass, the first under the workflow as #30 left it; its
 post-release job was red by design until this page named 0.14.0 as published. The unscoped
-launchers `cedulon` and `cedulon-mcp` move to 1.1.0 in this tree: 1.0.0
+launchers `cedulon` and `cedulon-mcp` moved to 1.1.0 with 0.14.0: 1.0.0
 depends on `@cedulon/mcp-server@^0.13.0`, `@cedulon/mcp-server@0.13.1` does not
 export the `package.json` subpath the launcher resolves, and `cedulon@1.0.0`
 installs but, when run, stops with "cannot resolve" and exits 1. `release.yml` does not publish the
@@ -604,7 +605,7 @@ forty minutes after the npm publish, because the post-release check then sat
 ahead of the registry step and failed as it does on every tagged run; the
 check has its own job now and the step ran. `server.json` is the entry it
 was published from, and the listing names `@cedulon/mcp-server` at the same
-`0.14.0`. On that
+`0.15.0`. On that
 reading the two channels are in step. The `0.11.0` listing had been pushed by
 hand the same way on 2 September at 23:59 UTC. The search endpoint
 answered a stale version for a short while after an earlier publish returned;
@@ -630,7 +631,7 @@ which of the two had failed; that is the run this distinction comes from.
 `release.yml` still sends packages to npm from the tag. It also carries an
 MCP Registry step (`mcp-publisher login github-oidc` then `publish`) after the
 npm readback; the post-release check has a job of its own. The step ran on the
-0.13.0 and 0.14.0 tags. When a tagged run stops before it, the entry is pushed
+0.13.0, 0.14.0 and 0.15.0 tags. When a tagged run stops before it, the entry is pushed
 by `finish` mode or by hand and can lag behind npm - it spent half a day on
 `0.6.0` while npm served `0.7.0` - so when the numbers differ, this paragraph
 is where both get named. Earlier listings: `0.2.1` announced itself as `0.2.0`
