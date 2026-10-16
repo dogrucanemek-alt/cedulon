@@ -345,4 +345,18 @@ describe("policy limits velocity scope", () => {
     assert.equal(e.consumeDecisionToken(d.token, req, 1).allow, true);
     assert.equal(e.consumeDecisionToken(d.token, req, 1).reason, "decision-replay");
   });
+
+  it("RED then GREEN: a release that does not say when the reserve was made frees the nonce, not the window", () => {
+    // A JavaScript caller written against the two-argument release() passes no
+    // time. Read as "the current window", that is the over-refund the time
+    // exists to stop: the next window gets a payment more than it allows.
+    const e = engine({ maxPayments: 1, windowMs: 1000 });
+    const base = { currency: "USD", payee: "ok", tool: "spend", amount: 1n };
+    const old = "old".padEnd(16, "-");
+    assert.equal(e.evaluate({ ...base, nonce: old, nowMs: 10 }).allow, true);
+    assert.equal(e.evaluate({ ...base, nonce: "new".padEnd(16, "-"), nowMs: 2000 }).allow, true);
+    (e.release as (nonce: string, amount: bigint, reservedAtMs?: number) => void)(old, 1n);
+    assert.equal(e.store.usedNonces.has(old), false, "the nonce itself is free again");
+    assert.equal(e.evaluate({ ...base, nonce: "next".padEnd(16, "-"), nowMs: 2001 }).reason, "velocity");
+  });
 });
