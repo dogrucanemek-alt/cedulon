@@ -252,6 +252,11 @@ function resolveTmpdirPrefix(input: string): string {
   return input;
 }
 
+// The claim is an exclusive create followed by a write of the pid. A file that
+// cannot be read yet is most likely a holder between those two steps. One that
+// has stayed unreadable for a minute is a writer that died in between.
+const UNREADABLE_LOCK_GRACE_MS = 60_000;
+
 export class CedulonSession {
   readonly engine: PolicyEngine;
   readonly ledger = new RailLedger();
@@ -480,16 +485,35 @@ export class CedulonSession {
    */
   reload(): { dropped: string[] } {
     const held = this.receipts.map((r) => r.claims.nonce);
-    this.receipts.length = 0;
-    this.checkpoints = [];
-    this.journal.length = 0;
-    this.sealedPrivate = null;
-    this.keyUnprotectOk = false;
-    this.ledger.restore([]);
-    this.engine.store.reset();
-    this.load();
-    this.lastSeenState = this.readStateFingerprint();
-    this.recoverJournal();
+    // A reload that fails leaves the session as it was; an emptied session that
+    // later saves writes an empty history over the real one.
+    const undo = this.snapshot();
+    const sealedPrivate = this.sealedPrivate;
+    const keyUnprotectOk = this.keyUnprotectOk;
+    const keys = { ...this.keys };
+    const issuer = this.issuer;
+    const lastSeenState = this.lastSeenState;
+    try {
+      this.receipts.length = 0;
+      this.checkpoints = [];
+      this.journal.length = 0;
+      this.sealedPrivate = null;
+      this.keyUnprotectOk = false;
+      this.ledger.restore([]);
+      this.engine.store.reset();
+      this.load();
+      this.lastSeenState = this.readStateFingerprint();
+      this.recoverJournal();
+    } catch (err) {
+      this.restore(undo);
+      this.sealedPrivate = sealedPrivate;
+      this.keyUnprotectOk = keyUnprotectOk;
+      this.keys.receiptPrivatePem = keys.receiptPrivatePem;
+      this.keys.receiptPublicPem = keys.receiptPublicPem;
+      this.issuer = issuer;
+      this.lastSeenState = lastSeenState;
+      throw err;
+    }
     const now = new Set(this.receipts.map((r) => r.claims.nonce));
     return { dropped: held.filter((nonce) => !now.has(nonce)) };
   }
@@ -798,7 +822,20 @@ export class CedulonSession {
       pid = (parseIJson(readFileSync(lockPath, "utf8")) as { pid?: unknown }).pid;
     } catch (err) {
       if (err instanceof Error && err.message === "json-duplicate-key") throw err;
-      // A lock we cannot read says nothing about who holds it.
+      // An empty or partial file is a holder still between the exclusive create
+      // and the pid write, so it counts as held. One that stays unreadable for
+      // a minute is a writer that died in between and is taken over.
+      // A lock stamped in the future, by a file system whose clock runs ahead,
+      // also counts as held; refusing for a while is recoverable, two writers
+      // are not.
+      let st: { mtimeMs: number };
+      try {
+        st = statSync(lockPath);
+      } catch (statErr) {
+        if ((statErr as NodeJS.ErrnoException)?.code === "ENOENT") return true;
+        return false;
+      }
+      if (Date.now() - st.mtimeMs < UNREADABLE_LOCK_GRACE_MS) return false;
       return true;
     }
     if (typeof pid !== "number" || pid === process.pid) {
@@ -952,7 +989,17 @@ export class CedulonSession {
       if (opts?.crashAfter === "submitted") {
         throw new Error("cedulon-injected-crash");
       }
-      const result = rail.submit(row);
+      let result: "settled" | "failed";
+      try {
+        result = rail.submit(row);
+      } catch (err) {
+        const message = (err as Error)?.message ?? "";
+        if (message === "cedulon-rail-crash" || message === "cedulon-injected-crash") {
+          throw err;
+        }
+        this.markIndeterminate(row, nowMs);
+        return { ok: false, reason: "state-io" };
+      }
       if (result === "failed") {
         this.engine.release(args.nonce, BigInt(args.amount), this.reservedAtMs(args.nonce));
         this.appendJournal({ ...row, phase: "failed", atMs: nowMs });
@@ -1031,6 +1078,7 @@ export class CedulonSession {
       if (message === "cedulon-rail-crash" || message === "cedulon-injected-crash") {
         throw err;
       }
+      this.markIndeterminate(row, nowMs);
       return { ok: false, reason: "state-io" };
     }
     if (result === "failed") {
@@ -1165,6 +1213,27 @@ export class CedulonSession {
     this.journal.push(entry);
   }
 
+  /**
+   * A rail that throws gave no answer; the payment may or may not have moved,
+   * which is indeterminate (MUST-T12-4) — the same row a restart would write,
+   * written now so this session can retry or resolve it.
+   */
+  private markIndeterminate(
+    row: { nonce: string; amount: string; currency: string; payee: string },
+    nowMs: number,
+  ): void {
+    this.appendJournal({ ...row, phase: "indeterminate", atMs: nowMs });
+    try {
+      this.save();
+    } catch (err) {
+      if ((err as Error)?.message === "cedulon-state-symlink") {
+        throw err;
+      }
+      // Any other write failure leaves the row in memory. Disk stays at
+      // `submitted`, and a restart folds that line to the same phase.
+    }
+  }
+
   private recoverJournal(nowMs = Date.now()): void {
     let dirty = false;
     for (const row of foldJournal(this.journal)) {
@@ -1219,9 +1288,16 @@ export class CedulonSession {
     let raw: string;
     try {
       raw = readFileSync(this.statePath, "utf8");
-    } catch {
-      this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
-      return;
+    } catch (err) {
+      // Only a file that is not there is a fresh start; a file that exists and
+      // cannot be read (permissions, a scanner holding it, a directory) is the
+      // same as one that does not parse — starting from zero would rename over
+      // it on the first save and drop every receipt and the key.
+      if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+        this.issuer = pemSigner(this.keys.receiptPrivatePem, this.keys.receiptPublicPem);
+        return;
+      }
+      throw new Error("cedulon-state-unreadable", { cause: err });
     }
     let parsed: Persisted;
     try {
