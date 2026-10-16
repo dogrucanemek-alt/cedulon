@@ -17,9 +17,8 @@ been removed, or that a scanner held open at startup, started the server
 with no receipts and a newly generated key, and the first save renamed over
 the file; measured on Windows, three receipts and the signing key were gone.
 Only a file that is not there (`ENOENT`) is a fresh start now. Any other
-read error is `cedulon-state-unreadable`, the refusal a file that is not
-valid JSON already got, so a server started against such a file stops
-instead of starting empty. A `reload()` that fails leaves the session as it was:
+read error is `cedulon-state-unreadable`, so a server started against such
+a file stops instead of starting empty. A `reload()` that fails leaves the session as it was:
 0.14.0 emptied the session before it read the file, and the next payment
 saved one receipt over the history.
 
@@ -41,9 +40,9 @@ crash clears itself after a minute. A lock stamped far in the future stays
 until the clock is a minute past its stamp, and can be deleted by hand.
 
 C. External rails. A rail whose `submit` throws gave no answer, which
-MUST-T12-4 calls indeterminate. (The two crash messages the test double
-uses to stand for a dead process, `cedulon-rail-crash` and
-`cedulon-injected-crash`, are rethrown as before; a restart folds those.) 0.14.0 stopped the journal at `submitted`,
+MUST-T12-4 calls indeterminate. (An error whose message is exactly
+`cedulon-rail-crash` or `cedulon-injected-crash`, the names the suite uses
+to stand for a dead process, is rethrown as before; a restart folds it.) 0.14.0 stopped the journal at `submitted`,
 so `retryIndeterminate` and `resolveIndeterminate` answered
 `not-indeterminate` until the server was restarted; the same session can
 now retry or resolve it. The reason returned is still `state-io`, and the
