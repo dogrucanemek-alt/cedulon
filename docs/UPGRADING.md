@@ -4,6 +4,95 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.15.0: the server keeps what it holds, and a reserve goes back only where it was taken
+
+This release refuses things 0.14.0 accepted, and changes one call in
+`@cedulon/core`. Each change is on the side of refusing: where 0.15.0 says
+no and 0.14.0 went ahead, 0.14.0 could lose a receipt, pay twice, or pay
+someone the terms did not name.
+
+A. `@cedulon/mcp-server` refuses a state file it cannot read. 0.14.0 took
+every read error to mean "no state yet". A file whose read permission had
+been removed, or that a scanner held open at startup, started the server
+with no receipts and a newly generated key, and the first save renamed over
+the file; measured on Windows, three receipts and the signing key were gone.
+Only a file that is not there (`ENOENT`) is a fresh start now. Any other
+read error is `cedulon-state-unreadable`, the refusal a file that does not
+parse already got, so a server started against such a file stops instead
+of starting empty. A `reload()` that fails leaves the session as it was:
+0.14.0 emptied the session before it read the file, and the next payment
+saved one receipt over the history.
+
+What to do: if the server stops with `cedulon-state-unreadable`, restore
+read access to the file or wait for whatever holds it. Do not delete it;
+it holds the receipts and the key.
+
+B. The state lock is no longer taken from a holder that is still writing
+it. The lock is an exclusive create followed by a write of the pid, and a
+second server that arrived in between read an empty file, called the holder
+gone, and took the lock: two writers, one receipt erased by the later
+rename. An unreadable lock now counts as held for one minute after its last
+write, and so does one stamped in the future by a clock that runs ahead;
+after that it is taken over. The caller sees `state-locked:unknown` where
+0.14.0 went ahead.
+
+What to do: nothing. A refused payment can be tried again; a lock left by a
+crash clears itself after a minute. A lock stamped far in the future stays
+until the clock passes it, and can be deleted by hand.
+
+C. External rails. A rail whose `submit` throws gave no answer, which
+MUST-T12-4 calls indeterminate. 0.14.0 stopped the journal at `submitted`,
+so `retryIndeterminate` and `resolveIndeterminate` answered
+`not-indeterminate` until the server was restarted; the same session can
+now retry or resolve it. The reason returned is still `state-io`, and the
+reserve stays held. `resolveIndeterminate` releases on an extract with no
+matching row only if the extract's window covers every submit since the
+nonce's latest reserve, not only the last one; otherwise it answers
+`window-not-covering` and the payment stays indeterminate. A matching row is
+still proof of settlement, as before.
+
+What to do: an absence extract has to cover the first submit of a payment
+as well as any retry.
+
+D. `@cedulon/core`: `PolicyEngine.release(nonce, amount, reservedAtMs)`
+takes the time the reserve was made. This breaks TypeScript callers that
+pass two arguments. The nonce is always freed. The window's counters change
+only for a finite time inside the current window. 0.14.0 took every
+released reserve off the current window, so a reserve given back after its
+window had rolled gave the new window a payment more than `maxPayments`
+allows. A JavaScript caller that still passes no time frees the nonce and
+refunds no window.
+
+What to do: pass the time `evaluate` ran for that reserve. The MCP server
+passes the time of the nonce's latest `prepared` journal row. A reserve made
+with a clock behind the window's start is judged old and stays on the
+counters until the window rolls: that refuses, it does not overspend.
+
+E. `@cedulon/x402-adapter` compares the payee a manifest names. A manifest
+body may name a payee, compared as exact octets (MUST-T8-9), and `audit()`
+already did. The payment path did not: with terms that named `payee-A`, a
+payment to `payee-B` settled, and its receipt carried the hash of terms that
+never named the party it paid. `gatedSettle` now refuses it as
+`manifest-mismatch` before the policy engine is consulted. The unguarded
+path (`unguardedSettle`) refuses a manifest whose payee, amount or currency
+does not describe the payment; it still skips the policy gate and the
+manifest's expiry. A manifest that names no payee is unchanged.
+
+What to do: a request settled with a manifest that names a payee has to pay
+that payee.
+
+F. The launchers `cedulon` and `cedulon-mcp` move to 1.2.0 and depend on
+`^0.15.0`. A `^0.14.0` range does not accept 0.15.0, so 1.1.0 keeps
+installing 0.14.0 and the state-file loss in A.
+
+Unchanged, and repeated here because the gate reads each version's own
+section: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
+introduced, where with a usable issuer pin the departure is a finding that
+fails the audit, and without a pin the same departure is a warning that
+does not by itself fail it; and `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted core-04
+names in Section 9 (MUST-T6-1).
+
 ## 0.14.0: one encoding per value, and a verifier that closes what it used to let through
 
 This release refuses things 0.13.1 accepted. Each change is in the
