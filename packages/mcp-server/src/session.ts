@@ -1128,6 +1128,13 @@ export class CedulonSession {
       );
       return receipt;
     }
+    // Every attempt since the reserve may be the one the rail took; absence
+    // is evidence only over a window that covers all of them.
+    for (const t of this.submittedTimesSinceReserve(nonce)) {
+      if (t < windowStartMs || t >= windowEndMs) {
+        return { ok: false, reason: "window-not-covering" };
+      }
+    }
     this.engine.release(folded.nonce, BigInt(folded.amount), this.reservedAtMs(folded.nonce));
     this.appendJournal({
       nonce: folded.nonce,
@@ -1207,6 +1214,21 @@ export class CedulonSession {
       }
     }
     return at;
+  }
+
+  private submittedTimesSinceReserve(nonce: string): number[] {
+    let times: number[] = [];
+    for (const entry of this.journal) {
+      if (entry.nonce !== nonce) {
+        continue;
+      }
+      if (entry.phase === "prepared") {
+        times = [];
+      } else if (entry.phase === "submitted") {
+        times.push(entry.atMs);
+      }
+    }
+    return times;
   }
 
   private appendJournal(entry: JournalEntry): void {

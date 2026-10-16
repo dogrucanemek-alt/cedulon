@@ -155,6 +155,52 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal((released as { released?: true }).released, true);
   });
 
+  it("RED then GREEN: absence has to cover every submit, not only the last one", () => {
+    // Submitted at NOW, retried at NOW + 100, both times with no answer. The
+    // rail may have taken either attempt. An extract that covers only the
+    // retry and shows nothing proves nothing about the first, and releasing
+    // on it hands back the authority for a payment that may have moved
+    // (MUST-T12-4).
+    const n = nonce("twosub");
+    const { session, path, keys, policy } = crashToIndeterminate(n, NOW);
+    assert.throws(
+      () => retryIndeterminate(session, n, new MockExternalRail("crash", { idempotentSubmit: true }), NOW + 100),
+      /cedulon-rail-crash/,
+    );
+    const restarted = new CedulonSession({ statePath: path, keys, policy });
+    assert.equal(lastPhase(restarted, n), "indeterminate");
+
+    const rail = generateExtractKeys();
+    const lastOnly = coveringExtract(n, rail, [], { start: NOW + 50, end: NOW + 200 });
+    const out = resolveIndeterminate(restarted, n, { extract: lastOnly, railKeyPem: rail.publicKeyPem }, NOW + 201);
+    assert.equal(out.ok, false, "an extract over the retry alone released a payment the first submit may have made");
+    assert.equal(out.reason, "window-not-covering");
+    assert.equal(restarted.engine.store.usedNonces.has(n), true);
+
+    // Covering both submits, the same empty extract is the absence it claims to be.
+    const both = coveringExtract(n, rail, [], { start: NOW, end: NOW + 200 });
+    const released = resolveIndeterminate(restarted, n, { extract: both, railKeyPem: rail.publicKeyPem }, NOW + 202);
+    assert.equal(released.ok, true);
+    assert.equal((released as { released?: true }).released, true);
+
+    // A nonce the rail refused is free, and its earlier submit belongs to the
+    // reserve that ended there. Only the submits since the latest reserve
+    // count; an earlier use must not make a covering extract fall short.
+    const reusePath = statePath();
+    const reuseFirst = new CedulonSession({ statePath: reusePath });
+    const m = nonce("reused");
+    assert.equal(reuseFirst.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW).ok, false);
+    assert.throws(
+      () => reuseFirst.submitExternal(spendArgs(m), new MockExternalRail("crash"), NOW + 1000),
+      /cedulon-rail-crash/,
+    );
+    const reuse = new CedulonSession({ statePath: reusePath, keys: reuseFirst.keys, policy: reuseFirst.engine.policy });
+    assert.equal(lastPhase(reuse, m), "indeterminate");
+    const sinceReserve = coveringExtract(m, rail, [], { start: NOW + 1000, end: NOW + 1010 });
+    const freed = resolveIndeterminate(reuse, m, { extract: sinceReserve, railKeyPem: rail.publicKeyPem }, NOW + 1011);
+    assert.equal(freed.ok, true, "a submit from the nonce's earlier, failed use held back a covering extract");
+  });
+
   it("RED then GREEN: a matching extract row cuts a late settled receipt; audit is clean", () => {
     const n = nonce("hit");
     const path = statePath();
