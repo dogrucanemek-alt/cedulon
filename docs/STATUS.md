@@ -52,6 +52,28 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.15.0` is prepared in this tree and is not a published npm release; the tag
+publishes it, and this paragraph is brought up to what was published once the
+registry answers. It refuses things 0.14.0 accepted. `@cedulon/mcp-server`
+refuses a state file it cannot read instead of starting empty with a new key,
+and a `reload()` that fails leaves the session as it was; it no longer takes
+the state lock from a holder that is still writing it; a rail that throws,
+other than with the two messages the suite uses to stand for a dead process,
+leaves the payment indeterminate in the live session; and an empty extract
+releases an indeterminate payment only if its window covers every submit since
+the reserve. `@cedulon/core`'s `release` takes the time the reserve was made,
+so a reserve given back after its window rolled no longer refunds the next
+window. `@cedulon/x402-adapter` refuses a payment to anyone other than the
+payee a manifest names, on the gated and the unguarded path. The launchers
+`cedulon` and `cedulon-mcp` move to 1.2.0 and `^0.15.0`. `docs/UPGRADING.md`
+lists each change under its own letter. Unchanged, and named here because the
+gate reads this version's own paragraph: `audit()` reports
+`manifest-terms-mismatch` with the split 0.6.0 introduced, where with a
+usable issuer pin the departure is a finding that fails the audit, and
+without a pin the same departure is a warning that does not by itself fail it; and
+`requestHash` is still the SHA-256 of the six-field canonical document in
+lowercase hex, the digest the posted core-04 names in Section 9 (MUST-T6-1).
+
 `0.14.0` is published on npm across all nine packages, each with a SLSA v1
 provenance attestation and reporting `gitHead` `1cf81cd`, and it is what an
 installed package now answers. It refuses things 0.13.1 accepted.
