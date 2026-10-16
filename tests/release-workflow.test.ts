@@ -359,3 +359,62 @@ describe("release.yml names the public packages", () => {
     }
   });
 });
+
+describe("pre-release and post-release split", () => {
+  // The registry host timed out on 15 October 2026 four times, and the
+  // skip broke the "none skipped" sentence. A check against a moving
+  // "latest" belongs to the job that runs after a publish. The pattern
+  // is declared in two scripts and this test is the third thing that
+  // compares them.
+  it("RED then GREEN: a check that asks what is latest right now runs only in test:post-release", () => {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    const pre = pkg.scripts?.["test:pre-release"] ?? "";
+    const post = pkg.scripts?.["test:post-release"] ?? "";
+    const skip = /--test-skip-pattern="([^"]+)"/.exec(pre);
+    const named = /--test-name-pattern="([^"]+)"/.exec(post);
+    assert.ok(skip, 'test:pre-release is missing --test-skip-pattern="..."');
+    assert.ok(named, 'test:post-release is missing --test-name-pattern="..."');
+    assert.equal(skip[1], named[1], "the two scripts must carry the same list");
+
+    const source = readFileSync(join(root, "tests", "published-as.test.ts"), "utf8");
+    const describeAt = source.indexOf('describe("published-as claims"');
+    assert.ok(describeAt >= 0, 'describe("published-as claims" is missing');
+    const describeText = source.slice(describeAt);
+    const closeAt = describeText.search(/\n\}\);/);
+    assert.ok(closeAt >= 0, 'describe("published-as claims" does not close');
+    const describeBody = describeText.slice(0, closeAt + "\n});".length);
+
+    const networkCalls = ["tarballText(", "npmViewPublished(", "registryVersions(", "fetch("];
+    // This one asks for a pinned version, which holds forever at this
+    // commit, so it stays in the pre-release suite.
+    const pinnedVersionException = ["the draft's 'published as' list is in the tarball at that version"];
+
+    let count = 0;
+    const titles: string[] = [];
+    for (const hit of describeBody.matchAll(/\n  it\(/g)) {
+      const from = describeBody.slice(hit.index! + hit[0].indexOf("it("));
+      const nextIt = from.indexOf("\n  it(", 1);
+      const nextClose = from.indexOf("\n});");
+      let end = from.length;
+      if (nextIt >= 0) end = Math.min(end, nextIt);
+      if (nextClose >= 0) end = Math.min(end, nextClose);
+      const body = from.slice(0, end);
+      const title = /"([^"]*)"/.exec(from.slice("it(".length));
+      assert.ok(title, "an it( has no double-quoted title");
+      titles.push(title[1]!);
+      if (!networkCalls.some((call) => body.includes(call))) continue;
+      const namedPostRelease = new RegExp(skip[1]!).test(title[1]!);
+      if (namedPostRelease) count += 1;
+      assert.ok(
+        namedPostRelease || pinnedVersionException.includes(title[1]!),
+        `"${title[1]}" reaches the network and is neither in the post-release pattern nor a pinned-version check; place it`,
+      );
+    }
+    for (const name of pinnedVersionException) {
+      assert.ok(titles.includes(name), `the pinned-version exception "${name}" no longer names a test`);
+    }
+    assert.ok(count >= 3, "expected at least three live-latest checks inside published-as claims");
+  });
+});

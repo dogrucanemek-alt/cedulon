@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -81,6 +81,46 @@ describe("session state file", () => {
     assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
     writeFileSync(`${statePath}.lock`, '{"pid":1,"pid":1}');
     assert.throws(() => spendOnce(session, "n1".padEnd(16, "-")), /json-duplicate-key/);
+  });
+
+  it("RED then GREEN: a lock file its holder is still writing is held, not abandoned", () => {
+    // The claim is an exclusive create followed by a write of the pid, and a
+    // second server can arrive in between. It read an empty file, called the
+    // holder gone, removed the lock and took it: two writers, the same
+    // prevReceiptHash, and the later rename erased the other receipt.
+    const statePath = tempStatePath();
+    const session = new CedulonSession({ statePath });
+    assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
+    const lockPath = `${statePath}.lock`;
+
+    for (const [label, body] of [
+      ["empty", ""],
+      ["half-written", '{"pid":'],
+    ] as const) {
+      writeFileSync(lockPath, body);
+      const refused = spendOnce(session, `n-${label}`.padEnd(16, "-"));
+      assert.equal(refused.ok, false, `the ${label} lock file was taken over while its holder may still be writing it`);
+      assert.match(refused.ok === false ? refused.reason : "", /^state-locked:/);
+    }
+
+    // A file system whose clock runs ahead stamps a fresh lock in the future.
+    // Measuring its age in either direction reads it as old and steals it.
+    const ahead = new Date(Date.now() + 10 * 60_000);
+    writeFileSync(lockPath, "");
+    utimesSync(lockPath, ahead, ahead);
+    const skewed = spendOnce(session, "n-ahead".padEnd(16, "-"));
+    assert.equal(skewed.ok, false, "a lock stamped ahead of this clock was taken over");
+    assert.match(skewed.ok === false ? skewed.reason : "", /^state-locked:/);
+
+    // The same unreadable file, long after any writer would have finished, is
+    // a crash between the create and the write. It must not wedge the server.
+    const old = new Date(Date.now() - 10 * 60_000);
+    utimesSync(lockPath, old, old);
+    assert.equal(
+      spendOnce(session, "n-stale".padEnd(16, "-")).ok,
+      true,
+      "an unreadable lock left long ago is taken over rather than obeyed forever",
+    );
   });
 
   it("42 RED then GREEN: a temp directory reached through a symlink is not an attacker path", (t) => {
