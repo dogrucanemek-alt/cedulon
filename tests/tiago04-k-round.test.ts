@@ -11,7 +11,7 @@ import {
   signCheckpoint,
   verifyInclusionEnvelope,
 } from "@cedulon/checkpoint";
-import { generateManifestKeys, signManifest } from "@cedulon/manifest";
+import { generateManifestKeys, manifestHash, signManifest } from "@cedulon/manifest";
 import {
   counterSign,
   countersignDeliveredHashHex,
@@ -28,6 +28,7 @@ const WINDOW_END = NOW + 3_600_000;
 function settledReceipt(
   keys: { privateKeyPem: string; publicKeyPem: string },
   payee = "payee-1",
+  names: string | null = null,
 ) {
   return signReceipt(
     {
@@ -36,8 +37,8 @@ function settledReceipt(
       amount: "1",
       currency: "USD",
       policyHash: TEST_HASH,
-      manifestHash: null,
-      noManifest: true,
+      manifestHash: names,
+      noManifest: names === null,
       x402PaymentRef: "ref-ok",
       timestampMs: NOW,
       nonce: "n0".padEnd(16, "-"),
@@ -68,7 +69,7 @@ describe("Tiago -04 K8 deliveredHash (decided)", () => {
       merchant.publicKeyPem,
     );
     const receipt = counterSign(
-      settledReceipt(honest),
+      settledReceipt(honest, "payee-1", manifestHash(manifest)),
       payee.privateKeyPem,
       payee.publicKeyPem,
       honest.publicKeyPem,
@@ -124,7 +125,7 @@ describe("Tiago -04 K8 deliveredHash (decided)", () => {
       merchant.publicKeyPem,
     );
     const receipt = counterSign(
-      settledReceipt(honest),
+      settledReceipt(honest, "payee-1", manifestHash(manifest)),
       payee.privateKeyPem,
       payee.publicKeyPem,
       honest.publicKeyPem,
@@ -179,7 +180,7 @@ describe("Tiago -04 K8 deliveredHash (decided)", () => {
       merchant.privateKeyPem,
       merchant.publicKeyPem,
     );
-    const base = settledReceipt(honest);
+    const base = settledReceipt(honest, "payee-1", manifestHash(manifest));
     const honestCs = counterSign(base, payee.privateKeyPem, payee.publicKeyPem, honest.publicKeyPem, TEST_HASH);
     const garbage = counterSign(base, junk.privateKeyPem, junk.publicKeyPem, honest.publicKeyPem, "b".repeat(64));
     const extract = signRailExtract(
@@ -227,6 +228,89 @@ describe("Tiago -04 K8 deliveredHash (decided)", () => {
     const signed = counterSign(settledReceipt(honest), payee.privateKeyPem, payee.publicKeyPem, honest.publicKeyPem);
     assert.equal(verifyCounterSignature(signed, payee.publicKeyPem), true);
     assert.equal(countersignDeliveredHashHex(signed), null);
+  });
+});
+
+// Tiago, core-04 reading (22 Oct 2026), point 2: the delivery comparison is
+// asked only of receipts that name the presented manifest, as MUST-T8-9 is, and
+// never of a manifest a stated publisher pin refused.
+describe("Tiago core-04 #2: deliveredHash is compared only against the manifest the receipt names", () => {
+  function terms(keys: { privateKeyPem: string; publicKeyPem: string }, description = "terms") {
+    return signManifest(
+      {
+        description,
+        amount: "1",
+        currency: "USD",
+        acceptanceCriteriaHash: TEST_HASH,
+        cancelCondition: "none",
+        expiresAtMs: NOW + 60_000,
+      },
+      keys.privateKeyPem,
+      keys.publicKeyPem,
+    );
+  }
+
+  function run(names: string | null, presented: ReturnType<typeof signManifest>, publisherPin: string) {
+    const honest = generateReceiptKeys();
+    const payee = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const receipt = counterSign(
+      settledReceipt(honest, "payee-1", names),
+      payee.privateKeyPem,
+      payee.publicKeyPem,
+      honest.publicKeyPem,
+      "a".repeat(64),
+    );
+    const extract = signRailExtract(
+      {
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+        settlements: [{ ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    return audit({
+      receipts: [receipt],
+      checkpoints: [signCheckpoint(buildCheckpointClaims(1, [receipt], NOW, WINDOW_END, null), honest.privateKeyPem, honest.publicKeyPem)],
+      extract,
+      manifest: presented,
+      manifestTrust: { publicKeyPem: publisherPin },
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      payeeTrust: { "payee-1": payee.publicKeyPem },
+      trust: { publicKeyPem: rail.publicKeyPem, accountId: "acct", railId: "rail", windowStartMs: NOW, windowEndMs: WINDOW_END },
+    });
+  }
+
+  it("a noManifest receipt is not compared with the presented manifest", () => {
+    const merchant = generateManifestKeys();
+    const report = run(null, terms(merchant), merchant.publicKeyPem);
+    assert.equal(report.findings.some((f) => f.code === "delivery-mismatch"), false);
+  });
+
+  it("a receipt that names a different manifest is not compared with the presented one", () => {
+    const merchant = generateManifestKeys();
+    const elsewhere = manifestHash(terms(merchant, "another deal"));
+    const report = run(elsewhere, terms(merchant), merchant.publicKeyPem);
+    assert.equal(report.findings.some((f) => f.code === "delivery-mismatch"), false);
+  });
+
+  it("a manifest the publisher pin refused is not compared at all; the refusal stands", () => {
+    const merchant = generateManifestKeys();
+    const stranger = generateManifestKeys();
+    const presented = terms(stranger);
+    const report = run(manifestHash(presented), presented, merchant.publicKeyPem);
+    assert.equal(report.findings.some((f) => f.code === "delivery-mismatch"), false);
+    assert.equal(report.findings.some((f) => f.code === "manifest-key-mismatch"), true);
+  });
+
+  it("a receipt that names the presented, accepted manifest is still compared", () => {
+    const merchant = generateManifestKeys();
+    const presented = terms(merchant);
+    const report = run(manifestHash(presented), presented, merchant.publicKeyPem);
+    assert.equal(report.findings.some((f) => f.code === "delivery-mismatch"), true);
   });
 });
 

@@ -257,12 +257,14 @@ export type ChainBreak = { index: number; reason: string };
 export function findCheckpointChainBreak(
   chain: SignedCheckpoint[],
   expectedIssuerKeyPem?: string,
+  /** Expected `prevCheckpointHash` of the first checkpoint. Default: genesis (`null`). */
+  expectedFirstPrevHash: string | null = null,
 ): ChainBreak | null {
   for (let i = 0; i < chain.length; i += 1) {
     if (!verifyCheckpoint(chain[i], expectedIssuerKeyPem)) {
       return { index: i, reason: "bad-signature" };
     }
-    const expectedPrev = i === 0 ? null : checkpointHash(chain[i - 1]);
+    const expectedPrev = i === 0 ? expectedFirstPrevHash : checkpointHash(chain[i - 1]);
     if (chain[i].claims.prevCheckpointHash !== expectedPrev) {
       return { index: i, reason: "broken-link" };
     }

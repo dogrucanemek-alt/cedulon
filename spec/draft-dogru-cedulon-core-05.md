@@ -30,6 +30,7 @@ author:
     email: e.dogru@cedulon.com
 normative:
   RFC2119:
+  RFC4648:
   RFC6234:
   RFC6838:
   RFC7493:
@@ -50,7 +51,9 @@ normative:
       - ins: E. C. Dogru
         name: Emek Can Dogru
     date: 2026
-    target: https://github.com/dogrucanemek-alt/cedulon/blob/master/spec/draft-dogru-cedulon-checkpoint-00.md
+    seriesinfo:
+      Internet-Draft: draft-dogru-cedulon-checkpoint-00
+    target: https://datatracker.ietf.org/doc/draft-dogru-cedulon-checkpoint/
 informative:
   RFC7942:
   RFC9110:
@@ -68,7 +71,9 @@ informative:
       - ins: E. C. Dogru
         name: Emek Can Dogru
     date: 2026
-    target: https://github.com/dogrucanemek-alt/cedulon/blob/master/spec/draft-dogru-cedulon-threats-00.md
+    seriesinfo:
+      Internet-Draft: draft-dogru-cedulon-threats-00
+    target: https://datatracker.ietf.org/doc/draft-dogru-cedulon-threats/
   KUEHLEWIND-AUDIT:
     title: "An Architecture for Auditing AI Agent Delegation and Interactions"
     author:
@@ -495,9 +500,10 @@ decoded claim map does not match the presented claims (`MUST-T4-2`).
 ## Optional payee countersignature {#countersign}
 
 A payee MAY attach a countersignature over the issuer's signed
-Spend Receipt (`MAY-T8-10`). The profile uses a **detached**
+Spend Receipt (`MAY-T8-10`). The profile uses a **separate**
 COSE_Sign1 {{RFC9052}} whose payload is a CBOR map with private-use
-labels:
+labels. It carries that payload; it is not the detached-payload form
+of {{RFC9052}} Section 4.1, in which the payload is nil:
 
 | Label | Claim | CBOR type |
 |---|---|---|
@@ -510,8 +516,9 @@ and content type `application/cedulon-countersign+cbor`.
 This is a second Sign1 object, not RFC 9052 Countersignature0
 (unprotected-header label 11). Countersignature0 would write into
 the issuer object and change `receiptHash` after issue, breaking
-the receipt chain. A detached Sign1 keeps the issuer bytes
-stable, reuses `kid` and content-type, and is absent by simply
+the receipt chain. A separate Sign1 keeps the issuer bytes
+stable, reuses the header profile of {{cose-profile}} with its own
+`kid` (the payee's) and its own content type, and is absent by simply
 omitting the sibling object.
 
 Absence of a countersignature MUST NOT invalidate the issuer
@@ -536,10 +543,16 @@ the absence of the payee's word, not a substitute for it.
 The optional `deliveredHash` claim binds delivery to the receipt
 under the payee's key. A payee who countersigns MAY include the
 SHA-256 of the exact bytes it delivered in the same signed payload
-as the issuer receipt bytes. When an attributable countersignature
-carries `deliveredHash` and the verifier also holds the Trade
-Manifest, the two digests are compared as exact octets:
-`deliveredHash` against `acceptanceCriteriaHash`. A mismatch is
+as the issuer receipt bytes. The comparison runs when an attributable
+countersignature carries `deliveredHash`, the verifier holds a Trade
+Manifest that no pin refused, and the receipt names that manifest:
+its `manifestHash` equals the manifest's hash, the same scope as
+`MUST-T8-9`. A receipt that is `noManifest`, or names a different
+manifest, made no statement about this manifest's acceptance
+criteria and is not compared with it. The two values are compared as
+digest values: `acceptanceCriteriaHash`, 64 lowercase hexadecimal
+characters, is decoded to its 32 octets, and those octets are
+compared octet for octet with `deliveredHash`. A mismatch is
 `delivery-mismatch`, and it is a finding rather than a warning,
 because both ends of the comparison are signed. A `deliveredHash`
 carried by an unattributable countersignature is discarded with it.
@@ -569,10 +582,12 @@ A decoder MUST also impose a bound on what it will attempt: on encoded
 size, on nesting depth, and on the number of elements it will decode
 from an audit input. It MUST refuse an input that exceeds a bound with
 a named refusal rather than by exhausting memory or the stack, and it
-SHOULD document the bounds it applies (`MUST-T4-19`). This document
-fixes no numbers, because the right bounds depend on the deployment;
-what it requires is that exceeding a bound is a named, reported
-refusal rather than a crash.
+SHOULD document the bounds it applies (`MUST-T4-19`). The numbers
+are a floor every verifier accepts, fixed in {{presented-form}}, so
+that two conforming verifiers cannot accept and refuse the same
+input; a deployment that needs larger inputs raises the bound, and
+exceeding whatever bound it applies is a named, reported refusal
+rather than a crash.
 
 ## Claim labels {#receipt-labels}
 
@@ -587,6 +602,21 @@ the refusal. A decoder that preserves unknown or foreign claims is a
 separate layer and keeps them unchanged; the grammar binds what a
 party signs and what a validator accepts, not what a decoder can
 carry.
+
+Every `amount` - of a Spend Receipt, a Trade Manifest, and a
+settlement record - is a decimal integer string in the grammar
+`0|[1-9][0-9]*`. A signer MUST refuse to sign a value outside it,
+naming the claim. A settlement record whose `amount` is outside it
+refuses the extract (`renamed-settlement-amount`, Appendix B). For
+the signed objects a verifier needs no separate pass: step 8
+compares amounts as exact octets and never reads them as numbers,
+and every place that does read an amount as a number - the
+checkpoint totals, step 9's aggregation of a repeated `ref` - MUST
+report a value outside the grammar as `malformed-amount` rather than
+interpret it. A receipt the audit counts falls in a checkpoint
+window ({{verification}}), so its amount is read for that window's
+totals, whether or not the checkpoint redacted them, and a receipt
+amount outside the grammar is reported there.
 
 Receipt labels (`MUST-T4-3`, `MUST-T4-4`, `MUST-T4-7`):
 
@@ -702,6 +732,52 @@ internally consistent and says nothing about who signed it; two
 issuers cannot be told apart in that state. A Trade Manifest with no
 pinned key is not checked against its carried key at all (Appendix B,
 `unauthenticated-manifest`).
+
+### The presented form {#presented-form}
+
+Two verifiers accept the same inputs only if they read the same
+inputs, so the form an object travels in beside its signed octets is
+fixed here. A presented object is a JSON object, encoded as in
+{{canonical-json}} wherever it is hashed, with these members:
+
+| Object | Members |
+|---|---|
+| Spend Receipt | `claims`, `signature`, `publicKeyPem`, `encoding`, `coseHex`; optionally `counterCoseHex` and `payeePublicKeyPem` |
+| Epoch checkpoint | `claims`, `publicKeyPem`, `encoding`, `coseHex` |
+| Trade Manifest | `body`, `signature`, `publicKeyPem`, `encoding`, `coseHex` |
+| Decision Token | `claims`, `publicKeyPem`, `encoding`, `coseHex` |
+| Rail Extract | `body`, `signature`, `publicKeyPem` ({{rail-extract}}) |
+
+- `claims` and `body` carry the decoded claim set as a JSON object
+  whose member names are the claim names of {{receipt-labels}}; a
+  `tstr` is a JSON string, a `uint` a JSON number, a `bool` a JSON
+  boolean, `null` JSON null, and the `totals` map a JSON object of
+  strings. No claim of these claim sets is a byte string, so none is
+  written in JSON: a byte string such as `deliveredHash` exists only
+  inside the COSE octets that carry it.
+- `coseHex`, and `counterCoseHex` for the countersignature of
+  {{countersign}}, are the COSE_Sign1 octets in lowercase
+  hexadecimal. For an object in the COSE encoding these octets are
+  the signed object; `claims` or `body` MUST equal the claim set
+  decoded from them (`MUST-T4-2`).
+- `signature` is the signature in base64 with padding, the alphabet
+  of {{RFC4648}} Section 4.
+- `publicKeyPem` and `payeePublicKeyPem` are SubjectPublicKeyInfo
+  PEM, carried and never an identity source (above).
+- `encoding` is `"cose"`, or `"json"` for a Spend Receipt signed in
+  the JSON encoding of {{canonical-json}}.
+
+A member this table does not name carries no meaning a verifier may
+act on.
+
+The decoder bounds of `MUST-T4-19` are fixed as a floor so that every
+conforming verifier accepts the same objects: a verifier MUST accept
+an audit input within 65536 octets of encoded CBOR, 16 levels of
+nesting below the outermost item, 4096 elements in an array or pairs
+in a map, and 16384 octets in a single string, and MAY refuse one
+beyond any of them. The reference implementation accepts up to these
+numbers and refuses beyond them, by the names `cbor-too-large` and
+`cbor-too-deep`.
 
 # Canonical JSON encoding {#canonical-json}
 
@@ -906,7 +982,11 @@ verifier could check the other.
 `clockSkewMs`, when present, declares the boundary allowance the
 verifier applies at this window's edges during reconciliation
 ({{reconciliation}}); when absent, the profile default of 300000
-milliseconds (five minutes) applies.
+milliseconds (five minutes) applies. A timestamp is within the
+allowance of an edge when its distance from the nearest instant
+inside the window, which runs from `windowStartMs` inclusive to
+`windowEndMs` exclusive, is less than `clockSkewMs`; an allowance of
+zero defers nothing.
 
 ## Authentication
 
@@ -1045,11 +1125,17 @@ nothing is attested and the verifier MUST NOT fall back to accepting
 the keys the objects carry (`MUST-T4-11`).
 
 Membership in the attested set follows one rule: the signature
-verifies under a pinned issuer key. The `kid` header routes the check
-to a candidate key; the key an object carries beside its signature is
-not an identity source, because it travels outside the signed octets
-and anyone can rewrite it. Two consequences are stated so that
-implementations do not diverge on them. First, an honestly signed
+verifies under the pinned issuer key that the object's `kid` names.
+Routing by `kid` is exclusive. The signature is checked under the key
+`kid` names and no other: it is never tried against the remaining
+keys of a pinned set (`MUST-T4-12`), and an object whose `kid` names
+no pinned key is not checked under any pinned key, even one its
+signature would verify under. `kid` decides which key is asked; the
+signature decides the answer. The key an object carries beside its
+signature is not an identity source either, because it travels
+outside the signed octets and anyone can rewrite it. Three
+consequences are stated so that implementations do not diverge on
+them. First, an honestly signed
 object whose carried key was swapped stays attested: the swap is
 reported (`carried-key-mismatch`, a warning) and MUST NOT move the
 object out of the attested set or change the verdict, on the same
@@ -1061,17 +1147,21 @@ walked and named - for a receipt, `receipt-chain-break` with a
 signature-failed detail - never silently dropped; an object that
 neither verifies under the pin nor claims it is
 `issuer-key-mismatch`, excluded, and the settlement it names stays
-uncovered.
+uncovered. Third, a signature that would verify under a pinned key
+its `kid` does not name attests nothing: with a `kid` that names no
+pinned key the object is `issuer-key-mismatch`; with a `kid` that
+names another pinned key it fails under the key it names, and is the
+second case.
 
 The rule, read out per cell (steps 6 and 8 are the verification
 algorithm's):
 
-| Claims the pin (carried key or `kid`) | Verifies under the pin | Result |
+| Claims the pin (carried key or `kid`) | Verifies under the pinned key its `kid` names | Result |
 |---|---|---|
 | yes | yes | attested; a carried key other than the verifying one is `carried-key-mismatch`, a warning, and does not move the receipt |
-| yes | no | excluded from the attested set; still walked and named in step 6 (`receipt-chain-break`, signature-failed detail); its settlement stays uncovered in step 8. A checkpoint has no chain walk to be named in, so it is reported as `issuer-key-mismatch` on this row as well as the next, and the window it would have covered is reported uncovered |
-| no | no | `issuer-key-mismatch`; excluded; its settlement stays uncovered in step 8 (`MUST-T4-9`, `MUST-T4-10`) |
-| no pin held | no pin to verify under | no comparison against a key the verifier holds happens, and the keys the objects carry are not a fallback for one (`MUST-T4-11`); each signature is still checked against the key its own object carries ({{presentation}}), which establishes that the object is internally consistent and nothing about who signed it, so a broken signature is still named (`receipt-chain-break`, `checkpoint-total-mismatch`) while two different issuers cannot be told apart; receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and accusation-shaped findings take the two-branch severity of `MUST-T8-9` |
+| yes | no | excluded from the attested set; still walked and named in step 6 (`receipt-chain-break`, signature-failed detail); its settlement stays uncovered in step 8. This includes an object whose `kid` names one pinned key and whose signature verifies only under another: the other key is not tried. A checkpoint has no chain walk to be named in, so it is reported as `issuer-key-mismatch` on this row as well as the next, and the window it would have covered is reported uncovered |
+| no | no, or not asked: a `kid` that names no pinned key routes to none, so a pinned key its signature would verify under is not tried | `issuer-key-mismatch`; excluded; its settlement stays uncovered in step 8 (`MUST-T4-9`, `MUST-T4-10`) |
+| no pin held | no pin to verify under | no comparison against a key the verifier holds happens, and the keys the objects carry are not a fallback for one (`MUST-T4-11`); each signature is still checked against the key its own object carries ({{presentation}}), which establishes that the object is internally consistent and nothing about who signed it, so a broken signature is still named (`receipt-chain-break`, `checkpoint-total-mismatch`) while two different issuers cannot be told apart; receipts are presented-unattested, the verifier reports `unauthenticated-issuer`, and the two findings that charge a party rather than describe the submission - `duplicate-ref` (step 7) and `manifest-terms-mismatch` (step 4) - take the two-branch severity of `MUST-T8-9`: they are reported as warnings and do not by themselves fail the audit. Every other finding keeps its severity, so a finding the extract founds, such as `settlement-mismatch` in step 9, still fails it |
 
 A verifier MUST accept an issuer root that is a set of keys rather
 than a single key (`MUST-T4-12`), so that a key rotation mid-window
@@ -1186,7 +1276,12 @@ conditions computed across the submitted set - two receipts claiming
 one settlement reference, for instance - cannot be attributed to
 anyone and are reported as conditions of the submission rather than
 as failures of a party; the finding stands, only its attribution
-changes.
+changes. Two findings change severity with it, `duplicate-ref` and
+`manifest-terms-mismatch`: without a usable issuer key they are
+warnings and do not by themselves fail the audit (the last row of the
+table in {{issuer-root}}). A finding the extract founds keeps its
+severity: two receipts claiming one reference still fail the audit
+in step 9 when the receipted total differs from the settled total.
 
 # Reconciliation {#reconciliation}
 
@@ -1254,7 +1349,40 @@ and is specified in {{CEDULON-CHECKPOINT}} (Verification algorithm),
 which an implementation of this audit also implements: a receipt that
 falls in no presented checkpoint window, including every receipt when
 no checkpoint is presented, fails that document's window-coverage
-check.
+check. An audit that presents receipts therefore presents the
+checkpoints that cover them; receipt and extract verification without
+checkpoints does not produce a passing audit. An audit given no
+receipts and no checkpoints rests on the extract alone
+({{issuer-root}}).
+
+A stream of receipts usually begins before the window under audit,
+and its chain has to be anchored somewhere. Without an anchor it is
+anchored at its genesis: the first presented checkpoint is the
+genesis checkpoint of {{CEDULON-CHECKPOINT}}, the first receipt's
+`prevReceiptHash` is null (step 6), and auditing window N means
+presenting every receipt and checkpoint from the stream's first. An
+audit MAY instead present an anchor: the issuer-signed epoch
+checkpoint immediately preceding the first presented checkpoint. The
+anchor is resolved against the issuer root like any checkpoint; one
+that fails is `issuer-key-mismatch`, identified by `anchor`, and
+anchors nothing. A stated issuer pin that cannot be read leaves the
+anchor unused; the key the anchor carries is not a fallback for it
+(`MUST-T4-11`). With a usable pin, "the first presented checkpoint"
+means the first one in the attested set: a checkpoint that does not
+answer to the pin cannot make an anchor adjacent. The anchor is valid
+when, in addition, its `epoch` is one less than the first
+checkpoint's, its `endMs` equals that
+checkpoint's `startMs`, and that checkpoint's `prevCheckpointHash`
+equals the anchor's checkpoint hash; a failure of any of these is
+reported as `window-coverage`, identified by `anchor`, and the anchor
+anchors nothing. With a valid anchor, the first presented checkpoint
+is not a genesis checkpoint and its `prevCheckpointHash` is checked
+against the anchor rather than against null, and the first receipt's
+`prevReceiptHash` is checked against the anchor's `chainHeadHash`
+(step 6). The anchor's own window is not audited: its totals, count
+and head are not compared, and it covers no presented receipt. What
+happened before the anchor is the business of the audit of that
+earlier window.
 
 When a step names an identifier in backticks, that identifier
 SHOULD be used for the condition in diagnostic output. The
@@ -1297,23 +1425,29 @@ identifiers are not an interoperability surface.
    an expected account, rail, or window, it MUST report an extract
    that does not cover it (`MUST-T10-11`). The identifier
    `extract-scope-mismatch` SHOULD be used for both conditions. If
-   the verifier stated no period, it MUST treat the guarantee as
-   conditional (`MUST-T10-15`). The identifier
+   the verifier pinned a rail key and stated no period, it MUST treat
+   the guarantee as conditional (`MUST-T10-15`). The identifier
    `unstated-audit-window` SHOULD be used for this condition. If it
-   stated no account or no rail, it MUST treat the guarantee as
-   conditional for the same reason (`MUST-T10-18`); the identifier
-   `unstated-audit-scope` SHOULD be used. Whatever the verdict, the
+   pinned a rail key and stated no account or no rail, it MUST treat
+   the guarantee as conditional for the same reason (`MUST-T10-18`);
+   the identifier `unstated-audit-scope` SHOULD be used. With no rail
+   key pinned, neither is reported: the condition is
+   `unauthenticated-extract` (step 2), which already makes the
+   guarantee conditional. Whatever the verdict, the
    report MUST name the account, rail and window the extract declared,
    in every structure it returns for the audit (`MUST-T10-19`).
 4. Resolve each Spend Receipt against the issuer root
-   ({{issuer-root}}) in one pass. Decode the COSE_Sign1; a content
-   type that is not the receipt type, a decoder bound, or a decoded
-   claim map that does not match the presented claims is a named
-   refusal, not a signature verdict (`MUST-T4-2`, `MUST-T4-8`). Then
-   ask one question: does the signature verify under a pinned issuer
-   key. `kid` routes the check to a candidate key and carries no
-   authority of its own; the carried key is not consulted for
-   membership at all. The resolution table in {{issuer-root}} reads
+   ({{issuer-root}}) in one pass. Decode the COSE_Sign1; a decoder
+   bound or a duplicate key is a named refusal, not a signature
+   verdict, and the refused receipt is not counted (Finding codes,
+   below). A content type that is not the receipt type, or a decoded
+   claim map that does not match the presented claims, means the
+   receipt does not verify (`MUST-T4-2`, `MUST-T4-8`). Then
+   ask one question: does the signature verify under the pinned issuer
+   key that `kid` names. Routing by `kid` is exclusive
+   ({{issuer-root}}): no other key of the set is tried, and `kid`
+   carries no authority beyond choosing the key; the carried key is
+   not consulted for membership at all. The resolution table in {{issuer-root}} reads
    the answer out per cell. Every cell there is a named condition
    plus a membership decision; no cell is a silent removal.
    Where a countersignature is present,
@@ -1343,25 +1477,48 @@ identifiers are not an interoperability surface.
    name: such a receipt outside the window is not a completeness
    failure against this extract (`MUST-T10-16`); auditing a longer
    period requires extracts that cover it. At the window's edges the
-   declared allowance applies ({{rail-extract}}): an unmatched
-   settled receipt within `clockSkewMs` of `windowEndMs`, and an
-   unmatched settlement record within `clockSkewMs` of
-   `windowStartMs`, are reported as `boundary-deferred`, a warning,
-   rather than as step 8's completeness findings - two honest clocks
-   can disagree by less than the allowance, and both verifiers of an
-   honest edge payment would otherwise reach the same false
-   accusation (`MUST-T10-17`). Where the following window's extract
-   is presented and verifies, a deferred receipt whose `ref` appears
-   on it is resolved and not reported, and one whose `ref` does not
-   appear hardens into the step 8 finding; a deferred settlement
-   record near the opening edge resolves through this step's ref
-   binding, since the prior window's receipt that names its `ref` is
-   reconciled here regardless of timestamp. The following window's
-   extract closes or hardens closing-edge deferrals only; an
-   opening-edge record stays deferred until a receipt in the
-   presented bag names its `ref`, whether or not a following extract
-   is presented. In a single-window audit
-   a deferred record keeps the guarantee conditional. Receipts remain
+   declared allowance applies ({{rail-extract}}). The window is
+   half-open, from `windowStartMs` inclusive to `windowEndMs`
+   exclusive, and a `timestampMs` t is within `clockSkewMs` of an
+   edge when its distance from the nearest instant inside the window
+   is less than `clockSkewMs`: t < windowStartMs + clockSkewMs at the
+   opening edge, t >= windowEndMs - clockSkewMs at the closing edge.
+   An allowance of zero defers nothing. An unmatched
+   settled receipt, and an unmatched settlement record, within
+   `clockSkewMs` of either edge are reported as `boundary-deferred`,
+   a warning, rather than as step 8's completeness findings. The rail
+   settles before the issuer signs, so an honest payment can put its
+   settlement on one side of an edge and its receipt on the other,
+   and two honest clocks can also disagree by less than the
+   allowance; both verifiers of such a payment would otherwise reach
+   the same false accusation (`MUST-T10-17`). The receipt side of
+   each edge is resolved by the extract of the window on that side.
+   Where the following window's extract is presented and verifies, a
+   receipt deferred at the closing edge whose `ref` appears on it is
+   resolved and not reported, and one whose `ref` does not appear
+   hardens into the step 8 finding. Where the previous window's
+   extract is presented and verifies, the same holds for a receipt
+   deferred at the opening edge. An adjacent extract is used only
+   when it carries the account and rail of the presented extract and
+   its window abuts this one - the following window's extract starts
+   at `windowEndMs`, the previous window's extract ends at
+   `windowStartMs` - and only for the rows inside its own declared
+   window; one that does not is reported as `extract-scope-mismatch`
+   and resolves nothing. An adjacent extract names a deferred receipt
+   only through a row in its band facing this window - within
+   `clockSkewMs` of the shared edge, by this audit's allowance - whose
+   `ref`, `amount` and `currency` equal the receipt's. Any other row
+   with that `ref` is a settlement the adjacent window reconciles for
+   itself, and counting it here as well would let one settlement
+   cover two receipts across the edge. A receipt within `clockSkewMs` of both edges,
+   in a window shorter than twice the allowance, is resolved by
+   either adjacent extract that names its `ref`; when neither does,
+   either one that is presented and used hardens it. The record side is resolved by this step's ref binding:
+   a deferred settlement record at either edge is reconciled against
+   any receipt in the presented bag that names its `ref`, whatever
+   that receipt's timestamp, and no extract hardens it; it stays
+   deferred until such a receipt is presented. In a single-window
+   audit a deferred record or receipt keeps the guarantee conditional. Receipts remain
    subject to every other check regardless of window.
 6. Walk the receipts of the working set, together with any receipt that
    claims the pin and failed to verify under it ({{issuer-root}}), in
@@ -1370,7 +1527,9 @@ identifiers are not an interoperability surface.
    rebuilds the chain from the links, and the order in which
    receipts were presented carries no weight. `timestampMs` is
    issuer-asserted and is not an ordering source. The first
-   `prevReceiptHash` MUST be null. Each later `prevReceiptHash` MUST
+   `prevReceiptHash` MUST be null, or, where a valid anchor is
+   presented, MUST equal the anchor's `chainHeadHash` (null when no
+   receipt preceded it). Each later `prevReceiptHash` MUST
    equal `receiptHash` of the previous receipt. A miss, and a
    receipt the links cannot place, MUST be reported as a break in
    the receipt chain. The identifier `receipt-chain-break` SHOULD be
@@ -1382,7 +1541,13 @@ identifiers are not an interoperability surface.
 7. Index the settled receipts of the working set and the extract records by `ref`. A `ref`
    that appears more than once on either side MUST be reported as a
    repeated reference (`MUST-T10-6`). The identifier `duplicate-ref`
-   SHOULD be used for this condition.
+   SHOULD be used for this condition. On the receipt side its severity
+   follows the two branches of `MUST-T8-9`: with a usable issuer key
+   pinned, a ref repeated among the attested receipts fails the audit;
+   with none, a ref repeated among the presented receipts is a warning
+   and does not by itself fail the audit. A ref repeated on the extract
+   side fails the audit either way. Step 9 reconciles the amounts of a
+   repeated ref in both cases.
 8. For each `ref` that appears exactly once on each side, require a
    one-to-one match on `ref` AND `amount` AND `currency`
    (`MUST-T10-1`), compared as exact octets on the terms of
@@ -1396,6 +1561,12 @@ identifiers are not an interoperability surface.
    condition. A settled receipt with no extract row MUST be reported
    as a completeness failure (`MUST-T10-3`). The identifier
    `receipt-without-settlement` SHOULD be used for this condition.
+   This runs whether or not an extract was presented: with no extract,
+   no settled receipt has an extract row, so each is reported this
+   way and the audit fails. A settled receipt claims a settlement, and
+   an audit given nothing to show it is not a passing audit of it.
+   The settlement side has no population to read in that case, which
+   is all `MUST-T10-19` says about it.
    A settled receipt with a null rail ref MUST be reported as
    settled without a rail reference; this check asks what a receipt
    says about itself and runs over the presented receipts, attested
@@ -1447,6 +1618,23 @@ A condition that makes the audit fail is a finding. A condition
 that only makes the completeness guarantee conditional is a
 warning. Warnings MUST still appear in operator-facing output
 (`MUST-T10-14`).
+
+A third kind of condition comes before either: a refusal, an input
+the verifier will not read at all, decided before any verdict on
+what the input says. A decoder bound (`MUST-T4-19`), a duplicate CBOR
+key (`MUST-T4-18`) or JSON member name (`MUST-T4-20`), a non-empty
+unprotected header (`MUST-T4-21`), CBOR that is not in the
+deterministic encoding, and a Rail Extract body whose required
+members are missing or out of range ({{rail-extract}}) are refusals.
+A refusal MUST be reported by name, and the refused object is not
+counted: it is attested nowhere, covers no settlement and no
+checkpoint window, and adds to no total, so whatever its absence
+leaves uncovered is reported by the steps that would have counted it.
+A content type that is not the expected one, and a decoded claim map
+that does not match the presented claims, are not refusals: the
+object does not verify, and the row of the table in {{issuer-root}}
+that its `kid` selects applies. The refusal identifiers are listed in
+Appendix B.
 
 A finding that puts the extract itself in doubt (`extract-key-mismatch`,
 `trust-key-unreadable`, `extract-scope-mismatch`, or
@@ -1634,7 +1822,7 @@ Narrative: {{CEDULON-THREATS}}.
 | MUST-T4-16 | A policy decision point presented with a Trade Manifest it cannot verify against a key supplied out of band MUST refuse the payment. |
 | MUST-T4-17 | A verifier presented with a Trade Manifest MUST compare the manifest hash against the `manifestHash` of the receipts presented to the audit, including aborted ones, before any extract window is applied and before any issuer key is applied, and MUST report a presented manifest that no presented receipt references. An audit presented with no Trade Manifest is not made conditional by this requirement. |
 | MUST-T4-18 | A decoder MUST refuse a CBOR map that carries a duplicate encoded key. |
-| MUST-T4-19 | A decoder MUST impose a bound on encoded size, nesting depth, and the number of elements it will decode from an audit input, and MUST refuse an input that exceeds a bound with a named refusal rather than by exhausting memory or the stack. It SHOULD document the bounds it applies. This document fixes no numbers. |
+| MUST-T4-19 | A decoder MUST impose a bound on encoded size, nesting depth, and the number of elements it will decode from an audit input, and MUST refuse an input that exceeds a bound with a named refusal rather than by exhausting memory or the stack. It SHOULD document the bounds it applies. It MUST accept every input within the floor fixed in {{presented-form}} (65536 encoded octets, 16 levels of nesting, 4096 elements, 16384 octets in a string), so that two conforming verifiers do not accept and refuse the same input. |
 | MUST-T4-20 | A verifier that receives a JSON document as text MUST refuse a text in which any object repeats a member name, by name (`json-duplicate-key`), before parsing it. A verifier handed an object rather than text cannot apply this rule and MUST NOT report that it did. |
 | MUST-T4-21 | A decoder MUST refuse a COSE_Sign1 message whose unprotected header is not an empty map, by name (`cose-sign1-unprotected`), rather than verifying the signature and ignoring the header. |
 
@@ -1710,8 +1898,8 @@ Narrative: {{CEDULON-THREATS}}.
 | MUST-T8-custody | Implementations of this specification MUST NOT take custody of funds or operate escrow. |
 | MUST-T8-8 | If a payee countersignature is present, a verifier MUST reject it when the signature fails, when `kid` or content type does not match the configured payee key, or when the `receiptCose` value (label -70401) is not the issuer COSE_Sign1 bytes. |
 | MUST-T8-9 | A verifier presented with a Trade Manifest MUST compare the amount, currency and settlement time of every receipt that names it, aborted ones included, against the manifest amount, currency and expiry - amount and currency on the exact-octet terms of `MUST-T8-2`, time on the boundary of `MUST-T3-3`, and, where the manifest names a `payee`, the receipt payee on the same exact-octet terms - and MUST report a receipt that departs from them. Where a usable issuer key is pinned (a pinned issuer root at least one of whose keys the verifier can decode), the comparison is made over the receipts that verify under it and a departure MUST fail the audit. Where no usable issuer key is pinned, the departure MUST still be reported and MUST NOT by itself fail the audit. Receipts that do not name the manifest are not measured against it. A Trade Manifest that a stated publisher pin refuses is not terms for this purpose: where the verifier reports `manifest-key-mismatch`, it MUST NOT read a charge out of that document's body, neither this comparison nor the acceptance-hash comparison of {{countersign}}. |
-| MAY-T8-10 | A payee MAY attach a detached COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. |
-| MAY-T8-11 | An attributable countersignature MAY carry `deliveredHash`. When present and the verifier holds the Trade Manifest, the verifier MUST compare it against `acceptanceCriteriaHash` as exact octets and MUST report a mismatch as a failing finding (`delivery-mismatch`). A `deliveredHash` on an unattributable countersignature MUST be discarded with it. |
+| MAY-T8-10 | A payee MAY attach a separate COSE_Sign1 countersignature over the issuer receipt bytes. Absence MUST NOT invalidate the issuer receipt. |
+| MAY-T8-11 | An attributable countersignature MAY carry `deliveredHash`. When present, the verifier holds a Trade Manifest no pin refused, and the receipt's `manifestHash` names that manifest, the verifier MUST compare it with `acceptanceCriteriaHash` as digest values - the 64 hexadecimal characters decoded to 32 octets, then octet for octet - and MUST report a mismatch as a failing finding (`delivery-mismatch`). A receipt that is `noManifest` or names a different manifest MUST NOT be compared with it. A `deliveredHash` on an unattributable countersignature MUST be discarded with it. |
 
 ## Optional escrow role {#escrow-role}
 
@@ -1740,6 +1928,23 @@ An operator, leaked credential, or a second binary can settle on the rail
 and omit the Receipt Issuer. Completeness reconciles the extract to the receipts.
 See {{reconciliation}}. Narrative: {{CEDULON-THREATS}}.
 
+The boundary allowance of `MUST-T10-17` is a deliberate gap and is
+stated as one. Inside `clockSkewMs` of either edge, a settlement whose
+receipt was withheld, and a receipt whose settlement never happened,
+cost a `boundary-deferred` warning in a single-window audit rather
+than a failure: an honest payment that straddles the edge looks the
+same from one window, and failing it would accuse two honest parties.
+The gap is bounded by the allowance, it keeps the guarantee
+conditional, and a deployment that wants it closed audits consecutive
+windows: the receipt side hardens when the adjacent window's extract
+is presented, and the record side when the adjacent window's receipts
+are presented in the same bag. A single-window audit also cannot see
+a `ref` that a receipt in the adjacent window's bag already used; the
+facing-band rule of step 5 keeps an adjacent extract from carrying a
+receipt through a settlement that window reconciles for itself, and
+the remaining case, a duplicate receipt for an edge settlement, is
+visible only to an audit that holds both bags.
+
 | ID | Requirement |
 |---|---|
 | MUST-T10-1 | A verifier MUST match each extract settlement to a settled receipt on `ref` AND `amount` AND `currency`. An audit presented with no extract, no receipts and no checkpoints reports no completeness finding. It is not thereby unconditional, and the warnings for the roots it was not given still apply. |
@@ -1758,9 +1963,9 @@ See {{reconciliation}}. Narrative: {{CEDULON-THREATS}}.
 | MUST-T10-14 | An implementation MUST surface the guarantee and any warnings in any human-readable audit report it produces, not only in a returned structure. |
 | MUST-T10-15 | A verifier that supplies a rail pin but has not stated the period under audit MUST emit `unstated-audit-window` and MUST treat the guarantee as conditional; with no rail pin at all the condition reported is `unauthenticated-extract`. |
 | MUST-T10-16 | When an extract is supplied, a receipt whose `ref` appears on it is reconciled against it regardless of its own `timestampMs`; the window sieve applies only to receipts the extract does not name, and such a receipt outside the window MUST NOT be reported as a completeness failure against that extract. |
-| MUST-T10-17 | An unmatched settled receipt within the declared `clockSkewMs` of `windowEndMs`, and an unmatched settlement record within it of `windowStartMs`, MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure. A closing-edge deferral resolves against the following window's extract and hardens into the completeness finding when that extract is presented and does not name the `ref`; an opening-edge deferral resolves only against a receipt in the presented bag that names its `ref`, and a following extract does not harden it. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
+| MUST-T10-17 | An unmatched settled receipt, and an unmatched settlement record, within the declared `clockSkewMs` of either window edge - less than `clockSkewMs` from the nearest instant inside the half-open window, so t < windowStartMs + clockSkewMs or t >= windowEndMs - clockSkewMs - MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure. A receipt deferred at the closing edge resolves against the following window's extract, and one deferred at the opening edge against the previous window's extract; each hardens into the completeness finding when that adjacent extract is presented, verifies, abuts the window, and does not name the `ref`. A deferred settlement record resolves only against a receipt in the presented bag that names its `ref`, and no extract hardens it. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
 | MUST-T10-18 | A verifier that supplies a rail pin but has not stated the account or the rail under audit MUST emit `unstated-audit-scope` and MUST treat the guarantee as conditional; with no rail pin at all the condition reported is `unauthenticated-extract`. |
-| MUST-T10-19 | A report MUST name the account, rail and window the extract declared, in the printed report, in the finding object it returns, and in every other structure the implementation returns for that audit, a tool result or an export included. Where no extract was presented there is no declared population, and the structure names none. |
+| MUST-T10-19 | A report MUST name the account, rail and window the extract declared, in the printed report, in the finding object it returns, and in every other structure the implementation returns for that audit, a tool result or an export included. Where no extract was presented there is no declared population, and the structure names none. This requirement governs what the report names; it does not suspend step 8, which still reports every settled receipt that has no extract row. |
 | MUST-T10-20 | Where a stated rail pin refuses the presented extract and the verifier reports `extract-key-mismatch`, the verifier MUST NOT read a settlement finding out of that document's body: not a mismatch against a receipt, not money reported as unaccounted for, and not a receipt left unmatched by rows the refused document omits. The verifier MUST report `settlement-comparison-skipped` in the same result. A pinned key the verifier cannot decode is `trust-key-unreadable` and is not a refusal of the document, so it does not reach this requirement. |
 
 In MUST-T10-4, a completeness finding that makes the audit fail is
@@ -1960,7 +2165,7 @@ Subtype name:
 : cedulon-countersign+cbor
 
 Encoding considerations:
-: binary. A detached COSE_Sign1 structure in deterministic CBOR,
+: binary. A separate COSE_Sign1 structure in deterministic CBOR,
   untagged, as profiled in {{countersign}}, whose payload carries the
   exact issuer receipt octets it countersigns.
 
@@ -2039,7 +2244,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 638 of 638,
+  this revision describes, all three assert every case, 669 of 669,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.
@@ -2340,7 +2545,7 @@ ae447dc74ccb0f13383f0f43f0f67f288d61a6395e95e2038e320d
 | settlement-without-receipt | audit fails | Extract row has no matching settled receipt, or a repeating `ref` settled more than it receipted |
 | receipt-without-settlement | audit fails | Settled receipt ref is not on the extract |
 | settlement-mismatch | audit fails | Same `ref`, different amount or currency, including a repeating `ref` that settled less than it receipted |
-| duplicate-ref | audit fails | Ref appears more than once on one side |
+| duplicate-ref | audit fails under a usable issuer pin; warning without one | Ref appears more than once on one side. Without a usable issuer key the repeated receipt ref cannot be attributed to a party and is a warning; a repeated extract row is the rail's and keeps the failing severity. Step 9 still reconciles the ref's amounts either way. The two severities are the two branches of `MUST-T8-9` |
 | settled-without-ref | audit fails | `outcome` is settled and `x402PaymentRef` is null |
 | receipt-chain-break | audit fails | Signature or `prevReceiptHash` failed, or the links cannot place a receipt (issuer order, step 6) |
 | unauthenticated-extract | guarantee conditional | No verifier-supplied rail key, whatever the extract carries: a signature that verifies establishes internal consistency and not that the named rail produced the extract, and one that fails or is refused is not a key verdict either. The same code is reported when a rail key is pinned and no extract was presented at all, because there is nothing to check the pin against. A presented extract that does not verify under a pinned key is `extract-key-mismatch` instead |
@@ -2358,16 +2563,40 @@ ae447dc74ccb0f13383f0f43f0f67f288d61a6395e95e2038e320d
 | manifest-terms-mismatch | audit fails under a usable issuer pin; warning without one | A receipt names this Trade Manifest but departs from it in amount, currency, settlement time, or, where the manifest states one, payee. A manifest refused by a stated publisher pin is not compared at all; a gate applying `MUST-T8-2` and `MUST-T3-3` would have refused the payment. The two severities are the two branches of `MUST-T8-9` |
 | extract-scope-mismatch | audit fails | A record falls outside the declared window, or the extract does not cover the expected account, rail, or window |
 | extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract on `ref`, amount, currency or timestamp, which are the fields compared; the extract is authoritative. A beneficiary that differs is not part of this comparison and is reached by `beneficiary-mismatch`, against the receipt payee |
-| malformed-amount | audit fails | An amount on a `ref` already reported as repeating that could not be parsed as an integer |
+| malformed-amount | audit fails | An amount read as a number is outside the grammar `0|[1-9][0-9]*`: a receipt amount in a checkpoint window's totals (identified by the epoch), or an amount on a `ref` already reported as repeating (step 9) |
 | unstated-audit-window | guarantee conditional | A supplied rail pin states no period, so the extract defined its own. Where no rail key is pinned at all the period is equally unstated, and `unauthenticated-extract` is the condition reported |
 | unstated-audit-scope | guarantee conditional | A supplied rail pin states no account or no rail, so the extract defined the settlement path it reported on. The same "no pin at all" case is `unauthenticated-extract` |
 | countersign-bad | conditional | Present payee countersignature failed verify (signature, content type, or payload binding); unattributable, discarded as approval evidence. One verifiable under another key is `countersign-key-mismatch` |
 | carried-key-mismatch | conditional | An object verifies under a pinned issuer key but the key carried beside its signature is a different one; the unsigned surface was rewritten, the object stays attested ({{issuer-root}}) |
-| boundary-deferred | conditional | An unmatched item sits within the declared `clockSkewMs` of the window edge; deferred to the adjacent window rather than reported as a completeness failure (step 5) |
+| boundary-deferred | conditional | An unmatched receipt or settlement record sits within the declared `clockSkewMs` of either window edge (less than `clockSkewMs` from the nearest instant inside the window); deferred rather than reported as a completeness failure. A receipt resolves or hardens against the adjacent window's extract on its side; a record resolves against a receipt in the presented bag (step 5) |
 | beneficiary-mismatch | audit fails | A settlement record declares a `beneficiary` and the matched receipt's `payee` differs |
 | counterparty-unbound | scope record; verdict and guarantee unchanged | Neither the manifest names a `payee` nor any settlement record declares a `beneficiary`: ref, amount and currency closed against the payer's account extract, and the counterparty's identity was not bound |
-| delivery-mismatch | audit fails | An attributable countersignature carries `deliveredHash` and it differs from the acceptance-criteria hash of a Trade Manifest the audit did not refuse; both ends are signed (`MAY-T8-11`). Where a stated publisher pin refuses the manifest, its acceptance hash founds nothing and this comparison is not made (`MUST-T8-9`) |
+| delivery-mismatch | audit fails | An attributable countersignature carries `deliveredHash`, its receipt names a Trade Manifest the audit did not refuse, and the digest differs from that manifest's acceptance-criteria hash; both ends are signed (`MAY-T8-11`). A receipt that names no manifest, or another one, is not compared. Where a stated publisher pin refuses the manifest, its acceptance hash founds nothing and this comparison is not made (`MUST-T8-9`) |
 | malformed-policy-hash (and its family: malformed-request-hash, malformed-acceptance-criteria-hash, malformed-manifest-hash, malformed-receipt-hash, malformed-prev-receipt-hash, malformed-chain-head-hash, malformed-prev-checkpoint-hash, malformed-ap-two-mandate-hash) | audit fails | A hash-shaped claim does not match the 64-lowercase-hex grammar of {{receipt-labels}}; the claim is named in the code |
+
+The refusals of the Finding codes section are named, and the name
+travels with the condition the refused object leaves behind in the
+report. The reference implementation uses these:
+
+| Refusal | Raised when |
+|---|---|
+| cbor-too-large | An input exceeds the encoded-size, element-count or string-length floor of {{presented-form}} (`MUST-T4-19`) |
+| cbor-too-deep | An item is nested more than 16 levels below the outermost one (`MUST-T4-19`) |
+| cbor-eof | The encoded item ends before its declared length |
+| cbor-trailing | Octets follow the single encoded item |
+| cbor-duplicate-key | A CBOR map repeats an encoded key (`MUST-T4-18`) |
+| cbor-non-deterministic | An item is not in the deterministic encoding of {{cose-profile}} (`MUST-T4-1`) |
+| cbor-invalid-text | A text string is not valid UTF-8 |
+| cose-protected-header | The protected header is not the map {{cose-profile}} requires |
+| cose-sign1-unprotected | The unprotected header is not an empty map (`MUST-T4-21`) |
+| json-duplicate-key | A JSON text repeats a member name at any depth (`MUST-T4-20`) |
+| lone-surrogate | A JSON text carries a lone surrogate ({{canonical-json}}) |
+| missing-extract-accountId, -railId, -windowStartMs, -windowEndMs, -settlements | A required member of the Rail Extract body is absent or not of its type ({{rail-extract}}) |
+| malformed-extract-windowStartMs, malformed-extract-windowEndMs | A window bound is not a safe integer |
+| malformed-extract-window | `windowEndMs` is not after `windowStartMs`: the window declares no population |
+| malformed-extract-clockSkewMs | A declared allowance is not a non-negative safe integer |
+| renamed-settlement-ref, -amount, -currency, -timestampMs | A settlement record lacks a required member, carries it under no recognised name, or carries one outside its grammar (an `amount` outside `0|[1-9][0-9]*` included) |
+| malformed-settlement-timestampMs, malformed-settlement-beneficiary | A settlement timestamp is not a safe integer, or a declared `beneficiary` is not a string |
 
 # Appendix C. Worked Example: A 10.00 TRY Spend {#example}
 {:numbered="false"}
