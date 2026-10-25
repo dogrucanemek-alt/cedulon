@@ -999,4 +999,53 @@ describe("Tiago core-04 #5: a one-window audit with an anchor checkpoint", () =>
     assert.equal(report.findings.some((f) => f.id === "anchor"), false);
     assert.equal(report.ok, false);
   });
+
+  it("an anchor whose presented chainHeadHash is outside the hash grammar is reported by name on id anchor", () => {
+    const s = stream();
+    const anchor = { ...s.cpPrev, claims: { ...s.cpPrev.claims, chainHeadHash: "x" } };
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [s.cpN],
+      anchorCheckpoint: anchor,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(report.findings.some((f) => f.code === "malformed-chain-head-hash" && f.id === "anchor"), true);
+    assert.equal(report.ok, false);
+  });
+
+  it("an anchor refused by a decoder bound is reported by the refusal's name, not as a key verdict", () => {
+    const s = stream();
+    const anchor = { ...s.cpPrev, coseHex: "00".repeat(65_537) };
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [s.cpN],
+      anchorCheckpoint: anchor,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(
+      report.findings.some((f) => f.id === "anchor" && (f.detail ?? "").includes("cbor-too-large")),
+      true,
+    );
+    assert.equal(report.ok, false);
+  });
+
+  it("an anchor whose carried key was swapped stays usable and is carried-key-mismatch on id anchor", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    const anchor = { ...s.cpPrev, publicKeyPem: stranger.publicKeyPem };
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [s.cpN],
+      anchorCheckpoint: anchor,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.deepEqual(report.findings.map((f) => f.code), []);
+    assert.equal(report.warnings.some((w) => w.code === "carried-key-mismatch" && w.id === "anchor"), true);
+  });
 });

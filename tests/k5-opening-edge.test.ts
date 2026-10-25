@@ -368,7 +368,7 @@ describe("Tiago core-04 #1: the opening-edge receipt and the closing-edge row de
 describe("Tiago core-04 #1: an adjacent extract carries only through its facing band", () => {
   function signedRows(
     rail: { privateKeyPem: string; publicKeyPem: string },
-    settlements: { ref: string; timestampMs: number; amount: string }[],
+    settlements: { ref: string; timestampMs: number; amount: string; currency?: string }[],
     windowStartMs: number,
     windowEndMs: number,
   ): SignedRailExtract {
@@ -378,7 +378,7 @@ describe("Tiago core-04 #1: an adjacent extract carries only through its facing 
         railId: "rail",
         windowStartMs,
         windowEndMs,
-        settlements: settlements.map((s) => ({ ref: s.ref, amount: s.amount, currency: "USD", timestampMs: s.timestampMs })),
+        settlements: settlements.map((s) => ({ ref: s.ref, amount: s.amount, currency: s.currency ?? "USD", timestampMs: s.timestampMs })),
       },
       rail.privateKeyPem,
       rail.publicKeyPem,
@@ -430,6 +430,54 @@ describe("Tiago core-04 #1: an adjacent extract carries only through its facing 
     assert.equal(report.findings.some((f) => f.code === "receipt-without-settlement"), false);
     assert.equal(report.warnings.some((w) => w.code === "boundary-deferred" && w.id === signed.claims.nonce), false);
     assert.equal(report.ok, true);
+  });
+
+  it("a previous-window row with the receipt's amount but another currency does not carry", () => {
+    const { signed, report } = openingReceiptAgainst(
+      signedRows(previousExtractRail, [{ ref: "open-r", timestampMs: NOW - 100, amount: "1", currency: "EUR" }], PREV_START, NOW),
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "receipt-without-settlement" && f.id === signed.claims.nonce),
+      true,
+    );
+  });
+
+  it("the previous window's facing band starts at its windowEndMs - clockSkewMs: at it the row carries, one ms earlier it does not", () => {
+    const at = openingReceiptAgainst(
+      signedRows(previousExtractRail, [{ ref: "open-r", timestampMs: NOW - SKEW, amount: "1" }], PREV_START, NOW),
+    );
+    assert.equal(at.report.findings.some((f) => f.code === "receipt-without-settlement"), false);
+    const before = openingReceiptAgainst(
+      signedRows(previousExtractRail, [{ ref: "open-r", timestampMs: NOW - SKEW - 1, amount: "1" }], PREV_START, NOW),
+    );
+    assert.equal(
+      before.report.findings.some((f) => f.code === "receipt-without-settlement" && f.id === before.signed.claims.nonce),
+      true,
+    );
+  });
+
+  it("the following window's facing band ends before its windowStartMs + clockSkewMs: one ms short the row carries, at it it does not", () => {
+    const run = (rowTs: number) => {
+      const honest = generateReceiptKeys();
+      const rail = generateExtractKeys();
+      const signed = receipt(honest, "late-r", WINDOW_END - 50, "n-late-r");
+      const report = audit({
+        receipts: [signed],
+        checkpoints: covered(honest, [signed]),
+        extract: rows(rail, []),
+        nextExtract: signedRows(rail, [{ ref: "late-r", timestampMs: rowTs, amount: "1" }], WINDOW_END, WINDOW_END + 3_600_000),
+        issuerTrust: { publicKeyPem: honest.publicKeyPem },
+        trust: pinFor(rail),
+      });
+      return { signed, report };
+    };
+    const inside = run(WINDOW_END + SKEW - 1);
+    assert.equal(inside.report.findings.some((f) => f.code === "receipt-without-settlement"), false);
+    const at = run(WINDOW_END + SKEW);
+    assert.equal(
+      at.report.findings.some((f) => f.code === "receipt-without-settlement" && f.id === at.signed.claims.nonce),
+      true,
+    );
   });
 
   it("a following-window row with the ref in the middle of that window does not carry a closing-edge receipt", () => {
