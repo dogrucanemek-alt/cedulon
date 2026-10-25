@@ -259,9 +259,10 @@ export function findCheckpointChainBreak(
   expectedIssuerKeyPem?: string,
   /** Expected `prevCheckpointHash` of the first checkpoint. Default: genesis (`null`). */
   expectedFirstPrevHash: string | null = null,
+  verify: (cp: SignedCheckpoint) => boolean = (cp) => verifyCheckpoint(cp, expectedIssuerKeyPem),
 ): ChainBreak | null {
   for (let i = 0; i < chain.length; i += 1) {
-    if (!verifyCheckpoint(chain[i], expectedIssuerKeyPem)) {
+    if (!verify(chain[i])) {
       return { index: i, reason: "bad-signature" };
     }
     const expectedPrev = i === 0 ? expectedFirstPrevHash : checkpointHash(chain[i - 1]);
@@ -282,10 +283,11 @@ export type Equivocation = { epoch: number; hashes: string[] };
 export function findEquivocation(
   checkpoints: SignedCheckpoint[],
   expectedIssuerKeyPem?: string,
+  verify: (cp: SignedCheckpoint) => boolean = (cp) => verifyCheckpoint(cp, expectedIssuerKeyPem),
 ): Equivocation | null {
   const byEpoch = new Map<number, Set<string>>();
   for (const cp of checkpoints) {
-    if (!verifyCheckpoint(cp, expectedIssuerKeyPem)) {
+    if (!verify(cp)) {
       continue;
     }
     const h = checkpointHash(cp);

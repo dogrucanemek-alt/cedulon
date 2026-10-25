@@ -57,6 +57,7 @@ import {
 } from "@cedulon/effect-extract";
 import { SPEND_PROFILE, type ProfileWords, type ReconciliationProfile } from "./profile.ts";
 import { DECISION_PROFILE } from "./profiles/decision.ts";
+import { runWindows, type WindowInput, type WindowsInput, type WindowsReport } from "./windows.ts";
 
 export { DEFAULT_CLOCK_SKEW_MS };
 export {
@@ -138,7 +139,13 @@ export const FINDING_OBJECT_VERSION = 1;
  * On the decision profile this pin is the effect-extract signer, not a rail.
  */
 export type RailTrustPin = {
-  publicKeyPem: string;
+  /**
+   * One key, or every key the verifier accepts. A single pin turns an honest
+   * rail rotation into a wall of findings, and the way out an operator reaches
+   * for is to stop pinning at all - so the set is stated rather than assumed
+   * to be one.
+   */
+  publicKeyPem: string | readonly string[];
   accountId?: string;
   railId?: string;
   windowStartMs?: number;
@@ -324,6 +331,21 @@ export type AuditReport = {
   counts: AuditCounts;
 };
 
+/** Which window edge a carry or a deferred settlement row sits on. */
+type CarryEdge = "opening" | "closing";
+type EdgeRef = { ref: string; edge: CarryEdge };
+
+/**
+ * The single-window audit plus the carry rule's own lists. `audit()` returns
+ * only `report`; consecutive windows read the lists so an inner-edge
+ * deferral resolves only when the adjacent window actually carried that ref.
+ */
+type AuditDetailed = {
+  report: AuditReport;
+  carried: EdgeRef[];
+  deferredRows: EdgeRef[];
+};
+
 function receiptRef(r: SignedReceipt): string | null {
   return r.claims.x402PaymentRef;
 }
@@ -387,6 +409,24 @@ function verifyPresentedExtract(x: PresentedExtract, pop: Population, pin?: stri
     : pin
       ? verifyRailExtract(x, pin)
       : verifyRailExtract(x);
+}
+
+/**
+ * A rail (or effect) pin may be a set. The extract answers if any readable
+ * key in the set verifies it; the carried key must be that key, which
+ * `verifyRailExtract` / `verifyEffectExtract` already require.
+ */
+function extractVerifiesAgainstPin(
+  x: PresentedExtract,
+  pop: Population,
+  pin?: string | readonly string[],
+): boolean {
+  if (pin === undefined) {
+    return verifyPresentedExtract(x, pop);
+  }
+  return pinPemsOf(pin)
+    .filter((pem) => toSpkiDer(pem) !== null)
+    .some((pem) => verifyPresentedExtract(x, pop, pem));
 }
 
 function recordAttestedByPins(r: PresentedRecord, pins: readonly string[], pop: Population): boolean {
@@ -754,8 +794,10 @@ function classifySettlementMatches(
     PresentedRecord,
     PresentedRow
   >,
-): { findings: Finding[]; counts: MatchCounts } {
+): { findings: Finding[]; counts: MatchCounts; carried: EdgeRef[]; deferredRows: EdgeRef[] } {
   const findings: Finding[] = [];
+  const carried: EdgeRef[] = [];
+  const deferredRows: EdgeRef[] = [];
   const settled = receipts.filter((r) => profile.expectsRow(r));
   const refusalRefs = new Set(
     receipts
@@ -850,6 +892,7 @@ function classifySettlementMatches(
     if (!r) {
       if (nearOpen(s.timestampMs) || nearClose(s.timestampMs)) {
         counts.settlements.deferred += 1;
+        deferredRows.push({ ref, edge: nearOpen(s.timestampMs) ? "opening" : "closing" });
         findings.push({
           code: "boundary-deferred",
           id: ref,
@@ -919,6 +962,7 @@ function classifySettlementMatches(
         // to reconcile. No finding here; the count is how a reader learns the
         // row existed at all.
         counts.receipts.carried += 1;
+        carried.push({ ref, edge: open && namedByPrev ? "opening" : "closing" });
         continue;
       }
       if ((close && consecutive) || (open && consecutivePrev)) {
@@ -967,7 +1011,7 @@ function classifySettlementMatches(
     }
   }
 
-  return { findings, counts };
+  return { findings, counts, carried, deferredRows };
 }
 
 /** @deprecated use findSettlementMatches */
@@ -1058,10 +1102,11 @@ export function findCheckpointTotalMismatches(
   words: ProfileWords = SPEND_PROFILE.words,
   expectedRootPrev: string | null = null,
   expectedFirstPrevCheckpoint: string | null = null,
+  verify: (cp: SignedCheckpoint) => boolean = (cp) => verifyCheckpoint(cp),
 ): Finding[] {
   const findings: Finding[] = [];
   for (const cp of checkpoints) {
-    const v = verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex);
+    const v = verifiesOrRefusal(() => verify(cp), cp.coseHex);
     if (!v.ok) {
       findings.push({
         code: "checkpoint-total-mismatch",
@@ -1129,7 +1174,7 @@ export function findCheckpointTotalMismatches(
       });
     }
   }
-  const chain = findCheckpointChainBreak(checkpoints, undefined, expectedFirstPrevCheckpoint);
+  const chain = findCheckpointChainBreak(checkpoints, undefined, expectedFirstPrevCheckpoint, verify);
   if (chain) {
     findings.push({
       code: "checkpoint-total-mismatch",
@@ -1140,8 +1185,11 @@ export function findCheckpointTotalMismatches(
   return findings;
 }
 
-export function findEquivocationFinding(checkpoints: SignedCheckpoint[]): Finding | null {
-  const hit = findEquivocation(checkpoints);
+export function findEquivocationFinding(
+  checkpoints: SignedCheckpoint[],
+  verify: (cp: SignedCheckpoint) => boolean = (cp) => verifyCheckpoint(cp),
+): Finding | null {
+  const hit = findEquivocation(checkpoints, undefined, verify);
   if (!hit) {
     return null;
   }
@@ -1180,6 +1228,7 @@ function verifiedWitnessCheckpoints(
   receipts: InclusionReceipt[],
   witnessKeyPem?: string | readonly string[],
   attestsCheckpoint?: ((cp: SignedCheckpoint) => boolean) | null,
+  verify: (cp: SignedCheckpoint) => boolean = (cp) => verifyCheckpoint(cp),
 ): SignedCheckpoint[] {
   const out: SignedCheckpoint[] = [];
   for (const rec of receipts) {
@@ -1193,7 +1242,7 @@ function verifiedWitnessCheckpoints(
       continue;
     }
     const carried = rec.checkpoint;
-    if (!verifiesOrRefusal(() => verifyCheckpoint(carried), carried.coseHex).ok) {
+    if (!verifiesOrRefusal(() => verify(carried), carried.coseHex).ok) {
       continue;
     }
     out.push(carried);
@@ -1511,12 +1560,18 @@ function findMalformedHashClaims(input: AuditInput): Finding[] {
 }
 
 export function audit(input: AuditInput): AuditReport {
+  return auditDetailed(input).report;
+}
+
+function auditDetailed(input: AuditInput): AuditDetailed {
   assertAuditBounds(input);
   const profile = (input.profile ?? SPEND_PROFILE) as ReconciliationProfile<PresentedRecord, PresentedRow>;
   const pop = populationOf(profile);
   const w = profile.words;
   const findings: Finding[] = [...findMalformedHashClaims(input)];
   const warnings: Finding[] = [];
+  let carried: EdgeRef[] = [];
+  let deferredRows: EdgeRef[] = [];
 
   // When an extract is supplied it is the subject of the audit: reconcile the
   // rows it actually carries, never a separate array the caller hands over.
@@ -1535,9 +1590,7 @@ export function audit(input: AuditInput): AuditReport {
       });
     }
 
-    const signatureVerifies = input.trust
-      ? verifyPresentedExtract(input.extract, pop, input.trust.publicKeyPem)
-      : verifyPresentedExtract(input.extract, pop);
+    const signatureVerifies = extractVerifiesAgainstPin(input.extract, pop, input.trust?.publicKeyPem);
 
     // An extract that declares one window and carries rows from outside it has
     // not reported on the period it claims to cover. This holds whether or not
@@ -1584,16 +1637,20 @@ export function audit(input: AuditInput): AuditReport {
       // already verified would fail open on the worse input.
       const t = input.trust;
       const body = input.extract.body;
-      const pinnedDer = toSpkiDer(t.publicKeyPem);
-      if (pinnedDer === null) {
+      const { usable: extractDers, unreadable } = pinnedKeys(t.publicKeyPem);
+      if (unreadable > 0 || extractDers.length === 0) {
         // The verifier's own configuration is broken. Saying "mismatch" here
         // would blame the extract for a key we could not read.
         findings.push({
           code: "trust-key-unreadable",
           id: "extract",
-          detail: `the pinned ${w.extractKey} could not be read as a public key; supply PEM or base64 SPKI`,
+          detail:
+            extractDers.length === 0
+              ? `the pinned ${w.extractKey} could not be read as a public key; supply PEM or base64 SPKI`
+              : `${unreadable} of the pinned ${w.extractKey} keys could not be read as a public key; the rest are still in use`,
         });
-      } else if (!signatureVerifies) {
+      }
+      if (extractDers.length > 0 && !signatureVerifies) {
         extractRejected = true;
         findings.push({
           code: "extract-key-mismatch",
@@ -1603,9 +1660,9 @@ export function audit(input: AuditInput): AuditReport {
               ? `${withArticle(w.extractKey)} was pinned but the extract body was refused: ${encodeRefusal} - not a signature verdict`
               : `${withArticle(w.extractKey)} was pinned but the extract signature does not verify against the key it carries`,
         });
-      } else {
+      } else if (extractDers.length > 0) {
         const carriedDer = toSpkiDer(input.extract.publicKeyPem);
-        if (carriedDer === null || !carriedDer.equals(pinnedDer)) {
+        if (carriedDer === null || !extractDers.some((der) => der.equals(carriedDer))) {
           extractRejected = true;
           findings.push({
             code: "extract-key-mismatch",
@@ -2068,10 +2125,7 @@ export function audit(input: AuditInput): AuditReport {
   // not start where this one ends. Step 5 only authorises resolving against
   // the following window's extract.
   let nextOk = Boolean(
-    input.nextExtract &&
-      (input.trust
-        ? verifyPresentedExtract(input.nextExtract, pop, input.trust.publicKeyPem)
-        : verifyPresentedExtract(input.nextExtract, pop)),
+    input.nextExtract && extractVerifiesAgainstPin(input.nextExtract, pop, input.trust?.publicKeyPem),
   );
   if (nextOk && input.extract && input.nextExtract && !extractRejected) {
     const next = input.nextExtract;
@@ -2129,10 +2183,7 @@ export function audit(input: AuditInput): AuditReport {
     }
   }
   let prevOk = Boolean(
-    input.previousExtract &&
-      (input.trust
-        ? verifyPresentedExtract(input.previousExtract, pop, input.trust.publicKeyPem)
-        : verifyPresentedExtract(input.previousExtract, pop)),
+    input.previousExtract && extractVerifiesAgainstPin(input.previousExtract, pop, input.trust?.publicKeyPem),
   );
   if (prevOk && input.extract && input.previousExtract && !extractRejected) {
     const prev = input.previousExtract;
@@ -2226,6 +2277,8 @@ export function audit(input: AuditInput): AuditReport {
     const classified = classifySettlementMatches(inScope, reconciled, settlementBoundary, profile);
     findings.push(...classified.findings);
     matchCounts = classified.counts;
+    carried = classified.carried;
+    deferredRows = classified.deferredRows;
   }
   const counts: AuditCounts = {
     receipts: {
@@ -2295,6 +2348,9 @@ export function audit(input: AuditInput): AuditReport {
     );
     if (chain) findings.push(chain);
   }
+  const pinVerify = issuerPinUsable
+    ? (cp: SignedCheckpoint) => checkpointAttestedByPins(cp, issuerPins)
+    : (cp: SignedCheckpoint) => verifyCheckpoint(cp);
   findings.push(
     ...findCheckpointTotalMismatches(
       attested,
@@ -2304,6 +2360,7 @@ export function audit(input: AuditInput): AuditReport {
       w,
       expectedRootPrev,
       expectedFirstPrevCheckpoint,
+      pinVerify,
     ),
   );
   findings.push(...findWindowCoverage(attested, attestedCheckpoints, pop, w, expectedRootPrev));
@@ -2318,9 +2375,10 @@ export function audit(input: AuditInput): AuditReport {
         input.inclusionReceipts!,
         (input.witnessTrust as IssuerTrustPin).publicKeyPem,
         attestsCheckpoint,
+        pinVerify,
       )
     : [];
-  const equiv = findEquivocationFinding([...attestedCheckpoints, ...witnessCheckpoints]);
+  const equiv = findEquivocationFinding([...attestedCheckpoints, ...witnessCheckpoints], pinVerify);
   if (equiv) findings.push(equiv);
 
   if (input.inclusionReceipts) {
@@ -2409,7 +2467,7 @@ export function audit(input: AuditInput): AuditReport {
   // conditional. Only a checkpoint that verifies gets to make this claim — an
   // unverifiable one has already been reported above.
   for (const cp of attestedCheckpoints) {
-    if (cp.claims.totals === null && verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex).ok) {
+    if (cp.claims.totals === null && verifiesOrRefusal(() => pinVerify(cp), cp.coseHex).ok) {
       warnings.push({
         code: "checkpoint-totals-redacted",
         id: `epoch-${cp.claims.epoch}`,
@@ -2423,20 +2481,34 @@ export function audit(input: AuditInput): AuditReport {
     warnings.push(f);
   }
   const hard = findings.filter((f) => f.severity !== "warn");
-  const missing = hard.filter((f) => f.code === profile.codes.rowWithoutRecord);
-  const summary =
-    hard.length === 0
-      ? "audit: balanced"
-      : missing.length > 0
-        ? `audit: ${missing.length} ${w.row} without ${w.record} → FAIL`
-        : `audit: ${hard.length} finding(s) → FAIL`;
-  // A scope record (`counterparty-unbound`) names what was not bound; it is
-  // not a doubt about the evidence that was authenticated.
+  return {
+    report: {
+      ok: hard.length === 0,
+      findings: hard,
+      warnings,
+      guarantee: reportGuarantee(warnings, hard),
+      summary: reportSummary(hard, w, profile.codes.rowWithoutRecord),
+      counts,
+      ...(input.extract
+        ? {
+            scope: {
+              accountId: extractAccountId(input.extract, pop),
+              railId: extractRailId(input.extract, pop),
+              windowStartMs: input.extract.body.windowStartMs,
+              windowEndMs: input.extract.body.windowEndMs,
+            },
+          }
+        : {}),
+    },
+    carried,
+    deferredRows,
+  };
+}
+
+/** Same rule `audit()` uses: a scope-only warning does not drop the guarantee. */
+function reportGuarantee(warnings: Finding[], hard: Finding[]): AuditReport["guarantee"] {
   const scopeOnly = new Set<FindingCode>(["counterparty-unbound"]);
-  const guaranteeWarnings = warnings.filter((w) => !scopeOnly.has(w.code));
-  // A finding that says the evidence itself cannot be trusted also removes the
-  // unconditional claim; otherwise a report could name a key mismatch and still
-  // describe its own guarantee as unconditional.
+  const guaranteeWarnings = warnings.filter((item) => !scopeOnly.has(item.code));
   const doubtedEvidence = hard.some(
     (f) =>
       f.code === "extract-key-mismatch" ||
@@ -2446,24 +2518,16 @@ export function audit(input: AuditInput): AuditReport {
       f.code === "issuer-key-mismatch" ||
       f.code === "manifest-key-mismatch",
   );
-  return {
-    ok: hard.length === 0,
-    findings: hard,
-    warnings,
-    guarantee: guaranteeWarnings.length === 0 && !doubtedEvidence ? "unconditional" : "conditional",
-    summary,
-    counts,
-    ...(input.extract
-      ? {
-          scope: {
-            accountId: extractAccountId(input.extract, pop),
-            railId: extractRailId(input.extract, pop),
-            windowStartMs: input.extract.body.windowStartMs,
-            windowEndMs: input.extract.body.windowEndMs,
-          },
-        }
-      : {}),
-  };
+  return guaranteeWarnings.length === 0 && !doubtedEvidence ? "unconditional" : "conditional";
+}
+
+function reportSummary(hard: Finding[], words: ProfileWords, rowWithoutRecord: string): string {
+  const missing = hard.filter((f) => f.code === rowWithoutRecord);
+  return hard.length === 0
+    ? "audit: balanced"
+    : missing.length > 0
+      ? `audit: ${missing.length} ${words.row} without ${words.record} → FAIL`
+      : `audit: ${hard.length} finding(s) → FAIL`;
 }
 
 export type FindingObject = {
@@ -2629,4 +2693,21 @@ export function presentedInRange(
   return entries
     .filter((e) => e.timestampMs >= fromMs && e.timestampMs < toMs)
     .sort((a, b) => a.timestampMs - b.timestampMs || rank(a.source) - rank(b.source));
+}
+
+export type { WindowInput, WindowsInput, WindowsReport };
+
+/**
+ * Consecutive windows audited as one run (core-05 T10): each window sees its
+ * neighbours' extracts, window i > 0 is anchored on window i-1's last
+ * checkpoint, and an inner-edge settlement row resolves only when the
+ * adjacent window carried a receipt for its ref.
+ */
+export function auditWindows(input: WindowsInput): WindowsReport {
+  return runWindows(input, {
+    auditDetailed,
+    guarantee: reportGuarantee,
+    summary: reportSummary,
+    defaultProfile: SPEND_PROFILE,
+  });
 }

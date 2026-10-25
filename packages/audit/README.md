@@ -17,6 +17,20 @@ reported as `boundary-deferred` rather than charged, and the warning's
 window's extract, or a receipt that names the row's ref.
 
 ```ts
+import { auditWindows } from "@cedulon/audit";
+
+const run = auditWindows({ windows: [w0, w1, w2], trust, issuerTrust });
+// run.windows: each window's own report; run.findings: what the run adds
+```
+
+`auditWindows` audits consecutive windows as one run. Each window sees its
+neighbours' extracts and is anchored on the previous window's last
+checkpoint, and a row deferred at an inner edge either resolves, when the
+adjacent window carried a receipt for its ref, or becomes
+`settlement-without-receipt`. Only the run's two outer edges keep the
+warning. The rail pin, like the issuer pin, takes one key or a list of keys.
+
+```ts
 import { checkPresentedForm, presentedInRange } from "@cedulon/audit";
 
 checkPresentedForm(bundle);                       // [] or { object, member, problem }[]

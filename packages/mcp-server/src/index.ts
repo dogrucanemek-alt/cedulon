@@ -55,7 +55,7 @@ const TOOLS = [
         },
         trust: {
           type: "object",
-          description: "Rail key you hold out of band: { publicKeyPem, accountId?, railId?, windowStartMs?, windowEndMs? }",
+          description: "Rail key you hold out of band: { publicKeyPem: string | string[], accountId?, railId?, windowStartMs?, windowEndMs? }",
         },
         issuerTrust: {
           type: "object",
