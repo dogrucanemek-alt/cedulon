@@ -4,8 +4,10 @@ import { describe, it } from "node:test";
 import { audit, checkPresentedForm } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint } from "@cedulon/checkpoint";
 import {
+  counterSign,
   generateReceiptKeys,
   signReceipt,
+  verifyCounterSignature,
   verifyReceipt,
   verifyReceiptJson,
   verifyReceiptUnderPin,
@@ -114,6 +116,29 @@ describe("the profile's verifiers take a COSE Spend Receipt only (MUST-T4-1)", (
       assert.match(named.detail, /MUST-T4-1/);
     });
   }
+
+  it("with no extract and no issuer pin, a JSON receipt still covers no settlement row", () => {
+    const r = jsonReceipt();
+    const report = audit({
+      receipts: [r],
+      checkpoints: [],
+      settlements: [{ ref: r.claims.x402PaymentRef!, amount: "1", currency: "USD", timestampMs: S + 1_800_000 }],
+    });
+    assert.ok(
+      report.findings.some((f) => f.code === "settlement-without-receipt" && f.id === r.claims.x402PaymentRef),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.counts.receipts.inScope, 0, JSON.stringify(report.counts));
+    assert.equal(report.counts.receipts.matched, 0, JSON.stringify(report.counts));
+    assert.ok(report.findings.some((f) => f.id === r.claims.nonce && /receipt-not-cose/.test(f.detail)));
+  });
+
+  it("a countersignature does not verify on a receipt whose encoding is not cose", () => {
+    const payee = generateReceiptKeys();
+    const signed = counterSign(coseReceipt(), payee.privateKeyPem, payee.publicKeyPem, issuer.publicKeyPem);
+    assert.equal(verifyCounterSignature(signed, payee.publicKeyPem), true);
+    assert.equal(verifyCounterSignature({ ...signed, encoding: "json" }, payee.publicKeyPem), false);
+  });
 
   it("the same audit with the COSE receipt balances", () => {
     const report = auditOne(coseReceipt(), true);

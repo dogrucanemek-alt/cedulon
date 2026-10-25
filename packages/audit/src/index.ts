@@ -264,7 +264,11 @@ export type AuditCounts = {
   receipts: {
     /** Every receipt presented. */
     submitted: number;
-    /** Receipts the issuer pin attests; every submitted receipt when no usable pin was stated. */
+    /**
+     * Receipts the issuer pin attests; with no issuer key stated, every
+     * submitted receipt in the profile's encoding (MUST-T4-1). A stated pin
+     * that cannot be read attests nothing.
+     */
     attested: number;
     /**
      * Attested receipts the population admits: ref on the extract, or timestamp
@@ -345,6 +349,15 @@ function populationOf(
 
 function isDecisionRecord(r: PresentedRecord, pop: Population): r is SignedDecisionRecord {
   return pop === "decision";
+}
+
+/**
+ * A spend receipt outside COSE does not verify under the profile (MUST-T4-1),
+ * so it is no coverage, pin or no pin (MUST-T4-10). Decision records are COSE
+ * by type.
+ */
+function inProfileEncoding(r: PresentedRecord, pop: Population): boolean {
+  return isDecisionRecord(r, pop) || r.encoding === "cose";
 }
 
 function isEffectExtract(x: PresentedExtract, pop: Population): x is SignedEffectExtract {
@@ -1756,7 +1769,9 @@ export function audit(input: AuditInput): AuditReport {
   // was entitled to issue receipts for them, and a receipt verified against the
   // key it carries only proves it is internally consistent. So the receipts that
   // count as coverage are the ones answering to a second root, stated out of band.
-  let attested = input.receipts;
+  // Without a pin every submitted receipt in the profile's encoding is weighed;
+  // one outside it is walked below only so the chain walk can name it.
+  let attested = input.receipts.filter((r) => inProfileEncoding(r, pop));
   // Null while no issuer key was stated: there is no attested/unattested split
   // to make, and every check falls back to the whole submitted list.
   let attestsCheckpoint: ((cp: SignedCheckpoint) => boolean) | null = null;
@@ -2012,12 +2027,6 @@ export function audit(input: AuditInput): AuditReport {
   const inScope =
     input.extract && !extractRejected
       ? attested.filter((r) => {
-        // A spend receipt outside COSE does not verify (MUST-T4-1) and
-        // therefore covers no settlement (MUST-T4-10), pin or no pin.
-        // It stays in `attested` so the chain walk can still name it.
-        if (!isDecisionRecord(r, pop) && r.encoding !== "cose") {
-          return false;
-        }
         const ref = profile.recordRef(r);
         if (ref !== null && extractRefs.has(ref)) {
           return true;
@@ -2242,7 +2251,7 @@ export function audit(input: AuditInput): AuditReport {
   // rejected writes "the checkpoint lied" and "the chain is broken" against an
   // honest issuer - noise that argues for switching the pin off.
   const countersign = findCountersignFindings({
-    receipts: (issuerPinUsable ? attested : input.receipts).filter(
+    receipts: (issuerPinUsable ? attested : input.receipts.filter((r) => inProfileEncoding(r, pop))).filter(
       (r): r is SignedReceipt => !isDecisionRecord(r, pop),
     ),
     payeeTrust: input.payeeTrust,
@@ -2262,7 +2271,11 @@ export function audit(input: AuditInput): AuditReport {
             ? issuerPins.some((pem) => sameSpkiKey(r.publicKeyPem, pem))
             : receiptBelongsToPin(r, issuerPins)),
       )
-    : attested;
+    : // With no issuer key stated, the walk also takes the receipts outside
+      // the profile's encoding, which attestation left out, so it can name them.
+      input.issuerTrust
+      ? attested
+      : input.receipts;
   if (profile.id === "decision") {
     const decisionWalk = chainWalk.filter((r): r is SignedDecisionRecord => isDecisionRecord(r, pop));
     const brk = findDecisionRecordChainBreak(decisionWalk, issuerPinUsable ? issuerPins : undefined);

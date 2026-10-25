@@ -450,7 +450,9 @@ export function countersignDeliveredHashHex(signed: SignedReceipt): string | nul
 }
 
 export function verifyCounterSignature(signed: SignedReceipt, payeePublicKeyPem?: string): boolean {
-  if (!signed.counterCoseHex) {
+  // A countersignature approves the receipt it covers, and a receipt outside
+  // COSE does not verify under the profile (MUST-T4-1).
+  if (signed.encoding !== "cose" || !signed.counterCoseHex) {
     return false;
   }
   const key = payeePublicKeyPem ?? signed.payeePublicKeyPem;
@@ -482,6 +484,13 @@ export function verifyCounterSignature(signed: SignedReceipt, payeePublicKeyPem?
   }
 }
 
+/**
+ * SHA-256 of the receipt's COSE octets, the receiptHash the core profile
+ * defines. For a receipt in the deprecated JSON encoding it returns the legacy
+ * hash of `{ claims, signature }` in the canonical encoding, which is outside
+ * the profile: no verifier of the profile accepts that receipt (MUST-T4-1),
+ * so the value only links legacy JSON chains to each other.
+ */
 export function receiptHash(signed: SignedReceipt): string {
   if (signed.encoding === "cose" && signed.coseHex) {
     return sha256Hex(Buffer.from(signed.coseHex, "hex"));
