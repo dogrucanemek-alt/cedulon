@@ -3,7 +3,7 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
 import { DEFAULT_CLOCK_SKEW_MS, audit } from "@cedulon/audit";
-import { buildCheckpointClaims, signCheckpoint } from "@cedulon/checkpoint";
+import { buildCheckpointClaims, checkpointHash, signCheckpoint } from "@cedulon/checkpoint";
 import { generateManifestKeys, manifestHash, signManifest, verifyManifest } from "@cedulon/manifest";
 import { counterSign, generateReceiptKeys, receiptHash, signReceipt, signReceiptUnchecked } from "@cedulon/receipts";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
@@ -813,5 +813,149 @@ describe("reconciliation gaps: following extract, per-receipt approval, totals o
       issuerTrust: { publicKeyPem: honest.publicKeyPem },
     });
     assert.equal(report.findings.some((f) => f.code === "checkpoint-total-mismatch"), true);
+  });
+});
+
+// Tiago, core-04 reading (22 Oct 2026), point 5. Without an anchor, the audit of
+// window N needs every receipt and checkpoint back to the stream's genesis. An
+// anchor - the issuer-signed checkpoint immediately before the first presented
+// one - lets window N stand on its own: the first presented checkpoint chains to
+// the anchor's hash and the first receipt in the window to the anchor's
+// chainHeadHash. The anchor's own window is not audited.
+describe("Tiago core-04 #5: a one-window audit with an anchor checkpoint", () => {
+  const H = 3_600_000;
+  const N_START = NOW + 10 * H;
+  const N_END = N_START + H;
+  const P_START = N_START - H;
+
+  function claims(ref: string, ts: number, nonce: string, prev: string | null) {
+    return {
+      payer: "payer",
+      payee: "payee-1",
+      amount: "1",
+      currency: "USD",
+      policyHash: TEST_HASH,
+      manifestHash: null,
+      noManifest: true,
+      x402PaymentRef: ref,
+      timestampMs: ts,
+      nonce: nonce.padEnd(16, "-"),
+      prevReceiptHash: prev,
+      outcome: "settled" as const,
+    };
+  }
+
+  function stream() {
+    const issuer = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const r0 = signReceipt(claims("w-prev", P_START + 600_000, "a-prev", null), issuer.privateKeyPem, issuer.publicKeyPem);
+    const cpPrev = signCheckpoint(buildCheckpointClaims(1, [r0], P_START, N_START, null), issuer.privateKeyPem, issuer.publicKeyPem);
+    const r1 = signReceipt(claims("w-n", N_START + 600_000, "a-n", receiptHash(r0)), issuer.privateKeyPem, issuer.publicKeyPem);
+    const cpN = signCheckpoint(buildCheckpointClaims(2, [r1], N_START, N_END, checkpointHash(cpPrev)), issuer.privateKeyPem, issuer.publicKeyPem);
+    const extract = signRailExtract(
+      {
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: N_START,
+        windowEndMs: N_END,
+        settlements: [{ ref: "w-n", amount: "1", currency: "USD", timestampMs: N_START + 600_000 }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const trust = { publicKeyPem: rail.publicKeyPem, accountId: "acct", railId: "rail", windowStartMs: N_START, windowEndMs: N_END };
+    return { issuer, rail, r0, r1, cpPrev, cpN, extract, trust };
+  }
+
+  it("without an anchor, window N alone does not pass (the chain needs its genesis)", () => {
+    const s = stream();
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), true);
+    assert.equal(report.ok, false);
+  });
+
+  it("with the preceding checkpoint as anchor, window N passes on its own", () => {
+    const s = stream();
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [s.cpN],
+      anchorCheckpoint: s.cpPrev,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.deepEqual(report.findings.map((f) => f.code), []);
+    assert.equal(report.ok, true);
+  });
+
+  it("an anchor that does not verify under the issuer pin is issuer-key-mismatch on id anchor and anchors nothing", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    const forged = signCheckpoint(s.cpPrev.claims, stranger.privateKeyPem, stranger.publicKeyPem);
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [s.cpN],
+      anchorCheckpoint: forged,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(report.findings.some((f) => f.code === "issuer-key-mismatch" && f.id === "anchor"), true);
+    assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), true);
+    assert.equal(report.ok, false);
+  });
+
+  it("an anchor the first checkpoint does not chain to is window-coverage on id anchor and anchors nothing", () => {
+    const s = stream();
+    const other = signReceipt(claims("w-other", P_START + 700_000, "a-other", null), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const wrongAnchor = signCheckpoint(buildCheckpointClaims(1, [other], P_START, N_START, null), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [s.cpN],
+      anchorCheckpoint: wrongAnchor,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(report.findings.some((f) => f.code === "window-coverage" && f.id === "anchor"), true);
+    assert.equal(report.ok, false);
+  });
+
+  it("with a valid anchor, a first receipt that does not chain to the anchor's head is receipt-chain-break", () => {
+    const s = stream();
+    const stray = signReceipt(claims("w-n", N_START + 600_000, "a-stray", null), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const cpStray = signCheckpoint(buildCheckpointClaims(2, [stray], N_START, N_END, checkpointHash(s.cpPrev)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const report = audit({
+      receipts: [stray],
+      checkpoints: [cpStray],
+      anchorCheckpoint: s.cpPrev,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), true);
+    assert.equal(report.ok, false);
+  });
+
+  it("an anchor whose window ends where the first checkpoint starts but whose epoch is not one less is window-coverage on id anchor", () => {
+    const s = stream();
+    const skipped = signCheckpoint({ ...s.cpPrev.claims, epoch: 0 }, s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const cpN = signCheckpoint(buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(skipped)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [cpN],
+      anchorCheckpoint: skipped,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(report.findings.some((f) => f.code === "window-coverage" && f.id === "anchor"), true);
+    assert.equal(report.ok, false);
   });
 });
