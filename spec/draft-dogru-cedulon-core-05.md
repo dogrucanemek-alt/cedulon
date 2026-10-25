@@ -1942,7 +1942,12 @@ The gap is bounded by the allowance, it keeps the guarantee
 conditional, and a deployment that wants it closed audits consecutive
 windows: the receipt side hardens when the adjacent window's extract
 is presented, and the record side when the adjacent window's receipts
-are presented in the same bag. A single-window audit also cannot see
+are presented in the same bag. An audit that runs consecutive windows
+as one does this at every inner edge. Both bags are presented there,
+so a settlement record deferred at an inner edge resolves when the
+adjacent window carries a receipt for its `ref` through that window's
+facing band (step 5), and is otherwise the completeness finding. Only
+the two outer edges of the run keep the warning. A single-window audit also cannot see
 a `ref` that a receipt in the adjacent window's bag already used; the
 facing-band rule of step 5 keeps an adjacent extract from carrying a
 receipt through a settlement that window reconciles for itself, and
