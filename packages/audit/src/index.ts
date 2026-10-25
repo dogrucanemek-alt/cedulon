@@ -590,9 +590,13 @@ export type SettlementBoundary = {
   windowEndMs: number;
   clockSkewMs: number;
   /** Set when a following window was presented and verified. */
-  nextRefs?: ReadonlySet<string>;
+  nextRows?: readonly PresentedRow[];
   /** Set when a preceding window was presented and verified. */
-  prevRefs?: ReadonlySet<string>;
+  prevRows?: readonly PresentedRow[];
+  /** The following extract's own window start; the facing band is measured from it. */
+  nextWindowStartMs?: number;
+  /** The preceding extract's own window end; the facing band is measured from it. */
+  prevWindowEndMs?: number;
 };
 
 function clockSkewOf(extract: PresentedExtract, pop: Population): number {
@@ -649,6 +653,51 @@ function unreconciledCounts(
       unreconciled: settlements.length,
     },
   };
+}
+
+function recordMoney(record: PresentedRecord): { amount: string; currency: string } | null {
+  const claims = record.claims;
+  if (
+    "amount" in claims &&
+    "currency" in claims &&
+    typeof claims.amount === "string" &&
+    typeof claims.currency === "string"
+  ) {
+    return { amount: claims.amount, currency: claims.currency };
+  }
+  return null;
+}
+
+function rowMoney(row: PresentedRow): { amount: string; currency: string } | null {
+  if (
+    "amount" in row &&
+    "currency" in row &&
+    typeof row.amount === "string" &&
+    typeof row.currency === "string"
+  ) {
+    return { amount: row.amount, currency: row.currency };
+  }
+  return null;
+}
+
+/**
+ * an adjacent extract carries a receipt only through the row its own audit defers: the band facing this window, with the receipt's amount and currency
+ */
+function adjacentNamesReceipt(
+  receipt: PresentedRecord,
+  ref: string,
+  rows: readonly PresentedRow[] | undefined,
+  inFacingBand: (row: PresentedRow) => boolean,
+): boolean {
+  if (!rows) return false;
+  return rows.some((row) => {
+    if (row.ref !== ref || !inFacingBand(row)) return false;
+    const left = recordMoney(receipt);
+    const right = rowMoney(row);
+    // Decision rows and records have no amount/currency; band + ref are enough.
+    if (left === null || right === null) return true;
+    return left.amount === right.amount && left.currency === right.currency;
+  });
 }
 
 function classifySettlementMatches(
@@ -741,8 +790,8 @@ function classifySettlementMatches(
   // The rail settles first and the issuer signs after, so an honest payment
   // can straddle either edge; each adjacent extract resolves the receipt
   // side of its own edge.
-  const consecutive = Boolean(boundary?.nextRefs);
-  const consecutivePrev = Boolean(boundary?.prevRefs);
+  const consecutive = boundary?.nextRows !== undefined;
+  const consecutivePrev = boundary?.prevRows !== undefined;
   const lowerCut = boundary ? boundary.windowStartMs + boundary.clockSkewMs : null;
   const upperCut = boundary ? boundary.windowEndMs - boundary.clockSkewMs : null;
   // The window is half-open, so "within clockSkewMs" is a distance below clockSkewMs from the nearest instant inside it:
@@ -804,8 +853,26 @@ function classifySettlementMatches(
     if (!settlementsByRef.has(ref)) {
       const open = nearOpen(r.claims.timestampMs);
       const close = nearClose(r.claims.timestampMs);
-      const namedByPrev = consecutivePrev && boundary!.prevRefs!.has(ref);
-      const namedByNext = consecutive && boundary!.nextRefs!.has(ref);
+      const namedByPrev =
+        consecutivePrev &&
+        adjacentNamesReceipt(
+          r,
+          ref,
+          boundary!.prevRows,
+          (row) =>
+            boundary!.prevWindowEndMs !== undefined &&
+            row.timestampMs >= boundary!.prevWindowEndMs - boundary!.clockSkewMs,
+        );
+      const namedByNext =
+        consecutive &&
+        adjacentNamesReceipt(
+          r,
+          ref,
+          boundary!.nextRows,
+          (row) =>
+            boundary!.nextWindowStartMs !== undefined &&
+            row.timestampMs < boundary!.nextWindowStartMs + boundary!.clockSkewMs,
+        );
       if ((open && namedByPrev) || (close && namedByNext)) {
         // The adjacent window carries this ref, so the row is that report's
         // to reconcile. No finding here; the count is how a reader learns the
@@ -1744,75 +1811,81 @@ export function audit(input: AuditInput): AuditReport {
       }
     }
   }
+  const attestedCheckpoints = attestsCheckpoint
+    ? input.checkpoints.filter((cp) => attestsCheckpoint!(cp))
+    : input.checkpoints;
   // Without an anchor the chain must be presented from its genesis; with one,
   // window N stands on its own and window N-1 is the previous audit's business.
   let expectedRootPrev: string | null = null;
   let expectedFirstPrevCheckpoint: string | null = null;
   if (input.anchorCheckpoint) {
-    const anchor = input.anchorCheckpoint;
-    let signatureOk = false;
-    if (issuerPinUsable && attestsCheckpoint) {
-      if (!attestsCheckpoint(anchor)) {
-        findings.push({
-          code: "issuer-key-mismatch",
-          id: "anchor",
-          detail: `anchor checkpoint is signed by a key other than the pinned ${w.issuer} key`,
-        });
+    // a stated pin that cannot be read is not a licence to fall back to the key the anchor carries
+    if (input.issuerTrust === undefined || issuerPinUsable) {
+      const anchor = input.anchorCheckpoint;
+      let signatureOk = false;
+      if (issuerPinUsable && attestsCheckpoint) {
+        if (!attestsCheckpoint(anchor)) {
+          findings.push({
+            code: "issuer-key-mismatch",
+            id: "anchor",
+            detail: `anchor checkpoint is signed by a key other than the pinned ${w.issuer} key`,
+          });
+        } else {
+          signatureOk = true;
+        }
       } else {
-        signatureOk = true;
+        const v = verifiesOrRefusal(() => verifyCheckpoint(anchor), anchor.coseHex);
+        if (!v.ok) {
+          findings.push({
+            code: "checkpoint-total-mismatch",
+            id: "anchor",
+            detail: "anchor signature failed",
+          });
+        } else {
+          signatureOk = true;
+        }
       }
-    } else {
-      const v = verifiesOrRefusal(() => verifyCheckpoint(anchor), anchor.coseHex);
-      if (!v.ok) {
-        findings.push({
-          code: "checkpoint-total-mismatch",
-          id: "anchor",
-          detail: "anchor signature failed",
-        });
-      } else {
-        signatureOk = true;
-      }
-    }
-    if (signatureOk) {
-      if (input.checkpoints.length === 0) {
-        findings.push({
-          code: "window-coverage",
-          id: "anchor",
-          detail: "an anchor needs a presented checkpoint to precede",
-        });
-      } else {
-        const first = input.checkpoints.reduce((a, b) =>
-          a.claims.epoch <= b.claims.epoch ? a : b,
-        );
-        let adjacent = true;
-        if (anchor.claims.epoch + 1 !== first.claims.epoch) {
-          adjacent = false;
+      if (signatureOk) {
+        if (attestedCheckpoints.length === 0) {
           findings.push({
             code: "window-coverage",
             id: "anchor",
-            detail: `anchor epoch ${anchor.claims.epoch} + 1 !== first checkpoint epoch ${first.claims.epoch}`,
+            detail: "an anchor needs an attested checkpoint to precede",
           });
-        }
-        if (anchor.claims.endMs !== first.claims.startMs) {
-          adjacent = false;
-          findings.push({
-            code: "window-coverage",
-            id: "anchor",
-            detail: `anchor endMs ${anchor.claims.endMs} !== first checkpoint startMs ${first.claims.startMs}`,
-          });
-        }
-        const want = checkpointHash(anchor);
-        if (first.claims.prevCheckpointHash !== want) {
-          adjacent = false;
-          findings.push({
-            code: "window-coverage",
-            id: "anchor",
-            detail: `first checkpoint prevCheckpointHash does not equal checkpointHash(anchor)`,
-          });
-        }
-        if (adjacent) {
-          expectedFirstPrevCheckpoint = want;
-          expectedRootPrev = anchor.claims.chainHeadHash;
+        } else {
+          const first = attestedCheckpoints.reduce((a, b) =>
+            a.claims.epoch <= b.claims.epoch ? a : b,
+          );
+          let adjacent = true;
+          if (anchor.claims.epoch + 1 !== first.claims.epoch) {
+            adjacent = false;
+            findings.push({
+              code: "window-coverage",
+              id: "anchor",
+              detail: `anchor epoch ${anchor.claims.epoch} + 1 !== first checkpoint epoch ${first.claims.epoch}`,
+            });
+          }
+          if (anchor.claims.endMs !== first.claims.startMs) {
+            adjacent = false;
+            findings.push({
+              code: "window-coverage",
+              id: "anchor",
+              detail: `anchor endMs ${anchor.claims.endMs} !== first checkpoint startMs ${first.claims.startMs}`,
+            });
+          }
+          const want = checkpointHash(anchor);
+          if (first.claims.prevCheckpointHash !== want) {
+            adjacent = false;
+            findings.push({
+              code: "window-coverage",
+              id: "anchor",
+              detail: `first checkpoint prevCheckpointHash does not equal checkpointHash(anchor)`,
+            });
+          }
+          if (adjacent) {
+            expectedFirstPrevCheckpoint = want;
+            expectedRootPrev = anchor.claims.chainHeadHash;
+          }
         }
       }
     }
@@ -1955,7 +2028,7 @@ export function audit(input: AuditInput): AuditReport {
   // read when that extract's signature verifies and, if the presented extract
   // was accepted, its scope matches; if the presented extract was refused the
   // scope is not compared, and such a row is still reported.
-  const nextInWindowRefs = new Set<string>();
+  const nextInWindowRows: PresentedRow[] = [];
   let nextRowCount = 0;
   if (nextOk && input.extract) {
     const next = input.nextExtract!;
@@ -1968,7 +2041,7 @@ export function audit(input: AuditInput): AuditReport {
           detail: `${w.row} ${row.ref} at ${row.timestampMs} is outside the following ${w.extract}'s declared window ${next.body.windowStartMs}..${next.body.windowEndMs}`,
         });
       } else {
-        nextInWindowRefs.add(row.ref);
+        nextInWindowRows.push(row);
       }
     }
   }
@@ -2011,7 +2084,7 @@ export function audit(input: AuditInput): AuditReport {
       prevOk = false;
     }
   }
-  const prevInWindowRefs = new Set<string>();
+  const prevInWindowRows: PresentedRow[] = [];
   let prevRowCount = 0;
   if (prevOk && input.extract) {
     const prev = input.previousExtract!;
@@ -2024,7 +2097,7 @@ export function audit(input: AuditInput): AuditReport {
           detail: `${w.row} ${row.ref} at ${row.timestampMs} is outside the preceding ${w.extract}'s declared window ${prev.body.windowStartMs}..${prev.body.windowEndMs}`,
         });
       } else {
-        prevInWindowRefs.add(row.ref);
+        prevInWindowRows.push(row);
       }
     }
   }
@@ -2034,14 +2107,20 @@ export function audit(input: AuditInput): AuditReport {
         windowEndMs: input.extract.body.windowEndMs,
         clockSkewMs: clockSkewOf(input.extract, pop),
         // A verified extract with no rows still closes the edge. One whose
-        // every row sits outside its window does not: an empty set is truthy,
-        // and attaching it would harden the deferral the out-of-window row
-        // must not close.
-        ...(nextOk && (nextRowCount === 0 || nextInWindowRefs.size > 0)
-          ? { nextRefs: nextInWindowRefs }
+        // every row sits outside its window does not: an empty array is
+        // truthy, and attaching it would harden the deferral the
+        // out-of-window row must not close.
+        ...(nextOk && (nextRowCount === 0 || nextInWindowRows.length > 0)
+          ? {
+              nextRows: nextInWindowRows,
+              nextWindowStartMs: input.nextExtract!.body.windowStartMs,
+            }
           : {}),
-        ...(prevOk && (prevRowCount === 0 || prevInWindowRefs.size > 0)
-          ? { prevRefs: prevInWindowRefs }
+        ...(prevOk && (prevRowCount === 0 || prevInWindowRows.length > 0)
+          ? {
+              prevRows: prevInWindowRows,
+              prevWindowEndMs: input.previousExtract!.body.windowEndMs,
+            }
           : {}),
       }
     : undefined;
@@ -2088,9 +2167,6 @@ export function audit(input: AuditInput): AuditReport {
   // submitted list instead means one receipt from a key the verifier already
   // rejected writes "the checkpoint lied" and "the chain is broken" against an
   // honest issuer - noise that argues for switching the pin off.
-  const attestedCheckpoints = attestsCheckpoint
-    ? input.checkpoints.filter((cp) => attestsCheckpoint!(cp))
-    : input.checkpoints;
   const countersign = findCountersignFindings({
     receipts: (issuerPinUsable ? attested : input.receipts).filter(
       (r): r is SignedReceipt => !isDecisionRecord(r, pop),

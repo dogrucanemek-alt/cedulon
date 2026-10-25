@@ -981,17 +981,22 @@ describe("Tiago core-04 #5: a one-window audit with an anchor checkpoint", () =>
   });
 
   it("with an issuer pin stated but unreadable, the anchor is not checked against its own carried key and anchors nothing", () => {
+    // Nothing is attested under an unreadable pin, so the chain walk has no
+    // receipts and cannot show whether the anchor was used. A non-adjacent
+    // anchor can: checked against the key it carries, it would be weighed and
+    // reported as window-coverage on id anchor; left unused, it says nothing.
     const s = stream();
+    const skipped = signCheckpoint({ ...s.cpPrev.claims, epoch: 0 }, s.issuer.privateKeyPem, s.issuer.publicKeyPem);
     const report = audit({
       receipts: [s.r1],
       checkpoints: [s.cpN],
-      anchorCheckpoint: s.cpPrev,
+      anchorCheckpoint: skipped,
       extract: s.extract,
       trust: s.trust,
       issuerTrust: { publicKeyPem: "not a key" },
     } as Parameters<typeof audit>[0]);
     assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
-    assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), true);
+    assert.equal(report.findings.some((f) => f.id === "anchor"), false);
     assert.equal(report.ok, false);
   });
 });
