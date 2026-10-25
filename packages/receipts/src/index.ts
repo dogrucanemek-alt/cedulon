@@ -178,6 +178,10 @@ function assertClaimConsistency(claims: SpendReceiptClaims): void {
   if (prev) throw new Error(prev);
 }
 
+/**
+ * @deprecated The JSON encoding is outside the core profile (MUST-T4-1);
+ * the profile's verifiers refuse it as receipt-not-cose.
+ */
 export function signReceiptJson(
   claims: SpendReceiptClaims,
   privateKeyPem: string,
@@ -201,6 +205,12 @@ export function receiptEncodeRefusal(signed: SignedReceipt): string | null {
   return jcsEncodeRefusal(signed.claims);
 }
 
+/**
+ * @deprecated The JSON encoding is outside the core profile (MUST-T4-1);
+ * the profile's verifiers refuse it as receipt-not-cose. Only the padded
+ * base64 spelling of the signature verifies here: its receiptHash covers the
+ * signature text, so a second spelling would be a second identity.
+ */
 export function verifyReceiptJson(signed: SignedReceipt, expectedIssuerKeyPem?: string): boolean {
   if (expectedIssuerKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedIssuerKeyPem)) {
     return false;
@@ -208,12 +218,16 @@ export function verifyReceiptJson(signed: SignedReceipt, expectedIssuerKeyPem?: 
   if (signed.claims.noManifest !== (signed.claims.manifestHash === null)) {
     return false;
   }
+  const sig = signed.signature;
+  if (sig === "" || Buffer.from(sig, "base64").toString("base64") !== sig) {
+    return false;
+  }
   try {
     // Same reason the COSE sibling encodes inside its try: a claim set
     // carrying a value RFC 8785 cannot encode is unverifiable, and this
     // function's contract is to say so rather than to throw.
     const payload = Buffer.from(canonical(signed.claims), "utf8");
-    return verify(null, payload, signed.publicKeyPem, Buffer.from(signed.signature, "base64"));
+    return verify(null, payload, signed.publicKeyPem, Buffer.from(sig, "base64"));
   } catch {
     return false;
   }
@@ -270,6 +284,10 @@ export function verifyReceiptCose(signed: SignedReceipt, expectedIssuerKeyPem?: 
   }
 }
 
+/**
+ * The `"json"` encoding is deprecated: it is outside the core profile
+ * (MUST-T4-1), and the profile's verifiers refuse it as receipt-not-cose.
+ */
 export function signReceipt(
   claims: SpendReceiptClaims,
   privateKeyPem: string,
@@ -332,9 +350,10 @@ export function signReceiptUnchecked(
  * behaviour; an audit that omits it is told so in its report.
  */
 export function verifyReceipt(signed: SignedReceipt, expectedIssuerKeyPem?: string): boolean {
-  return signed.encoding === "json"
-    ? verifyReceiptJson(signed, expectedIssuerKeyPem)
-    : verifyReceiptCose(signed, expectedIssuerKeyPem);
+  if (signed.encoding !== "cose") {
+    return false;
+  }
+  return verifyReceiptCose(signed, expectedIssuerKeyPem);
 }
 
 /**
@@ -342,16 +361,11 @@ export function verifyReceipt(signed: SignedReceipt, expectedIssuerKeyPem?: stri
  * Attestation follows this question, not the unsigned `publicKeyPem` field.
  */
 export function verifyReceiptUnderPin(signed: SignedReceipt, pinPem: string): boolean {
-  if (signed.claims.noManifest !== (signed.claims.manifestHash === null)) {
+  if (signed.encoding !== "cose") {
     return false;
   }
-  if (signed.encoding === "json") {
-    try {
-      const payload = Buffer.from(canonical(signed.claims), "utf8");
-      return verify(null, payload, pinPem, Buffer.from(signed.signature, "base64"));
-    } catch {
-      return false;
-    }
+  if (signed.claims.noManifest !== (signed.claims.manifestHash === null)) {
+    return false;
   }
   if (!signed.coseHex) {
     return false;

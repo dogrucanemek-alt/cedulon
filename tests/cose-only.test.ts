@@ -39,7 +39,9 @@ function claims(nonce: string) {
     manifestHash: null,
     noManifest: true,
     x402PaymentRef: `ref-${nonce}`,
-    timestampMs: S + 1_000,
+    // Mid-window, away from the profile's 300000 ms edge allowance, so an
+    // uncovered row is settlement-without-receipt rather than deferred.
+    timestampMs: S + 1_800_000,
     nonce: nonce.padEnd(16, "-"),
     prevReceiptHash: null,
     outcome: "settled" as const,
@@ -57,7 +59,7 @@ function auditOne(receipt: SignedReceipt, pinIssuer: boolean) {
       railId: "rail",
       windowStartMs: S,
       windowEndMs: E,
-      settlements: [{ ref: receipt.claims.x402PaymentRef!, amount: "1", currency: "USD", timestampMs: S + 1_000 }],
+      settlements: [{ ref: receipt.claims.x402PaymentRef!, amount: "1", currency: "USD", timestampMs: S + 1_800_000 }],
     },
     rail.privateKeyPem,
     rail.publicKeyPem,

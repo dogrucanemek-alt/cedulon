@@ -479,6 +479,13 @@ export function findReceiptChainBreak(
     };
   }
   for (let i = 0; i < ordered.length; i += 1) {
+    if (ordered[i].encoding !== "cose") {
+      return {
+        code: "receipt-chain-break",
+        id: ordered[i].claims.nonce,
+        detail: `receipt ${i} refused: receipt-not-cose - outside the core profile (MUST-T4-1), not a signature verdict`,
+      };
+    }
     const v = verifiesOrRefusal(() => receiptVerifiesForChain(ordered[i], pinPems), ordered[i].coseHex);
     const jcs = v.ok ? null : receiptEncodeRefusal(ordered[i]);
     if (v.refusal !== null || jcs !== null) {
@@ -2005,6 +2012,12 @@ export function audit(input: AuditInput): AuditReport {
   const inScope =
     input.extract && !extractRejected
       ? attested.filter((r) => {
+        // A spend receipt outside COSE does not verify (MUST-T4-1) and
+        // therefore covers no settlement (MUST-T4-10), pin or no pin.
+        // It stays in `attested` so the chain walk can still name it.
+        if (!isDecisionRecord(r, pop) && r.encoding !== "cose") {
+          return false;
+        }
         const ref = profile.recordRef(r);
         if (ref !== null && extractRefs.has(ref)) {
           return true;
