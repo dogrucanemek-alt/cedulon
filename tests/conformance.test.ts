@@ -1,5 +1,8 @@
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import {
@@ -42,6 +45,21 @@ function assertConformance(rows: Row[]): void {
 
 function living(): Vector[] {
   return loadVectors().map((v) => ({ ...v }));
+}
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Ids of vectors whose `draft` is not found, whitespace aside, in the document `doc` names. */
+function quoteMisses(vectors: Vector[]): string[] {
+  const flat = (s: string) => s.replace(/\s+/g, " ").trim();
+  const docs = new Map<string, string>();
+  const misses: string[] = [];
+  for (const v of vectors) {
+    if (!v.doc) continue;
+    if (!docs.has(v.doc)) docs.set(v.doc, flat(readFileSync(join(root, "spec", `${v.doc}.md`), "utf8")));
+    if (!docs.get(v.doc)!.includes(flat(v.draft))) misses.push(v.id);
+  }
+  return misses;
 }
 
 describe("conformance vectors run in the suite", () => {
@@ -95,6 +113,31 @@ describe("conformance vectors run in the suite", () => {
     assert.equal(hit?.status, "error", `expected error, got ${hit?.status}: ${hit?.detail}`);
     assert.match(hit!.detail, /draftNamesDigest is true/);
     assert.throws(() => assertConformance(rows), /conformance error \(not a split\): V-T3-4-request-hash/);
+  });
+
+  it("a vector that names its document quotes that document word for word", () => {
+    // The expected result is taken from the sentence beside it, so the
+    // sentence has to be the document's and not a paraphrase that can drift.
+    const misquoted = quoteMisses(living());
+    assert.deepEqual(misquoted, []);
+    const drifted = living().map((v) =>
+      v.id === "V-C5-T10-17-zero-allowance" ? { ...v, draft: "An allowance of zero defers everything." } : v,
+    );
+    assert.deepEqual(quoteMisses(drifted), ["V-C5-T10-17-zero-allowance"]);
+  });
+
+  it("core-05 vectors cover the four edge quadrants, the facing band and the anchor", () => {
+    const core05 = living().filter((v) => v.doc === "draft-dogru-cedulon-core-05");
+    const kinds = new Set(core05.map((v) => v.kind));
+    for (const k of ["boundary-deferred", "row-by-receipt", "facing-band", "anchor"]) {
+      assert.ok(kinds.has(k), `no core-05 vector of kind ${k}`);
+    }
+    const quadrants = new Set(
+      core05
+        .filter((v) => v.kind === "boundary-deferred" && v.expectWarning === "boundary-deferred")
+        .map((v) => `${v.side}:${v.timestampMs! < (v.windowStartMs! + v.windowEndMs!) / 2 ? "opening" : "closing"}`),
+    );
+    assert.deepEqual([...quadrants].sort(), ["record:closing", "record:opening", "row:closing", "row:opening"]);
   });
 
   it("GREEN: living vectors match the counted split list", () => {
