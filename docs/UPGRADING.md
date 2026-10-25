@@ -80,10 +80,9 @@ equivocation pool. A checkpoint whose carried key had been swapped failed
 the audit or lost its `checkpoint-totals-redacted` warning. Worse, it
 dropped out of the equivocation comparison, so a second checkpoint for one
 epoch went unreported. It is now `carried-key-mismatch`, a warning, and
-stays attested, as the issuer root states. With no pin, or an unreadable
-one, the carried key is still the one checked. `findCheckpointChainBreak`
-and `findEquivocation` in `@cedulon/checkpoint` take an optional verifier;
-their existing callers behave as before.
+stays attested, as the issuer root states. With no pin the carried key is
+still the one checked. A stated pin that cannot be read attests nothing and
+falls back to no carried key, as before.
 
 G. The rail pin takes one key or a list (MUST-T4-12). `trust.publicKeyPem`
 accepts a string or an array of strings, for the presented, previous and
@@ -100,8 +99,14 @@ H. New in `@cedulon/audit`; nothing is removed.
   and is otherwise `settlement-without-receipt`. A row used twice across
   the run, in its own window and carried for a receipt next door, is
   `duplicate-ref`. Windows that do not tile the stated run are
-  `extract-scope-mismatch` on id `windows`. Only the run's two outer edges
-  keep the warning.
+  `extract-scope-mismatch` on id `windows`. Each window's report comes back
+  as that window's audit made it, warnings included; what the run resolves
+  or hardens is in the run's own `findings`, `resolved` and `guarantee`, and
+  only deferrals at the run's two outer edges leave that guarantee
+  conditional. A row in both bands of a window shorter than twice the
+  allowance keeps its warning while one band faces outside the run. A
+  receipt in both bands follows the single-window rule of step 5: either
+  adjacent extract that is presented and does not name it hardens it.
 - A `boundary-deferred` warning carries `needs`, naming the audit input
   that would resolve it: the previous or following extract, with the band
   its row must sit in, or a receipt that names the row's `ref`.
@@ -114,6 +119,17 @@ H. New in `@cedulon/audit`; nothing is removed.
   COSE octets, and the decoder floor. It does not verify signatures.
 - `presentedInRange(input, report, fromMs, toMs)` lists what was presented
   inside `[fromMs, toMs)`, with the codes the report gave each id.
+
+- Signatures that grew, each by trailing parameters with defaults, so
+  existing calls behave as before: in `@cedulon/checkpoint`,
+  `findCheckpointChainBreak` takes the expected first `prevCheckpointHash`
+  and then a verifier, and `findEquivocation` a verifier, and
+  `checkpointHash` is now exported; in `@cedulon/audit`,
+  `orderByIssuerChain` and `findReceiptChainBreak` take the expected first
+  `prevReceiptHash`, `findCheckpointTotalMismatches` both expected first
+  hashes and a verifier, and `findEquivocationFinding` a verifier. The
+  `Finding` type gains the optional `needs`, and `RailTrustPin.publicKeyPem`
+  widens to a string or an array of strings.
 
 What to do: a reader of `formatAudit` output that rejects line kinds it
 does not know has to accept `need`.
