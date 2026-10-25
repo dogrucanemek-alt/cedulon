@@ -10,4 +10,21 @@ const report = audit({ receipts, checkpoints, settlements });
 // report.summary is "audit: balanced" or lists findings
 ```
 
+A receipt or row within the clock-skew allowance of a window edge is
+reported as `boundary-deferred` rather than charged, and the warning's
+`needs` says which document would resolve it: the previous or following
+window's extract, or a receipt that names the row's ref.
+
+```ts
+import { checkPresentedForm, presentedInRange } from "@cedulon/audit";
+
+checkPresentedForm(bundle);                       // [] or { object, member, problem }[]
+presentedInRange(input, report, fromMs, toMs);    // what was presented in [fromMs, toMs)
+```
+
+`checkPresentedForm` reads a bundle against the presented form the core
+draft fixes (section "The presented form") before an audit: missing and unlisted
+members, hex and base64 spelling, encoding, claims against the COSE
+octets, and the decoder floor. It does not verify signatures.
+
 Repository: https://github.com/dogrucanemek-alt/cedulon

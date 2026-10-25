@@ -742,7 +742,7 @@ fixed here. A presented object is a JSON object, encoded as in
 
 | Object | Members |
 |---|---|
-| Spend Receipt | `claims`, `signature`, `publicKeyPem`, `encoding`, `coseHex`; optionally `counterCoseHex` and `payeePublicKeyPem` |
+| Spend Receipt | `claims`, `signature`, `publicKeyPem`, `encoding`, and `coseHex` in the COSE encoding; optionally `counterCoseHex` and `payeePublicKeyPem` |
 | Epoch checkpoint | `claims`, `publicKeyPem`, `encoding`, `coseHex` |
 | Trade Manifest | `body`, `signature`, `publicKeyPem`, `encoding`, `coseHex` |
 | Decision Token | `claims`, `publicKeyPem`, `encoding`, `coseHex` |
@@ -761,7 +761,8 @@ fixed here. A presented object is a JSON object, encoded as in
   the signed object; `claims` or `body` MUST equal the claim set
   decoded from them (`MUST-T4-2`).
 - `signature` is the signature in base64 with padding, the alphabet
-  of {{RFC4648}} Section 4.
+  of {{RFC4648}} Section 4. For an object in the COSE encoding it is
+  the signature carried in its COSE_Sign1 octets.
 - `publicKeyPem` and `payeePublicKeyPem` are SubjectPublicKeyInfo
   PEM, carried and never an identity source (above).
 - `encoding` is `"cose"`, or `"json"` for a Spend Receipt signed in
@@ -2240,11 +2241,19 @@ Coverage:
   and the implementation has not been run against a deployed
   Transparency Service.
 
+: The repository's conformance vectors include cases for the edge
+  allowance, the facing band and the anchor of this revision, each
+  quoting the sentence of this document it tests, and a test holds the
+  quotations to the text. A vector carries no code of the companion
+  implementation; running one still needs a runner that builds the
+  case it describes. A separate function reports, before an audit,
+  each place a presented bundle departs from {{presented-form}}.
+
 : Continuous integration runs the pre-release suite - the post-release
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 669 of 669,
+  this revision describes, all three assert every case, 704 of 704,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.

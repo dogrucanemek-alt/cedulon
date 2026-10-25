@@ -56,9 +56,26 @@ is a promise of the package, not of the schema.
   code: string,             // diagnostic id from -01, or an extension
   id: string,               // subject (ref, nonce, epoch, "extract")
   detail: string,           // operator-facing sentence
-  severity?: "fail" | "warn"
+  severity?: "fail" | "warn",
+  needs?: {                 // boundary-deferred only
+    evidence: "previousExtract" | "nextExtract" | "receipts",
+    ref: string,
+    windowEndMs?: number,   // previousExtract: where that extract must end
+    windowStartMs?: number, // nextExtract: where that extract must start
+    rowFromMs?: number,     // the adjacent extract's band facing this window,
+    rowToMs?: number        // half-open, where its row must sit
+  }
 }
 ```
+
+`needs` says what would resolve a `boundary-deferred` item, in the
+names of the audit input. A receipt deferred at the opening edge needs
+the previous window's extract, ending where this window starts, with a
+row for its `ref`, amount and currency inside that extract's facing
+band; at the closing edge, the following window's extract. A deferred
+settlement row needs a presented receipt that names its `ref`, at any
+timestamp, so it carries no band. The field changes nothing about the
+verdict, and no other finding carries it.
 
 Decision-profile codes (0.13.0 prepared, not published):
 `decision-without-effect` (allow, no row), `effect-without-decision`
