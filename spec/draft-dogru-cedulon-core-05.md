@@ -30,6 +30,7 @@ author:
     email: e.dogru@cedulon.com
 normative:
   RFC2119:
+  RFC4648:
   RFC6234:
   RFC6838:
   RFC7493:
@@ -422,7 +423,7 @@ A Trade Manifest MUST bind all of the following (`MUST-T8-1`):
 
 - goods or service description
 - price (integer minor units, encoded as a decimal string matching
-  `0|[1-9][0-9]*`|`0|[1-9][0-9]*`)
+  `0|[1-9][0-9]*`)
 - currency (ISO 4217 alphabetic or a documented token identifier)
 - acceptance-criteria hash (SHA-256 {{RFC6234}} of the exact delivery
   bytes, lowercase hexadecimal)
@@ -472,7 +473,7 @@ Claims (`MUST-T4-3`, `MUST-T4-4`, `MUST-T4-7`):
 |---|---|
 | payer | Payer agent identifier |
 | payee | Payee identifier |
-| amount | Minor units as a decimal string `0|[1-9][0-9]*`|`0|[1-9][0-9]*` |
+| amount | Minor units as a decimal string `0|[1-9][0-9]*` |
 | currency | Currency identifier |
 | policyHash | SHA-256 of the canonical policy document (lowercase hex) |
 | manifestHash | SHA-256 of the signed manifest COSE bytes, or null when `noManifest` is true |
@@ -604,7 +605,7 @@ carry.
 
 Every `amount` - of a Spend Receipt, a Trade Manifest, and a
 settlement record - is a decimal integer string in the grammar
-`0|[1-9][0-9]*`|`0|[1-9][0-9]*`. A signer MUST refuse to sign a value outside it,
+`0|[1-9][0-9]*`. A signer MUST refuse to sign a value outside it,
 naming the claim. A settlement record whose `amount` is outside it
 refuses the extract (`renamed-settlement-amount`, Appendix B). For
 the signed objects a verifier needs no separate pass: step 8
@@ -760,7 +761,7 @@ fixed here. A presented object is a JSON object, encoded as in
   the signed object; `claims` or `body` MUST equal the claim set
   decoded from them (`MUST-T4-2`).
 - `signature` is the signature in base64 with padding, the alphabet
-  of {{!RFC4648}} Section 4.
+  of {{RFC4648}} Section 4.
 - `publicKeyPem` and `payeePublicKeyPem` are SubjectPublicKeyInfo
   PEM, carried and never an identity source (above).
 - `encoding` is `"cose"`, or `"json"` for a Spend Receipt signed in
@@ -774,8 +775,9 @@ conforming verifier accepts the same objects: a verifier MUST accept
 an audit input within 65536 octets of encoded CBOR, 16 levels of
 nesting below the outermost item, 4096 elements in an array or pairs
 in a map, and 16384 octets in a single string, and MAY refuse one
-beyond any of them. The reference implementation refuses at exactly
-these numbers, by the names `cbor-too-large` and `cbor-too-deep`.
+beyond any of them. The reference implementation accepts up to these
+numbers and refuses beyond them, by the names `cbor-too-large` and
+`cbor-too-deep`.
 
 # Canonical JSON encoding {#canonical-json}
 
@@ -922,7 +924,7 @@ contain the following members, under these names:
 | Member | JSON type |
 |---|---|
 | ref | string (rail payment reference) |
-| amount | string matching `0|[1-9][0-9]*`|`0|[1-9][0-9]*` |
+| amount | string matching `0|[1-9][0-9]*` |
 | currency | string |
 | timestampMs | number (POSIX milliseconds, an integer) |
 
@@ -2216,7 +2218,7 @@ Maturity:
   author. One reader rebuilt the regenerated receipt vector of
   Appendix A from this text alone, in an independent toolchain, and
   obtained the published 307 octets byte for byte, SHA-256
-  `0|[1-9][0-9]*`f1fe8859faf25de906b08142674f1270656d8ea7bfc00853c2fc6e9d3f5a10b`;
+  `0f1fe8859faf25de906b08142674f1270656d8ea7bfc00853c2fc6e9d3f5a10b`;
   that reader had read parts of the public repository and says so, so
   it is not a clean-room result.
 
@@ -2561,7 +2563,7 @@ ae447dc74ccb0f13383f0f43f0f67f288d61a6395e95e2038e320d
 | manifest-terms-mismatch | audit fails under a usable issuer pin; warning without one | A receipt names this Trade Manifest but departs from it in amount, currency, settlement time, or, where the manifest states one, payee. A manifest refused by a stated publisher pin is not compared at all; a gate applying `MUST-T8-2` and `MUST-T3-3` would have refused the payment. The two severities are the two branches of `MUST-T8-9` |
 | extract-scope-mismatch | audit fails | A record falls outside the declared window, or the extract does not cover the expected account, rail, or window |
 | extract-settlement-mismatch | audit fails | A caller-supplied settlement list disagrees with the extract on `ref`, amount, currency or timestamp, which are the fields compared; the extract is authoritative. A beneficiary that differs is not part of this comparison and is reached by `beneficiary-mismatch`, against the receipt payee |
-| malformed-amount | audit fails | An amount read as a number is outside the grammar `0|[1-9][0-9]*`\|`0|[1-9][0-9]*`: a receipt amount in a checkpoint window's totals (identified by the epoch), or an amount on a `ref` already reported as repeating (step 9) |
+| malformed-amount | audit fails | An amount read as a number is outside the grammar `0|[1-9][0-9]*`: a receipt amount in a checkpoint window's totals (identified by the epoch), or an amount on a `ref` already reported as repeating (step 9) |
 | unstated-audit-window | guarantee conditional | A supplied rail pin states no period, so the extract defined its own. Where no rail key is pinned at all the period is equally unstated, and `unauthenticated-extract` is the condition reported |
 | unstated-audit-scope | guarantee conditional | A supplied rail pin states no account or no rail, so the extract defined the settlement path it reported on. The same "no pin at all" case is `unauthenticated-extract` |
 | countersign-bad | conditional | Present payee countersignature failed verify (signature, content type, or payload binding); unattributable, discarded as approval evidence. One verifiable under another key is `countersign-key-mismatch` |
@@ -2593,7 +2595,7 @@ report. The reference implementation uses these:
 | malformed-extract-windowStartMs, malformed-extract-windowEndMs | A window bound is not a safe integer |
 | malformed-extract-window | `windowEndMs` is not after `windowStartMs`: the window declares no population |
 | malformed-extract-clockSkewMs | A declared allowance is not a non-negative safe integer |
-| renamed-settlement-ref, -amount, -currency, -timestampMs | A settlement record lacks a required member, carries it under no recognised name, or carries one outside its grammar (an `amount` outside `0|[1-9][0-9]*`\|`0|[1-9][0-9]*` included) |
+| renamed-settlement-ref, -amount, -currency, -timestampMs | A settlement record lacks a required member, carries it under no recognised name, or carries one outside its grammar (an `amount` outside `0|[1-9][0-9]*` included) |
 | malformed-settlement-timestampMs, malformed-settlement-beneficiary | A settlement timestamp is not a safe integer, or a declared `beneficiary` is not a string |
 
 # Appendix C. Worked Example: A 10.00 TRY Spend {#example}
