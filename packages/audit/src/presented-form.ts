@@ -49,10 +49,10 @@ function isPaddedBase64(value: unknown): boolean {
 function tableFor(kind: ObjectKind, encoding: unknown): { required: string[]; allowed: Set<string> } {
   if (kind === "spend") {
     const required = ["claims", "signature", "publicKeyPem", "encoding"];
-    const allowed = new Set([...required, "counterCoseHex", "payeePublicKeyPem"]);
-    // Only the JSON encoding rules coseHex out; an encoding outside the two is
-    // reported once, as bad-encoding, not again through its octets.
-    if (encoding !== "json") allowed.add("coseHex");
+    // coseHex is always listed; it is required only when encoding is cose.
+    // A spend receipt whose encoding is not cose is reported once, as
+    // bad-encoding, not again through missing or present octets.
+    const allowed = new Set([...required, "counterCoseHex", "payeePublicKeyPem", "coseHex"]);
     if (encoding === "cose") required.push("coseHex");
     return { required, allowed };
   }
@@ -72,8 +72,7 @@ function tableFor(kind: ObjectKind, encoding: unknown): { required: string[]; al
   return { required, allowed: new Set(required) };
 }
 
-function encodingOk(kind: ObjectKind, encoding: unknown): boolean {
-  if (kind === "spend") return encoding === "cose" || encoding === "json";
+function encodingOk(_kind: ObjectKind, encoding: unknown): boolean {
   return encoding === "cose";
 }
 

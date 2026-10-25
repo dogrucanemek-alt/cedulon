@@ -187,12 +187,12 @@ describe("COSE_Sign1 receipts", () => {
     assert.equal(verifyReceipt(signed), true);
   });
 
-  it("legacy JSON path still verifies", () => {
+  it("legacy JSON path verifies only through its own helper; the profile's verifier refuses it (MUST-T4-1)", () => {
     const k = generateReceiptKeys();
     const signed = signReceiptJson(SIGNABLE_CLAIMS, k.privateKeyPem, k.publicKeyPem);
     assert.equal(signed.encoding, "json");
     assert.equal(verifyReceiptJson(signed), true);
-    assert.equal(verifyReceipt(signed), true);
+    assert.equal(verifyReceipt(signed), false);
   });
 
   it("vector 1: fixture key + appendix claims equals locked receipt COSE hex", () => {

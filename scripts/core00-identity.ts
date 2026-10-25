@@ -18,6 +18,7 @@ export const TABLE_ID = /^\|\s*((?:MUST|SHOULD|MAY)-T\d+-[\da-z]+)\s*\|/gm;
 export const MUST_ID = /MUST-T\d+-[\da-z]+/g;
 export const CORE_TABLE_T11 = ["MUST-T11-1", "MUST-T11-12"] as const;
 export const NEW_IN_CORE_00 = ["MUST-T6-7"] as const;
+export const NEW_IN_CHECKPOINT_01 = ["MUST-T11-20"] as const;
 export const EXPECTED_MUST_COUNT = 92;
 
 export function tableDefinedIds(text: string): string[] {
@@ -48,16 +49,38 @@ function docName(key: keyof FamilyDocs): string {
   return `draft-dogru-cedulon-${key}-00`;
 }
 
-export function reportFamilyIdentities(
+function frozenFamilyNames(): FamilyDocs {
+  return {
+    core: docName("core"),
+    checkpoint: docName("checkpoint"),
+    threats: docName("threats"),
+  };
+}
+
+function companionRevision(name: string): number {
+  const m = /-(\d+)$/.exec(name);
+  return m ? Number(m[1]) : 0;
+}
+
+function namedNewFor(names: FamilyDocs): readonly string[] {
+  return companionRevision(names.checkpoint) >= 1
+    ? [...NEW_IN_CORE_00, ...NEW_IN_CHECKPOINT_01]
+    : [...NEW_IN_CORE_00];
+}
+
+function reportFamilyIdentitiesNamed(
   docs: FamilyDocs,
+  names: FamilyDocs,
   inventory: Iterable<string>,
+  expectedMust: Iterable<string> = inventory,
 ): IdentityReport {
-  const expected = new Set(inventory);
+  const numbered = new Set(inventory);
+  const expected = new Set(expectedMust);
   const definedBy = new Map<string, string[]>();
   for (const key of ["core", "checkpoint", "threats"] as const) {
     for (const id of tableDefinedIds(docs[key])) {
       const list = definedBy.get(id) ?? [];
-      list.push(docName(key));
+      list.push(names[key]);
       definedBy.set(id, list);
     }
   }
@@ -65,7 +88,7 @@ export function reportFamilyIdentities(
   const duplicates = [...definedBy.entries()]
     .filter(([, docsFor]) => docsFor.length > 1)
     .sort(([a], [b]) => a.localeCompare(b));
-  const missing = [...expected].filter((id) => !definedBy.has(id)).sort();
+  const missing = [...numbered].filter((id) => !definedBy.has(id)).sort();
   const extra = mustDefined.filter((id) => !expected.has(id));
   const coreIds = new Set(tableDefinedIds(docs.core));
   const checkpointIds = new Set(tableDefinedIds(docs.checkpoint));
@@ -85,39 +108,86 @@ export function reportFamilyIdentities(
   };
 }
 
-export function identityFailures(report: IdentityReport): string[] {
+export function reportFamilyIdentities(
+  docs: FamilyDocs,
+  inventory: Iterable<string>,
+): IdentityReport {
+  return reportFamilyIdentitiesNamed(docs, frozenFamilyNames(), inventory);
+}
+
+type PromisedOn = { ids: readonly string[]; document: string; list: string };
+
+function collectIdentityFailures(
+  report: IdentityReport,
+  names: FamilyDocs,
+  allowedExtra: ReadonlySet<string>,
+  promised: readonly PromisedOn[],
+  expectedCount: number | undefined,
+): string[] {
   const fails: string[] = [];
-  if (report.mustDefined.length !== EXPECTED_MUST_COUNT) {
+  if (expectedCount !== undefined && report.mustDefined.length !== expectedCount) {
     fails.push(
-      `MUST table rows across the family: ${report.mustDefined.length}, expected ${EXPECTED_MUST_COUNT}`,
+      `MUST table rows across the family: ${report.mustDefined.length}, expected ${expectedCount}`,
     );
   }
-  for (const [id, docs] of report.duplicates) {
-    fails.push(`${id} is defined in more than one document: ${docs.join(", ")}`);
+  for (const [id, docsFor] of report.duplicates) {
+    fails.push(`${id} is defined in more than one document: ${docsFor.join(", ")}`);
   }
   for (const id of report.missing) {
     fails.push(`${id} is in the numbered inventory but defined in no family document`);
   }
   for (const id of report.extra) {
-    if (!(NEW_IN_CORE_00 as readonly string[]).includes(id)) {
+    if (!allowedExtra.has(id)) {
       fails.push(`${id} is defined in the family but not in the numbered inventory`);
     }
   }
-  for (const id of NEW_IN_CORE_00) {
-    const docs = report.definedBy.get(id) ?? [];
-    if (!docs.includes("draft-dogru-cedulon-core-00")) {
-      fails.push(
-        `${id} is promised on NEW_IN_CORE_00 and is not defined in draft-dogru-cedulon-core-00`,
-      );
+  for (const { ids, document, list } of promised) {
+    for (const id of ids) {
+      const definedIn = report.definedBy.get(id) ?? [];
+      if (!definedIn.includes(document)) {
+        fails.push(`${id} is promised on ${list} and is not defined in ${document}`);
+      }
     }
   }
   for (const id of report.coreT11Wrong) {
-    fails.push(`${id} must be defined in draft-dogru-cedulon-core-00 and is not`);
+    fails.push(`${id} must be defined in ${names.core} and is not`);
   }
   for (const id of report.checkpointT11Missing) {
-    fails.push(`${id} must be defined in draft-dogru-cedulon-checkpoint-00 and is not`);
+    fails.push(`${id} must be defined in ${names.checkpoint} and is not`);
   }
   return fails;
+}
+
+export function identityFailures(report: IdentityReport): string[] {
+  const names = frozenFamilyNames();
+  return collectIdentityFailures(
+    report,
+    names,
+    new Set<string>(NEW_IN_CORE_00),
+    [{ ids: NEW_IN_CORE_00, document: names.core, list: "NEW_IN_CORE_00" }],
+    EXPECTED_MUST_COUNT,
+  );
+}
+
+export function livingFamilyFailures(
+  docs: FamilyDocs,
+  names: FamilyDocs,
+  inventory: Iterable<string>,
+): string[] {
+  const numbered = [...inventory];
+  const namedNew = namedNewFor(names);
+  const report = reportFamilyIdentitiesNamed(docs, names, numbered, [...numbered, ...namedNew]);
+  const promised: PromisedOn[] = [
+    { ids: NEW_IN_CORE_00, document: names.core, list: "NEW_IN_CORE_00" },
+  ];
+  if (companionRevision(names.checkpoint) >= 1) {
+    promised.push({
+      ids: NEW_IN_CHECKPOINT_01,
+      document: names.checkpoint,
+      list: "NEW_IN_CHECKPOINT_01",
+    });
+  }
+  return collectIdentityFailures(report, names, new Set(), promised, undefined);
 }
 
 export function assertFamilyIdentities(docs: FamilyDocs, inventory: Iterable<string>): void {
