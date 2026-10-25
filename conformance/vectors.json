@@ -368,7 +368,7 @@
     },
     {
       "id": "V-C5-anchor-valid",
-      "must": "Audit procedure step 6 (the first prevReceiptHash)",
+      "must": "MUST-T11-20",
       "doc": "draft-dogru-cedulon-core-05",
       "draft": "With a valid anchor, the first presented checkpoint is not a genesis checkpoint and its `prevCheckpointHash` is checked against the anchor rather than against null, and the first receipt's `prevReceiptHash` is checked against the anchor's `chainHeadHash` (step 6).",
       "kind": "anchor",
@@ -378,7 +378,7 @@
     },
     {
       "id": "V-C5-anchor-foreign-key",
-      "must": "Audit procedure, anchor paragraph",
+      "must": "MUST-T11-20",
       "doc": "draft-dogru-cedulon-core-05",
       "draft": "The anchor is resolved against the issuer root like any checkpoint; one that fails is `issuer-key-mismatch`, identified by `anchor`, and anchors nothing.",
       "kind": "anchor",
@@ -388,7 +388,7 @@
     },
     {
       "id": "V-C5-anchor-epoch-off",
-      "must": "Audit procedure, anchor paragraph",
+      "must": "MUST-T11-20",
       "doc": "draft-dogru-cedulon-core-05",
       "draft": "a failure of any of these is reported as `window-coverage`, identified by `anchor`, and the anchor anchors nothing.",
       "kind": "anchor",

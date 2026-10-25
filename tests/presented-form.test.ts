@@ -15,10 +15,10 @@ import { TEST_HASH } from "./hash-fixtures.ts";
 /**
  * The presented form of draft-dogru-cedulon-core-05 {#presented-form}: the
  * members each object travels with beside its signed octets, and the decoder
- * floor of MUST-T4-19. Measured on master c78f3f1, audit() accepts an
+ * floor of MUST-T4-19. Measured on master c78f3f1, audit() accepted an
  * upper-case coseHex, a garbage `signature` on a COSE receipt, an unpadded
  * one on a JSON receipt, an unlisted member and encoding "COSE" without a
- * word, so two verifiers can read the same bundle differently. The checker
+ * word, so two verifiers could read the same bundle differently. The checker
  * says which member of which object is off, before an audit is run.
  */
 type Problem = { object: string; member: string | null; problem: string };
@@ -54,7 +54,7 @@ function claims(nonce: string, prev: string | null) {
 /** A bundle every member of which is in the presented form. */
 function honest(): Record<string, any> {
   const a = signReceipt(claims("pf-a", null), issuer.privateKeyPem, issuer.publicKeyPem);
-  const b = signReceipt(claims("pf-b", receiptHash(a)), issuer.privateKeyPem, issuer.publicKeyPem, "json");
+  const b = signReceipt(claims("pf-b", receiptHash(a)), issuer.privateKeyPem, issuer.publicKeyPem);
   const checkpoint = signCheckpoint(buildCheckpointClaims(1, [a, b], S, E, null), issuer.privateKeyPem, issuer.publicKeyPem);
   const extract = signRailExtract(
     {
@@ -167,7 +167,7 @@ describe("checkPresentedForm: the presented form of core-05, checked before an a
     assert.ok(has(check!(bundle), "receipts[0]", "signature", "signature-mismatch"), JSON.stringify(check!(bundle)));
   });
 
-  it("encoding outside cose and json is bad-encoding; a checkpoint is cose only", () => {
+  it("an encoding spelled other than cose is bad-encoding, on a receipt and on a checkpoint", () => {
     assert.equal(typeof check, "function");
     const bundle = honest();
     bundle.receipts[0] = { ...bundle.receipts[0], encoding: "COSE" };
@@ -182,14 +182,23 @@ describe("checkPresentedForm: the presented form of core-05, checked before an a
     );
   });
 
-  it("a member the table does not name is reported as unlisted-member, and a JSON receipt's coseHex is one", () => {
+  it("a member the table does not name is reported as unlisted-member", () => {
     assert.equal(typeof check, "function");
     const bundle = honest();
     bundle.receipts[0] = { ...bundle.receipts[0], extra: 1 };
-    bundle.receipts[1] = { ...bundle.receipts[1], coseHex: "zz" };
     const problems = check!(bundle);
     assert.ok(has(problems, "receipts[0]", "extra", "unlisted-member"), JSON.stringify(problems));
-    assert.ok(has(problems, "receipts[1]", "coseHex", "unlisted-member"), JSON.stringify(problems));
+  });
+
+  it("a receipt in the JSON encoding is bad-encoding: the profile has one encoding (MUST-T4-1)", () => {
+    assert.equal(typeof check, "function");
+    const bundle = honest();
+    const { coseHex: _gone, ...rest } = bundle.receipts[1];
+    bundle.receipts[1] = { ...rest, encoding: "json" };
+    assert.deepEqual(
+      check!(bundle).filter((p) => p.object === "receipts[1]"),
+      [{ object: "receipts[1]", member: "encoding", problem: "bad-encoding" }],
+    );
   });
 
   it("claims that differ from the claim set in the COSE octets are claims-mismatch (MUST-T4-2), for each object that carries them", () => {

@@ -52,7 +52,7 @@ normative:
         name: Emek Can Dogru
     date: 2026
     seriesinfo:
-      Internet-Draft: draft-dogru-cedulon-checkpoint-00
+      Internet-Draft: draft-dogru-cedulon-checkpoint-01
     target: https://datatracker.ietf.org/doc/draft-dogru-cedulon-checkpoint/
 informative:
   RFC7942:
@@ -712,9 +712,8 @@ A presented Spend Receipt, epoch checkpoint, Trade Manifest, or
 Decision Token carries, beside the signed octets, its claim set or
 body in decoded form and **the signer's public key as a
 SubjectPublicKeyInfo PEM**; a countersigned receipt carries the
-payee's key the same way, and an object presented in the JSON
-encoding of {{canonical-json}} repeats its signature there as
-base64. None of these is inside the signed octets, which is the
+payee's key the same way, and a Spend Receipt or Trade Manifest
+repeats its signature there as base64 ({{presented-form}}). None of these is inside the signed octets, which is the
 whole point of naming them here: the signature
 covers the COSE message and nothing else, so every one of these
 members is a surface anyone holding the object can rewrite. This is
@@ -742,7 +741,7 @@ fixed here. A presented object is a JSON object, encoded as in
 
 | Object | Members |
 |---|---|
-| Spend Receipt | `claims`, `signature`, `publicKeyPem`, `encoding`, and `coseHex` in the COSE encoding; optionally `counterCoseHex` and `payeePublicKeyPem` |
+| Spend Receipt | `claims`, `signature`, `publicKeyPem`, `encoding`, `coseHex`; optionally `counterCoseHex` and `payeePublicKeyPem` |
 | Epoch checkpoint | `claims`, `publicKeyPem`, `encoding`, `coseHex` |
 | Trade Manifest | `body`, `signature`, `publicKeyPem`, `encoding`, `coseHex` |
 | Decision Token | `claims`, `publicKeyPem`, `encoding`, `coseHex` |
@@ -761,12 +760,15 @@ fixed here. A presented object is a JSON object, encoded as in
   the signed object; `claims` or `body` MUST equal the claim set
   decoded from them (`MUST-T4-2`).
 - `signature` is the signature in base64 with padding, the alphabet
-  of {{RFC4648}} Section 4. For an object in the COSE encoding it is
-  the signature carried in its COSE_Sign1 octets.
+  of {{RFC4648}} Section 4. For a Spend Receipt or a Trade Manifest
+  it is the signature carried in its COSE_Sign1 octets.
 - `publicKeyPem` and `payeePublicKeyPem` are SubjectPublicKeyInfo
   PEM, carried and never an identity source (above).
-- `encoding` is `"cose"`, or `"json"` for a Spend Receipt signed in
-  the JSON encoding of {{canonical-json}}.
+- `encoding` is `"cose"`. A Spend Receipt in any other encoding, such
+  as the JSON encoding the companion implementation offered before
+  this profile, is outside it: it does not verify under this document
+  (`MUST-T4-1`), so it covers no settlement (`MUST-T4-10`). The
+  reference implementation refuses it by the name `receipt-not-cose`.
 
 A member this table does not name carries no meaning a verifier may
 act on.
@@ -1362,7 +1364,8 @@ anchored at its genesis: the first presented checkpoint is the
 genesis checkpoint of {{CEDULON-CHECKPOINT}}, the first receipt's
 `prevReceiptHash` is null (step 6), and auditing window N means
 presenting every receipt and checkpoint from the stream's first. An
-audit MAY instead present an anchor: the issuer-signed epoch
+audit MAY instead present an anchor (`MUST-T11-20` of
+{{CEDULON-CHECKPOINT}}): the issuer-signed epoch
 checkpoint immediately preceding the first presented checkpoint. The
 anchor is resolved against the issuer root like any checkpoint; one
 that fails is `issuer-key-mismatch`, identified by `anchor`, and
@@ -2599,6 +2602,7 @@ report. The reference implementation uses these:
 | cose-protected-header | The protected header is not the map {{cose-profile}} requires |
 | cose-sign1-unprotected | The unprotected header is not an empty map (`MUST-T4-21`) |
 | json-duplicate-key | A JSON text repeats a member name at any depth (`MUST-T4-20`) |
+| receipt-not-cose | A Spend Receipt is presented in an encoding other than COSE (`MUST-T4-1`) |
 | lone-surrogate | A JSON text carries a lone surrogate ({{canonical-json}}) |
 | missing-extract-accountId, -railId, -windowStartMs, -windowEndMs, -settlements | A required member of the Rail Extract body is absent or not of its type ({{rail-extract}}) |
 | malformed-extract-windowStartMs, malformed-extract-windowEndMs | A window bound is not a safe integer |
