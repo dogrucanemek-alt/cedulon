@@ -1942,7 +1942,12 @@ The gap is bounded by the allowance, it keeps the guarantee
 conditional, and a deployment that wants it closed audits consecutive
 windows: the receipt side hardens when the adjacent window's extract
 is presented, and the record side when the adjacent window's receipts
-are presented in the same bag. A single-window audit also cannot see
+are presented in the same bag. An audit that runs consecutive windows
+as one does this at every inner edge. Both bags are presented there,
+so a settlement record deferred at an inner edge resolves when the
+adjacent window carries a receipt for its `ref` through that window's
+facing band (step 5), and is otherwise the completeness finding. Only
+the two outer edges of the run keep the warning. A single-window audit also cannot see
 a `ref` that a receipt in the adjacent window's bag already used; the
 facing-band rule of step 5 keeps an adjacent extract from carrying a
 receipt through a settlement that window reconciles for itself, and
@@ -1967,7 +1972,7 @@ visible only to an audit that holds both bags.
 | MUST-T10-14 | An implementation MUST surface the guarantee and any warnings in any human-readable audit report it produces, not only in a returned structure. |
 | MUST-T10-15 | A verifier that supplies a rail pin but has not stated the period under audit MUST emit `unstated-audit-window` and MUST treat the guarantee as conditional; with no rail pin at all the condition reported is `unauthenticated-extract`. |
 | MUST-T10-16 | When an extract is supplied, a receipt whose `ref` appears on it is reconciled against it regardless of its own `timestampMs`; the window sieve applies only to receipts the extract does not name, and such a receipt outside the window MUST NOT be reported as a completeness failure against that extract. |
-| MUST-T10-17 | An unmatched settled receipt, and an unmatched settlement record, within the declared `clockSkewMs` of either window edge - less than `clockSkewMs` from the nearest instant inside the half-open window, so t < windowStartMs + clockSkewMs or t >= windowEndMs - clockSkewMs - MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure. A receipt deferred at the closing edge resolves against the following window's extract, and one deferred at the opening edge against the previous window's extract; each hardens into the completeness finding when that adjacent extract is presented, verifies, abuts the window, and does not name the `ref`. A deferred settlement record resolves only against a receipt in the presented bag that names its `ref`, and no extract hardens it. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
+| MUST-T10-17 | An unmatched settled receipt, and an unmatched settlement record, within the declared `clockSkewMs` of either window edge - less than `clockSkewMs` from the nearest instant inside the half-open window, so t < windowStartMs + clockSkewMs or t >= windowEndMs - clockSkewMs - MUST be reported as `boundary-deferred`, a warning, rather than as a completeness failure. A receipt deferred at the closing edge resolves against the following window's extract, and one deferred at the opening edge against the previous window's extract; each hardens into the completeness finding when that adjacent extract is presented, verifies, abuts the window, and does not name the `ref`. A deferred settlement record resolves only against a receipt in the presented bag that names its `ref`, and no extract hardens it. In an audit that runs consecutive windows as one, the bags on both sides of an inner edge are presented together: a settlement record deferred there resolves when the adjacent window carries a receipt for its `ref`, and is otherwise the completeness finding. Absent a declared `clockSkewMs`, the profile default of 300000 milliseconds applies. |
 | MUST-T10-18 | A verifier that supplies a rail pin but has not stated the account or the rail under audit MUST emit `unstated-audit-scope` and MUST treat the guarantee as conditional; with no rail pin at all the condition reported is `unauthenticated-extract`. |
 | MUST-T10-19 | A report MUST name the account, rail and window the extract declared, in the printed report, in the finding object it returns, and in every other structure the implementation returns for that audit, a tool result or an export included. Where no extract was presented there is no declared population, and the structure names none. This requirement governs what the report names; it does not suspend step 8, which still reports every settled receipt that has no extract row. |
 | MUST-T10-20 | Where a stated rail pin refuses the presented extract and the verifier reports `extract-key-mismatch`, the verifier MUST NOT read a settlement finding out of that document's body: not a mismatch against a receipt, not money reported as unaccounted for, and not a receipt left unmatched by rows the refused document omits. The verifier MUST report `settlement-comparison-skipped` in the same result. A pinned key the verifier cannot decode is `trust-key-unreadable` and is not a refusal of the document, so it does not reach this requirement. |
@@ -2256,7 +2261,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 724 of 724,
+  this revision describes, all three assert every case, 745 of 745,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.
