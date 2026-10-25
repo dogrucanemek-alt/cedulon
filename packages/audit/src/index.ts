@@ -1435,6 +1435,10 @@ function findMalformedHashClaims(input: AuditInput): Finding[] {
     pushHashRefusal(findings, "chainHeadHash", cp.claims.chainHeadHash, id, true);
     pushHashRefusal(findings, "prevCheckpointHash", cp.claims.prevCheckpointHash, id, true);
   }
+  if (input.anchorCheckpoint) {
+    pushHashRefusal(findings, "chainHeadHash", input.anchorCheckpoint.claims.chainHeadHash, "anchor", true);
+    pushHashRefusal(findings, "prevCheckpointHash", input.anchorCheckpoint.claims.prevCheckpointHash, "anchor", true);
+  }
   if (input.manifest) {
     pushHashRefusal(
       findings,
@@ -1823,7 +1827,14 @@ export function audit(input: AuditInput): AuditReport {
     if (input.issuerTrust === undefined || issuerPinUsable) {
       const anchor = input.anchorCheckpoint;
       let signatureOk = false;
-      if (issuerPinUsable && attestsCheckpoint) {
+      const refusal = coseDecodeRefusalHex(anchor.coseHex);
+      if (refusal !== null) {
+        findings.push({
+          code: "checkpoint-total-mismatch",
+          id: "anchor",
+          detail: `anchor refused: ${refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`,
+        });
+      } else if (issuerPinUsable && attestsCheckpoint) {
         if (!attestsCheckpoint(anchor)) {
           findings.push({
             code: "issuer-key-mismatch",
@@ -1846,6 +1857,17 @@ export function audit(input: AuditInput): AuditReport {
         }
       }
       if (signatureOk) {
+        if (issuerPinUsable) {
+          const verifying = issuerPins.filter((pem) => verifyCheckpointUnderPin(anchor, pem));
+          if (verifying.length > 0 && !verifying.some((pem) => sameSpkiKey(anchor.publicKeyPem, pem))) {
+            warnings.push({
+              code: "carried-key-mismatch",
+              id: "anchor",
+              severity: "warn",
+              detail: `anchor checkpoint verifies under a pinned ${w.issuer} key but the carried publicKeyPem is not that key`,
+            });
+          }
+        }
         if (attestedCheckpoints.length === 0) {
           findings.push({
             code: "window-coverage",
