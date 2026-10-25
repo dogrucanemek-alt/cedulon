@@ -67,6 +67,7 @@ export {
   type ReconciliationProfile,
 } from "./profile.ts";
 export { DECISION_PROFILE } from "./profiles/decision.ts";
+export { checkPresentedForm, type PresentedFormProblem } from "./presented-form.ts";
 
 export const FINDING_CODES = [
   "settlement-without-receipt",
@@ -215,11 +216,22 @@ function receiptBelongsToPin(r: SignedReceipt, pins: readonly string[]): boolean
   return false;
 }
 
+export type DeferredNeed = {
+  /** The AuditInput member that would resolve the item. */
+  evidence: "previousExtract" | "nextExtract" | "receipts";
+  ref: string;
+  windowEndMs?: number; // previousExtract: the extract must end here
+  windowStartMs?: number; // nextExtract: the extract must start here
+  rowFromMs?: number; // adjacent extract: its facing band, half-open
+  rowToMs?: number;
+};
+
 export type Finding = {
   code: FindingCode;
   detail: string;
   id: string;
   severity?: "fail" | "warn";
+  needs?: DeferredNeed;
 };
 
 /**
@@ -681,6 +693,20 @@ function rowMoney(row: PresentedRow): { amount: string; currency: string } | nul
 }
 
 /**
+ * The facing band at a shared edge: previous window ends at `sharedMs`,
+ * following window starts there. Same numbers the adjacent-row walk uses.
+ */
+function facingBand(
+  side: "prev" | "next",
+  sharedMs: number,
+  clockSkewMs: number,
+): { rowFromMs: number; rowToMs: number } {
+  return side === "prev"
+    ? { rowFromMs: sharedMs - clockSkewMs, rowToMs: sharedMs }
+    : { rowFromMs: sharedMs, rowToMs: sharedMs + clockSkewMs };
+}
+
+/**
  * an adjacent extract carries a receipt only through the row its own audit defers: the band facing this window, with the receipt's amount and currency
  */
 function adjacentNamesReceipt(
@@ -811,6 +837,7 @@ function classifySettlementMatches(
           detail: nearOpen(s.timestampMs)
             ? `${profile.words.row} ${s.ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.rowWithoutRecord}`
             : `${profile.words.row} ${s.ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.rowWithoutRecord}`,
+          needs: { evidence: "receipts", ref },
         });
       } else {
         counts.settlements.unmatched += 1;
@@ -855,24 +882,18 @@ function classifySettlementMatches(
       const close = nearClose(r.claims.timestampMs);
       const namedByPrev =
         consecutivePrev &&
-        adjacentNamesReceipt(
-          r,
-          ref,
-          boundary!.prevRows,
-          (row) =>
-            boundary!.prevWindowEndMs !== undefined &&
-            row.timestampMs >= boundary!.prevWindowEndMs - boundary!.clockSkewMs,
-        );
+        adjacentNamesReceipt(r, ref, boundary!.prevRows, (row) => {
+          if (boundary!.prevWindowEndMs === undefined) return false;
+          const band = facingBand("prev", boundary!.prevWindowEndMs, boundary!.clockSkewMs);
+          return row.timestampMs >= band.rowFromMs;
+        });
       const namedByNext =
         consecutive &&
-        adjacentNamesReceipt(
-          r,
-          ref,
-          boundary!.nextRows,
-          (row) =>
-            boundary!.nextWindowStartMs !== undefined &&
-            row.timestampMs < boundary!.nextWindowStartMs + boundary!.clockSkewMs,
-        );
+        adjacentNamesReceipt(r, ref, boundary!.nextRows, (row) => {
+          if (boundary!.nextWindowStartMs === undefined) return false;
+          const band = facingBand("next", boundary!.nextWindowStartMs, boundary!.clockSkewMs);
+          return row.timestampMs < band.rowToMs;
+        });
       if ((open && namedByPrev) || (close && namedByNext)) {
         // The adjacent window carries this ref, so the row is that report's
         // to reconcile. No finding here; the count is how a reader learns the
@@ -889,6 +910,9 @@ function classifySettlementMatches(
         });
       } else if (open || close) {
         counts.receipts.deferred += 1;
+        const band = close
+          ? facingBand("next", boundary!.windowEndMs, boundary!.clockSkewMs)
+          : facingBand("prev", boundary!.windowStartMs, boundary!.clockSkewMs);
         findings.push({
           code: "boundary-deferred",
           id: r.claims.nonce,
@@ -896,6 +920,21 @@ function classifySettlementMatches(
           detail: close
             ? `${profile.words.record} nonce=${r.claims.nonce} ref=${ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.recordWithoutRow}`
             : `${profile.words.record} nonce=${r.claims.nonce} ref=${ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.recordWithoutRow}`,
+          needs: close
+            ? {
+                evidence: "nextExtract",
+                ref,
+                windowStartMs: boundary!.windowEndMs,
+                rowFromMs: band.rowFromMs,
+                rowToMs: band.rowToMs,
+              }
+            : {
+                evidence: "previousExtract",
+                ref,
+                windowEndMs: boundary!.windowStartMs,
+                rowFromMs: band.rowFromMs,
+                rowToMs: band.rowToMs,
+              },
         });
       } else {
         counts.receipts.unmatched += 1;
@@ -2472,5 +2511,96 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   for (const w of report.warnings) {
     lines.push(`warn\t${w.code}\t${w.detail}`);
   }
+  for (const w of report.warnings) {
+    const need = w.needs;
+    if (!need) continue;
+    if (need.evidence === "previousExtract") {
+      lines.push(
+        `need\tpreviousExtract\t${need.ref}\twindowEndMs=${need.windowEndMs} row in [${need.rowFromMs},${need.rowToMs})`,
+      );
+    } else if (need.evidence === "nextExtract") {
+      lines.push(
+        `need\tnextExtract\t${need.ref}\twindowStartMs=${need.windowStartMs} row in [${need.rowFromMs},${need.rowToMs})`,
+      );
+    } else {
+      lines.push(`need\treceipts\t${need.ref}`);
+    }
+  }
   return lines.join("\n");
+}
+
+export type PresentedEntry = {
+  kind: "record" | "row";
+  source: "receipts" | "settlements" | "extract" | "previousExtract" | "nextExtract";
+  id: string;
+  ref: string | null;
+  timestampMs: number;
+  codes: string[];
+};
+
+const PRESENTED_SOURCE_ORDER = [
+  "receipts",
+  "settlements",
+  "extract",
+  "previousExtract",
+  "nextExtract",
+] as const;
+
+/**
+ * Time filter over what was presented, plus the codes the report already
+ * attached to that id. Does not verify signatures and does not rematch.
+ */
+export function presentedInRange(
+  input: AuditInput,
+  report: AuditReport,
+  fromMs: number,
+  toMs: number,
+): PresentedEntry[] {
+  const profile = (input.profile ?? SPEND_PROFILE) as ReconciliationProfile<PresentedRecord, PresentedRow>;
+  const pop = populationOf(profile);
+  const codesOf = (id: string): string[] => [
+    ...report.findings.filter((f) => f.id === id).map((f) => f.code),
+    ...report.warnings.filter((w) => w.id === id).map((w) => w.code),
+  ];
+  const entries: PresentedEntry[] = [];
+  for (const record of input.receipts) {
+    entries.push({
+      kind: "record",
+      source: "receipts",
+      id: record.claims.nonce,
+      ref: profile.recordRef(record),
+      timestampMs: record.claims.timestampMs,
+      codes: codesOf(record.claims.nonce),
+    });
+  }
+  for (const row of input.settlements ?? []) {
+    entries.push({
+      kind: "row",
+      source: "settlements",
+      id: row.ref,
+      ref: row.ref,
+      timestampMs: row.timestampMs,
+      codes: codesOf(row.ref),
+    });
+  }
+  const pushExtract = (extract: PresentedExtract | undefined, source: "extract" | "previousExtract" | "nextExtract") => {
+    if (!extract) return;
+    for (const row of extractRows(extract, pop)) {
+      entries.push({
+        kind: "row",
+        source,
+        id: row.ref,
+        ref: row.ref,
+        timestampMs: row.timestampMs,
+        codes: codesOf(row.ref),
+      });
+    }
+  };
+  pushExtract(input.extract, "extract");
+  pushExtract(input.previousExtract, "previousExtract");
+  pushExtract(input.nextExtract, "nextExtract");
+  const rank = (source: PresentedEntry["source"]) => PRESENTED_SOURCE_ORDER.indexOf(source);
+  return entries
+    .filter((e) => e.timestampMs >= fromMs && e.timestampMs < toMs)
+    .sort((a, b) => a.timestampMs - b.timestampMs || rank(a.source) - rank(b.source));
 }

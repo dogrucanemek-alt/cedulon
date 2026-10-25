@@ -102,6 +102,32 @@ describe("finding object schema", () => {
     assert.deepEqual(listed, [...FINDING_CODES]);
   });
 
+  it("a boundary-deferred warning's needs is declared strictly; an unlisted member or evidence outside the list is an error", () => {
+    const declared = schema.$defs?.finding?.properties?.needs;
+    assert.ok(declared, "finding.needs is not declared");
+    const needs = resolve(declared, schema);
+    assert.equal(needs.additionalProperties, false);
+    assert.deepEqual(needs.required, ["evidence", "ref"]);
+    assert.deepEqual(needs.properties?.evidence?.enum, ["previousExtract", "nextExtract", "receipts"]);
+    const check = (data: unknown): string[] => {
+      const errors: string[] = [];
+      validate(data, { $ref: "#/$defs/finding" }, "$", schema, errors);
+      return errors;
+    };
+    const finding = {
+      code: "boundary-deferred",
+      id: "n-open",
+      detail: "deferred",
+      severity: "warn",
+      needs: { evidence: "previousExtract", ref: "r-open", windowEndMs: 1000, rowFromMs: 0, rowToMs: 1000 },
+    };
+    assert.deepEqual(check(finding), []);
+    assert.deepEqual(check({ ...finding, needs: { evidence: "receipts", ref: "w-open" } }), []);
+    assert.ok(check({ ...finding, needs: { ...finding.needs, band: "x" } }).some((e) => /unexpected band/.test(e)));
+    assert.ok(check({ ...finding, needs: { evidence: "extract", ref: "r" } }).some((e) => /not in enum/.test(e)));
+    assert.ok(check({ ...finding, needs: { evidence: "receipts", ref: "r", rowFromMs: 1.5 } }).some((e) => /expected integer/.test(e)));
+  });
+
   it("audit --json matches the schema and leaves human output alone", () => {
     const human = runDocumentedCommand("npm run audit", root);
     const verifier = documentedRuns(

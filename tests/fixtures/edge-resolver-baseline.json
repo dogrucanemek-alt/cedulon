@@ -1,0 +1,249 @@
+{
+  "recordedOn": "master c78f3f1, before boundary-deferred carried needs",
+  "receiptOpen": {
+    "ok": true,
+    "findings": [],
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "id": "counterparty",
+        "severity": "warn",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found"
+      },
+      {
+        "code": "boundary-deferred",
+        "id": "n-open----------",
+        "severity": "warn",
+        "detail": "receipt nonce=n-open---------- ref=r-open sits inside the opening δ (1000 ms) and is unmatched; deferred rather than receipt-without-settlement"
+      }
+    ],
+    "counts": {
+      "receipts": {
+        "submitted": 1,
+        "attested": 1,
+        "inScope": 1,
+        "aborted": 0,
+        "settled": 1,
+        "matched": 0,
+        "deferred": 1,
+        "carried": 0,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "rows": 0,
+        "matched": 0,
+        "deferred": 0,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      }
+    }
+  },
+  "receiptClose": {
+    "ok": true,
+    "findings": [],
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "id": "counterparty",
+        "severity": "warn",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found"
+      },
+      {
+        "code": "boundary-deferred",
+        "id": "n-close---------",
+        "severity": "warn",
+        "detail": "receipt nonce=n-close--------- ref=r-close sits inside the closing δ (1000 ms) and is unmatched; deferred rather than receipt-without-settlement"
+      }
+    ],
+    "counts": {
+      "receipts": {
+        "submitted": 1,
+        "attested": 1,
+        "inScope": 1,
+        "aborted": 0,
+        "settled": 1,
+        "matched": 0,
+        "deferred": 1,
+        "carried": 0,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "rows": 0,
+        "matched": 0,
+        "deferred": 0,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      }
+    }
+  },
+  "rowOpen": {
+    "ok": true,
+    "findings": [],
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "id": "counterparty",
+        "severity": "warn",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found"
+      },
+      {
+        "code": "boundary-deferred",
+        "id": "w-open",
+        "severity": "warn",
+        "detail": "settlement w-open sits inside the opening δ (1000 ms) and is unmatched; deferred rather than settlement-without-receipt"
+      }
+    ],
+    "counts": {
+      "receipts": {
+        "submitted": 0,
+        "attested": 0,
+        "inScope": 0,
+        "aborted": 0,
+        "settled": 0,
+        "matched": 0,
+        "deferred": 0,
+        "carried": 0,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "rows": 1,
+        "matched": 0,
+        "deferred": 1,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      }
+    }
+  },
+  "rowClose": {
+    "ok": true,
+    "findings": [],
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "id": "counterparty",
+        "severity": "warn",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found"
+      },
+      {
+        "code": "boundary-deferred",
+        "id": "w-close",
+        "severity": "warn",
+        "detail": "settlement w-close sits inside the closing δ (1000 ms) and is unmatched; deferred rather than settlement-without-receipt"
+      }
+    ],
+    "counts": {
+      "receipts": {
+        "submitted": 0,
+        "attested": 0,
+        "inScope": 0,
+        "aborted": 0,
+        "settled": 0,
+        "matched": 0,
+        "deferred": 0,
+        "carried": 0,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "rows": 1,
+        "matched": 0,
+        "deferred": 1,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      }
+    }
+  },
+  "hardened": {
+    "ok": false,
+    "findings": [
+      {
+        "code": "receipt-without-settlement",
+        "id": "n-open----------",
+        "detail": "receipt nonce=n-open---------- ref=r-open is not on the rail extract"
+      }
+    ],
+    "warnings": [
+      {
+        "code": "counterparty-unbound",
+        "id": "counterparty",
+        "severity": "warn",
+        "detail": "counterparty identity was not bound: no manifest states a payee and no reconciled row names a beneficiary, so `ref`, amount and currency are the whole of what ties these settlements to these receipts, whatever the reconciliation itself found"
+      }
+    ],
+    "counts": {
+      "receipts": {
+        "submitted": 1,
+        "attested": 1,
+        "inScope": 1,
+        "aborted": 0,
+        "settled": 1,
+        "matched": 0,
+        "deferred": 0,
+        "carried": 0,
+        "unmatched": 1,
+        "repeated": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "rows": 0,
+        "matched": 0,
+        "deferred": 0,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      }
+    }
+  },
+  "decision": {
+    "ok": true,
+    "findings": [],
+    "warnings": [
+      {
+        "code": "boundary-deferred",
+        "id": "e-open",
+        "severity": "warn",
+        "detail": "effect e-open sits inside the opening δ (300000 ms) and is unmatched; deferred rather than effect-without-decision"
+      },
+      {
+        "code": "boundary-deferred",
+        "id": "n-dclose--------",
+        "severity": "warn",
+        "detail": "decision record nonce=n-dclose-------- ref=d-close sits inside the closing δ (300000 ms) and is unmatched; deferred rather than decision-without-effect"
+      }
+    ],
+    "counts": {
+      "receipts": {
+        "submitted": 1,
+        "attested": 1,
+        "inScope": 1,
+        "aborted": 0,
+        "settled": 1,
+        "matched": 0,
+        "deferred": 1,
+        "carried": 0,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      },
+      "settlements": {
+        "rows": 1,
+        "matched": 0,
+        "deferred": 1,
+        "unmatched": 0,
+        "repeated": 0,
+        "unreconciled": 0
+      }
+    }
+  }
+}
