@@ -745,7 +745,9 @@ function classifySettlementMatches(
   const consecutivePrev = Boolean(boundary?.prevRefs);
   const lowerCut = boundary ? boundary.windowStartMs + boundary.clockSkewMs : null;
   const upperCut = boundary ? boundary.windowEndMs - boundary.clockSkewMs : null;
-  const nearOpen = (ts: number) => lowerCut !== null && ts <= lowerCut;
+  // The window is half-open, so "within clockSkewMs" is a distance below clockSkewMs from the nearest instant inside it:
+  // t < start + skew at the opening edge, t >= end - skew at the closing edge, and a zero allowance defers nothing.
+  const nearOpen = (ts: number) => lowerCut !== null && ts < lowerCut;
   const nearClose = (ts: number) => upperCut !== null && ts >= upperCut;
 
   for (const [ref, s] of settlementsByRef) {

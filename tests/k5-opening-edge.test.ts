@@ -360,13 +360,18 @@ describe("Tiago core-04 #1: the opening-edge receipt and the closing-edge row de
   });
 });
 
-describe("Tiago core-04 mechanical 1: 'within clockSkewMs' is a distance of at most clockSkewMs, on both edges", () => {
-  it("row exactly clockSkewMs after windowStartMs is deferred; one ms later it is not", () => {
+// The window is half-open, [windowStartMs, windowEndMs). "Within clockSkewMs"
+// is a distance below clockSkewMs from the nearest instant inside it: at the
+// opening edge t < windowStartMs + clockSkewMs, at the closing edge
+// t >= windowEndMs - clockSkewMs (the last instant inside is windowEndMs - 1).
+// A zero allowance therefore defers nothing.
+describe("Tiago core-04 mechanical 1: 'within clockSkewMs' is a distance below clockSkewMs from the nearest instant inside the window", () => {
+  it("row one ms short of windowStartMs + clockSkewMs is deferred; at it, it is not", () => {
     const rail = generateExtractKeys();
+    const inside = audit({ receipts: [], checkpoints: [], extract: rows(rail, [{ ref: "r-in", timestampMs: NOW + SKEW - 1 }]), trust: pinFor(rail) });
+    assert.equal(inside.warnings.some((w) => w.code === "boundary-deferred" && w.id === "r-in"), true);
     const at = audit({ receipts: [], checkpoints: [], extract: rows(rail, [{ ref: "r-at", timestampMs: NOW + SKEW }]), trust: pinFor(rail) });
-    assert.equal(at.warnings.some((w) => w.code === "boundary-deferred" && w.id === "r-at"), true);
-    const past = audit({ receipts: [], checkpoints: [], extract: rows(rail, [{ ref: "r-past", timestampMs: NOW + SKEW + 1 }]), trust: pinFor(rail) });
-    assert.equal(past.findings.some((f) => f.code === "settlement-without-receipt" && f.id === "r-past"), true);
+    assert.equal(at.findings.some((f) => f.code === "settlement-without-receipt" && f.id === "r-at"), true);
   });
 
   it("row exactly clockSkewMs before windowEndMs is deferred; one ms earlier it is not", () => {
@@ -377,15 +382,15 @@ describe("Tiago core-04 mechanical 1: 'within clockSkewMs' is a distance of at m
     assert.equal(before.findings.some((f) => f.code === "settlement-without-receipt" && f.id === "c-before"), true);
   });
 
-  it("receipt exactly clockSkewMs after windowStartMs is deferred; one ms later it is not", () => {
+  it("receipt one ms short of windowStartMs + clockSkewMs is deferred; at it, it is not", () => {
     const honest = generateReceiptKeys();
     const rail = generateExtractKeys();
+    const inside = receipt(honest, "o-in", NOW + SKEW - 1, "n-o-in");
+    const insideReport = audit({ receipts: [inside], checkpoints: covered(honest, [inside]), extract: rows(rail, []), issuerTrust: { publicKeyPem: honest.publicKeyPem }, trust: pinFor(rail) });
+    assert.equal(insideReport.warnings.some((w) => w.code === "boundary-deferred" && w.id === inside.claims.nonce), true);
     const at = receipt(honest, "o-at", NOW + SKEW, "n-o-at");
     const atReport = audit({ receipts: [at], checkpoints: covered(honest, [at]), extract: rows(rail, []), issuerTrust: { publicKeyPem: honest.publicKeyPem }, trust: pinFor(rail) });
-    assert.equal(atReport.warnings.some((w) => w.code === "boundary-deferred" && w.id === at.claims.nonce), true);
-    const past = receipt(honest, "o-past", NOW + SKEW + 1, "n-o-past");
-    const pastReport = audit({ receipts: [past], checkpoints: covered(honest, [past]), extract: rows(rail, []), issuerTrust: { publicKeyPem: honest.publicKeyPem }, trust: pinFor(rail) });
-    assert.equal(pastReport.findings.some((f) => f.code === "receipt-without-settlement" && f.id === past.claims.nonce), true);
+    assert.equal(atReport.findings.some((f) => f.code === "receipt-without-settlement" && f.id === at.claims.nonce), true);
   });
 
   it("receipt exactly clockSkewMs before windowEndMs is deferred; one ms earlier it is not", () => {

@@ -586,13 +586,16 @@ describe("rail extract binding", () => {
     );
 
     // Inside the window the rule still bites: drop the row and the first
-    // receipt has nothing behind it.
+    // receipt has nothing behind it. It was signed at windowStartMs, inside the
+    // opening allowance, where a settlement can sit on the previous window's
+    // extract; present that extract without it and the deferral hardens.
     const red = audit({
       receipts: [firstReceipt, secondReceipt],
       checkpoints: [],
       extract: railExtract(rail),
+      previousExtract: railExtract(rail, [], { windowStartMs: NOW - 3_600_000, windowEndMs: NOW }),
       trust: pin(rail),
-    });
+    } as Parameters<typeof audit>[0]);
     assert.equal(
       red.findings.some(
         (f) => f.code === "receipt-without-settlement" && f.id === firstReceipt.claims.nonce,
