@@ -52,6 +52,29 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.16.0` is prepared in this tree and is not a published npm release; the tag
+publishes it, and this paragraph is brought up to what was published once the
+registry answers. It moves verdicts both ways. `audit()` defers an unmatched
+row or receipt at all four edges of the window, takes a `previousExtract` and
+an `anchorCheckpoint`, and lets an adjacent extract carry a deferred receipt
+only through a row in its facing band with the receipt's amount and currency.
+It compares a countersignature's `deliveredHash` only for a receipt that names
+the presented manifest. A Spend Receipt that is not COSE does not verify and
+covers no settlement (`receipt-not-cose`), and the JSON helpers are
+deprecated. Under an issuer pin, a checkpoint whose carried key was swapped
+stays attested with `carried-key-mismatch` instead of failing or dropping out
+of the equivocation comparison. The rail pin takes a list of keys.
+`auditWindows`, `checkPresentedForm`, `presentedInRange` and the `needs` of a
+deferral are new. The launchers `cedulon` and `cedulon-mcp` move to 1.3.0 and
+`^0.16.0`. `docs/UPGRADING.md` lists each change under its own letter.
+Unchanged, and named here because the gate reads this version's own
+paragraph: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
+introduced, where with a usable issuer pin the departure is a finding that
+fails the audit, and without a pin the same departure is a warning that does
+not by itself fail it; and `requestHash` is still the SHA-256 of the six-field
+canonical document in lowercase hex, the digest the posted core-04 names in
+Section 9 (MUST-T6-1).
+
 `0.15.0` is published on npm across all nine packages, each with a SLSA v1
 provenance attestation and reporting `gitHead` `065f713`, and it is what an
 installed package now answers. It refuses things 0.14.0 accepted. `@cedulon/mcp-server`
