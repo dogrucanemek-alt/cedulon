@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { audit } from "@cedulon/audit";
+import { buildCheckpointClaims, checkpointHash, signCheckpoint } from "@cedulon/checkpoint";
 import { parseIJson, requestHashOf } from "@cedulon/core";
 import {
   generateManifestKeys,
@@ -53,6 +54,17 @@ export type Vector = {
   /** Only meaningful once draftNamesDigest is true; see the request-hash branch. */
   expectRequestHash?: string;
   text?: string;
+  doc?: string;
+  side?: "record" | "row";
+  clockSkewMs?: number;
+  receiptTimestampMs?: number;
+  adjacent?: "previous" | "next";
+  rowTimestampMs?: number | null;
+  rowAmount?: string;
+  expectCarried?: boolean;
+  anchor?: "absent" | "valid" | "foreign-key" | "epoch-off";
+  expectOk?: boolean;
+  expectId?: string;
 };
 
 export type Row = { id: string; status: "pass" | "split" | "error"; detail: string };
@@ -91,6 +103,74 @@ function baseClaims() {
     nonce: "n0".padEnd(16, "-"),
     prevReceiptHash: null,
     outcome: "aborted" as const,
+  };
+}
+
+const EDGE_REF = "edge-ref";
+const EDGE_HOUR = 3_600_000;
+
+function edgeReceipt(
+  issuer: ReturnType<typeof generateReceiptKeys>,
+  timestampMs: number,
+  over: { ref?: string; nonce?: string; prev?: string | null } = {},
+) {
+  return signReceipt(
+    {
+      ...baseClaims(),
+      amount: "1",
+      currency: "USD",
+      x402PaymentRef: over.ref ?? EDGE_REF,
+      timestampMs,
+      nonce: (over.nonce ?? "n0").padEnd(16, "-"),
+      prevReceiptHash: over.prev ?? null,
+      outcome: "settled",
+    },
+    issuer.privateKeyPem,
+    issuer.publicKeyPem,
+  );
+}
+
+function edgeExtract(
+  rail: ReturnType<typeof generateExtractKeys>,
+  windowStartMs: number,
+  windowEndMs: number,
+  clockSkewMs: number,
+  settlements: Array<{ ref: string; timestampMs: number; amount?: string }>,
+) {
+  return signRailExtract(
+    {
+      accountId: "acct",
+      railId: "rail",
+      windowStartMs,
+      windowEndMs,
+      clockSkewMs,
+      settlements: settlements.map((row) => ({
+        ref: row.ref,
+        amount: row.amount ?? "1",
+        currency: "USD",
+        timestampMs: row.timestampMs,
+      })),
+    },
+    rail.privateKeyPem,
+    rail.publicKeyPem,
+  );
+}
+
+function edgePins(
+  rail: ReturnType<typeof generateExtractKeys>,
+  issuer: ReturnType<typeof generateReceiptKeys>,
+  windowStartMs: number,
+  windowEndMs: number,
+) {
+  return {
+    trust: {
+      publicKeyPem: rail.publicKeyPem,
+      accountId: "acct",
+      railId: "rail",
+      windowStartMs,
+      windowEndMs,
+    },
+    issuerTrust: { publicKeyPem: issuer.publicKeyPem },
   };
 }
 
@@ -247,8 +327,8 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
         manifestTrust: { publicKeyPem: manifestKeys.publicKeyPem },
         issuerTrust: v.pinIssuer ? { publicKeyPem: honest.publicKeyPem } : undefined,
       });
-      const findingCodes = report.findings.map((f) => f.code);
-      const warningCodes = report.warnings.map((w) => w.code);
+      const findingCodes: string[] = report.findings.map((f) => f.code);
+      const warningCodes: string[] = report.warnings.map((w) => w.code);
       const problems: string[] = [];
       if (typeof v.expectFinding === "string" && !findingCodes.some((c) => c === v.expectFinding)) {
         problems.push(`missing finding ${v.expectFinding}`);
@@ -519,6 +599,355 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
         status: "pass",
         detail: `companion reports extract-key-mismatch, reads no charge from the refused body, and warns ${v.expectWarning}, as MUST-T10-20 requires`,
       });
+      continue;
+    }
+
+    if (v.kind === "boundary-deferred") {
+      if (v.side !== "record" && v.side !== "row") {
+        rows.push({ id: v.id, status: "error", detail: "boundary-deferred vector must set side" });
+        continue;
+      }
+      if (
+        v.windowStartMs === undefined ||
+        v.windowEndMs === undefined ||
+        v.clockSkewMs === undefined ||
+        v.timestampMs === undefined
+      ) {
+        rows.push({ id: v.id, status: "error", detail: "boundary-deferred vector is missing a window or timestamp" });
+        continue;
+      }
+      if (!v.expectWarning && typeof v.expectFinding !== "string" && !v.expectNoFinding) {
+        rows.push({ id: v.id, status: "error", detail: "boundary-deferred vector states no expectation" });
+        continue;
+      }
+      const rail = generateExtractKeys();
+      const issuer = generateReceiptKeys();
+      const pins = edgePins(rail, issuer, v.windowStartMs, v.windowEndMs);
+      const extract = edgeExtract(
+        rail,
+        v.windowStartMs,
+        v.windowEndMs,
+        v.clockSkewMs,
+        v.side === "row" ? [{ ref: EDGE_REF, timestampMs: v.timestampMs }] : [],
+      );
+      const receipts = v.side === "record" ? [edgeReceipt(issuer, v.timestampMs)] : [];
+      const checkpoints =
+        v.side === "record"
+          ? [
+              signCheckpoint(
+                buildCheckpointClaims(1, receipts, v.windowStartMs, v.windowEndMs, null),
+                issuer.privateKeyPem,
+                issuer.publicKeyPem,
+              ),
+            ]
+          : [];
+      const report = audit({ receipts, checkpoints, extract, ...pins });
+      const findingCodes: string[] = report.findings.map((f) => f.code);
+      const warningCodes: string[] = report.warnings.map((w) => w.code);
+      const problems: string[] = [];
+      if (v.expectWarning && !warningCodes.includes(v.expectWarning)) {
+        problems.push(`missing warning ${v.expectWarning}`);
+      }
+      if (typeof v.expectFinding === "string" && !findingCodes.includes(v.expectFinding)) {
+        problems.push(`missing finding ${v.expectFinding}`);
+      }
+      if (v.expectNoFinding && findingCodes.includes(v.expectNoFinding)) {
+        problems.push(`unexpected finding ${v.expectNoFinding}`);
+      }
+      if (problems.length > 0) {
+        rows.push({
+          id: v.id,
+          status: "split",
+          detail: `${problems.join("; ")}; findings=${findingCodes.join(",") || "none"} warnings=${warningCodes.join(",") || "none"}`,
+        });
+      } else {
+        const said = [
+          v.expectWarning ? `warning ${v.expectWarning}` : "",
+          typeof v.expectFinding === "string" ? `found ${v.expectFinding}` : "",
+          v.expectNoFinding ? `no finding ${v.expectNoFinding}` : "",
+        ]
+          .filter(Boolean)
+          .join("; ");
+        rows.push({ id: v.id, status: "pass", detail: said || "boundary-deferred matched" });
+      }
+      continue;
+    }
+
+    if (v.kind === "row-by-receipt") {
+      if (
+        v.windowStartMs === undefined ||
+        v.windowEndMs === undefined ||
+        v.clockSkewMs === undefined ||
+        v.timestampMs === undefined ||
+        v.receiptTimestampMs === undefined
+      ) {
+        rows.push({ id: v.id, status: "error", detail: "row-by-receipt vector is missing a window or timestamp" });
+        continue;
+      }
+      if (!v.expectNoFinding) {
+        rows.push({ id: v.id, status: "error", detail: "row-by-receipt vector states no expectation" });
+        continue;
+      }
+      const rail = generateExtractKeys();
+      const issuer = generateReceiptKeys();
+      const pins = edgePins(rail, issuer, v.windowStartMs, v.windowEndMs);
+      const extract = edgeExtract(rail, v.windowStartMs, v.windowEndMs, v.clockSkewMs, [
+        { ref: EDGE_REF, timestampMs: v.timestampMs },
+      ]);
+      const report = audit({
+        receipts: [edgeReceipt(issuer, v.receiptTimestampMs)],
+        checkpoints: [],
+        extract,
+        ...pins,
+      });
+      const findingCodes: string[] = report.findings.map((f) => f.code);
+      const warningCodes: string[] = report.warnings.map((w) => w.code);
+      const problems: string[] = [];
+      if (v.expectNoFinding && findingCodes.includes(v.expectNoFinding)) {
+        problems.push(`unexpected finding ${v.expectNoFinding}`);
+      }
+      if (warningCodes.includes("boundary-deferred")) {
+        problems.push("unexpected warning boundary-deferred");
+      }
+      if (problems.length > 0) {
+        rows.push({
+          id: v.id,
+          status: "split",
+          detail: `${problems.join("; ")}; findings=${findingCodes.join(",") || "none"} warnings=${warningCodes.join(",") || "none"}`,
+        });
+      } else {
+        rows.push({
+          id: v.id,
+          status: "pass",
+          detail: `no finding ${v.expectNoFinding ?? "settlement-without-receipt"}; no warning boundary-deferred`,
+        });
+      }
+      continue;
+    }
+
+    if (v.kind === "facing-band") {
+      if (v.adjacent !== "previous" && v.adjacent !== "next") {
+        rows.push({ id: v.id, status: "error", detail: "facing-band vector must set adjacent" });
+        continue;
+      }
+      if (
+        v.windowStartMs === undefined ||
+        v.windowEndMs === undefined ||
+        v.clockSkewMs === undefined ||
+        v.timestampMs === undefined
+      ) {
+        rows.push({ id: v.id, status: "error", detail: "facing-band vector is missing a window or timestamp" });
+        continue;
+      }
+      if (!v.expectCarried && typeof v.expectFinding !== "string") {
+        rows.push({ id: v.id, status: "error", detail: "facing-band vector states no expectation" });
+        continue;
+      }
+      const rail = generateExtractKeys();
+      const issuer = generateReceiptKeys();
+      const pins = edgePins(rail, issuer, v.windowStartMs, v.windowEndMs);
+      const receipt = edgeReceipt(issuer, v.timestampMs);
+      const extract = edgeExtract(rail, v.windowStartMs, v.windowEndMs, v.clockSkewMs, []);
+      const adjacentRows =
+        typeof v.rowTimestampMs === "number"
+          ? [{ ref: EDGE_REF, timestampMs: v.rowTimestampMs, amount: v.rowAmount ?? "1" }]
+          : [];
+      const previousExtract =
+        v.adjacent === "previous"
+          ? edgeExtract(rail, v.windowStartMs - EDGE_HOUR, v.windowStartMs, v.clockSkewMs, adjacentRows)
+          : undefined;
+      const nextExtract =
+        v.adjacent === "next"
+          ? edgeExtract(rail, v.windowEndMs, v.windowEndMs + EDGE_HOUR, v.clockSkewMs, adjacentRows)
+          : undefined;
+      const report = audit({
+        receipts: [receipt],
+        checkpoints: [
+          signCheckpoint(
+            buildCheckpointClaims(1, [receipt], v.windowStartMs, v.windowEndMs, null),
+            issuer.privateKeyPem,
+            issuer.publicKeyPem,
+          ),
+        ],
+        extract,
+        previousExtract,
+        nextExtract,
+        ...pins,
+      });
+      const findingCodes: string[] = report.findings.map((f) => f.code);
+      const warningCodes: string[] = report.warnings.map((w) => w.code);
+      const problems: string[] = [];
+      if (v.expectCarried) {
+        if (report.counts.receipts.carried !== 1) {
+          problems.push(`carried=${report.counts.receipts.carried}`);
+        }
+        if (findingCodes.includes("receipt-without-settlement")) {
+          problems.push("unexpected finding receipt-without-settlement");
+        }
+        if (warningCodes.includes("boundary-deferred")) {
+          problems.push("unexpected warning boundary-deferred");
+        }
+      }
+      if (typeof v.expectFinding === "string" && !findingCodes.includes(v.expectFinding)) {
+        problems.push(`missing finding ${v.expectFinding}`);
+      }
+      if (problems.length > 0) {
+        rows.push({
+          id: v.id,
+          status: "split",
+          detail: `${problems.join("; ")}; findings=${findingCodes.join(",") || "none"} warnings=${warningCodes.join(",") || "none"} carried=${report.counts.receipts.carried}`,
+        });
+      } else {
+        const said = v.expectCarried
+          ? "carried=1; no receipt-without-settlement; no boundary-deferred"
+          : typeof v.expectFinding === "string"
+            ? `found ${v.expectFinding}`
+            : "facing-band matched";
+        rows.push({ id: v.id, status: "pass", detail: said });
+      }
+      continue;
+    }
+
+    if (v.kind === "anchor") {
+      if (
+        v.anchor !== "absent" &&
+        v.anchor !== "valid" &&
+        v.anchor !== "foreign-key" &&
+        v.anchor !== "epoch-off"
+      ) {
+        rows.push({ id: v.id, status: "error", detail: `anchor vector has anchor=${String(v.anchor)}` });
+        continue;
+      }
+      if (!v.expectOk && typeof v.expectFinding !== "string") {
+        rows.push({ id: v.id, status: "error", detail: "anchor vector states no expectation" });
+        continue;
+      }
+      const issuer = generateReceiptKeys();
+      const rail = generateExtractKeys();
+      const nStart = NOW + 10 * EDGE_HOUR;
+      const nEnd = nStart + EDGE_HOUR;
+      const pStart = nStart - EDGE_HOUR;
+      const r0 = signReceipt(
+        {
+          payer: "payer",
+          payee: "payee-1",
+          amount: "1",
+          currency: "USD",
+          policyHash: TEST_POLICY_HASH,
+          manifestHash: null,
+          noManifest: true,
+          x402PaymentRef: "w-prev",
+          timestampMs: pStart + 600_000,
+          nonce: "a-prev".padEnd(16, "-"),
+          prevReceiptHash: null,
+          outcome: "settled",
+        },
+        issuer.privateKeyPem,
+        issuer.publicKeyPem,
+      );
+      const cpPrev = signCheckpoint(
+        buildCheckpointClaims(1, [r0], pStart, nStart, null),
+        issuer.privateKeyPem,
+        issuer.publicKeyPem,
+      );
+      const r1 = signReceipt(
+        {
+          payer: "payer",
+          payee: "payee-1",
+          amount: "1",
+          currency: "USD",
+          policyHash: TEST_POLICY_HASH,
+          manifestHash: null,
+          noManifest: true,
+          x402PaymentRef: "w-n",
+          timestampMs: nStart + 600_000,
+          nonce: "a-n".padEnd(16, "-"),
+          prevReceiptHash: receiptHash(r0),
+          outcome: "settled",
+        },
+        issuer.privateKeyPem,
+        issuer.publicKeyPem,
+      );
+      let cpN = signCheckpoint(
+        buildCheckpointClaims(2, [r1], nStart, nEnd, checkpointHash(cpPrev)),
+        issuer.privateKeyPem,
+        issuer.publicKeyPem,
+      );
+      const extract = signRailExtract(
+        {
+          accountId: "acct",
+          railId: "rail",
+          windowStartMs: nStart,
+          windowEndMs: nEnd,
+          settlements: [{ ref: "w-n", amount: "1", currency: "USD", timestampMs: nStart + 600_000 }],
+        },
+        rail.privateKeyPem,
+        rail.publicKeyPem,
+      );
+      const trust = {
+        publicKeyPem: rail.publicKeyPem,
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: nStart,
+        windowEndMs: nEnd,
+      };
+      let anchorCheckpoint: ReturnType<typeof signCheckpoint> | undefined;
+      if (v.anchor === "valid") {
+        anchorCheckpoint = cpPrev;
+      } else if (v.anchor === "foreign-key") {
+        const stranger = generateReceiptKeys();
+        anchorCheckpoint = signCheckpoint(cpPrev.claims, stranger.privateKeyPem, stranger.publicKeyPem);
+      } else if (v.anchor === "epoch-off") {
+        anchorCheckpoint = signCheckpoint(
+          { ...cpPrev.claims, epoch: 0 },
+          issuer.privateKeyPem,
+          issuer.publicKeyPem,
+        );
+        cpN = signCheckpoint(
+          buildCheckpointClaims(2, [r1], nStart, nEnd, checkpointHash(anchorCheckpoint)),
+          issuer.privateKeyPem,
+          issuer.publicKeyPem,
+        );
+      }
+      const report = audit({
+        receipts: [r1],
+        checkpoints: [cpN],
+        extract,
+        trust,
+        issuerTrust: { publicKeyPem: issuer.publicKeyPem },
+        ...(anchorCheckpoint ? { anchorCheckpoint } : {}),
+      });
+      const findingCodes: string[] = report.findings.map((f) => f.code);
+      const problems: string[] = [];
+      if (v.expectOk) {
+        if (report.ok !== true || report.findings.length > 0) {
+          problems.push(`ok=${report.ok}; findings=${findingCodes.join(",") || "none"}`);
+        }
+      }
+      if (typeof v.expectFinding === "string") {
+        const hit = report.findings.find(
+          (f) => f.code === v.expectFinding && (v.expectId === undefined || f.id === v.expectId),
+        );
+        if (!hit) {
+          problems.push(
+            `missing finding ${v.expectFinding}${v.expectId ? ` id=${v.expectId}` : ""}`,
+          );
+        }
+      }
+      if (problems.length > 0) {
+        rows.push({
+          id: v.id,
+          status: "split",
+          detail: `${problems.join("; ")}; findings=${report.findings.map((f) => `${f.code}:${f.id}`).join(",") || "none"}`,
+        });
+      } else {
+        const said = v.expectOk
+          ? "ok; findings empty"
+          : typeof v.expectFinding === "string"
+            ? `found ${v.expectFinding}${v.expectId ? ` id=${v.expectId}` : ""}`
+            : "anchor matched";
+        rows.push({ id: v.id, status: "pass", detail: said });
+      }
       continue;
     }
 

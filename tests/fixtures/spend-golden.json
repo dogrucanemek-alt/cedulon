@@ -465,6 +465,10 @@
         "code": "boundary-deferred",
         "detail": "settlement r-open sits inside the opening δ (300000 ms) and is unmatched; deferred rather than settlement-without-receipt",
         "id": "r-open",
+        "needs": {
+          "evidence": "receipts",
+          "ref": "r-open"
+        },
         "severity": "warn"
       }
     ]

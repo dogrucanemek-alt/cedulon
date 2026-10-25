@@ -126,6 +126,25 @@ describe("conformance vectors run in the suite", () => {
     assert.deepEqual(quoteMisses(drifted), ["V-C5-T10-17-zero-allowance"]);
   });
 
+  it("RED: a vector of the core-05 kinds that states no expectation is an error, not a pass", () => {
+    const strip = (v: Vector): Vector => {
+      const { expectWarning: _w, expectFinding: _f, expectNoFinding: _n, expectCarried: _c, expectOk: _o, ...rest } = v;
+      return rest as Vector;
+    };
+    const ids = [
+      "V-C5-T10-17-receipt-opening-edge",
+      "V-C5-step5-row-resolved-by-any-receipt",
+      "V-C5-step5-previous-outside-band",
+      "V-C5-anchor-valid",
+    ];
+    const rows = evaluateVectors(living().filter((v) => ids.includes(v.id)).map(strip));
+    assert.equal(rows.length, ids.length);
+    for (const row of rows) {
+      assert.equal(row.status, "error", `${row.id}: ${row.status} ${row.detail}`);
+      assert.match(row.detail, /states no expectation/);
+    }
+  });
+
   it("core-05 vectors cover the four edge quadrants, the facing band and the anchor", () => {
     const core05 = living().filter((v) => v.doc === "draft-dogru-cedulon-core-05");
     const kinds = new Set(core05.map((v) => v.kind));

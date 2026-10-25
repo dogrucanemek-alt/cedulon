@@ -175,6 +175,11 @@ describe("checkPresentedForm: the presented form of core-05, checked before an a
     const problems = check!(bundle);
     assert.ok(has(problems, "receipts[0]", "encoding", "bad-encoding"), JSON.stringify(problems));
     assert.ok(has(problems, "checkpoints[0]", "encoding", "bad-encoding"), JSON.stringify(problems));
+    // One fault, one line: only the JSON encoding rules coseHex out.
+    assert.deepEqual(
+      problems.filter((p) => p.object === "receipts[0]"),
+      [{ object: "receipts[0]", member: "encoding", problem: "bad-encoding" }],
+    );
   });
 
   it("a member the table does not name is reported as unlisted-member, and a JSON receipt's coseHex is one", () => {
