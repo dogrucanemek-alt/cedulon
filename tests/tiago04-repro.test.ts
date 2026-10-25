@@ -958,4 +958,40 @@ describe("Tiago core-04 #5: a one-window audit with an anchor checkpoint", () =>
     assert.equal(report.findings.some((f) => f.code === "window-coverage" && f.id === "anchor"), true);
     assert.equal(report.ok, false);
   });
+
+  it("adjacency is judged against the first attested checkpoint, not an unattested one presented beside it", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    // The real window-N checkpoint chains to some other checkpoint, not the anchor.
+    const other = signReceipt(claims("w-other", P_START + 700_000, "a-other2", null), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const elsewhere = signCheckpoint(buildCheckpointClaims(1, [other], P_START, N_START, null), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const realN = signCheckpoint(buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(elsewhere)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    // A stranger's checkpoint that would make the anchor look adjacent.
+    const decoy = signCheckpoint(buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)), stranger.privateKeyPem, stranger.publicKeyPem);
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [decoy, realN],
+      anchorCheckpoint: s.cpPrev,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(report.findings.some((f) => f.code === "window-coverage" && f.id === "anchor"), true);
+    assert.equal(report.ok, false);
+  });
+
+  it("with an issuer pin stated but unreadable, the anchor is not checked against its own carried key and anchors nothing", () => {
+    const s = stream();
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [s.cpN],
+      anchorCheckpoint: s.cpPrev,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), true);
+    assert.equal(report.ok, false);
+  });
 });
