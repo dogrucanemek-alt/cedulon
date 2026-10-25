@@ -10,6 +10,7 @@ import {
 } from "@cedulon/cose";
 import {
   applyInclusionProof,
+  checkpointHash,
   findCheckpointChainBreak,
   findEquivocation,
   statementHashOfCheckpoint,
@@ -407,7 +408,10 @@ function verifiesOrRefusal(
  * were presented. Presentation is a bag; the chain is rebuilt from the
  * links, then walked.
  */
-export function orderByIssuerChain(receipts: SignedReceipt[]): {
+export function orderByIssuerChain(
+  receipts: SignedReceipt[],
+  expectedRootPrev: string | null = null,
+): {
   ordered: SignedReceipt[];
   leftover: SignedReceipt[];
 } {
@@ -419,7 +423,9 @@ export function orderByIssuerChain(receipts: SignedReceipt[]): {
   // objects folded them into one here, so the walk and the counts that read
   // it saw fewer receipts than were submitted.
   const remaining = new Set<number>(receipts.map((_, i) => i));
-  const starts = receipts.map((r, i) => i).filter((i) => receipts[i].claims.prevReceiptHash === null);
+  const starts = receipts
+    .map((r, i) => i)
+    .filter((i) => receipts[i].claims.prevReceiptHash === expectedRootPrev);
   const ordered: SignedReceipt[] = [];
   let current: number | null = starts.length === 1 ? starts[0] : null;
   while (current !== null && remaining.has(current)) {
@@ -450,8 +456,9 @@ function receiptVerifiesForChain(receipt: SignedReceipt, pinPems?: readonly stri
 export function findReceiptChainBreak(
   receipts: SignedReceipt[],
   pinPems?: readonly string[],
+  expectedRootPrev: string | null = null,
 ): Finding | null {
-  const { ordered, leftover } = orderByIssuerChain(receipts);
+  const { ordered, leftover } = orderByIssuerChain(receipts, expectedRootPrev);
   if (leftover.length > 0) {
     return {
       code: "receipt-chain-break",
@@ -479,7 +486,7 @@ export function findReceiptChainBreak(
         detail: `receipt ${i} signature failed`,
       };
     }
-    let expected: string | null = null;
+    let expected: string | null = expectedRootPrev;
     if (i > 0) {
       try {
         expected = receiptHash(ordered[i - 1]);
@@ -584,6 +591,8 @@ export type SettlementBoundary = {
   clockSkewMs: number;
   /** Set when a following window was presented and verified. */
   nextRefs?: ReadonlySet<string>;
+  /** Set when a preceding window was presented and verified. */
+  prevRefs?: ReadonlySet<string>;
 };
 
 function clockSkewOf(extract: PresentedExtract, pop: Population): number {
@@ -729,23 +738,28 @@ function classifySettlementMatches(
     }
   }
 
-  // nextRefs closes the trailing edge only. An unmatched opening-edge row
-  // waits for a receipt in this bag; the following window does not harden it.
+  // The rail settles first and the issuer signs after, so an honest payment
+  // can straddle either edge; each adjacent extract resolves the receipt
+  // side of its own edge.
   const consecutive = Boolean(boundary?.nextRefs);
+  const consecutivePrev = Boolean(boundary?.prevRefs);
   const lowerCut = boundary ? boundary.windowStartMs + boundary.clockSkewMs : null;
   const upperCut = boundary ? boundary.windowEndMs - boundary.clockSkewMs : null;
+  const nearOpen = (ts: number) => lowerCut !== null && ts <= lowerCut;
+  const nearClose = (ts: number) => upperCut !== null && ts >= upperCut;
 
   for (const [ref, s] of settlementsByRef) {
     const r = receiptsByRef.get(ref);
     if (!r) {
-      const nearStart = lowerCut !== null && s.timestampMs < lowerCut;
-      if (nearStart) {
+      if (nearOpen(s.timestampMs) || nearClose(s.timestampMs)) {
         counts.settlements.deferred += 1;
         findings.push({
           code: "boundary-deferred",
           id: ref,
           severity: "warn",
-          detail: `${profile.words.row} ${s.ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.rowWithoutRecord}`,
+          detail: nearOpen(s.timestampMs)
+            ? `${profile.words.row} ${s.ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.rowWithoutRecord}`
+            : `${profile.words.row} ${s.ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.rowWithoutRecord}`,
         });
       } else {
         counts.settlements.unmatched += 1;
@@ -786,21 +800,33 @@ function classifySettlementMatches(
 
   for (const [ref, r] of receiptsByRef) {
     if (!settlementsByRef.has(ref)) {
-      const nearEnd = upperCut !== null && r.claims.timestampMs >= upperCut;
-      if (nearEnd && consecutive && boundary!.nextRefs!.has(ref)) {
-        // The following window carries this ref, so the row is that report's
+      const open = nearOpen(r.claims.timestampMs);
+      const close = nearClose(r.claims.timestampMs);
+      const namedByPrev = consecutivePrev && boundary!.prevRefs!.has(ref);
+      const namedByNext = consecutive && boundary!.nextRefs!.has(ref);
+      if ((open && namedByPrev) || (close && namedByNext)) {
+        // The adjacent window carries this ref, so the row is that report's
         // to reconcile. No finding here; the count is how a reader learns the
         // row existed at all.
         counts.receipts.carried += 1;
         continue;
       }
-      if (nearEnd && !consecutive) {
+      if ((close && consecutive) || (open && consecutivePrev)) {
+        counts.receipts.unmatched += 1;
+        findings.push({
+          code: profile.codes.recordWithoutRow as FindingCode,
+          id: r.claims.nonce,
+          detail: profile.recordWithoutRowDetail(r, ref),
+        });
+      } else if (open || close) {
         counts.receipts.deferred += 1;
         findings.push({
           code: "boundary-deferred",
           id: r.claims.nonce,
           severity: "warn",
-          detail: `${profile.words.record} nonce=${r.claims.nonce} ref=${ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.recordWithoutRow}`,
+          detail: close
+            ? `${profile.words.record} nonce=${r.claims.nonce} ref=${ref} sits inside the closing δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.recordWithoutRow}`
+            : `${profile.words.record} nonce=${r.claims.nonce} ref=${ref} sits inside the opening δ (${boundary!.clockSkewMs} ms) and is unmatched; deferred rather than ${profile.codes.recordWithoutRow}`,
         });
       } else {
         counts.receipts.unmatched += 1;
@@ -837,6 +863,7 @@ export function findWindowCoverage(
   checkpoints: SignedCheckpoint[],
   pop: Population = "spend",
   words: ProfileWords = SPEND_PROFILE.words,
+  expectedRootPrev: string | null = null,
 ): Finding[] {
   const findings: Finding[] = [];
   const ordered = [...checkpoints].sort((a, b) => a.claims.epoch - b.claims.epoch);
@@ -861,7 +888,7 @@ export function findWindowCoverage(
 
   const chained =
     pop === "spend"
-      ? orderByIssuerChain(receipts as SignedReceipt[])
+      ? orderByIssuerChain(receipts as SignedReceipt[], expectedRootPrev)
       : { ordered: receipts, leftover: [] as PresentedRecord[] };
   for (const r of [...chained.ordered, ...chained.leftover]) {
     const hits = checkpoints.filter((cp) => inCheckpointWindow(r.claims.timestampMs, cp));
@@ -901,6 +928,8 @@ export function findCheckpointTotalMismatches(
   ) => Record<string, string>,
   pop: Population = "spend",
   words: ProfileWords = SPEND_PROFILE.words,
+  expectedRootPrev: string | null = null,
+  expectedFirstPrevCheckpoint: string | null = null,
 ): Finding[] {
   const findings: Finding[] = [];
   for (const cp of checkpoints) {
@@ -919,7 +948,7 @@ export function findCheckpointTotalMismatches(
     const inWindow = receiptsInWindow(receipts, cp);
     const inWindowOnChain =
       pop === "spend"
-        ? receiptsInWindow(orderByIssuerChain(receipts as SignedReceipt[]).ordered, cp)
+        ? receiptsInWindow(orderByIssuerChain(receipts as SignedReceipt[], expectedRootPrev).ordered, cp)
         : inWindow;
     // MUST-T10-13: an amount that cannot be read is a finding. It must not
     // abort the audit. Only the totals comparison is skipped for this
@@ -972,7 +1001,7 @@ export function findCheckpointTotalMismatches(
       });
     }
   }
-  const chain = findCheckpointChainBreak(checkpoints);
+  const chain = findCheckpointChainBreak(checkpoints, undefined, expectedFirstPrevCheckpoint);
   if (chain) {
     findings.push({
       code: "checkpoint-total-mismatch",
@@ -1181,9 +1210,15 @@ function findCountersignFindings(input: {
     });
   }
   const acceptance = input.manifest?.body.acceptanceCriteriaHash;
+  // A receipt that names no manifest, or another one, made no promise about
+  // this one's acceptance criteria.
+  const namedHash = input.manifest ? manifestHash(input.manifest) : null;
   if (typeof acceptance === "string") {
     for (const r of input.receipts) {
       if (!approved.has(r)) {
+        continue;
+      }
+      if (r.claims.manifestHash !== namedHash) {
         continue;
       }
       const delivered = countersignDeliveredHashHex(r);
@@ -1250,6 +1285,13 @@ export type AuditInput = {
   inclusionReceipts?: InclusionReceipt[];
   /** Following rail window; closes `boundary-deferred` records that match it. */
   nextExtract?: PresentedExtract;
+  /** Preceding rail window; closes or hardens opening-edge deferred receipts. */
+  previousExtract?: PresentedExtract;
+  /**
+   * The issuer-signed checkpoint immediately before the first presented one.
+   * Binds the chain that began before this window; its own window is not audited.
+   */
+  anchorCheckpoint?: SignedCheckpoint;
   /**
    * Layer-2 pair (RFC 9942 §5.2.1): candidate registered statement bytes +
    * inclusion proof. Both present ⇒ proof is applied. Omitted ⇒ named as
@@ -1700,12 +1742,86 @@ export function audit(input: AuditInput): AuditReport {
       }
     }
   }
+  // Without an anchor the chain must be presented from its genesis; with one,
+  // window N stands on its own and window N-1 is the previous audit's business.
+  let expectedRootPrev: string | null = null;
+  let expectedFirstPrevCheckpoint: string | null = null;
+  if (input.anchorCheckpoint) {
+    const anchor = input.anchorCheckpoint;
+    let signatureOk = false;
+    if (issuerPinUsable && attestsCheckpoint) {
+      if (!attestsCheckpoint(anchor)) {
+        findings.push({
+          code: "issuer-key-mismatch",
+          id: "anchor",
+          detail: `anchor checkpoint is signed by a key other than the pinned ${w.issuer} key`,
+        });
+      } else {
+        signatureOk = true;
+      }
+    } else {
+      const v = verifiesOrRefusal(() => verifyCheckpoint(anchor), anchor.coseHex);
+      if (!v.ok) {
+        findings.push({
+          code: "checkpoint-total-mismatch",
+          id: "anchor",
+          detail: "anchor signature failed",
+        });
+      } else {
+        signatureOk = true;
+      }
+    }
+    if (signatureOk) {
+      if (input.checkpoints.length === 0) {
+        findings.push({
+          code: "window-coverage",
+          id: "anchor",
+          detail: "an anchor needs a presented checkpoint to precede",
+        });
+      } else {
+        const first = input.checkpoints.reduce((a, b) =>
+          a.claims.epoch <= b.claims.epoch ? a : b,
+        );
+        let adjacent = true;
+        if (anchor.claims.epoch + 1 !== first.claims.epoch) {
+          adjacent = false;
+          findings.push({
+            code: "window-coverage",
+            id: "anchor",
+            detail: `anchor epoch ${anchor.claims.epoch} + 1 !== first checkpoint epoch ${first.claims.epoch}`,
+          });
+        }
+        if (anchor.claims.endMs !== first.claims.startMs) {
+          adjacent = false;
+          findings.push({
+            code: "window-coverage",
+            id: "anchor",
+            detail: `anchor endMs ${anchor.claims.endMs} !== first checkpoint startMs ${first.claims.startMs}`,
+          });
+        }
+        const want = checkpointHash(anchor);
+        if (first.claims.prevCheckpointHash !== want) {
+          adjacent = false;
+          findings.push({
+            code: "window-coverage",
+            id: "anchor",
+            detail: `first checkpoint prevCheckpointHash does not equal checkpointHash(anchor)`,
+          });
+        }
+        if (adjacent) {
+          expectedFirstPrevCheckpoint = want;
+          expectedRootPrev = anchor.claims.chainHeadHash;
+        }
+      }
+    }
+  }
+
   // Presentation order carries no weight. Rebuild the attested bag from the
   // prevReceiptHash links so every later walk (chain head, window coverage,
   // settlement match order) sees the same issuer order.
   if (profile.id !== "decision") {
     const spend = attested.filter((r): r is SignedReceipt => !isDecisionRecord(r, pop));
-    const chained = orderByIssuerChain(spend);
+    const chained = orderByIssuerChain(spend, expectedRootPrev);
     attested = [...chained.ordered, ...chained.leftover];
   }
 
@@ -1854,6 +1970,62 @@ export function audit(input: AuditInput): AuditReport {
       }
     }
   }
+  let prevOk = Boolean(
+    input.previousExtract &&
+      (input.trust
+        ? verifyPresentedExtract(input.previousExtract, pop, input.trust.publicKeyPem)
+        : verifyPresentedExtract(input.previousExtract, pop)),
+  );
+  if (prevOk && input.extract && input.previousExtract && !extractRejected) {
+    const prev = input.previousExtract;
+    const expectedAccount = extractAccountId(input.extract, pop);
+    const gotAccount = extractAccountId(prev, pop);
+    const expectedRail = extractRailId(input.extract, pop);
+    const gotRail = extractRailId(prev, pop);
+    const scopeGaps: Finding[] = [];
+    if (gotAccount !== expectedAccount) {
+      scopeGaps.push({
+        code: "extract-scope-mismatch",
+        id: "previousExtract",
+        detail: `preceding ${w.extract} covers ${w.account} ${gotAccount}, not the expected ${expectedAccount}`,
+      });
+    }
+    if (gotRail !== expectedRail) {
+      scopeGaps.push({
+        code: "extract-scope-mismatch",
+        id: "previousExtract",
+        detail: `preceding ${w.extract} covers ${w.rail} ${gotRail}, not the expected ${expectedRail}`,
+      });
+    }
+    if (prev.body.windowEndMs !== input.extract.body.windowStartMs) {
+      scopeGaps.push({
+        code: "extract-scope-mismatch",
+        id: "previousExtract",
+        detail: `preceding ${w.extract} ends at ${prev.body.windowEndMs}, not at the expected window end ${input.extract.body.windowStartMs}`,
+      });
+    }
+    if (scopeGaps.length > 0) {
+      findings.push(...scopeGaps);
+      prevOk = false;
+    }
+  }
+  const prevInWindowRefs = new Set<string>();
+  let prevRowCount = 0;
+  if (prevOk && input.extract) {
+    const prev = input.previousExtract!;
+    for (const row of extractRows(prev, pop)) {
+      prevRowCount += 1;
+      if (row.timestampMs < prev.body.windowStartMs || row.timestampMs >= prev.body.windowEndMs) {
+        findings.push({
+          code: "extract-scope-mismatch",
+          id: row.ref,
+          detail: `${w.row} ${row.ref} at ${row.timestampMs} is outside the preceding ${w.extract}'s declared window ${prev.body.windowStartMs}..${prev.body.windowEndMs}`,
+        });
+      } else {
+        prevInWindowRefs.add(row.ref);
+      }
+    }
+  }
   const settlementBoundary: SettlementBoundary | undefined = input.extract
     ? {
         windowStartMs: input.extract.body.windowStartMs,
@@ -1865,6 +2037,9 @@ export function audit(input: AuditInput): AuditReport {
         // must not close.
         ...(nextOk && (nextRowCount === 0 || nextInWindowRefs.size > 0)
           ? { nextRefs: nextInWindowRefs }
+          : {}),
+        ...(prevOk && (prevRowCount === 0 || prevInWindowRefs.size > 0)
+          ? { prevRefs: prevInWindowRefs }
           : {}),
       }
     : undefined;
@@ -1948,13 +2123,25 @@ export function audit(input: AuditInput): AuditReport {
     }
   } else {
     const spendWalk = chainWalk.filter((r): r is SignedReceipt => !isDecisionRecord(r, pop));
-    const chain = findReceiptChainBreak(spendWalk, issuerPinUsable ? issuerPins : undefined);
+    const chain = findReceiptChainBreak(
+      spendWalk,
+      issuerPinUsable ? issuerPins : undefined,
+      expectedRootPrev,
+    );
     if (chain) findings.push(chain);
   }
   findings.push(
-    ...findCheckpointTotalMismatches(attested, attestedCheckpoints, (recs) => profile.checkpointTotals(recs), pop, w),
+    ...findCheckpointTotalMismatches(
+      attested,
+      attestedCheckpoints,
+      (recs) => profile.checkpointTotals(recs),
+      pop,
+      w,
+      expectedRootPrev,
+      expectedFirstPrevCheckpoint,
+    ),
   );
-  findings.push(...findWindowCoverage(attested, attestedCheckpoints, pop, w));
+  findings.push(...findWindowCoverage(attested, attestedCheckpoints, pop, w, expectedRootPrev));
 
   // A witness only adds evidence once the verifier has named the log. Until then
   // its inclusion receipts are a log anyone could have invented, and letting them
