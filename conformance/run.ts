@@ -688,6 +688,16 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
         rows.push({ id: v.id, status: "error", detail: "row-by-receipt vector states no expectation" });
         continue;
       }
+      // The kind measures one thing: the row pairs with the receipt. Any other
+      // code here would pass without measuring it.
+      if (v.expectNoFinding !== "settlement-without-receipt") {
+        rows.push({
+          id: v.id,
+          status: "error",
+          detail: `row-by-receipt measures settlement-without-receipt, not ${v.expectNoFinding}`,
+        });
+        continue;
+      }
       const rail = generateExtractKeys();
       const issuer = generateReceiptKeys();
       const pins = edgePins(rail, issuer, v.windowStartMs, v.windowEndMs);
@@ -708,6 +718,9 @@ export function evaluateVectors(vectors: Vector[]): Row[] {
       }
       if (warningCodes.includes("boundary-deferred")) {
         problems.push("unexpected warning boundary-deferred");
+      }
+      if (report.counts.settlements.matched !== 1) {
+        problems.push(`settlements matched=${report.counts.settlements.matched}`);
       }
       if (problems.length > 0) {
         rows.push({

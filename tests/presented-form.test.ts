@@ -207,6 +207,16 @@ describe("checkPresentedForm: the presented form of core-05, checked before an a
     assert.ok(has(check!(dec), "receipts[0]", "claims", "claims-mismatch"), JSON.stringify(check!(dec)));
   });
 
+  it("claims holding a value JSON cannot carry are wrong-type, even where the canonical text would match", () => {
+    assert.equal(typeof check, "function");
+    const bundle = honest();
+    // canonical() writes 1n as "1", so a comparison of canonical text alone
+    // would call this claim set equal to the one in the octets.
+    bundle.receipts[0] = { ...bundle.receipts[0], claims: { ...bundle.receipts[0].claims, amount: 1n } };
+    const problems = check!(bundle);
+    assert.ok(has(problems, "receipts[0]", "claims", "wrong-type"), JSON.stringify(problems, (_k, v) => (typeof v === "bigint" ? `${v}n` : v)));
+  });
+
   it("COSE octets beyond the floor are refused by the decoder's own name", () => {
     assert.equal(typeof check, "function");
     const bundle = honest();

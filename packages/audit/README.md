@@ -10,7 +10,8 @@ const report = audit({ receipts, checkpoints, settlements });
 // report.summary is "audit: balanced" or lists findings
 ```
 
-A receipt or row within the clock-skew allowance of a window edge is
+An unmatched receipt or row within the clock-skew allowance of a window
+edge, which no presented adjacent extract resolves or hardens, is
 reported as `boundary-deferred` rather than charged, and the warning's
 `needs` says which document would resolve it: the previous or following
 window's extract, or a receipt that names the row's ref.

@@ -17,6 +17,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Only what JSON can carry. canonical() writes a BigInt as the string of its
+ * digits, so a claim set holding 1n would compare equal to one holding "1".
+ */
+function isJsonValue(value: unknown, depth = 0): boolean {
+  if (depth > 32) return false;
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every((v) => isJsonValue(v, depth + 1));
+  if (isPlainObject(value)) return Object.values(value).every((v) => isJsonValue(v, depth + 1));
+  return false;
+}
+
 function isSpkiPem(value: unknown): boolean {
   if (typeof value !== "string" || !value.startsWith("-----BEGIN PUBLIC KEY-----")) {
     return false;
@@ -94,7 +107,8 @@ function checkSignedObject(
   }
 
   const payloadName = claimsMember(kind);
-  if (payloadName in obj && !isPlainObject(obj[payloadName])) {
+  const payloadOk = isPlainObject(obj[payloadName]) && isJsonValue(obj[payloadName]);
+  if (payloadName in obj && !payloadOk) {
     problems.push({ object: objectName, member: payloadName, problem: "wrong-type" });
   }
   if ("signature" in obj && allowed.has("signature") && !isPaddedBase64(obj.signature)) {
@@ -129,7 +143,7 @@ function checkSignedObject(
   if (coseReady && typeof obj.coseHex === "string") {
     try {
       const msg = decodeCoseSign1(hexToBytes(obj.coseHex));
-      if (isPlainObject(obj[payloadName])) {
+      if (payloadOk) {
         let decoded: unknown;
         try {
           decoded = decodeClaims(kind, msg.payload);

@@ -145,6 +145,14 @@ describe("conformance vectors run in the suite", () => {
     }
   });
 
+  it("RED: a row-by-receipt vector that names any code but settlement-without-receipt is an error", () => {
+    const drifted = living()
+      .filter((v) => v.id === "V-C5-step5-row-resolved-by-any-receipt")
+      .map((v) => ({ ...v, expectNoFinding: "manifest-key-mismatch" }));
+    const [row] = evaluateVectors(drifted);
+    assert.equal(row?.status, "error", `${row?.status}: ${row?.detail}`);
+  });
+
   it("core-05 vectors cover the four edge quadrants, the facing band and the anchor", () => {
     const core05 = living().filter((v) => v.doc === "draft-dogru-cedulon-core-05");
     const kinds = new Set(core05.map((v) => v.kind));
