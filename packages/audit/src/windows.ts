@@ -10,7 +10,20 @@ import type {
 } from "./index.ts";
 import type { ProfileWords } from "./profile.ts";
 
-type EdgeRef = { ref: string; edge: "opening" | "closing" };
+type Edge = "opening" | "closing";
+type EdgeRef = { ref: string; edge: Edge };
+
+/** What one window's audit hands the run besides its report. */
+type WindowDetail = {
+  report: AuditReport;
+  /** Receipts this window carried, and the edge whose adjacent extract named them. */
+  carried: EdgeRef[];
+  /** Rows deferred here, with every edge band they sit in. */
+  deferredRows: Array<{ ref: string; edges: Edge[] }>;
+  /** Rows this window paired by name with one of its own receipts. */
+  matched: string[];
+  lastAttestedCheckpoint?: SignedCheckpoint;
+};
 
 /**
  * What a run needs from the single-window audit. index.ts supplies it, so the
@@ -18,7 +31,7 @@ type EdgeRef = { ref: string; edge: "opening" | "closing" };
  * only.
  */
 export type WindowsDeps = {
-  auditDetailed: (input: AuditInput) => { report: AuditReport; carried: EdgeRef[]; deferredRows: EdgeRef[] };
+  auditDetailed: (input: AuditInput) => WindowDetail;
   guarantee: (warnings: Finding[], hard: Finding[]) => AuditReport["guarantee"];
   summary: (hard: Finding[], words: ProfileWords, rowWithoutRecord: string) => string;
   defaultProfile: { words: ProfileWords; codes: { rowWithoutRecord: string } };
@@ -45,11 +58,6 @@ export type WindowsReport = {
   findings: Array<Finding & { window?: number }>;
   resolved: number;
 };
-
-function highestEpoch(checkpoints: SignedCheckpoint[]): SignedCheckpoint | undefined {
-  if (checkpoints.length === 0) return undefined;
-  return checkpoints.reduce((a, b) => (a.claims.epoch >= b.claims.epoch ? a : b));
-}
 
 function tilingDetail(windows: WindowInput[], trust?: RailTrustPin): string | null {
   if (windows.length === 0) {
@@ -115,7 +123,9 @@ export function runWindows(input: WindowsInput, deps: WindowsDeps): WindowsRepor
     });
   }
 
-  const details = input.windows.map((window, i) => {
+  // Sequential, because window i is anchored on what window i-1's audit attested.
+  const details: WindowDetail[] = [];
+  input.windows.forEach((window, i) => {
     const extract = window.extract;
     const windowInput: AuditInput = {
       issuerTrust: input.issuerTrust,
@@ -133,42 +143,76 @@ export function runWindows(input: WindowsInput, deps: WindowsDeps): WindowsRepor
       nextExtract: input.windows[i + 1]?.extract,
       trust: trustForWindow(input.trust, extract, tilingOk),
     };
-    const anchor =
-      i === 0 ? input.anchorCheckpoint : highestEpoch(input.windows[i - 1].checkpoints);
+    // Window i > 0 anchors on the last checkpoint the issuer root attested in
+    // window i-1, never on one it refused.
+    const anchor = i === 0 ? input.anchorCheckpoint : details[i - 1]!.lastAttestedCheckpoint;
     if (anchor) {
       windowInput.anchorCheckpoint = anchor;
     }
-    return auditDetailed(windowInput);
+    details.push(auditDetailed(windowInput));
   });
+
+  // One settlement row covers one receipt. Within a window the audit already
+  // holds to that; across an inner edge a row can be paired by its own window
+  // and carried for a receipt of the window beside it, which only the run sees.
+  const uses = new Map<string, string[]>();
+  const use = (window: number, ref: string, by: string) => {
+    const key = `${window}\u0000${ref}`;
+    uses.set(key, [...(uses.get(key) ?? []), by]);
+  };
+  details.forEach((d, i) => {
+    for (const ref of d.matched) use(i, ref, `a receipt in window ${i}`);
+    for (const c of d.carried) use(c.edge === "closing" ? i + 1 : i - 1, c.ref, `a receipt in window ${i}`);
+  });
+  for (const [key, by] of uses) {
+    if (by.length < 2) continue;
+    const [window, ref] = key.split("\u0000") as [string, string];
+    findings.push({
+      code: "duplicate-ref",
+      id: ref,
+      window: Number(window),
+      detail: `settlement ${ref} in window ${window} is counted for ${by.join(" and for ")}`,
+    });
+  }
 
   const removed = new Set<string>();
   let resolved = 0;
-  for (let i = 0; i < details.length; i += 1) {
-    const innerOpen = i > 0;
-    const innerClose = i < details.length - 1;
-    for (const row of details[i].deferredRows) {
-      const inner = (row.edge === "opening" && innerOpen) || (row.edge === "closing" && innerClose);
-      if (!inner) continue;
-      const adjacent = row.edge === "opening" ? details[i - 1] : details[i + 1];
-      const want = row.edge === "opening" ? "closing" : "opening";
-      const carried = adjacent.carried.some((c) => c.ref === row.ref && c.edge === want);
-      removed.add(`${i}:${row.ref}`);
+  details.forEach((d, i) => {
+    const isInner = (edge: Edge) => (edge === "opening" ? i > 0 : i < details.length - 1);
+    for (const row of d.deferredRows) {
+      const inner = row.edges.filter(isInner);
+      if (inner.length === 0) continue;
+      const carried = inner.some((edge) => {
+        const adjacent = edge === "opening" ? details[i - 1]! : details[i + 1]!;
+        const facing: Edge = edge === "opening" ? "closing" : "opening";
+        return adjacent.carried.some((c) => c.ref === row.ref && c.edge === facing);
+      });
       if (carried) {
         resolved += 1;
-      } else {
+        removed.add(`${i}\u0000${row.ref}`);
+      } else if (inner.length === row.edges.length) {
+        // Every band the row sits in faces a presented window, and none of
+        // them carried a receipt for it: both bags are here, so it is uncovered.
+        removed.add(`${i}\u0000${row.ref}`);
         findings.push({
           code: "settlement-without-receipt",
           id: row.ref,
           window: i,
-          detail: `settlement ${row.ref} was deferred at the ${row.edge} edge and the adjacent window did not carry a receipt for its ref through that window's facing band`,
+          detail: `settlement ${row.ref} was deferred at the ${inner.join(" and ")} edge and the adjacent window did not carry a receipt for its ref through that window's facing band`,
         });
       }
+      // Otherwise one band faces outside the run, where its receipt may still be: the warning stays.
     }
-  }
+  });
 
   const windows = details.map((d) => d.report);
+  // Only a settlement row's deferral is resolved or hardened here; a receipt's
+  // deferral at an outer edge keeps its warning even if its nonce reads like a ref.
   const warnings = details.flatMap((d, i) =>
-    d.report.warnings.filter((w) => !(w.code === "boundary-deferred" && removed.has(`${i}:${w.id}`))),
+    d.report.warnings.filter(
+      (w) =>
+        !(w.code === "boundary-deferred" && w.needs?.evidence === "receipts" && removed.has(`${i}\u0000${w.id}`)),
+    ),
   );
   const hard = [...findings, ...windows.flatMap((r) => r.findings)];
   const profile = input.profile ?? deps.defaultProfile;

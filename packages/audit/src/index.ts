@@ -343,8 +343,14 @@ type EdgeRef = { ref: string; edge: CarryEdge };
 type AuditDetailed = {
   report: AuditReport;
   carried: EdgeRef[];
-  deferredRows: EdgeRef[];
+  /** Every edge whose band the row sits in: both, in a window shorter than twice the allowance. */
+  deferredRows: DeferredRow[];
+  /** Refs of rows this window paired by name with one of its own receipts. */
+  matched: string[];
+  /** The highest-epoch checkpoint the issuer root attests; what the next window anchors on. */
+  lastAttestedCheckpoint?: SignedCheckpoint;
 };
+type DeferredRow = { ref: string; edges: CarryEdge[] };
 
 function receiptRef(r: SignedReceipt): string | null {
   return r.claims.x402PaymentRef;
@@ -794,10 +800,11 @@ function classifySettlementMatches(
     PresentedRecord,
     PresentedRow
   >,
-): { findings: Finding[]; counts: MatchCounts; carried: EdgeRef[]; deferredRows: EdgeRef[] } {
+): { findings: Finding[]; counts: MatchCounts; carried: EdgeRef[]; deferredRows: DeferredRow[]; matched: string[] } {
   const findings: Finding[] = [];
   const carried: EdgeRef[] = [];
-  const deferredRows: EdgeRef[] = [];
+  const deferredRows: DeferredRow[] = [];
+  const matched: string[] = [];
   const settled = receipts.filter((r) => profile.expectsRow(r));
   const refusalRefs = new Set(
     receipts
@@ -892,7 +899,13 @@ function classifySettlementMatches(
     if (!r) {
       if (nearOpen(s.timestampMs) || nearClose(s.timestampMs)) {
         counts.settlements.deferred += 1;
-        deferredRows.push({ ref, edge: nearOpen(s.timestampMs) ? "opening" : "closing" });
+        deferredRows.push({
+          ref,
+          edges: [
+            ...(nearOpen(s.timestampMs) ? (["opening"] as const) : []),
+            ...(nearClose(s.timestampMs) ? (["closing"] as const) : []),
+          ],
+        });
         findings.push({
           code: "boundary-deferred",
           id: ref,
@@ -917,6 +930,7 @@ function classifySettlementMatches(
     }
     counts.settlements.matched += 1;
     counts.receipts.matched += 1;
+    matched.push(ref);
     const bound = profile.bind(r, s);
     if (!bound.ok) {
       findings.push({
@@ -1011,7 +1025,7 @@ function classifySettlementMatches(
     }
   }
 
-  return { findings, counts, carried, deferredRows };
+  return { findings, counts, carried, deferredRows, matched };
 }
 
 /** @deprecated use findSettlementMatches */
@@ -1571,7 +1585,8 @@ function auditDetailed(input: AuditInput): AuditDetailed {
   const findings: Finding[] = [...findMalformedHashClaims(input)];
   const warnings: Finding[] = [];
   let carried: EdgeRef[] = [];
-  let deferredRows: EdgeRef[] = [];
+  let deferredRows: DeferredRow[] = [];
+  let matched: string[] = [];
 
   // When an extract is supplied it is the subject of the audit: reconcile the
   // rows it actually carries, never a separate array the caller hands over.
@@ -2279,6 +2294,7 @@ function auditDetailed(input: AuditInput): AuditDetailed {
     matchCounts = classified.counts;
     carried = classified.carried;
     deferredRows = classified.deferredRows;
+    matched = classified.matched;
   }
   const counts: AuditCounts = {
     receipts: {
@@ -2502,6 +2518,11 @@ function auditDetailed(input: AuditInput): AuditDetailed {
     },
     carried,
     deferredRows,
+    matched,
+    lastAttestedCheckpoint: attestedCheckpoints.reduce<SignedCheckpoint | undefined>(
+      (last, cp) => (last === undefined || cp.claims.epoch > last.claims.epoch ? cp : last),
+      undefined,
+    ),
   };
 }
 
