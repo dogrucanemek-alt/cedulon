@@ -77,8 +77,13 @@ the release hashes to that value. The tagged run published, read back,
 registered and attached the bundle in one pass; its post-release job was red
 by design until this page named 0.16.0 as published. The launchers `cedulon`
 and `cedulon-mcp` move to 1.3.0 and depend on `^0.16.0`: a `^0.15.0` range
-does not accept 0.16.0, so 1.2.0 keeps installing 0.15.0. `release.yml` does
-not publish the launchers, and 1.3.0 is not on npm yet. Unchanged, and named
+does not accept 0.16.0, so 1.2.0 kept installing 0.15.0. `release.yml` does
+not publish the launchers; `cedulon@1.3.0` and `cedulon-mcp@1.3.0` were
+published by hand on 26 October 2026; npm's shasum for each equals that of the
+tarball installed into an empty folder and run before publishing, and npm now
+marks 1.3.0 as `latest` for both. Measured from npm in an empty folder: both
+install `@cedulon/mcp-server@0.16.0`, and each launcher starts the server and
+its `initialize` reports `0.16.0`. Unchanged, and named
 here because the gate reads this version's own paragraph: `audit()` reports
 `manifest-terms-mismatch` with the split 0.6.0
 introduced, where with a usable issuer pin the departure is a finding that
