@@ -4,6 +4,148 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.16.0: the window's four edges, one receipt encoding, and consecutive windows as one run
+
+This release moves verdicts both ways, and each item says which. Some
+things 0.15.0 charged are now deferred, or pass with a warning, because
+0.15.0 was accusing an honest party or failing an object whose unsigned
+label had been rewritten. Some things 0.15.0 passed now fail, because 0.15.0
+let one settlement or one receipt count twice.
+
+A. `@cedulon/audit`: all four edges of the window defer (MUST-T10-17).
+0.15.0 deferred an unmatched settlement row only at the opening edge and an
+unmatched settled receipt only at the closing edge. A receipt the issuer
+signed just after the window opened, whose settlement sits at the end of the
+previous window, was `receipt-without-settlement`, and a row at the closing
+edge whose receipt was signed in the next window was
+`settlement-without-receipt`. Both are now `boundary-deferred`, a warning.
+The allowance itself is unchanged: within `clockSkewMs` of an edge means
+t < windowStartMs + clockSkewMs or t >= windowEndMs - clockSkewMs, and an
+allowance of zero defers nothing.
+
+What to do: nothing, to keep what passed. To turn the new warnings into
+verdicts, present the adjacent window's extract (B) or audit the windows
+together (H).
+
+B. `audit()` takes `previousExtract`, the mirror of `nextExtract`: it
+resolves or hardens a receipt deferred at the opening edge, under the same
+account, rail and abutment checks. An adjacent extract now carries a
+deferred receipt only through a row in its band facing this window, within
+`clockSkewMs` of the shared edge, whose `ref`, `amount` and `currency` equal
+the receipt's. 0.15.0 let any row of the following extract with the
+receipt's `ref` carry it, wherever in that window the row sat and whatever
+its amount, so
+one settlement could cover a receipt on each side of the edge. Such a
+receipt now hardens into `receipt-without-settlement`.
+
+What to do: the adjacent extract has to settle a deferred receipt near the
+shared edge, for its amount and currency.
+
+C. `audit()` takes `anchorCheckpoint`, the issuer-signed checkpoint
+immediately before the first presented one. With a valid anchor the
+checkpoint chain starts from its hash and the receipt chain from its
+`chainHeadHash`, so one window is audited without the stream's history; the
+anchor's own window is not audited. Under an issuer pin, an anchor the pin
+does not attest is `issuer-key-mismatch` on id `anchor`; one that does not
+meet the first checkpoint (epoch, `endMs`, hash link) is `window-coverage`
+on id `anchor`. Either anchors nothing. Without an anchor the chain is
+walked from genesis, as before.
+
+D. `audit()` compares a countersignature's `deliveredHash` only for a
+receipt whose `manifestHash` names the presented manifest (MUST-T8-9).
+0.15.0 compared every attributable countersignature with the presented
+manifest, so a `noManifest` receipt, or one naming another manifest, could
+be `delivery-mismatch` against terms it never named.
+
+E. A Spend Receipt is COSE or it does not verify (MUST-T4-1). `verifyReceipt`,
+`verifyReceiptUnderPin` and `verifyCounterSignature` refuse a receipt whose
+`encoding` is not `cose`. `audit()` names it in the chain walk under
+`receipt-chain-break`, as `receipt 0 refused: receipt-not-cose - outside the
+core profile (MUST-T4-1), not a signature verdict`. It keeps the receipt out
+of scope, so the receipt's row is reported uncovered, with or without an
+issuer pin, and with no issuer key stated `counts.receipts.attested` no
+longer counts it. `signReceiptJson` and `verifyReceiptJson` stay and are
+deprecated. `verifyReceiptJson` accepts only the padded base64 spelling of
+the signature: the JSON receipt's hash covers that text, and 0.15.0 accepted
+an unpadded copy of one receipt under a second hash.
+
+What to do: sign receipts in COSE, which is `signReceipt`'s default. A
+receipt signed with `signReceipt(..., "json")` has to be issued in COSE to
+count in an audit.
+
+F. Under a usable issuer pin, a checkpoint the pin attests is no longer
+verified again against the key it carries. 0.15.0 did that in the totals
+comparison, the checkpoint chain walk, the redaction warning and the
+equivocation pool. A checkpoint whose carried key had been swapped failed
+the audit or lost its `checkpoint-totals-redacted` warning. Worse, it
+dropped out of the equivocation comparison, so a second checkpoint for one
+epoch went unreported. It is now `carried-key-mismatch`, a warning, and
+stays attested, as the issuer root states. With no pin the carried key is
+still the one checked. A stated pin that cannot be read attests nothing and
+falls back to no carried key, as before.
+
+G. The rail pin takes one key or a list (MUST-T4-12). `trust.publicKeyPem`
+accepts a string or an array of strings, for the presented, previous and
+following extracts alike, so a rail that rotated its key at a window edge
+can be audited across it with its pin in place. An unreadable key in the
+list is `trust-key-unreadable`, and the readable ones are still used.
+
+H. New in `@cedulon/audit`; nothing is removed.
+
+- `auditWindows` audits consecutive windows as one run. Each window sees
+  its neighbours' extracts and is anchored on the last checkpoint the
+  previous window's audit attested. A settlement row deferred at an inner
+  edge resolves when the adjacent window carried a receipt for its `ref`,
+  and is otherwise `settlement-without-receipt`. A row used twice across
+  the run, in its own window and carried for a receipt next door, is
+  `duplicate-ref`. Windows that do not tile the stated run are
+  `extract-scope-mismatch` on id `windows`. Each window's report comes back
+  as that window's audit made it, warnings included; what the run resolves
+  or hardens is in the run's own `findings`, `resolved` and `guarantee`, and
+  only deferrals at the run's two outer edges leave that guarantee
+  conditional. A row in both bands of a window shorter than twice the
+  allowance keeps its warning while one band faces outside the run. A
+  receipt in both bands follows the single-window rule of step 5: either
+  adjacent extract that is presented and does not name it hardens it.
+- A `boundary-deferred` warning carries `needs`, naming the audit input
+  that would resolve it: the previous or following extract, with the band
+  its row must sit in, or a receipt that names the row's `ref`.
+  `formatAudit` prints one `need` line per deferral after the warnings. The
+  finding object stays at version 1, and the schema declares `needs` as an
+  optional member.
+- `checkPresentedForm(bundle)` reports, before an audit, each place a
+  bundle departs from the presented form of the core draft: missing and
+  unlisted members, hex and base64 spelling, encoding, claims against the
+  COSE octets, and the decoder floor. It does not verify signatures.
+- `presentedInRange(input, report, fromMs, toMs)` lists what was presented
+  inside `[fromMs, toMs)`, with the codes the report gave each id.
+
+- Signatures that grew, each by trailing parameters with defaults, so
+  existing calls behave as before: in `@cedulon/checkpoint`,
+  `findCheckpointChainBreak` takes the expected first `prevCheckpointHash`
+  and then a verifier, and `findEquivocation` a verifier, and
+  `checkpointHash` is now exported; in `@cedulon/audit`,
+  `orderByIssuerChain` and `findReceiptChainBreak` take the expected first
+  `prevReceiptHash`, `findCheckpointTotalMismatches` both expected first
+  hashes and a verifier, and `findEquivocationFinding` a verifier. The
+  `Finding` type gains the optional `needs`, and `RailTrustPin.publicKeyPem`
+  widens to a string or an array of strings.
+
+What to do: a reader of `formatAudit` output that rejects line kinds it
+does not know has to accept `need`.
+
+I. The launchers `cedulon` and `cedulon-mcp` move to 1.3.0 and depend on
+`^0.16.0`. A `^0.15.0` range does not accept 0.16.0, so 1.2.0 keeps
+installing 0.15.0.
+
+Unchanged, and repeated here because the gate reads each version's own
+section: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
+introduced, where with a usable issuer pin the departure is a finding that
+fails the audit, and without a pin the same departure is a warning that
+does not by itself fail it; and `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted core-04
+names in Section 9 (MUST-T6-1).
+
 ## 0.15.0: the server keeps what it holds, and a reserve goes back only where it was taken
 
 This release refuses things 0.14.0 accepted, and changes one call in

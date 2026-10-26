@@ -24,11 +24,13 @@ const run = auditWindows({ windows: [w0, w1, w2], trust, issuerTrust });
 ```
 
 `auditWindows` audits consecutive windows as one run. Each window sees its
-neighbours' extracts and is anchored on the previous window's last
-checkpoint, and a row deferred at an inner edge either resolves, when the
-adjacent window carried a receipt for its ref, or becomes
-`settlement-without-receipt`. Only the run's two outer edges keep the
-warning. The rail pin, like the issuer pin, takes one key or a list of keys.
+neighbours' extracts and is anchored on the last checkpoint the previous
+window's audit attested. In the run's own findings, a row deferred at an
+inner edge either resolves, when the adjacent window carried a receipt for
+its ref, or becomes `settlement-without-receipt`, and only deferrals at the
+run's two outer edges leave the run conditional; each window's own report
+is returned as that window's audit made it. The rail pin, like the issuer
+pin, takes one key or a list of keys.
 
 ```ts
 import { checkPresentedForm, presentedInRange } from "@cedulon/audit";
