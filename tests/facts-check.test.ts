@@ -27,12 +27,38 @@ describe("facts-check compares the declaration to a third party", () => {
     assert.deepEqual(
       compareFacts(declared, {
         npmVerax: declared.veraxVersion,
-        npmCedulon: declared.cedulonVersion,
+        veraxCedulonDeps: {
+          "@verax-ai/body @cedulon/core": declared.cedulonVersion,
+          "@verax-ai/proxy @cedulon/audit": declared.cedulonVersion,
+        },
         dataciteVersion: declared.veraxArchivedVersion,
         urlStatuses,
       }),
       [],
     );
+  });
+
+  it("RED: a @cedulon/* dependency of the named Verax release that differs from the entry is caught", () => {
+    const problems = compareFacts(declaredFacts(), {
+      veraxCedulonDeps: { "@verax-ai/proxy @cedulon/audit": "9.9.9" },
+    });
+    assert.ok(
+      problems.some((line) => line.includes("@cedulon/audit") && line.includes("9.9.9")),
+      problems.join(" | "),
+    );
+  });
+
+  it("RED: a Verax release that declares no @cedulon/* dependency is caught", () => {
+    const problems = compareFacts(declaredFacts(), { veraxCedulonDeps: {} });
+    assert.ok(problems.length > 0, "an empty dependency set must not pass");
+  });
+
+  it("a newer @cedulon/* on npm is not a deviation: the entry names what Verax depends on", () => {
+    const declared = declaredFacts();
+    const problems = compareFacts(declared, {
+      veraxCedulonDeps: { "@verax-ai/body @cedulon/core": declared.cedulonVersion },
+    });
+    assert.deepEqual(problems, []);
   });
 
   it("RED: a Zenodo archive that moved past the declared archived version is caught", () => {

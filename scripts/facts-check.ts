@@ -1,9 +1,12 @@
 /**
  * The living draft and STATUS.md can agree with each other and still
  * be wrong. Both copies are handwritten. This script is the third
- * party: it reads @verax-ai/body and @cedulon/core off the npm
- * registry, the concept DOI off DataCite, asks the registry whether
- * the named packages exist, and HEAD-checks the GitHub URLs.
+ * party: it reads @verax-ai/body off the npm registry, and the
+ * @cedulon/* versions that the named Verax release of @verax-ai/body
+ * and @verax-ai/proxy declares, the concept DOI off DataCite, asks the
+ * registry whether the named packages exist, and HEAD-checks the
+ * GitHub URLs. The entry says which @cedulon/* release Verax depends
+ * on, so the newest @cedulon/* on npm is not the source for it.
  *
  * It needs the network, so it is not part of `npm test`. The
  * comparison itself is a pure function; the suite calls that with
@@ -19,7 +22,8 @@ import {
 } from "./impl-status-verax.ts";
 
 export const VERAX_PACKAGE = "@verax-ai/body";
-export const CEDULON_PACKAGE = "@cedulon/core";
+/** The Verax packages whose @cedulon/* dependencies the entry speaks for. */
+export const VERAX_CEDULON_DEPENDENTS = ["@verax-ai/body", "@verax-ai/proxy"] as const;
 
 export type DeclaredFacts = {
   veraxVersion: string;
@@ -31,7 +35,8 @@ export type DeclaredFacts = {
 
 export type FactSources = {
   npmVerax?: string;
-  npmCedulon?: string;
+  /** "<verax package> <@cedulon/* package>" → the version that Verax release declares. */
+  veraxCedulonDeps?: Record<string, string>;
   dataciteVersion?: string;
   urlStatuses?: Record<string, number>;
 };
@@ -75,11 +80,16 @@ export function compareFacts(declared: DeclaredFacts, sources: FactSources): str
   if (sources.npmVerax !== undefined && sources.npmVerax !== declared.veraxVersion) {
     problems.push(`${VERAX_PACKAGE} ${declared.veraxVersion} → ${sources.npmVerax}`);
   }
-  if (
-    sources.npmCedulon !== undefined &&
-    sources.npmCedulon !== declared.cedulonVersion
-  ) {
-    problems.push(`${CEDULON_PACKAGE} ${declared.cedulonVersion} → ${sources.npmCedulon}`);
+  if (sources.veraxCedulonDeps !== undefined) {
+    const deps = Object.entries(sources.veraxCedulonDeps);
+    if (deps.length === 0) {
+      problems.push(`${VERAX_PACKAGE} ${declared.veraxVersion} @cedulon/* → none declared`);
+    }
+    for (const [name, version] of deps) {
+      if (version !== declared.cedulonVersion) {
+        problems.push(`${name} ${declared.cedulonVersion} → ${version}`);
+      }
+    }
   }
   if (
     sources.dataciteVersion !== undefined &&
@@ -110,6 +120,7 @@ export function factCount(declared: DeclaredFacts): number {
 }
 
 type NpmAbbreviated = { "dist-tags"?: { latest?: unknown } };
+type NpmManifest = { dependencies?: Record<string, unknown> };
 type DataCiteDoc = { data?: { attributes?: { version?: unknown } } };
 
 async function npmLatest(name: string): Promise<string> {
@@ -121,6 +132,17 @@ async function npmLatest(name: string): Promise<string> {
   const version = doc["dist-tags"]?.latest;
   if (typeof version !== "string") throw new Error("npm has no latest tag");
   return version;
+}
+
+async function cedulonDependencies(name: string, version: string): Promise<Record<string, string>> {
+  const res = await fetch(`https://registry.npmjs.org/${name.replace("/", "%2f")}/${version}`);
+  if (!res.ok) throw new Error(`npm ${res.status}`);
+  const doc = (await res.json()) as NpmManifest;
+  const found: Record<string, string> = {};
+  for (const [dep, range] of Object.entries(doc.dependencies ?? {})) {
+    if (dep.startsWith("@cedulon/")) found[`${name} ${dep}`] = String(range);
+  }
+  return found;
 }
 
 async function dataciteVersion(doi: string): Promise<string> {
@@ -164,10 +186,14 @@ async function collectSources(declared: DeclaredFacts): Promise<{
   }
 
   try {
-    sources.npmCedulon = await npmLatest(CEDULON_PACKAGE);
+    const deps: Record<string, string> = {};
+    for (const name of VERAX_CEDULON_DEPENDENTS) {
+      Object.assign(deps, await cedulonDependencies(name, declared.veraxVersion));
+    }
+    sources.veraxCedulonDeps = deps;
   } catch (error) {
     fetchProblems.push(
-      `${CEDULON_PACKAGE} ${declared.cedulonVersion} → ${sourceLabel(error)}`,
+      `${VERAX_PACKAGE} ${declared.veraxVersion} @cedulon/* ${declared.cedulonVersion} → ${sourceLabel(error)}`,
     );
   }
 
