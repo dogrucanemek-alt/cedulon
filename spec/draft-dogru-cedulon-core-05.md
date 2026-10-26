@@ -2261,7 +2261,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 745 of 745,
+  this revision describes, all three assert every case, 753 of 753,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.
@@ -2303,8 +2303,11 @@ Implementation:
   specification.
 
 Description:
-: The body admits six tools through its own gate: memory.get,
+: The body admits six tools of its own through its gate: memory.get,
   memory.put, message.read, message.send, spend and audit.explain.
+  Tools of the child MCP servers its operator names are published as
+  `prefix.childName`, and a call forwarded to one passes the same gate
+  and leaves the same signed decision record and effect row.
   An admitted call leaves a signed decision record; a retry under the
   same reference is answered from that record rather than writing a
   second one, and a denial the body cannot append is refused to the
@@ -2312,13 +2315,22 @@ Description:
   leave an effect row, and the audit path reconciles the rows against
   the records; an allow whose effect cannot be found is reported as
   such rather than assumed to have run. A halted body answers every
-  further call with a signed denial record. Each halt and resume is
+  further call with a signed denial record. Since 0.7.0 a failed check
+  of the body's memory store halts it the same way, and a call that
+  meets the halt after its allow is refused before it runs and leaves
+  a signed halted effect row. Each halt and resume is
   also written to the ledger as a control record signed by the body's
   record key, naming whoever the halt history names. When an operator
   is registered, an approval over HTTP carries a passkey (WebAuthn)
   assertion bound to the held request, and the offline verifier checks
   it again against the operator's public key; a command-line approval
-  stays unsigned. Once an operator is registered, a resume over HTTP
+  stays unsigned. Since 0.6.0 such an approval can also arrive from
+  another device through an operator door that is off unless the
+  operator configures it. Taking a passkey out of use is written to
+  the ledger as a signed record, and the offline verifier does not
+  count an approval signed with it that the ledger holds after that
+  record.
+  Once an operator is registered, a resume over HTTP
   is refused without such an assertion; a halt may carry one and is
   never refused for lacking it; a halt or resume from the command
   line stays unsigned. Each
@@ -2346,13 +2358,15 @@ Coverage:
 : `@cedulon/cose` and `@cedulon/core` implement the signed decision
   record (COSE Sign1 and the Decision Record).
   `@cedulon/effect-extract` implements the effect extract.
-  `@cedulon/checkpoint` implements the checkpoint. `@cedulon/audit`
-  is called when a window is explained. `@cedulon/x402-adapter` is
-  present as a library; there is no live x402 rail, and the body
-  does not move money.
+  `@cedulon/checkpoint` implements the checkpoint. These four are
+  dependencies of `@verax-ai/body` and of `@verax-ai/proxy`.
+  `@cedulon/audit`, a dependency of `@verax-ai/proxy`, is called when
+  a window is explained. `@cedulon/x402-adapter`, also a dependency of
+  `@verax-ai/proxy`, is used for its types; there is no live x402
+  rail, and the body does not move money.
 
 Version compatibility:
-: Verax 0.4.6 depends on `@cedulon/*` 0.13.1. Those published
+: Verax 0.7.0 depends on `@cedulon/*` 0.13.1. Those published
   packages implement the posted draft-dogru-cedulon-09 profile and,
   from 0.13.0, the posted draft-dogru-cedulon-decision-profile-03.
   0.13.1 changes no behaviour from 0.13.0. This document is the
@@ -2372,7 +2386,7 @@ Contact:
 
 URL:
 : <https://github.com/verax-ai/verax>. The packages `@verax-ai/body`,
-  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.4.6
+  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.7.0
   (<https://www.npmjs.com/package/@verax-ai/body>,
   <https://www.npmjs.com/package/@verax-ai/proxy>,
   <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP

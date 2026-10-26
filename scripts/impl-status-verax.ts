@@ -31,10 +31,30 @@ export const REQUIRED_URLS = [
   "https://doi.org/10.5281/zenodo.22811593",
 ] as const;
 
-export const VERAX_VERSION = "0.4.6";
+export const VERAX_VERSION = "0.7.0";
 /** The newest Verax version archived on Zenodo; it trails npm when a release is not deposited. */
-export const VERAX_ARCHIVED_VERSION = "0.4.6";
+export const VERAX_ARCHIVED_VERSION = "0.7.0";
 export const CEDULON_VERSION = "0.13.1";
+
+/** The Verax packages the entry names on npm at VERAX_VERSION. */
+export const VERAX_PACKAGES = ["@verax-ai/body", "@verax-ai/proxy", "@verax-ai/inventory"] as const;
+
+/**
+ * The @cedulon/* packages each Verax package declares at VERAX_VERSION,
+ * all at CEDULON_VERSION. Both entries must name every one of them;
+ * facts-check holds this map to the published manifests.
+ */
+export const VERAX_CEDULON_DEPS: Readonly<Record<string, readonly string[]>> = {
+  "@verax-ai/body": ["@cedulon/checkpoint", "@cedulon/core", "@cedulon/cose", "@cedulon/effect-extract"],
+  "@verax-ai/proxy": [
+    "@cedulon/audit",
+    "@cedulon/checkpoint",
+    "@cedulon/core",
+    "@cedulon/cose",
+    "@cedulon/effect-extract",
+    "@cedulon/x402-adapter",
+  ],
+};
 
 const DRAFT_START = "A second implementation is named here.";
 const STATUS_START = "## Second implementation (Verax)";
@@ -128,6 +148,14 @@ export function implStatusVeraxFailures(draft: string, status: string): string[]
     !statusBlock.includes(CEDULON_VERSION)
   ) {
     failures.push(`both entries must name @cedulon/* ${CEDULON_VERSION}`);
+  }
+  for (const [label, block] of [["the draft", draftBlock], ["the STATUS", statusBlock]] as const) {
+    for (const m of flatten(block).matchAll(/`@cedulon\/\*` (\d+\.\d+\.\d+)/g)) {
+      if (m[1] !== CEDULON_VERSION) failures.push(`${label} Verax entry names ${m[0]}, not ${CEDULON_VERSION}`);
+    }
+    for (const pkg of new Set(Object.values(VERAX_CEDULON_DEPS).flat())) {
+      if (!block.includes(`\`${pkg}\``)) failures.push(`${label} Verax entry omits ${pkg}`);
+    }
   }
 
   for (const hit of forbiddenHits(draftBlock)) {
