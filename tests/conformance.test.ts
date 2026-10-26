@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -11,6 +11,7 @@ import {
   type Row,
   type Vector,
 } from "../conformance/run.ts";
+import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
 
 /**
  * A split is a recorded disagreement with the posted draft, not a
@@ -58,6 +59,27 @@ function quoteMisses(vectors: Vector[]): string[] {
     if (!v.doc) continue;
     if (!docs.has(v.doc)) docs.set(v.doc, flat(readFileSync(join(root, "spec", `${v.doc}.md`), "utf8")));
     if (!docs.get(v.doc)!.includes(flat(v.draft))) misses.push(v.id);
+  }
+  return misses;
+}
+
+/**
+ * Problems with the file's `draft` header: a vector that names no `doc`
+ * belongs to the document the header names, so the header has to be the
+ * living core draft and has to contain every requirement such a vector
+ * cites. A header left on an older revision names requirements that
+ * revision never had.
+ */
+function headerMisses(header: string, vectors: Vector[]): string[] {
+  const misses: string[] = [];
+  const livingName = basename(livingCoreDraftPath(root), ".md");
+  if (header !== livingName) misses.push(`header ${header} is not ${livingName}`);
+  const text = readFileSync(join(root, "spec", `${header}.md`), "utf8");
+  for (const v of vectors) {
+    if (v.doc) continue;
+    for (const id of v.must.match(/\b(?:MUST|SHOULD|MAY)-T\d+(?:-[\da-z]+)?\b/g) ?? []) {
+      if (!text.includes(id)) misses.push(`${v.id} cites ${id}, not in ${header}`);
+    }
   }
   return misses;
 }
@@ -124,6 +146,14 @@ describe("conformance vectors run in the suite", () => {
       v.id === "V-C5-T10-17-zero-allowance" ? { ...v, draft: "An allowance of zero defers everything." } : v,
     );
     assert.deepEqual(quoteMisses(drifted), ["V-C5-T10-17-zero-allowance"]);
+  });
+
+  it("the file header names the living core draft, and it holds every MUST an undocumented vector cites", () => {
+    const header = (JSON.parse(readFileSync(join(root, "conformance", "vectors.json"), "utf8")) as { draft: string }).draft;
+    assert.deepEqual(headerMisses(header, living()), []);
+    const stale = headerMisses("draft-dogru-cedulon-03", living());
+    assert.ok(stale.includes("V-T10-18-unstated-audit-scope cites MUST-T10-18, not in draft-dogru-cedulon-03"), stale.join("; "));
+    assert.ok(stale.some((m) => m.startsWith("header draft-dogru-cedulon-03 is not ")), stale.join("; "));
   });
 
   it("RED: a vector of the core-05 kinds that states no expectation is an error, not a pass", () => {
