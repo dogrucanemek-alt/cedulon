@@ -71,6 +71,29 @@ describe("Verax Implementation Status entries stay aligned", () => {
     );
   });
 
+  it("RED: a @cedulon/* package dropped from one entry is caught", () => {
+    const dropped = status.replaceAll("`@cedulon/x402-adapter`", "the adapter");
+    assert.notEqual(dropped, status);
+    const failures = implStatusVeraxFailures(draft, dropped);
+    assert.ok(
+      failures.some((f) => f.includes("@cedulon/x402-adapter")),
+      failures.join(" | "),
+    );
+  });
+
+  it("RED: @cedulon/* at another version beside the current one is caught", () => {
+    const stale = status.replace(
+      "all at `@cedulon/*` 0.13.1,",
+      "all at `@cedulon/*` 0.13.1, earlier `@cedulon/*` 0.12.0,",
+    );
+    assert.notEqual(stale, status);
+    const failures = implStatusVeraxFailures(draft, stale);
+    assert.ok(
+      failures.some((f) => f.includes("0.12.0")),
+      failures.join(" | "),
+    );
+  });
+
   it("RED: a core document with no Verax entry is refused", () => {
     const failures = implStatusVeraxFailures(
       "# Implementation Status\n\nThis section names the companion implementation.\n",
