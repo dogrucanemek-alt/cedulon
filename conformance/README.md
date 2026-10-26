@@ -1,9 +1,11 @@
 # Conformance vectors
 
-These vectors are tied to a MUST in `draft-dogru-cedulon-03` unless a
-vector names another document in `doc`; those quote that document word
-for word, and `tests/conformance.test.ts` holds the quotation to the
-text. The expected result is taken from the draft sentence cited next
+These vectors are tied to a MUST in the document named by `draft` at the
+top of `vectors.json`, which is the living core draft, unless a vector
+names another document in `doc`; those quote that document word for
+word. `tests/conformance.test.ts` holds the header to the living core
+draft and to every MUST an undocumented vector cites, and holds the
+quotation to the text. The expected result is taken from the draft sentence cited next
 to each vector, not from this repository's test suite. Running them against
 the companion implementation is a check that the two have not
 drifted; a split is a finding, not a licence to edit the expected
