@@ -185,6 +185,16 @@ pre {
   margin-bottom: 0.35rem;
 }
 
+.announcement {
+  margin: 0 0 1rem;
+  padding: 0.25rem 0 0.25rem 1rem;
+  border-left: 2px solid var(--accent);
+}
+
+.announcement p {
+  margin-bottom: 0.6rem;
+}
+
 footer.colophon {
   margin-top: 3rem;
   padding-top: 1rem;
