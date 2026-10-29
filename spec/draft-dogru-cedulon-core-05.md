@@ -2318,7 +2318,11 @@ Description:
   further call with a signed denial record. Since 0.7.0 a failed check
   of the body's memory store halts it the same way, and a call that
   meets the halt after its allow is refused before it runs and leaves
-  a signed halted effect row. Each halt and resume is
+  a signed halted effect row. Since 0.8.0 a policy can name data
+  classes on a call's arguments and on its result; a gated result
+  leaves its own signed decision record, carrying counts and a hash of
+  what the agent received, and the offline verifier holds it to the
+  call's effect row. Each halt and resume is
   also written to the ledger as a control record signed by the body's
   record key, naming whoever the halt history names. When an operator
   is registered, an approval over HTTP carries a passkey (WebAuthn)
@@ -2366,7 +2370,7 @@ Coverage:
   rail, and the body does not move money.
 
 Version compatibility:
-: Verax 0.7.0 depends on `@cedulon/*` 0.13.1. Those published
+: Verax 0.8.0 depends on `@cedulon/*` 0.13.1. Those published
   packages implement the posted draft-dogru-cedulon-09 profile and,
   from 0.13.0, the posted draft-dogru-cedulon-decision-profile-03.
   0.13.1 changes no behaviour from 0.13.0. This document is the
@@ -2386,7 +2390,7 @@ Contact:
 
 URL:
 : <https://github.com/verax-ai/verax>. The packages `@verax-ai/body`,
-  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.7.0
+  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.8.0
   (<https://www.npmjs.com/package/@verax-ai/body>,
   <https://www.npmjs.com/package/@verax-ai/proxy>,
   <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP
