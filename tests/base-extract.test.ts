@@ -289,6 +289,24 @@ describe("base-extract rail id follows the USDC contract", () => {
       { message: "usdc-chain-mismatch" },
     );
   });
+
+  it("fetchUsdcExtract names a malformed eth_chainId instead of throwing a SyntaxError", async () => {
+    await assert.rejects(
+      () =>
+        fetchUsdcExtract({
+          rpc: fakeRpc({
+            chainId: "bogus",
+            logs: [],
+            blocks: { "0xa": { timestamp: "0x64" } },
+          }),
+          account: ACCOUNT,
+          fromBlock: 10,
+          toBlock: 10,
+          usdc: BASE_USDC,
+        }),
+      { message: "rpc-chain-id-shape" },
+    );
+  });
 });
 
 describe("base-extract window follows the requested block range", () => {
@@ -362,6 +380,46 @@ describe("base-extract window follows the requested block range", () => {
     assert.equal(extract.windowStartMs, 100_000);
     assert.equal(extract.windowEndMs, 200_001);
     assert.equal(extract.railId, "base-sepolia-usdc");
+  });
+
+  it("refuses a block range whose start is after its end", () => {
+    assert.throws(
+      () =>
+        logsToExtract({
+          logs: [],
+          blocks: {
+            "0xa": { timestamp: "0x64" },
+            "0xc": { timestamp: "0x12c" },
+          },
+          account: ACCOUNT,
+          fromBlock: 12,
+          toBlock: 10,
+        }),
+      { message: "inverted-block-range 12 > 10" },
+    );
+  });
+
+  it("fetchUsdcExtract refuses an inverted range before querying logs", async () => {
+    const calls: Array<{ method: string; params: unknown[] }> = [];
+    await assert.rejects(
+      () =>
+        fetchUsdcExtract({
+          rpc: fakeRpc({
+            chainId: "0x14a34",
+            logs: [],
+            blocks: {
+              "0xa": { timestamp: "0x64" },
+              "0xc": { timestamp: "0x12c" },
+            },
+            calls,
+          }),
+          account: ACCOUNT,
+          fromBlock: 12,
+          toBlock: 10,
+        }),
+      { message: "inverted-block-range 12 > 10" },
+    );
+    assert.equal(calls.some((c) => c.method === "eth_getLogs"), false);
   });
 });
 

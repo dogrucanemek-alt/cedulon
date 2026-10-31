@@ -108,6 +108,7 @@ export function logsToExtract(input: {
   usdc?: string;
   railId?: string;
 }): RailExtractBody {
+  assertBlockRange(input.fromBlock, input.toBlock);
   const fromBoundary = lookupBlock(input.blocks, input.fromBlock);
   if (!fromBoundary) {
     throw new Error(`missing-boundary-block ${input.fromBlock}`);
@@ -172,6 +173,7 @@ export async function fetchUsdcExtract(input: {
   usdc?: string;
   railId?: string;
 }): Promise<RailExtractBody> {
+  assertBlockRange(input.fromBlock, input.toBlock);
   const usdc = input.usdc ?? BASE_SEPOLIA_USDC;
   const known = USDC_RAILS[normalizeAddress(usdc)];
   if (!known && !input.railId) {
@@ -230,11 +232,22 @@ function lookupBlock(blocks: Record<string, RpcBlock>, n: number | string): RpcB
   return blocks[hex] ?? blocks[hex.toLowerCase()] ?? blocks[String(n)] ?? blocks[dec];
 }
 
+/** A window whose end is before its start would report a negative span. */
+function assertBlockRange(from: number | string, to: number | string): void {
+  if (BigInt(from) > BigInt(to)) {
+    throw new Error(`inverted-block-range ${from} > ${to}`);
+  }
+}
+
 function parseChainId(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
-  return Number(BigInt(String(value)));
+  try {
+    return Number(BigInt(String(value)));
+  } catch {
+    throw new Error("rpc-chain-id-shape");
+  }
 }
 
 function asLogs(value: unknown): RpcLog[] {
