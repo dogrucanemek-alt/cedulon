@@ -52,6 +52,27 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.17.0` is prepared in this tree and is not a published npm release; the tag
+publishes it, and this paragraph is brought up to what was published once the
+registry answers. It comes out of an independent run of 0.15.0 on Base
+mainnet USDC. `@cedulon/base-extract` names the rail from the USDC contract
+(`base-sepolia-usdc` or `base-usdc`), checks `eth_chainId` against it, and
+takes the extract window from the requested block range instead of the
+transfers it found, refusing a missing boundary block and an inverted range.
+A receipt inside the requested range but outside the transfers' span, out of
+scope under 0.16.0, is in scope. `audit-too-large` names the axis, the count
+and the bound and carries `code`; the bounds are unchanged. With settlement
+rows and no rail extract, `unauthenticated-extract` says no extract was
+supplied. The launchers `cedulon` and `cedulon-mcp` move to 1.4.0 and
+`^0.17.0`. `docs/UPGRADING.md` lists each change under its own letter.
+Unchanged, and named here because the gate reads this version's own
+paragraph: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
+introduced, where with a usable issuer pin the departure is a finding that
+fails the audit, and without a pin the same departure is a warning that does
+not by itself fail it; and `requestHash` is still the SHA-256 of the six-field
+canonical document in lowercase hex, the digest the posted core-04 names in
+Section 9 (MUST-T6-1).
+
 `0.16.0` is published on npm across all nine packages, each with a SLSA v1
 provenance attestation and reporting `gitHead` `e937371`, and it is what an
 installed package now answers. It moves verdicts both ways. `audit()` defers an unmatched
