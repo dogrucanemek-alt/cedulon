@@ -3,6 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <title>Cedulon — Missing evidence is itself evidence</title>
     <meta name="description" content="Cedulon is the open audit layer for agent-to-agent payments. Every spend carries a signed receipt, receipts chain to epoch checkpoints, and the chain is reconciled against the payment rail's own extract, so a spend that left no receipt becomes a finding.">
     <meta property="og:type" content="website">
@@ -244,10 +247,10 @@
 
   <section class="strip" aria-label="Where Cedulon is specified and used">
     <div class="wrap strip-grid">
+      <div data-downloads><b>Over 100,000 downloads</b><span>Of the Cedulon packages on npm, CI and mirrors included. Read daily from npm by verax-ai.com.</span></div>
       <div><b>IETF Internet-Drafts</b><span>Core, checkpoint, threats, reattestation, streaming and a decision profile, posted on the Datatracker.</span></div>
       <div><b>SCITT-anchorable</b><span>Receipts are COSE objects that a transparency service built on RFC 9943 can anchor.</span></div>
       <div><b>18 authors</b><span>A joint interoperability report by SCITT working group participants includes runs of Cedulon by others.</span></div>
-      <div><b>0 runtime dependencies</b><span>In the core packages. The MCP server depends only on the official MCP SDK.</span></div>
     </div>
   </section>
 
@@ -418,5 +421,6 @@
 
 <button class="motion" type="button" id="motion">Stop the motion</button>
 <script src="film.js"></script>
+<script src="downloads.js" defer></script>
   </body>
 </html>

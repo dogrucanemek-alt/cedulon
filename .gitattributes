@@ -34,3 +34,4 @@ site/og.png binary
 *.jpg binary
 *.woff2 binary
 *.mp4 binary
+*.ico binary
