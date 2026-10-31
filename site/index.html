@@ -8,13 +8,16 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Cedulon">
     <meta property="og:title" content="Cedulon — the open audit layer for agent-to-agent payments">
-    <meta property="og:description" content="Every spend carries a signed receipt, and the receipt chain is reconciled against the payment rail's own extract, so a spend that left no receipt becomes a finding. Open source (Apache-2.0), specified in three IETF Internet-Drafts.">
+    <meta property="og:description" content="Every spend carries a signed receipt, and the receipt chain is reconciled against the payment rail's own extract, so a spend that left no receipt becomes a finding. Open source (Apache-2.0), specified in IETF Internet-Drafts.">
     <meta property="og:url" content="https://cedulon.com/">
     <meta property="og:image" content="https://cedulon.com/og.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="preload" href="fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/ibm-plex-sans-latin-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/ibm-plex-mono-latin-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="home.css">
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -94,189 +97,326 @@
   <script defer src="/_vercel/insights/script.js"></script>
   </head>
   <body>
+<header class="top">
+  <div class="wrap bar">
+    <a class="brand" href="./" aria-label="Cedulon home">
+      <svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11.2" fill="none" stroke="#e9f1f7" stroke-width="2.6" stroke-dasharray="1.05 1.4"/><circle cx="13" cy="13" r="7.4" fill="none" stroke="#5895ff" stroke-width="1.1"/><circle cx="13" cy="13" r="3.4" fill="none" stroke="#e9f1f7" stroke-width="1.1"/></svg>
+      Cedulon
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#open">How it works</a>
+      <a class="opt" href="verify.html">Verify</a>
+      <a class="opt" href="spec.html">Spec</a>
+      <a class="opt" href="compare.html">Compare</a>
+      <a class="opt" href="panel/index.html">Panel</a>
+      <a class="pill ghost" href="https://github.com/dogrucanemek-alt/cedulon">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="film" id="film" aria-label="One payment through the Cedulon seal">
+    <div class="stage" id="stage">
+      <canvas id="film-canvas" aria-hidden="true"></canvas>
+      <ol class="chapters" id="chapters" aria-label="Chapters">
+        <li><button type="button" data-go="1">Open the seal</button></li>
+        <li><button type="button" data-go="2">Manifest</button></li>
+        <li><button type="button" data-go="3">Policy</button></li>
+        <li><button type="button" data-go="4">Rail</button></li>
+        <li><button type="button" data-go="5">Receipt</button></li>
+        <li><button type="button" data-go="6">Chain</button></li>
+        <li><button type="button" data-go="7">Bypass</button></li>
+        <li><button type="button" data-go="8">Audit</button></li>
+        <li><button type="button" data-go="9">Try it</button></li>
+      </ol>
+    </div>
+
+    <div class="beats">
+      <div class="beat hero-beat"><div class="wrap"><div class="panel">
+        <h1>Missing evidence is itself evidence.</h1>
+        <p class="lede">Cedulon is the open audit layer for agent payments. Every spend carries a signed receipt, and the receipts are reconciled against what the payment rail itself reports. A payment that left no receipt does not disappear from the books. It shows up as a finding.</p>
+        <div class="cmd"><code id="cmd-hero">npx -y @cedulon/mcp-server</code><button type="button" data-copy="cmd-hero">Copy</button></div>
+        <p class="cmd-note">Five MCP tools over stdio for Claude Desktop, Claude Code and Cursor. Nothing here moves money: the server settles on a mock rail and holds no wallet.</p>
+        <div class="cta">
+          <a class="pill solid" href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Start in five minutes</a>
+          <a class="pill ghost" href="spec.html">Read the drafts</a>
+        </div>
+        <p class="hint">Scroll to follow one payment through the seal.</p>
+      </div></div></div>
+
+      <div class="beat" id="open"><div class="wrap"><div class="panel">
+        <span class="step"><b>1</b>Open the seal</span>
+        <h2>One seal, four records</h2>
+        <p>Pull the seal apart and each layer is a record of its own: the policy that decides, the rail's own extract, the signed receipt and the chain of receipts. Follow one payment of 0.25 USDC through all of them.</p>
+      </div></div></div>
+
+      <div class="beat"><div class="wrap"><div class="panel">
+        <span class="step"><b>2</b>Manifest</span>
+        <h2>The seller signs the offer first</h2>
+        <p>Before any money moves, the seller signs a trade manifest: what is sold, for how much, and a hash of the acceptance criteria. The receipt will carry the manifest's hash.</p>
+<pre class="rec"><span class="k">description</span>            <span class="b">hourly forecast, 24 hours</span>
+<span class="k">amount</span>                 <span class="b">0.25</span>
+<span class="k">currency</span>               <span class="b">USDC</span>
+<span class="k">payee</span>                  <span class="b">api.weather.example</span>
+<span class="k">acceptanceCriteriaHash</span> <span class="b">c09d71e45b2f…</span>
+<span class="k">expiresAtMs</span>            <span class="b">1793466000000</span></pre>
+      </div></div></div>
+
+      <div class="beat"><div class="wrap"><div class="panel">
+        <span class="step"><b>3</b>Policy</span>
+        <h2>Default deny</h2>
+        <p>The policy decision point sees every request before the rail does. Over the limit, an unknown payee, a replayed nonce: refused, with the reason written down. If the policy engine is missing or throws, the answer is also no.</p>
+<pre class="rec"><span class="b">40.00 USDC</span>              <span class="no">limit-amount</span>
+<span class="b">to unknown.example</span>      <span class="no">scope-payee</span>
+<span class="b">engine unreachable</span>      <span class="no">engine-unavailable</span>
+<span class="b">0.25 USDC to api.weather.example</span>  <span class="ok">allow</span></pre>
+      </div></div></div>
+
+      <div class="beat"><div class="wrap"><div class="panel">
+        <span class="step"><b>4</b>Rail</span>
+        <h2>The rail settles</h2>
+        <p>The payment goes out on x402. Cedulon does not move the money. The settlement shows up in the rail's own extract, as one tick on the edge of the seal.</p>
+<pre class="rec"><span class="k">ref</span>          <span class="b">0x9a3e51c8:1</span>
+<span class="k">amount</span>       <span class="b">0.25 USDC</span>
+<span class="k">timestampMs</span>  <span class="b">1793462400000</span></pre>
+      </div></div></div>
+
+      <div class="beat"><div class="wrap"><div class="panel">
+        <span class="step"><b>5</b>Receipt</span>
+        <h2>The receipt is signed</h2>
+        <p>Payer, payee, amount, the policy hash, the manifest hash, the rail reference and the previous receipt's hash become one set of claims. They are encoded as deterministic CBOR and signed as COSE_Sign1. The pattern at the core is drawn from that receipt's SHA-256.</p>
+<pre class="rec"><span class="b">COSE_Sign1</span>
+<span class="k">protected</span>  <span class="b">alg -19 (Ed25519)</span>
+           <span class="b">application/cedulon-receipt+cbor</span>
+<span class="k">payload</span>    <span class="b">payer, payee, amount, currency,</span>
+           <span class="b">policyHash, manifestHash,</span>
+           <span class="b">x402PaymentRef, timestampMs, nonce,</span>
+           <span class="b">prevReceiptHash, outcome</span>
+<span class="k">signature</span>  <span class="b">Ed25519</span></pre>
+      </div></div></div>
+
+      <div class="beat"><div class="wrap"><div class="panel">
+        <span class="step"><b>6</b>Chain</span>
+        <h2>Each receipt holds the one before</h2>
+        <p>The new receipt carries the previous receipt's hash, so the chain shows when a receipt is changed or taken out. Every epoch closes with a checkpoint: how many receipts, their totals, the chain head and the previous checkpoint's hash.</p>
+<pre class="rec"><span class="k">prevReceiptHash</span>  <span class="b">9f3a0c17e2b6…</span>
+<span class="k">checkpoint</span>       <span class="b">epoch, receiptCount, totals,</span>
+                 <span class="b">chainHead, hash of the previous one</span></pre>
+      </div></div></div>
+
+      <div class="beat"><div class="wrap"><div class="panel">
+        <span class="step"><b>7</b>Bypass</span>
+        <h2>Someone skips Cedulon</h2>
+        <p>A second payment of 7 USD goes straight to the rail. No manifest, no policy decision, no receipt. The rail settles it anyway, and Cedulon cannot stop that. But the rail writes it down.</p>
+<pre class="rec"><span class="k">ref</span>      <span class="b">bypass-hidden</span>
+<span class="k">amount</span>   <span class="b">7 USD</span>
+<span class="k">receipt</span>  <span class="b">none</span></pre>
+      </div></div></div>
+
+      <div class="beat"><div class="wrap"><div class="panel">
+        <span class="step"><b>8</b>Audit</span>
+        <h2>The audit finds the empty place</h2>
+        <p>Reconciliation walks the rail's extract and pairs every settlement with a receipt. The settlement with nothing to pair with is the finding. These lines are the repository's own bypass demo.</p>
+<pre class="rec"><span class="k">code</span>    <span class="no">settlement-without-receipt</span>
+<span class="k">detail</span>  <span class="b">settlement bypass-hidden 7 USD</span>
+        <span class="b">has no spend receipt</span>
+<span class="no">audit: 1 settlement without receipt → FAIL</span></pre>
+        <p>The argument in full: <a href="https://doi.org/10.5281/zenodo.22071429">Two ledgers, one window</a>, CC BY 4.0.</p>
+      </div></div></div>
+
+      <div class="beat last" id="try"><div class="wrap"><div class="panel">
+        <span class="step"><b>9</b>Try it</span>
+        <h2>Now try it on the seal</h2>
+        <p>Change one byte of the receipt, or settle a payment that never asked Cedulon. The pattern is computed in your browser from the receipt's SHA-256.</p>
+        <div class="controls">
+          <button class="btn" type="button" id="do-tamper">Edit one byte</button>
+          <button class="btn" type="button" id="do-orphan">Settle one without a receipt</button>
+          <button class="btn plain" type="button" id="do-reset" disabled>Reset</button>
+        </div>
+        <dl class="status" aria-live="polite">
+          <dt>Signature</dt><dd id="st-sig">valid</dd>
+          <dt>Records</dt><dd id="st-chain" data-state="neutral">96 settlements, 96 receipts</dd>
+          <dt>Audit</dt><dd id="st-audit"><code>audit: balanced</code></dd>
+        </dl>
+      </div></div></div>
+    </div>
+  </section>
+
+  <section class="strip" aria-label="Where Cedulon is specified and used">
+    <div class="wrap strip-grid">
+      <div><b>IETF Internet-Drafts</b><span>Core, checkpoint, threats, reattestation, streaming and a decision profile, posted on the Datatracker.</span></div>
+      <div><b>SCITT-anchorable</b><span>Receipts are COSE objects that a transparency service built on RFC 9943 can anchor.</span></div>
+      <div><b>18 authors</b><span>A joint interoperability report by SCITT working group participants includes runs of Cedulon by others.</span></div>
+      <div><b>0 runtime dependencies</b><span>In the core packages. The MCP server depends only on the official MCP SDK.</span></div>
+    </div>
+  </section>
+
+  <section class="band" id="watch">
     <div class="wrap">
-      <header class="mast">
-        <nav>
-          <a href="index.html">Cedulon</a>
-          <a href="verify.html">Verify</a>
-          <a href="spec.html">Spec</a>
-          <a href="compare.html">Compare</a>
-          <a href="panel/index.html">Panel</a>
-        </nav>
-      </header>
-
-      <h1>Cedulon</h1>
-      <p class="tagline">Missing evidence is itself evidence.</p>
-      <p class="lede">
-        Agents can already pay on open rails such as x402 and AP2. Cedulon sits
-        above those rails as an audit layer: a signed spend receipt, a chained
-        epoch checkpoint, and a reconciliation of the rail extract. If a spend
-        left no receipt, the gap is the finding. Bookkeeping moved from
-        single-entry records to Pacioli's double-entry; Cedulon is the
-        later step where an external rail extract is machine-checkable.
-      </p>
-
-      <h2>How it works</h2>
-      <svg class="flow" viewBox="0 0 360 420" role="img" aria-labelledby="flow-title">
-        <title id="flow-title">Cedulon flow from manifest to reconciliation audit</title>
-        <rect class="box" x="40" y="8" width="280" height="48" />
-        <text x="180" y="30" text-anchor="middle" font-size="13">Trade Manifest</text>
-        <text x="180" y="46" text-anchor="middle" font-size="11">signed offer before payment</text>
-        <path class="arrow" d="M180 56 v16" />
-        <rect class="box" x="40" y="72" width="280" height="48" />
-        <text x="180" y="94" text-anchor="middle" font-size="13">Policy Decision Point</text>
-        <text x="180" y="110" text-anchor="middle" font-size="11">default deny, fail-closed</text>
-        <path class="arrow" d="M180 120 v16" />
-        <rect class="box" x="40" y="136" width="280" height="48" />
-        <text x="180" y="158" text-anchor="middle" font-size="13">Payment rail</text>
-        <text x="180" y="174" text-anchor="middle" font-size="11">x402 or other settlement</text>
-        <path class="arrow" d="M180 184 v16" />
-        <rect class="box" x="40" y="200" width="280" height="48" />
-        <text x="180" y="222" text-anchor="middle" font-size="13">Signed Spend Receipt</text>
-        <text x="180" y="238" text-anchor="middle" font-size="11">COSE_Sign1, Ed25519</text>
-        <path class="arrow" d="M180 248 v16" />
-        <rect class="box" x="40" y="264" width="280" height="48" />
-        <text x="180" y="286" text-anchor="middle" font-size="13">Epoch Checkpoint</text>
-        <text x="180" y="302" text-anchor="middle" font-size="11">totals and previous hash</text>
-        <path class="arrow" d="M180 312 v16" />
-        <rect class="box" x="40" y="328" width="280" height="48" />
-        <text x="180" y="350" text-anchor="middle" font-size="13">Reconciliation Audit</text>
-        <text x="180" y="366" text-anchor="middle" font-size="11">rail extract versus receipts</text>
-      </svg>
-
-      <h2>The gap we close</h2>
-      <div class="columns three">
-        <div class="col">
-          <h3>Anyone can verify a receipt</h3>
-          <p>A signed spend record checks as valid or tampered. That is the easy half.</p>
-        </div>
-        <div class="col">
-          <h3>Nobody sees a missing receipt</h3>
-          <p>A spend that never issued a receipt leaves no object to verify. The books still look clean.</p>
-        </div>
-        <div class="col">
-          <h3>Cedulon turns the gap into evidence</h3>
-          <p>
-            The companion audit compares the rail extract to the receipt chain.
-            A bypass in this repository prints
-            <span class="seal bad">audit: 1 settlement without receipt → FAIL</span>
-          </p>
-        </div>
+      <h2 class="sec-title">The same story in 37 seconds</h2>
+      <p class="sec-note">One payment through the seal, and the one that skipped it. No sound; the captions are in the picture.</p>
+      <div class="film-video">
+        <video src="media/cedulon-film.mp4" poster="media/cedulon-film.jpg" width="1280" height="720" controls preload="none" playsinline aria-label="A 37-second film: a payment of 0.25 USDC passes the Cedulon policy, settles on the rail and gets a signed receipt chained to the one before; a second payment of 7 USD skips Cedulon and settles on the rail, and the audit reports one settlement without receipt."></video>
       </div>
+    </div>
+  </section>
 
-      <h2>The same audit for decisions</h2>
-      <p>
-        A spend is one kind of effect. The companion profile applies the same reconciliation to a decision log:
-        a Decision Record is a signed allow, deny or defer over a request hash and a policy hash, and an Effect
-        Extract is what the channel actually carried. The audit pairs the two by reference and by content hash,
-        and publishes the counts that have to close.
-      </p>
-      <div class="columns three">
-        <div class="col">
+  <section class="band" id="decisions">
+    <div class="wrap">
+      <h2 class="sec-title">The same audit works for decisions</h2>
+      <p class="sec-note">A spend is one kind of effect. The decision profile applies the same reconciliation to a decision log: a signed allow, deny or defer on one side, and what the channel actually carried on the other.</p>
+      <div class="trio">
+        <article>
           <h3>A refusal followed by the effect it refused</h3>
-          <p>
-            Spend audits have no word for it: an aborted receipt and a settlement under its reference read as
-            "settlement without receipt". Here it is a finding with its own name.
-            <span class="seal bad">effect-against-refusal → FAIL</span>
-          </p>
-        </div>
-        <div class="col">
+          <p>A spend audit would call it a settlement without receipt. Here it is a finding with its own name.</p>
+          <code class="no">effect-against-refusal → FAIL</code>
+        </article>
+        <article>
           <h3>The class of the effect is under the signature</h3>
-          <p>
-            An allow names what it allowed and what kind of thing it is. A row that carries the allowed hash
-            under another class is <span class="mono">effect-class-mismatch</span>, not a match.
-          </p>
-        </div>
-        <div class="col">
+          <p>An allow names what it allowed and what kind of thing it is. A row that carries the allowed hash under another class is a mismatch.</p>
+          <code>effect-class-mismatch</code>
+        </article>
+        <article>
           <h3>One fixture, two independent readers</h3>
-          <p>
-            A frozen leaked-refusal fixture was read by this audit and by a second reader written elsewhere in
-            its own vocabulary; both refused it. The run, its digests and its limits are in the
-            <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/EXTERNAL_REVIEW.md">external review log</a>.
-          </p>
-        </div>
+          <p>A frozen leaked-refusal fixture was read by this audit and by a second reader written elsewhere. Both refused it. The run and its limits are in the <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/EXTERNAL_REVIEW.md">external review log</a>.</p>
+        </article>
       </div>
+    </div>
+  </section>
 
-      <h2>Gated spend (repository API)</h2>
-      <pre><code>import { PolicyEngine } from "@cedulon/core";
-import { generateReceiptKeys } from "@cedulon/receipts";
-import { gatedSettle } from "@cedulon/x402-adapter";
+  <section class="band" id="record">
+    <div class="wrap">
+      <h2 class="sec-title">On the record</h2>
+      <p class="sec-note">Drafts, papers and releases you can check for yourself. The posted revision of each draft and its date are on its Datatracker page.</p>
+      <div class="records">
+        <article>
+          <h3>Internet-Drafts</h3>
+          <ul>
+            <li><a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-core/">draft-dogru-cedulon-core</a></li>
+            <li><a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-checkpoint/">draft-dogru-cedulon-checkpoint</a></li>
+            <li><a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-threats/">draft-dogru-cedulon-threats</a></li>
+            <li><a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-reattestation/">draft-dogru-cedulon-reattestation</a></li>
+            <li><a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-streaming/">draft-dogru-cedulon-streaming</a></li>
+            <li><a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-decision-profile/">draft-dogru-cedulon-decision-profile</a></li>
+          </ul>
+        </article>
+        <article>
+          <h3>Paper</h3>
+          <p>Two ledgers, one window: integrity of a mediator's record does not establish its completeness. CC BY 4.0.</p>
+          <p class="doi"><a href="https://doi.org/10.5281/zenodo.22071429">10.5281/zenodo.22071429</a></p>
+        </article>
+        <article>
+          <h3>Joint interoperability report</h3>
+          <p>Independent runs, findings and disagreements recorded by SCITT working group participants, 14 August to 26 September 2026. 18 authors, with runs of Cedulon by other contributors.</p>
+          <p class="doi"><a href="https://doi.org/10.5281/zenodo.23332158">10.5281/zenodo.23332158</a></p>
+        </article>
+        <article>
+          <h3>Releases</h3>
+          <p>Each release is tagged on <a href="https://github.com/dogrucanemek-alt/cedulon">GitHub</a> and published to npm with a provenance attestation, <a href="https://www.npmjs.com/package/@cedulon/mcp-server">@cedulon/mcp-server</a> among them. Listed in the <a href="https://registry.modelcontextprotocol.io/v0/servers?search=io.github.dogrucanemek-alt/cedulon">MCP Registry</a>.</p>
+        </article>
+        <article>
+          <h3>Archive</h3>
+          <p>The repository is deposited at Zenodo, all versions under <a href="https://doi.org/10.5281/zenodo.22099791">10.5281/zenodo.22099791</a>; the deposit for the posted -09 revision is <a href="https://doi.org/10.5281/zenodo.22548019">10.5281/zenodo.22548019</a>. The decision profile has a deposit of its own, <a href="https://doi.org/10.5281/zenodo.22337734">10.5281/zenodo.22337734</a>.</p>
+        </article>
+        <article>
+          <h3>Cooperation with EMILIA</h3>
+          <p>Announced 26 October 2026. EMILIA Gate checks authority before a covered payment is released. Afterwards, Cedulon's reconciliation compares settlement records with the signed receipts. <a href="https://www.linkedin.com/feed/update/urn:li:activity:7520417869554147328/">The announcement</a>.</p>
+        </article>
+      </div>
+      <div class="after">
+        <a href="compare.html">How Cedulon compares with x402, AP2, Stripe Agent Toolkit, Coinbase AgentKit, AWS AgentCore Payments and Vaara</a>
+        <span>Author: Emek Can Doğru, ORCID <a href="https://orcid.org/0009-0005-4823-4468">0009-0005-4823-4468</a></span>
+      </div>
+    </div>
+  </section>
 
-const engine = new PolicyEngine({
-  maxAmount: 10n, maxCumulative: 30n, maxPayments: 3, windowMs: 3600000,
-});
-const keys = generateReceiptKeys();
-const result = gatedSettle(engine, {
-  req: { amount: 1n, currency: "USD", payee: "q", nonce: "n1", nowMs, tool: "spend" },
-  payer: "p", paymentHeader: "mock",
-}, { receiptPrivatePem: keys.privateKeyPem, receiptPublicPem: keys.publicKeyPem }, nowMs);</code></pre>
-
-      <h2>Use it as an MCP server</h2>
-      <p>
-        The same gated spend and extract audit are also five MCP tools on
-        stdio, published on npm as
-        <span class="mono">@cedulon/mcp-server</span>. Point Claude Desktop,
-        Claude Code, or Cursor at it; there is nothing to clone or build.
-        Step-by-step:
-        <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Cedulon in 5 minutes</a>.
-      </p>
-      <pre><code>{
+  <section class="band" id="run">
+    <div class="wrap">
+      <h2 class="sec-title">Run it on your machine</h2>
+      <p class="sec-note">Point Claude Desktop, Claude Code or Cursor at the npm package. There is nothing to clone and nothing to build. The server makes no network requests.</p>
+      <div class="run">
+        <div>
+          <div class="code-block">
+<pre class="rec" id="cfg"><span class="b">{
   "mcpServers": {
     "cedulon": {
       "command": "npx",
       "args": ["-y", "@cedulon/mcp-server"]
     }
   }
-}</code></pre>
-
-      <h2>Measured in this repository</h2>
-      <ul class="claims">
-        <li>the test suite is green in CI on Linux, macOS and Windows (<span class="mono">npm run test:pre-release</span>; non-root on the POSIX runners): every case asserts on Linux and macOS, while Windows skips its POSIX-mode cases with a stated reason, so a green Windows run is a smaller claim</li>
-        <li>core packages carry zero runtime dependencies; the MCP server package depends only on the official MCP SDK</li>
-        <li>fail-closed by default (missing or throwing policy engine denies)</li>
-        <li>signed receipts, chained checkpoints, reconciliation audit</li>
-      </ul>
-
-      <h2>Records</h2>
-      <ul class="claims">
-        <li>Internet-Drafts: <a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-core/">draft-dogru-cedulon-core</a>, <a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-checkpoint/">-checkpoint</a> and <a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-threats/">-threats</a> on the IETF Datatracker, which replaced <a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon/">draft-dogru-cedulon</a> there on 17 September 2026, with the companion <a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-reattestation/">reattestation</a> and <a href="https://datatracker.ietf.org/doc/draft-dogru-cedulon-streaming/">streaming</a> drafts; the posted revision and its date are on the Datatracker page, not here</li>
-        <li>Source and releases: <a href="https://github.com/dogrucanemek-alt/cedulon">github.com/dogrucanemek-alt/cedulon</a>; each release is tagged and its packages are published to npm with a provenance attestation, <a href="https://www.npmjs.com/package/@cedulon/mcp-server">@cedulon/mcp-server</a> among them</li>
-        <li>MCP Registry: listed as <span class="mono">io.github.dogrucanemek-alt/cedulon</span>, the entry <span class="mono">server.json</span> in the repository is published from</li>
-        <li>Archive: the repository is deposited at Zenodo, all versions under <a href="https://doi.org/10.5281/zenodo.22099791">10.5281/zenodo.22099791</a>; the deposit for the posted -09 revision is <a href="https://doi.org/10.5281/zenodo.22548019">10.5281/zenodo.22548019</a>; the deposit carrying the posted split family, with the core at -01, is <a href="https://doi.org/10.5281/zenodo.22905682">10.5281/zenodo.22905682</a>; the companion decision profile has a deposit of its own, all versions under <a href="https://doi.org/10.5281/zenodo.22337734">10.5281/zenodo.22337734</a>; the deposit for the posted -04 text is <a href="https://doi.org/10.5281/zenodo.23155667">10.5281/zenodo.23155667</a></li>
-        <li>Paper: <em>Two ledgers, one window: integrity of a mediator's record does not establish its completeness</em>, <a href="https://doi.org/10.5281/zenodo.22071429">10.5281/zenodo.22071429</a>, CC BY 4.0</li>
-        <li>Joint report: <em>Joint Interoperability Report: Independent Runs, Findings and Disagreements Recorded by SCITT Working Group Participants, 14 August to 26 September 2026</em>, 18 authors, <a href="https://doi.org/10.5281/zenodo.23332158">10.5281/zenodo.23332158</a>; it includes runs of Cedulon by other contributors</li>
-        <li>Author: Emek Can Doğru, ORCID <a href="https://orcid.org/0009-0005-4823-4468">0009-0005-4823-4468</a></li>
-      </ul>
-
-      <h2 id="cooperation">Cooperation</h2>
-      <p class="claims">Announcement, 26 October 2026:</p>
-      <blockquote class="announcement">
-        <p>When an agent makes a payment, approval and reconciliation answer different questions.</p>
-        <p>Before a covered payment is released, EMILIA Gate checks authority. EMILIA Protocol provides verifiable approval evidence.</p>
-        <p>Afterward, our planned integration will use Cedulon’s reconciliation tooling to compare available settlement records with those signed receipts and flag mismatches or missing evidence.</p>
-        <p>EMILIA and Cedulon have signed a cooperation framework to build this connection and publish shared adapters and tests using public or synthetic data.</p>
-      </blockquote>
-      <p class="claims"><a href="https://www.linkedin.com/feed/update/urn:li:activity:7520417869554147328/">The announcement as posted on LinkedIn</a></p>
-
-      <h2 id="faq">Questions</h2>
-      <h3>What does Cedulon actually do?</h3>
-      <p>Cedulon sits above payment rails such as x402 and AP2 as an audit layer. It writes a signed spend receipt, a chained epoch checkpoint, and a reconciliation of the rail extract. If a spend left no receipt, the gap is the finding. The design is specified in IETF Internet-Drafts and published as open source under Apache-2.0.</p>
-      <h3>Can anyone verify a spend receipt?</h3>
-      <p>A signed spend record checks as valid or tampered. That is the easy half. A spend that never issued a receipt leaves no object to verify, and the books can still look clean. The companion audit compares the rail extract to the receipt chain so a missing receipt becomes a finding.</p>
-      <h3>Does Cedulon take custody of funds?</h3>
-      <p>Cedulon does not take custody and does not operate escrow. An optional third-party escrow role may appear in the protocol as an interface. This repository uses mock keys and a mock rail. The published packages do not touch money: no real wallets and no network rails.</p>
-      <h3>How do I attach Cedulon to Claude or Cursor?</h3>
-      <p>The gated spend and extract audit are five MCP tools on stdio, published on npm as @cedulon/mcp-server. Point Claude Desktop, Claude Code, or Cursor at that package. There is nothing to clone or build. A five-minute path is in the repository Quickstart document.</p>
-      <h3>What does Cedulon not prove?</h3>
-      <p>Cedulon does not take custody and does not operate escrow. It does not judge delivery quality beyond a hash compare against the manifest acceptance criteria. Payment rails may succeed even if Cedulon is skipped. Production key storage is out of scope in this repository. Completeness checking does not replace prevention.</p>
-
-      <p><a href="agent-payment-audit.html">Auditing what an agent spent &mdash; signed receipts, whether an x402/AP2 reconciliation standard exists, and proving which rule allowed an action, with the five adjacent IETF drafts compared &rarr;</a></p>
-      <p><a href="compare.html">How Cedulon compares with Stripe Agent Toolkit, Coinbase AgentKit, x402, Google AP2, AWS AgentCore Payments and Vaara &mdash; docs and code kept apart in every cell, dated, including where they are ahead of us &rarr;</a></p>
-
-      <footer class="colophon">
-        <p><a href="https://github.com/dogrucanemek-alt/cedulon">Source</a> · <a href="spec.html">Draft</a> · <a href="verify.html">Run as a verifier</a> · <a href="compare.html">Compare</a> · <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Quickstart</a> · <a href="privacy.html">Privacy</a></p>
-        <p>Apache-2.0 · A <a href="https://verax-ai.com">VERAX</a> product · © 2026 Emek Can Doğru</p>
-      </footer>
+}</span></pre>
+            <button class="copy-btn" type="button" data-copy="cfg">Copy</button>
+          </div>
+          <div class="code-block">
+<pre class="rec" id="cc"><span class="b">claude mcp add cedulon -- npx -y @cedulon/mcp-server</span></pre>
+            <button class="copy-btn" type="button" data-copy="cc">Copy</button>
+          </div>
+          <p class="env">Limits come from the environment, for example <code>CEDULON_MAX_AMOUNT</code> and <code>CEDULON_ALLOWED_PAYEES</code>. Set <code>CEDULON_STATE_PATH</code> to keep the receipt chain across restarts.</p>
+        </div>
+        <div class="tools-wrap">
+          <table class="tools">
+            <thead><tr><th scope="col">Tool</th><th scope="col">What it does</th></tr></thead>
+            <tbody>
+              <tr><td><code>cedulon_spend</code></td><td>Checks the policy, then returns a signed receipt or a refusal with its reason.</td></tr>
+              <tr><td><code>cedulon_audit</code></td><td>Reconciles a rail extract against the receipt chain and returns findings and counts.</td></tr>
+              <tr><td><code>cedulon_verify_receipt</code></td><td>Checks a receipt's signature, and a countersignature when there is one.</td></tr>
+              <tr><td><code>cedulon_export_ledger</code></td><td>Exports receipts, checkpoint and extract as JSON.</td></tr>
+              <tr><td><code>cedulon_status</code></td><td>Version, active policy, receipt count and chain head.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
+  </section>
+
+  <section class="band" id="faq">
+    <div class="wrap">
+      <h2 class="sec-title">Questions</h2>
+      <div class="faq">
+        <article>
+          <h3>What does Cedulon actually do?</h3>
+          <p>Cedulon sits above payment rails such as x402 and AP2 as an audit layer. It writes a signed spend receipt, a chained epoch checkpoint, and a reconciliation of the rail extract. If a spend left no receipt, the gap is the finding. The design is specified in IETF Internet-Drafts and published as open source under Apache-2.0.</p>
+        </article>
+        <article>
+          <h3>Can anyone verify a spend receipt?</h3>
+          <p>A signed spend record checks as valid or tampered. That is the easy half. A spend that never issued a receipt leaves no object to verify, and the books can still look clean. The companion audit compares the rail extract to the receipt chain so a missing receipt becomes a finding.</p>
+        </article>
+        <article>
+          <h3>Does Cedulon take custody of funds?</h3>
+          <p>Cedulon does not take custody and does not operate escrow. An optional third-party escrow role may appear in the protocol as an interface. This repository uses mock keys and a mock rail. The published packages do not touch money: no real wallets and no network rails.</p>
+        </article>
+        <article>
+          <h3>How do I attach Cedulon to Claude or Cursor?</h3>
+          <p>The gated spend and extract audit are five MCP tools on stdio, published on npm as @cedulon/mcp-server. Point Claude Desktop, Claude Code, or Cursor at that package. There is nothing to clone or build. A five-minute path is in the repository <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Quickstart</a> document.</p>
+        </article>
+        <article>
+          <h3>What does Cedulon not prove?</h3>
+          <p>Cedulon does not take custody and does not operate escrow. It does not judge delivery quality beyond a hash compare against the manifest acceptance criteria. Payment rails may succeed even if Cedulon is skipped. Production key storage is out of scope in this repository. Completeness checking does not replace prevention.</p>
+        </article>
+        <article>
+          <h3>Where can I read more?</h3>
+          <p><a href="agent-payment-audit.html">Auditing what an agent spent</a>, with the adjacent IETF drafts compared, and <a href="compare.html">how Cedulon compares</a> with Stripe Agent Toolkit, Coinbase AgentKit, x402, Google AP2, AWS AgentCore Payments and Vaara, including where they are ahead.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <nav aria-label="Footer">
+      <a href="https://github.com/dogrucanemek-alt/cedulon">Source</a>
+      <a href="spec.html">Drafts</a>
+      <a href="verify.html">Run as a verifier</a>
+      <a href="compare.html">Compare</a>
+      <a href="https://github.com/dogrucanemek-alt/cedulon/blob/master/docs/QUICKSTART.md">Quickstart</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+    <p>A <a href="https://verax-ai.com">VERAX</a> product. Apache-2.0. © 2026 Emek Can Doğru</p>
+  </div>
+</footer>
+
+<button class="motion" type="button" id="motion">Stop the motion</button>
+<script src="film.js"></script>
   </body>
 </html>
