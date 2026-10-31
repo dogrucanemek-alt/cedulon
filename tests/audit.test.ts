@@ -463,3 +463,47 @@ describe("new detections — RED then GREEN", () => {
     assert.equal(green.ok, true);
   });
 });
+
+describe("unauthenticated-extract wording when no extract is supplied", () => {
+  it("says the extract was not supplied, not that a rail extract is unsigned", () => {
+    const report = audit({
+      receipts: [],
+      checkpoints: [],
+      settlements: [{ ref: "r1", amount: "1", currency: "USD", timestampMs: 1 }],
+    });
+    const warn = report.warnings.find((f) => f.code === "unauthenticated-extract");
+    assert.ok(warn, "unauthenticated-extract must stay the code name");
+    assert.match(warn.detail, /was supplied/);
+    assert.match(warn.detail, /unsigned/);
+    assert.match(warn.detail, /conditional/);
+    assert.equal(/is unsigned/.test(warn.detail), false);
+  });
+
+  it("keeps a different detail when an extract is presented without a pin", () => {
+    const ek = generateExtractKeys();
+    const extract = signRailExtract(
+      {
+        accountId: "acct-1",
+        railId: "mock-rail",
+        windowStartMs: 1_700_000_000_000,
+        windowEndMs: 1_700_000_000_010,
+        settlements: [],
+      },
+      ek.privateKeyPem,
+      ek.publicKeyPem,
+    );
+    const omitted = audit({
+      receipts: [],
+      checkpoints: [],
+      settlements: [{ ref: "r1", amount: "1", currency: "USD", timestampMs: 1 }],
+    });
+    const presented = audit({ receipts: [], checkpoints: [], extract });
+    const omittedDetail = omitted.warnings.find((f) => f.code === "unauthenticated-extract")?.detail;
+    const presentedDetail = presented.warnings.find((f) => f.code === "unauthenticated-extract")?.detail;
+    assert.ok(omittedDetail);
+    assert.ok(presentedDetail);
+    assert.notEqual(omittedDetail, presentedDetail);
+    assert.match(omittedDetail, /was supplied/);
+    assert.match(presentedDetail, /no verifier-supplied/);
+  });
+});

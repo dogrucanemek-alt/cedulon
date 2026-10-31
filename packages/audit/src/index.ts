@@ -1761,7 +1761,7 @@ function auditDetailed(input: AuditInput): AuditDetailed {
       id: "extract",
       detail: input.trust
         ? `${withArticle(w.extractKey)} was pinned but no extract was supplied, so there is nothing to check it against; completeness guarantee is conditional`
-        : `${w.extract} is unsigned; completeness guarantee is conditional`,
+        : `no ${w.extract} was supplied; the rows arrived unsigned, so the completeness guarantee is conditional`,
       severity: "warn",
     });
   }
