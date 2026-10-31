@@ -225,7 +225,7 @@
     "warnings": [
       {
         "code": "unauthenticated-extract",
-        "detail": "rail extract is unsigned; completeness guarantee is conditional",
+        "detail": "no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional",
         "id": "extract",
         "severity": "warn"
       }
@@ -322,7 +322,7 @@
     "warnings": [
       {
         "code": "unauthenticated-extract",
-        "detail": "rail extract is unsigned; completeness guarantee is conditional",
+        "detail": "no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional",
         "id": "extract",
         "severity": "warn"
       }

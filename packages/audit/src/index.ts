@@ -1507,21 +1507,29 @@ export const AUDIT_MAX_CHECKPOINTS = 256;
 /** Inclusion receipts; case 79 uses 51. */
 export const AUDIT_MAX_INCLUSIONS = 4_096;
 
+function throwAuditTooLarge(axis: string, count: number, max: number): never {
+  const err = new Error(`audit-too-large: ${axis} ${count} > ${max}; split the window`) as Error & {
+    code: string;
+  };
+  err.code = "audit-too-large";
+  throw err;
+}
+
 function assertAuditBounds(input: AuditInput): void {
   if (input.receipts.length > AUDIT_MAX_RECEIPTS) {
-    throw new Error("audit-too-large");
+    throwAuditTooLarge("receipts", input.receipts.length, AUDIT_MAX_RECEIPTS);
   }
   if (input.checkpoints.length > AUDIT_MAX_CHECKPOINTS) {
-    throw new Error("audit-too-large");
+    throwAuditTooLarge("checkpoints", input.checkpoints.length, AUDIT_MAX_CHECKPOINTS);
   }
   const settlements = input.extract
     ? extractRows(input.extract, populationOf(input.profile))
     : (input.settlements ?? []);
   if (settlements.length > AUDIT_MAX_SETTLEMENTS) {
-    throw new Error("audit-too-large");
+    throwAuditTooLarge("settlements", settlements.length, AUDIT_MAX_SETTLEMENTS);
   }
   if ((input.inclusionReceipts?.length ?? 0) > AUDIT_MAX_INCLUSIONS) {
-    throw new Error("audit-too-large");
+    throwAuditTooLarge("inclusions", input.inclusionReceipts?.length ?? 0, AUDIT_MAX_INCLUSIONS);
   }
 }
 
@@ -1753,7 +1761,7 @@ function auditDetailed(input: AuditInput): AuditDetailed {
       id: "extract",
       detail: input.trust
         ? `${withArticle(w.extractKey)} was pinned but no extract was supplied, so there is nothing to check it against; completeness guarantee is conditional`
-        : `${w.extract} is unsigned; completeness guarantee is conditional`,
+        : `no ${w.extract} was supplied; the rows arrived unsigned, so the completeness guarantee is conditional`,
       severity: "warn",
     });
   }

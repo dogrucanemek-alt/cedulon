@@ -2,7 +2,7 @@ import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
-import { audit, AUDIT_MAX_RECEIPTS } from "@cedulon/audit";
+import { audit, AUDIT_MAX_RECEIPTS, AUDIT_MAX_SETTLEMENTS } from "@cedulon/audit";
 import {
   CBOR_MAX_DEPTH,
   CBOR_MAX_ELEMENTS,
@@ -71,11 +71,39 @@ describe("resource limits", () => {
     const flood = Array.from({ length: AUDIT_MAX_RECEIPTS + 1 }, () => good);
     assert.throws(
       () => audit({ receipts: flood, checkpoints: [] }),
-      { message: "audit-too-large" },
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.equal((err as Error & { code?: string }).code, "audit-too-large");
+        assert.match(
+          err.message,
+          new RegExp(`^audit-too-large: receipts ${AUDIT_MAX_RECEIPTS + 1} > ${AUDIT_MAX_RECEIPTS}; split the window$`),
+        );
+        return true;
+      },
     );
   });
 
   it("the suite's largest audit (41 receipts) is under the bound", () => {
     assert.ok(41 < AUDIT_MAX_RECEIPTS);
+  });
+
+  it("audit-too-large names the axis, the count, the bound, and how to split", () => {
+    const flood = Array.from({ length: AUDIT_MAX_SETTLEMENTS + 1 }, (_, i) => ({
+      ref: `r${i}`,
+      amount: "1",
+      currency: "USD",
+      timestampMs: NOW + i,
+    }));
+    try {
+      audit({ receipts: [], checkpoints: [], settlements: flood });
+      assert.fail("expected audit-too-large");
+    } catch (err) {
+      assert.ok(err instanceof Error);
+      assert.equal((err as Error & { code?: string }).code, "audit-too-large");
+      assert.match(
+        err.message,
+        new RegExp(`^audit-too-large: settlements ${AUDIT_MAX_SETTLEMENTS + 1} > ${AUDIT_MAX_SETTLEMENTS}; split the window$`),
+      );
+    }
   });
 });

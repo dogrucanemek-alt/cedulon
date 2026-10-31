@@ -27,6 +27,11 @@ Constants live next to the check: `CBOR_MAX_*` in `@cedulon/cose` and
 `AUDIT_MAX_*` in `@cedulon/audit`. A third-party decoder that does not
 apply the same bounds is answering a different question.
 
+A window that exceeds an audit bound is refused, not truncated. Split
+the window into abutting periods so each side stays at or under the
+bound, then audit the pieces. The error names the axis, the count, and
+the bound (`audit-too-large: settlements 5000 > 4096; split the window`).
+
 A map with a duplicate key is `cbor-duplicate-key` here. Other decoders
 may keep the last value and say nothing. That split is fail-closed on
 our side; it is not an agreement on the value.
