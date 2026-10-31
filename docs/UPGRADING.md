@@ -4,6 +4,75 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.17.0: a mainnet rail by its own name, the window that was asked for, and refusals that say what they refused
+
+These changes came out of an independent run of 0.15.0 on Base mainnet USDC.
+They change how `@cedulon/base-extract` names and bounds the extract it
+builds, and what two refusals say. B moves a verdict and says which way.
+
+A. `@cedulon/base-extract`: the rail id follows the USDC contract. 0.16.0
+labelled every extract `base-sepolia-usdc`, including one built from Base
+mainnet. The Base Sepolia USDC contract maps to `base-sepolia-usdc` and the
+Base USDC contract (`BASE_USDC`, chain `BASE_CHAIN_ID` 8453) to `base-usdc`.
+`fetchUsdcExtract` reads `eth_chainId` and refuses a known contract on the
+other chain as `usdc-chain-mismatch`, and a non-numeric chain id as
+`rpc-chain-id-shape`. A contract that is not in the map needs an explicit
+`railId`; without one it is `unknown-usdc-contract`. An explicit `railId`
+does not override a known contract. `RAIL_ID` keeps its Sepolia meaning.
+
+What to do: an audit that pinned `base-sepolia-usdc` as the rail of a Base
+mainnet extract, because 0.16.0 named it so, pins `base-usdc` instead.
+
+B. `@cedulon/base-extract`: the window is the requested block range. 0.16.0
+took `windowStartMs` and `windowEndMs` from the transfers it found, so a
+range with one transfer gave a 1 ms window and a range with none gave 0..0.
+The window now runs from the `fromBlock` timestamp to the `toBlock`
+timestamp plus 1 ms, whether or not a transfer fired. `fetchUsdcExtract`
+fetches both boundary blocks. `logsToExtract` throws
+`missing-boundary-block <n>` when `blocks` has no timestamp for `fromBlock`
+or `toBlock`, and both refuse a `fromBlock` after `toBlock` as
+`inverted-block-range` before any query.
+
+An audit of such an extract now covers the range the operator asked for. A
+receipt inside that range but outside the span of the transfers found was
+out of scope under 0.16.0 and is in scope now, where it has to be matched.
+
+What to do: a direct caller of `logsToExtract` puts the `fromBlock` and
+`toBlock` timestamps into `blocks`.
+
+C. `@cedulon/audit`: `audit-too-large` says which bound it exceeded. The
+message names the axis, the count and the bound, for example
+`audit-too-large: settlements 5000 > 4096; split the window`, and the error
+carries `code: "audit-too-large"`. The bounds are unchanged; a window over
+one is refused, not truncated.
+
+What to do: a caller that compared the message to `audit-too-large` by
+equality compares `err.code` instead.
+
+D. `@cedulon/audit`: with settlement rows and no rail extract, the
+`unauthenticated-extract` warning says no rail extract was supplied and the
+rows arrived unsigned. 0.16.0 said the rail extract was unsigned, although
+none had been passed. The code and the verdict are unchanged, and so is the
+wording for an extract presented without a pin.
+
+What to do: a reader that matches the warning's detail text follows the new
+wording; one that reads the code is unaffected.
+
+E. The live demo prints `guarantee=` once. It covers Base mainnet as well as
+Sepolia through `--usdc`.
+
+F. The launchers `cedulon` and `cedulon-mcp` move to 1.4.0 and depend on
+`^0.17.0`. A `^0.16.0` range does not accept 0.17.0, so 1.3.0 keeps
+installing 0.16.0.
+
+Unchanged, and repeated here because the gate reads each version's own
+section: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
+introduced, where with a usable issuer pin the departure is a finding that
+fails the audit, and without a pin the same departure is a warning that
+does not by itself fail it; and `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted core-04
+names in Section 9 (MUST-T6-1).
+
 ## 0.16.0: the window's four edges, one receipt encoding, and consecutive windows as one run
 
 This release moves verdicts both ways, and each item says which. Some
