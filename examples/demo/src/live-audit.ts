@@ -1,15 +1,19 @@
-// Reads a real Base Sepolia USDC window and reconciles it against a receipt
-// chain, which is the shape of the actual job: the rail is not ours to edit,
-// and whatever it reports has to be accounted for.
+// Reads a real Base USDC window — Sepolia or mainnet, selected by --usdc
+// and the RPC endpoint — and reconciles it against a receipt chain, which
+// is the shape of the actual job: the rail is not ours to edit, and
+// whatever it reports has to be accounted for.
 //
-// Read-only. No wallet, no key, no transaction is sent. Set CEDULON_RPC_URL to
-// any Base Sepolia endpoint; https://sepolia.base.org needs no credential.
+// Read-only. No wallet, no key, no transaction is sent. Set CEDULON_RPC_URL
+// to a Base or Base Sepolia endpoint.
 //
 //   npm run demo:live -- --address 0x... --from <block> --to <block>
+//   npm run demo:live -- --address 0x... --from <block> --to <block> \
+//     --usdc 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
 //
-// With no receipts to match, every settlement the chain reports is a gap, and
-// the report says so rather than balancing. Pass --receipts <file> to
-// reconcile against a chain exported by npm run demo:export.
+// Default USDC is Base Sepolia. Pass the Base mainnet contract above for
+// chain 8453. With no receipts to match, every settlement the chain reports
+// is a gap, and the report says so rather than balancing. Pass --receipts
+// <file> to reconcile against a chain exported by npm run demo:export.
 
 import { readFileSync } from "node:fs";
 import { fetchUsdcExtract, makeRpc } from "@cedulon/base-extract";
@@ -28,7 +32,7 @@ const to = arg("--to");
 const rpcUrl = process.env.CEDULON_RPC_URL;
 
 if (!address || !from || !to) {
-  process.stderr.write("usage: --address <0x...> --from <block> --to <block> [--receipts <file>]\n");
+  process.stderr.write("usage: --address <0x...> --from <block> --to <block> [--receipts <file>] [--usdc <0x...>]\n");
   process.exit(2);
 }
 if (!rpcUrl) {
@@ -57,7 +61,6 @@ console.log(`settlements=${extract.settlements.length} total=${total} receipts=$
 
 const report = audit({ receipts, checkpoints: [], settlements: extract.settlements });
 console.log(formatAudit(report));
-console.log(`guarantee=${report.guarantee}`);
 
 // A window the chain reported and we cannot account for is the failure this
 // demo exists to show, so an unreconciled run must not exit 0.

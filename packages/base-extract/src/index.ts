@@ -2,10 +2,31 @@ import type { RailExtractBody, RailSettlement } from "@cedulon/x402-adapter";
 
 /** Circle USDC on Base Sepolia. Public contract address, not a credential. */
 export const BASE_SEPOLIA_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+/** Circle USDC on Base. Public contract address, not a credential. */
+export const BASE_USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 export const TRANSFER_TOPIC0 =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 export const USDC_DECIMALS = 6;
+/** Backward-compatible Sepolia rail name. New extracts take the id from the USDC map. */
 export const RAIL_ID = "base-sepolia-usdc";
+/** Base. Public chain id, not a credential. */
+export const BASE_CHAIN_ID = 8453;
+
+const USDC_RAILS: Record<string, { railId: string; chainId: number }> = {
+  [BASE_SEPOLIA_USDC.toLowerCase()]: { railId: RAIL_ID, chainId: 84532 },
+  [BASE_USDC.toLowerCase()]: { railId: "base-usdc", chainId: BASE_CHAIN_ID },
+};
+
+function resolveRailId(usdc: string, explicit?: string): string {
+  const known = USDC_RAILS[normalizeAddress(usdc)];
+  if (known) {
+    return known.railId;
+  }
+  if (explicit) {
+    return explicit;
+  }
+  throw new Error("unknown-usdc-contract");
+}
 
 export type RpcLog = {
   address: string;
@@ -80,11 +101,21 @@ export function logsToExtract(input: {
   logs: RpcLog[];
   blocks: Record<string, RpcBlock>;
   account: string;
-  fromBlock: number;
-  toBlock: number;
+  fromBlock: number | string;
+  toBlock: number | string;
   currency?: string;
   decimals?: number;
+  usdc?: string;
+  railId?: string;
 }): RailExtractBody {
+  const fromBoundary = lookupBlock(input.blocks, input.fromBlock);
+  if (!fromBoundary) {
+    throw new Error(`missing-boundary-block ${input.fromBlock}`);
+  }
+  const toBoundary = lookupBlock(input.blocks, input.toBlock);
+  if (!toBoundary) {
+    throw new Error(`missing-boundary-block ${input.toBlock}`);
+  }
   const currency = input.currency ?? "USDC";
   const settlements: RailSettlement[] = [];
   for (const log of input.logs) {
@@ -104,12 +135,11 @@ export function logsToExtract(input: {
       timestampMs,
     });
   }
-  const times = settlements.map((s) => s.timestampMs);
   return {
     accountId: normalizeAddress(input.account),
-    railId: RAIL_ID,
-    windowStartMs: times.length === 0 ? 0 : Math.min(...times),
-    windowEndMs: times.length === 0 ? 0 : Math.max(...times) + 1,
+    railId: resolveRailId(input.usdc ?? BASE_SEPOLIA_USDC, input.railId),
+    windowStartMs: Number(hexToBigInt(fromBoundary.timestamp)) * 1000,
+    windowEndMs: Number(hexToBigInt(toBoundary.timestamp)) * 1000 + 1,
     settlements,
   };
 }
@@ -140,8 +170,19 @@ export async function fetchUsdcExtract(input: {
   fromBlock: number | string;
   toBlock: number | string;
   usdc?: string;
+  railId?: string;
 }): Promise<RailExtractBody> {
   const usdc = input.usdc ?? BASE_SEPOLIA_USDC;
+  const known = USDC_RAILS[normalizeAddress(usdc)];
+  if (!known && !input.railId) {
+    throw new Error("unknown-usdc-contract");
+  }
+  if (known) {
+    const chainId = parseChainId(await input.rpc("eth_chainId", []));
+    if (chainId !== known.chainId) {
+      throw new Error("usdc-chain-mismatch");
+    }
+  }
   const accountTopic = padTopicAddress(input.account);
   const range = {
     fromBlock: toHexBlock(input.fromBlock),
@@ -153,29 +194,47 @@ export async function fetchUsdcExtract(input: {
     input.rpc("eth_getLogs", [{ ...range, topics: [TRANSFER_TOPIC0, null, accountTopic] }]),
   ]);
   const logs = dedupeLogs([...(asLogs(outLogs)), ...(asLogs(inLogs))]);
-  const blockNums = [...new Set(logs.map((l) => l.blockNumber))];
+  const fromHex = toHexBlock(input.fromBlock);
+  const toHex = toHexBlock(input.toBlock);
+  const blockNums = new Set<string>([fromHex, toHex, ...logs.map((l) => l.blockNumber)]);
   const blocks: Record<string, RpcBlock> = {};
   for (const num of blockNums) {
-    const block = (await input.rpc("eth_getBlockByNumber", [num, false])) as RpcBlock | null;
+    const hex = toHexBlock(num);
+    const block = (await input.rpc("eth_getBlockByNumber", [hex, false])) as RpcBlock | null;
     if (!block) {
-      throw new Error(`missing-block ${num}`);
+      throw new Error(`missing-block ${hex}`);
     }
-    blocks[num] = { timestamp: block.timestamp };
+    const stamp = { timestamp: block.timestamp };
+    blocks[num] = stamp;
+    blocks[hex] = stamp;
+    blocks[hex.toLowerCase()] = stamp;
   }
   return logsToExtract({
     logs,
     blocks,
     account: input.account,
-    fromBlock: Number(input.fromBlock),
-    toBlock: Number(input.toBlock),
+    fromBlock: input.fromBlock,
+    toBlock: input.toBlock,
+    usdc,
+    railId: input.railId,
   });
 }
 
 function toHexBlock(n: number | string): string {
-  if (typeof n === "string" && n.startsWith("0x")) {
-    return n;
-  }
   return `0x${BigInt(n).toString(16)}`;
+}
+
+function lookupBlock(blocks: Record<string, RpcBlock>, n: number | string): RpcBlock | undefined {
+  const hex = toHexBlock(n);
+  const dec = typeof n === "string" && /^0x/i.test(n) ? BigInt(n).toString(10) : String(n);
+  return blocks[hex] ?? blocks[hex.toLowerCase()] ?? blocks[String(n)] ?? blocks[dec];
+}
+
+function parseChainId(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return Number(BigInt(String(value)));
 }
 
 function asLogs(value: unknown): RpcLog[] {
