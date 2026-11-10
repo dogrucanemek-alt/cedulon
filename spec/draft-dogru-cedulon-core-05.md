@@ -2370,7 +2370,7 @@ Coverage:
   rail, and the body does not move money.
 
 Version compatibility:
-: Verax 0.8.0 depends on `@cedulon/*` 0.13.1. Those published
+: Verax 0.8.2 depends on `@cedulon/*` 0.13.1. Those published
   packages implement the posted draft-dogru-cedulon-09 profile and,
   from 0.13.0, the posted draft-dogru-cedulon-decision-profile-03.
   0.13.1 changes no behaviour from 0.13.0. This document is the
@@ -2390,7 +2390,7 @@ Contact:
 
 URL:
 : <https://github.com/verax-ai/verax>. The packages `@verax-ai/body`,
-  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.8.0
+  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.8.2
   (<https://www.npmjs.com/package/@verax-ai/body>,
   <https://www.npmjs.com/package/@verax-ai/proxy>,
   <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP

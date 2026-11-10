@@ -15,13 +15,17 @@ and verification is against that signed root. A proof with `treeSize` greater
 than `2^32 - 1` is refused.
 
 Receipts that omit `alg` still verify under the older domain-separation-free
-walk. Callers of `verifyInclusion` see the same boolean contract; call
-`verifyInclusionDetailed` when you need `{ ok, legacyTree }` to tell the two
-walks apart (`legacyTree: true` means the older walk ran).
+walk. Acceptance on that walk still requires the statement digest, the leaf
+index, and the reproduced root to match the payload the log signed; a shared
+root alone was never enough. Callers of `verifyInclusion` see the same
+boolean contract; call `verifyInclusionDetailed` when you need
+`{ ok, legacyTree }` to tell the two walks apart (`legacyTree: true` means
+the older walk ran).
 
 The older tree paired an odd last node with itself and did not separate leaves
-from interior nodes, so the leaf set `[a, b, c]` and `[a, b, c, c]` produced
-the same root. The RFC 9162 tree does not.
+from interior nodes, so the leaf lists `[a, b, c]` and `[a, b, c, c]` produced
+the same root and could not be told apart from the root alone. The RFC 9162
+tree removes that collision.
 
 ## 0.17.0: a mainnet rail by its own name, the window that was asked for, and refusals that say what they refused
 

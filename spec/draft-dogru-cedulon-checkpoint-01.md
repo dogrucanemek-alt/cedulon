@@ -216,17 +216,18 @@ entries or carries one of another type, does not verify: the content
 type is the check {{CEDULON-CORE}} (COSE Profile) makes on every object of this
 profile, and the payload map is the one this paragraph states.
 
-When the witness issues under {{RFC9162}}, the receipt may also carry
+When the witness issues under {{RFC9162}}, the receipt carries
 `alg` with the value `rfc9162-sha256`, `treeSize` (the number of leaves
 at issuance), and `leafHash` (`HASH(0x00 || statement octets)` per
 {{RFC9162}} Section 2.1.1). Those three fields sit beside the COSE
 object; they are not entries of the signed payload map above. The
 signed fields remain the statement hash, the entry index, and the tree
-head, and verification is against that signed tree head. A receipt that
-omits `alg` is verified by the older domain-separation-free walk this
-revision replaces. A receipt that names an unknown `alg` is refused.
-An inclusion proof whose `treeSize` is greater than 2^32 - 1 is
-refused.
+head, and verification is against that signed tree head. The -00
+revision of this document described a different tree: leaves and
+interior nodes carried no prefix, and a level with an odd count paired
+its last node with itself. Receipts published under that tree omit
+`alg`, and this revision does not define their verification. A receipt
+that names an unknown `alg` does not verify.
 
 A verifier MAY be given witness receipts for the period under audit.
 It is a distinct input from the presented checkpoint chain, and
