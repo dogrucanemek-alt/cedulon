@@ -1298,13 +1298,31 @@ function findTransparencyWitness(
   // to be enough to report an honest issuer for hiding something never theirs.
   // The unsigned body must also be the statement the receipt signed: a body from
   // another statement cannot say whose logged hash this is.
-  const accusing = anchoring.filter(
-    (r) =>
-      r.checkpoint &&
-      statementHashOfCheckpoint(r.checkpoint) === r.statementHash &&
-      (!attestsCheckpoint || attestsCheckpoint(r.checkpoint)),
-  );
+  //
+  // When the verifier pinned an issuer key, that pin decides attribution. When
+  // it did not, a body still has to verify, and its key has to match a key on
+  // the presented chain; otherwise the entry names some other issuer (or none)
+  // and is not an accusation against this chain. An empty presented chain has
+  // no key to match, so it cannot accuse.
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
+  const accusing = anchoring.filter((r) => {
+    if (!r.checkpoint) {
+      return false;
+    }
+    if (statementHashOfCheckpoint(r.checkpoint) !== r.statementHash) {
+      return false;
+    }
+    if (attestsCheckpoint) {
+      return attestsCheckpoint(r.checkpoint);
+    }
+    if (checkpoints.length === 0) {
+      return false;
+    }
+    if (!verifiesOrRefusal(() => verifyCheckpoint(r.checkpoint!), r.checkpoint.coseHex).ok) {
+      return false;
+    }
+    return checkpoints.some((cp) => sameSpkiKey(r.checkpoint!.publicKeyPem, cp.publicKeyPem));
+  });
 
   for (const cp of checkpoints) {
     const hash = statementHashOfCheckpoint(cp);
@@ -1318,26 +1336,22 @@ function findTransparencyWitness(
     }
   }
 
-  // Cannot name who logged these, so they are not accusations - but a real
-  // withholding goes silent if stripping the body is enough to bury it. Counted
-  // rather than listed: entries with no body are free to produce, and one
-  // warning each would let an attacker bury the findings under volume. A body
-  // that does not match the signed statement hash is the same: it names nobody
-  // for this hash (MUST-T11-17).
+  // Every log entry this chain does not present and that did not enter the
+  // accusing set is counted here: no body, hash mismatch, unverifiable body,
+  // or a body whose issuer cannot be tied to the presented chain. Counted
+  // rather than listed so volume cannot bury the findings (MUST-T11-17).
+  const accusingSet = new Set(accusing);
   const unattributable = anchoring.filter((rec) => {
     if (presentedHashes.has(rec.statementHash)) {
       return false;
     }
-    if (!rec.checkpoint) {
-      return true;
-    }
-    return statementHashOfCheckpoint(rec.checkpoint) !== rec.statementHash;
+    return !accusingSet.has(rec);
   });
   if (unattributable.length > 0) {
     warnings.push({
       code: "witness-entry-unattributable",
       id: "witness",
-      detail: `the witness holds ${unattributable.length} statement(s) this chain does not present and which carry no body that says whose they are; first is ${unattributable[0].statementHash}`,
+      detail: `the witness holds ${unattributable.length} statement(s) this chain does not present and which cannot be attributed to it; first is ${unattributable[0].statementHash}`,
       severity: "warn",
     });
   }

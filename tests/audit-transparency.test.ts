@@ -273,6 +273,105 @@ describe("A — transparency witness on the audit path", () => {
     );
   });
 
+  it("without an issuer pin a foreign checkpoint in the log does not accuse withholding", () => {
+    const honest = generateReceiptKeys();
+    const foreign = generateReceiptKeys();
+    const receipts = chainReceipts(honest, ["1"]);
+    const presented = oneCheckpoint(honest, receipts, 1);
+    const stranger = signCheckpoint(
+      buildCheckpointClaims(9, receipts, 1_700_000_000_010, 1_700_000_000_020, null),
+      foreign.privateKeyPem,
+      foreign.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const strangerReceipt = anchorCheckpoint(ts, stranger);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, strangerReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `foreign entry must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "foreign entry is counted as unattributable",
+    );
+  });
+
+  it("without an issuer pin a same-key withheld body still accuses", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const presented = oneCheckpoint(k, receipts, 1);
+    const withheld = signCheckpoint(
+      buildCheckpointClaims(2, receipts, 1_700_000_000_010, 1_700_000_000_020, statementHashOfCheckpoint(presented)),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const withheldReceipt = anchorCheckpoint(ts, withheld);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, withheldReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      true,
+      `same-key withheld must accuse: ${JSON.stringify(report.findings)}`,
+    );
+  });
+
+  it("a body whose claims disagree with its COSE is not silent in the witness", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const presented = oneCheckpoint(k, receipts, 1);
+    const withheld = signCheckpoint(
+      buildCheckpointClaims(2, receipts, 1_700_000_000_010, 1_700_000_000_020, statementHashOfCheckpoint(presented)),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const withheldReceipt = anchorCheckpoint(ts, withheld);
+    const tampered = {
+      ...withheldReceipt,
+      checkpoint: {
+        ...withheldReceipt.checkpoint!,
+        claims: { ...withheldReceipt.checkpoint!.claims, epoch: 99 },
+      },
+    };
+    assert.equal(statementHashOfCheckpoint(tampered.checkpoint), withheldReceipt.statementHash);
+    assert.equal(verifyCheckpoint(tampered.checkpoint), false);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, tampered],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+      issuerTrust: { publicKeyPem: k.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `tampered claims must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "tampered body still enters the unattributable count",
+    );
+  });
+
   it("an empty or unreadable witness pin warns as unauthenticated, not as unanchored", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);

@@ -6,6 +6,12 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## Unreleased
 
+When an audit is run without an issuer pin, `checkpoint-withheld` is raised
+for a log entry whose body verifies under a key that also signed a presented
+checkpoint; other log entries that this chain does not present are counted
+under `witness-entry-unattributable` instead of being treated as withholding
+by the presented issuer.
+
 `audit` layer 2 (candidate statement bytes plus an inclusion proof) accepts a
 receipt only under a verifier-supplied pinned witness key (`witnessTrust`).
 Earlier builds accepted a receipt that verified against the key it carried when
