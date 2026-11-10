@@ -127,7 +127,7 @@ describe("witness receipt shape", () => {
     assert.throws(() => decodeInclusionPayload(six.coseHex), /inclusion-payload/);
   });
 
-  it("a signed index that is negative or fractional is refused", () => {
+  it("a signed index that is negative is refused as inclusion-payload", () => {
     const negative = resigned(
       inc,
       witness.privateKeyPem,
@@ -142,7 +142,9 @@ describe("witness receipt shape", () => {
     );
     assert.throws(() => decodeInclusionPayload(negative.coseHex), /inclusion-payload/);
     assert.equal(verifyInclusion(negative, "deadbeef", witness.publicKeyPem), false);
+  });
 
+  it("a signed index that is fractional is refused by the CBOR decoder", () => {
     // A float index cannot be written by encodeCbor; build the map octets by
     // hand (float64 1.5 at label 2) and sign them. decodeCbor refuses major 7
     // before the unsigned-integer rule runs, so the receipt still fails closed.
@@ -168,6 +170,81 @@ describe("witness receipt shape", () => {
     };
     assert.throws(() => decodeInclusionPayload(fractional.coseHex));
     assert.equal(verifyInclusion(fractional, "deadbeef", witness.publicKeyPem), false);
+  });
+
+  it("decodeInclusionPayload refuses statementHash and treeHead that are not 64 lowercase hex", () => {
+    const badHashes = [
+      "",
+      "a".repeat(63),
+      inc.statementHash.toUpperCase(),
+      "g".repeat(64),
+    ];
+    for (const bad of badHashes) {
+      const badStatement = resigned(
+        inc,
+        witness.privateKeyPem,
+        [
+          [1, bad],
+          [2, inc.index],
+          [3, inc.treeHead],
+          [4, inc.treeSize!],
+          [5, "rfc9162-sha256"],
+        ],
+        CTY_INCLUSION,
+      );
+      assert.throws(
+        () => decodeInclusionPayload(badStatement.coseHex),
+        /inclusion-payload/,
+        `statementHash ${JSON.stringify(bad)}`,
+      );
+      const badHead = resigned(
+        inc,
+        witness.privateKeyPem,
+        [
+          [1, inc.statementHash],
+          [2, inc.index],
+          [3, bad],
+          [4, inc.treeSize!],
+          [5, "rfc9162-sha256"],
+        ],
+        CTY_INCLUSION,
+      );
+      assert.throws(
+        () => decodeInclusionPayload(badHead.coseHex),
+        /inclusion-payload/,
+        `treeHead ${JSON.stringify(bad)}`,
+      );
+      const badThreeStatement = resigned(
+        inc,
+        witness.privateKeyPem,
+        [
+          [1, bad],
+          [2, 0],
+          [3, inc.treeHead],
+        ],
+        CTY_INCLUSION,
+      );
+      assert.throws(
+        () => decodeInclusionPayload(badThreeStatement.coseHex),
+        /inclusion-payload/,
+        `three-entry statementHash ${JSON.stringify(bad)}`,
+      );
+      const badThreeHead = resigned(
+        inc,
+        witness.privateKeyPem,
+        [
+          [1, inc.statementHash],
+          [2, 0],
+          [3, bad],
+        ],
+        CTY_INCLUSION,
+      );
+      assert.throws(
+        () => decodeInclusionPayload(badThreeHead.coseHex),
+        /inclusion-payload/,
+        `three-entry treeHead ${JSON.stringify(bad)}`,
+      );
+    }
   });
 
   it("a three-entry receipt must omit unsigned alg and treeSize", () => {

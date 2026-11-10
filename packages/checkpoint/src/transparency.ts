@@ -647,6 +647,9 @@ export function decodeInclusionPayload(coseHex: string): {
   if (typeof statementHash !== "string" || typeof index !== "number" || typeof treeHead !== "string") {
     throw new Error("inclusion-payload");
   }
+  if (!HASH_HEX_RE.test(statementHash) || !HASH_HEX_RE.test(treeHead)) {
+    throw new Error("inclusion-payload");
+  }
   if (!Number.isSafeInteger(index) || index < 0) {
     throw new Error("inclusion-payload");
   }

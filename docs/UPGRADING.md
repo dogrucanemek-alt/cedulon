@@ -1097,11 +1097,13 @@ audit({
 `issuerTrust` and `witnessTrust` also accept a list of keys, so a rotation does
 not turn honest receipts into a wall of findings.
 
-**An audit with no roots is not an error, but it is not unconditional either.**
-It reports `unauthenticated-issuer`, `unauthenticated-witness` and
-`unauthenticated-countersigner` as warnings and the guarantee stays
-`conditional`. Code that asserted `guarantee === "unconditional"` without passing
-the roots will now fail, and that is the point of the release.
+**When layer 2 is not exercised, an audit with no roots is not an error, but it
+is not unconditional either.** It reports `unauthenticated-issuer`,
+`unauthenticated-witness` and `unauthenticated-countersigner` as warnings and the
+guarantee stays `conditional`. Layer-2 input requires a pinned witness key
+(`witnessTrust`); without a readable one the pair is `witness-inclusion-invalid`.
+Code that asserted `guarantee === "unconditional"` without passing the roots
+will now fail, and that is the point of the release.
 
 New finding codes: `issuer-key-mismatch`, `countersign-key-mismatch`,
 `countersign-missing`, `witness-entry-unattributable`, and the three

@@ -1296,8 +1296,13 @@ function findTransparencyWitness(
   // A log holds statements from everyone who uses it, and an entry with no body
   // names nobody - stripping the body off a genuine entry is free, and it used
   // to be enough to report an honest issuer for hiding something never theirs.
+  // The unsigned body must also be the statement the receipt signed: a body from
+  // another statement cannot say whose logged hash this is.
   const accusing = anchoring.filter(
-    (r) => r.checkpoint && (!attestsCheckpoint || attestsCheckpoint(r.checkpoint)),
+    (r) =>
+      r.checkpoint &&
+      statementHashOfCheckpoint(r.checkpoint) === r.statementHash &&
+      (!attestsCheckpoint || attestsCheckpoint(r.checkpoint)),
   );
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
 
@@ -1316,15 +1321,23 @@ function findTransparencyWitness(
   // Cannot name who logged these, so they are not accusations - but a real
   // withholding goes silent if stripping the body is enough to bury it. Counted
   // rather than listed: entries with no body are free to produce, and one
-  // warning each would let an attacker bury the findings under volume.
-  const unattributable = anchoring.filter(
-    (rec) => !rec.checkpoint && !presentedHashes.has(rec.statementHash),
-  );
+  // warning each would let an attacker bury the findings under volume. A body
+  // that does not match the signed statement hash is the same: it names nobody
+  // for this hash (MUST-T11-17).
+  const unattributable = anchoring.filter((rec) => {
+    if (presentedHashes.has(rec.statementHash)) {
+      return false;
+    }
+    if (!rec.checkpoint) {
+      return true;
+    }
+    return statementHashOfCheckpoint(rec.checkpoint) !== rec.statementHash;
+  });
   if (unattributable.length > 0) {
     warnings.push({
       code: "witness-entry-unattributable",
       id: "witness",
-      detail: `the witness holds ${unattributable.length} statement(s) this chain does not present and which carry no body to say whose they are; first is ${unattributable[0].statementHash}`,
+      detail: `the witness holds ${unattributable.length} statement(s) this chain does not present and which carry no body that says whose they are; first is ${unattributable[0].statementHash}`,
       severity: "warn",
     });
   }
@@ -2406,11 +2419,23 @@ function auditDetailed(input: AuditInput): AuditDetailed {
   // its inclusion receipts are a log anyone could have invented, and letting them
   // reach the epoch pool lets an attacker report the honest issuer for publishing
   // two checkpoints of one epoch. The warning says why they were left out.
-  const witnessConfigured = Boolean(input.inclusionReceipts && input.witnessTrust);
+  // Configuration means at least one readable key: an empty or unreadable pin
+  // list is the same as naming no log.
+  const witnessPin = input.witnessTrust
+    ? pinnedKeys(input.witnessTrust.publicKeyPem)
+    : null;
+  const witnessConfigured = Boolean(
+    input.inclusionReceipts && witnessPin && witnessPin.usable.length > 0,
+  );
+  const witnessPem = witnessConfigured
+    ? pinPemsOf((input.witnessTrust as IssuerTrustPin).publicKeyPem).filter(
+        (pem) => toSpkiDer(pem) !== null,
+      )
+    : undefined;
   const witnessCheckpoints = witnessConfigured
     ? verifiedWitnessCheckpoints(
         input.inclusionReceipts!,
-        (input.witnessTrust as IssuerTrustPin).publicKeyPem,
+        witnessPem,
         attestsCheckpoint,
         pinVerify,
       )
@@ -2423,7 +2448,7 @@ function auditDetailed(input: AuditInput): AuditDetailed {
       const witness = findTransparencyWitness(
         attestedCheckpoints,
         input.inclusionReceipts,
-        (input.witnessTrust as IssuerTrustPin).publicKeyPem,
+        witnessPem,
         attestsCheckpoint,
       );
       findings.push(...witness.findings);
@@ -2433,7 +2458,9 @@ function auditDetailed(input: AuditInput): AuditDetailed {
         code: "unauthenticated-witness",
         id: "witness",
         detail:
-          "no verifier-supplied witness key; an inclusion receipt verified against the key it carries would say a log exists rather than that the named log anchored anything, so none was verified here and the receipt was left out of the comparison",
+          input.witnessTrust !== undefined
+            ? "a witness pin was supplied but no key in it could be read as a public key; an inclusion receipt verified against the key it carries would say a log exists rather than that the named log anchored anything, so none was verified here and the receipt was left out of the comparison"
+            : "no verifier-supplied witness key; an inclusion receipt verified against the key it carries would say a log exists rather than that the named log anchored anything, so none was verified here and the receipt was left out of the comparison",
         severity: "warn",
       });
     }
