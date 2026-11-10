@@ -161,8 +161,9 @@ Brand names come from `packages/core/src/brand.ts` only.
 
 ## How to cite
 
-Citation metadata is in `CITATION.cff`. The archived -00 release is
-published as https://doi.org/10.5281/zenodo.22099792. The decision
+Citation metadata is in `CITATION.cff`. Cite the concept record
+https://doi.org/10.5281/zenodo.22099791, which resolves to the latest archived
+version. The decision
 profile, posted at draft-dogru-cedulon-decision-profile-04, is deposited on its own
 as https://doi.org/10.5281/zenodo.22337734 (all versions; the posted -04 text is
 https://doi.org/10.5281/zenodo.23155667)
