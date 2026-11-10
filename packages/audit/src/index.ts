@@ -1190,12 +1190,15 @@ export function findCheckpointTotalMismatches(
       });
     }
   }
-  const chain = findCheckpointChainBreak(checkpoints, undefined, expectedFirstPrevCheckpoint, verify);
+  // Spec walk is epoch order; remap the break index to the presented array.
+  const byEpoch = [...checkpoints].sort((a, b) => a.claims.epoch - b.claims.epoch);
+  const chain = findCheckpointChainBreak(byEpoch, undefined, expectedFirstPrevCheckpoint, verify);
   if (chain) {
+    const presentedIndex = checkpoints.indexOf(byEpoch[chain.index]!);
     findings.push({
       code: "checkpoint-total-mismatch",
-      id: `checkpoint-chain-${chain.index}`,
-      detail: `checkpoint chain ${chain.reason} at ${chain.index}`,
+      id: `checkpoint-chain-${presentedIndex}`,
+      detail: `checkpoint chain ${chain.reason} at ${presentedIndex}`,
     });
   }
   return findings;

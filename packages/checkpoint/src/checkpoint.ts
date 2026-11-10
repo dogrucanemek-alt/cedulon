@@ -254,6 +254,10 @@ export function checkpointHash(signed: SignedCheckpoint): string {
 
 export type ChainBreak = { index: number; reason: string };
 
+/**
+ * Walks `chain` in the order given; the caller supplies epoch order when that
+ * is the walk the document requires.
+ */
 export function findCheckpointChainBreak(
   chain: SignedCheckpoint[],
   expectedIssuerKeyPem?: string,

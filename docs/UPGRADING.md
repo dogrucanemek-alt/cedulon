@@ -6,6 +6,13 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## Unreleased
 
+`audit` walks the checkpoint hash chain in epoch order, as the verification
+algorithm requires. A bundle whose `prevCheckpointHash` links follow
+presentation order while epochs are shuffled (for example 3 then 1 then 2) is
+now a `checkpoint-total-mismatch` chain break. Callers that already present an
+honest chain in any array order keep a clean audit; callers that relied on
+presentation-order linking without epoch order do not.
+
 New inclusion receipts from the in-process transparency log use the RFC 9162
 Merkle Tree Hash (Section 2.1): leaf `HASH(0x00 || entry)`, interior node
 `HASH(0x01 || left || right)`. Each new receipt carries `alg: "rfc9162-sha256"`,
