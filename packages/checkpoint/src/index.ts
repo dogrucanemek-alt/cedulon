@@ -19,6 +19,7 @@ export {
 } from "./checkpoint.ts";
 export {
   MemoryTransparencyService,
+  RFC9162_EMPTY_ROOT,
   anchorCheckpoint,
   anchorReceipt,
   applyInclusionProof,
@@ -26,12 +27,19 @@ export {
   decodeInclusionPayload,
   merkleParent,
   merkleRoot,
+  rfc9162InclusionProof,
+  rfc9162LeafHash,
+  rfc9162NodeHash,
+  rfc9162Root,
+  rfc9162VerifyInclusion,
   statementHashOfCheckpoint,
   statementHashOfReceipt,
   strictHexBytes,
   validInclusionProof,
   verifyInclusion,
+  verifyInclusionDetailed,
   verifyInclusionEnvelope,
   type InclusionProof,
   type InclusionReceipt,
+  type InclusionVerifyResult,
 } from "./transparency.ts";

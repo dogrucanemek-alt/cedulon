@@ -885,7 +885,7 @@ window. `@cedulon/x402-adapter` is used for its types; there is no
 live x402 rail.
 
 The packages `@verax-ai/body`, `@verax-ai/proxy` and
-`@verax-ai/inventory` are on npm at 0.8.0
+`@verax-ai/inventory` are on npm at 0.8.2
 (<https://www.npmjs.com/package/@verax-ai/body>,
 <https://www.npmjs.com/package/@verax-ai/proxy>,
 <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP
@@ -903,7 +903,7 @@ one amount. A tenant boundary has not been exercised with two live
 customers. License: Apache-2.0. Contact: the author of
 draft-dogru-cedulon.
 
-Version compatibility: Verax 0.8.0 depends on `@cedulon/*` 0.13.1.
+Version compatibility: Verax 0.8.2 depends on `@cedulon/*` 0.13.1.
 Those published packages implement the posted draft-dogru-cedulon-09
 profile and, from 0.13.0, the posted
 draft-dogru-cedulon-decision-profile-03. 0.13.1 changes no behaviour

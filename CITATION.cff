@@ -11,8 +11,8 @@ url: "https://cedulon.com"
 license: Apache-2.0
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.22099792
-    description: "Archived -00 release (commit e0b4ac8)"
+    value: 10.5281/zenodo.22099791
+    description: "Concept DOI; resolves to the latest archived version"
 keywords:
   - agent commerce
   - audit

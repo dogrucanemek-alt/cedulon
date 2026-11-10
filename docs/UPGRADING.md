@@ -4,6 +4,56 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## Unreleased
+
+When an audit is run without an issuer pin, `checkpoint-withheld` is raised
+for a log entry whose body verifies under a key that also signed a presented
+checkpoint; other log entries that this chain does not present are counted
+under `witness-entry-unattributable` instead of being treated as withholding
+by the presented issuer.
+
+`audit` layer 2 (candidate statement bytes plus an inclusion proof) accepts a
+receipt only under a verifier-supplied pinned witness key (`witnessTrust`).
+Earlier builds accepted a receipt that verified against the key it carried when
+no pin was present. Callers that exercised layer 2 without `witnessTrust` now
+see `witness-inclusion-invalid`; supply the log's key out of band.
+
+`audit` walks the checkpoint hash chain in epoch order, as the verification
+algorithm requires. A bundle whose `prevCheckpointHash` links follow
+presentation order while epochs are shuffled (for example 3 then 1 then 2) is
+now a `checkpoint-total-mismatch` chain break. Callers that already present an
+honest chain in any array order keep a clean audit; callers that relied on
+presentation-order linking without epoch order do not.
+
+New inclusion receipts from the in-process transparency log use the RFC 9162
+Merkle Tree Hash (Section 2.1): leaf `HASH(0x00 || entry)`, interior node
+`HASH(0x01 || left || right)`. Each new receipt signs a five-entry CBOR map:
+`statementHash`, `index`, `treeHead`, `treeSize` (unsigned int), and
+`alg` (`rfc9162-sha256`). Unsigned `alg` and `treeSize` on the receipt and
+on the inclusion proof must equal those signed values. `leafHash` sits
+beside the COSE and is not signed; when present it is recomputed from the
+candidate and compared. A proof with `treeSize` greater than `2^32 - 1` is
+refused. `applyInclusionProof` throws `inclusion-proof` for an RFC 9162
+proof, because that helper is the legacy pad-even walk. Verifiers at 0.17.0
+and earlier do not verify a five-entry receipt.
+
+A three-entry signed payload is the -00 (legacy) map: `statementHash`,
+`index`, and `treeHead`. That receipt must omit unsigned `alg` and
+`treeSize`, and its proof must omit them too. Callers of `verifyInclusion`
+see the same boolean contract; call `verifyInclusionDetailed` when you need
+`{ ok, legacyTree }`. `legacyTree` is true when the signed payload is the
+three-entry map; false when it is five-entry or when the payload cannot be
+read (including early envelope failures). Three-entry receipts still verify
+under the older walk, in `verifyInclusion` and in tier 2 of `audit`; acceptance
+there still requires the statement hash, the index, and the reproduced root to
+match the payload the log signed. `audit` raises no separate finding when it
+accepts one.
+
+The older tree paired an odd last node with itself and did not separate leaves
+from interior nodes, so the leaf lists `[a, b, c]` and `[a, b, c, c]` produced
+the same root and could not be told apart from the root alone. The RFC 9162
+tree removes that collision.
+
 ## 0.17.0: a mainnet rail by its own name, the window that was asked for, and refusals that say what they refused
 
 These changes came out of an independent run of 0.15.0 on Base mainnet USDC.
@@ -1053,11 +1103,13 @@ audit({
 `issuerTrust` and `witnessTrust` also accept a list of keys, so a rotation does
 not turn honest receipts into a wall of findings.
 
-**An audit with no roots is not an error, but it is not unconditional either.**
-It reports `unauthenticated-issuer`, `unauthenticated-witness` and
-`unauthenticated-countersigner` as warnings and the guarantee stays
-`conditional`. Code that asserted `guarantee === "unconditional"` without passing
-the roots will now fail, and that is the point of the release.
+**When layer 2 is not exercised, an audit with no roots is not an error, but it
+is not unconditional either.** It reports `unauthenticated-issuer`,
+`unauthenticated-witness` and `unauthenticated-countersigner` as warnings and the
+guarantee stays `conditional`. Layer-2 input requires a pinned witness key
+(`witnessTrust`); without a readable one the pair is `witness-inclusion-invalid`.
+Code that asserted `guarantee === "unconditional"` without passing the roots
+will now fail, and that is the point of the release.
 
 New finding codes: `issuer-key-mismatch`, `countersign-key-mismatch`,
 `countersign-missing`, `witness-entry-unattributable`, and the three

@@ -11,8 +11,11 @@ import {
 import {
   applyInclusionProof,
   checkpointHash,
+  decodeInclusionPayload,
   findCheckpointChainBreak,
   findEquivocation,
+  rfc9162LeafHash,
+  rfc9162VerifyInclusion,
   statementHashOfCheckpoint,
   strictHexBytes,
   totalsFromReceipts,
@@ -1188,12 +1191,22 @@ export function findCheckpointTotalMismatches(
       });
     }
   }
-  const chain = findCheckpointChainBreak(checkpoints, undefined, expectedFirstPrevCheckpoint, verify);
+  // Spec walk is epoch order; remap the break index to the presented array.
+  const byEpoch = checkpoints
+    .map((cp, presentedIndex) => ({ cp, presentedIndex }))
+    .sort((a, b) => a.cp.claims.epoch - b.cp.claims.epoch);
+  const chain = findCheckpointChainBreak(
+    byEpoch.map((row) => row.cp),
+    undefined,
+    expectedFirstPrevCheckpoint,
+    verify,
+  );
   if (chain) {
+    const presentedIndex = byEpoch[chain.index]!.presentedIndex;
     findings.push({
       code: "checkpoint-total-mismatch",
-      id: `checkpoint-chain-${chain.index}`,
-      detail: `checkpoint chain ${chain.reason} at ${chain.index}`,
+      id: `checkpoint-chain-${presentedIndex}`,
+      detail: `checkpoint chain ${chain.reason} at ${presentedIndex}`,
     });
   }
   return findings;
@@ -1283,10 +1296,36 @@ function findTransparencyWitness(
   // A log holds statements from everyone who uses it, and an entry with no body
   // names nobody - stripping the body off a genuine entry is free, and it used
   // to be enough to report an honest issuer for hiding something never theirs.
-  const accusing = anchoring.filter(
-    (r) => r.checkpoint && (!attestsCheckpoint || attestsCheckpoint(r.checkpoint)),
-  );
+  // The unsigned body must also be the statement the receipt signed: a body from
+  // another statement cannot say whose logged hash this is.
+  //
+  // When the verifier pinned an issuer key, that pin decides attribution. When
+  // it did not, a body still has to verify, and its key has to match a key on
+  // the presented chain; otherwise the entry names some other issuer (or none)
+  // and is not an accusation against this chain. An empty presented chain has
+  // no key to match, so it cannot accuse.
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
+  const presentedVerified = checkpoints.filter(
+    (cp) => verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex).ok,
+  );
+  const accusing = anchoring.filter((r) => {
+    if (!r.checkpoint) {
+      return false;
+    }
+    if (statementHashOfCheckpoint(r.checkpoint) !== r.statementHash) {
+      return false;
+    }
+    if (attestsCheckpoint) {
+      return attestsCheckpoint(r.checkpoint);
+    }
+    if (checkpoints.length === 0) {
+      return false;
+    }
+    if (!verifiesOrRefusal(() => verifyCheckpoint(r.checkpoint!), r.checkpoint.coseHex).ok) {
+      return false;
+    }
+    return presentedVerified.some((cp) => sameSpkiKey(r.checkpoint!.publicKeyPem, cp.publicKeyPem));
+  });
 
   for (const cp of checkpoints) {
     const hash = statementHashOfCheckpoint(cp);
@@ -1300,18 +1339,22 @@ function findTransparencyWitness(
     }
   }
 
-  // Cannot name who logged these, so they are not accusations - but a real
-  // withholding goes silent if stripping the body is enough to bury it. Counted
-  // rather than listed: entries with no body are free to produce, and one
-  // warning each would let an attacker bury the findings under volume.
-  const unattributable = anchoring.filter(
-    (rec) => !rec.checkpoint && !presentedHashes.has(rec.statementHash),
-  );
+  // Every log entry this chain does not present and that did not enter the
+  // accusing set is counted here: no body, hash mismatch, unverifiable body,
+  // or a body whose issuer cannot be tied to the presented chain. Counted
+  // rather than listed so volume cannot bury the findings (MUST-T11-17).
+  const accusingSet = new Set(accusing);
+  const unattributable = anchoring.filter((rec) => {
+    if (presentedHashes.has(rec.statementHash)) {
+      return false;
+    }
+    return !accusingSet.has(rec);
+  });
   if (unattributable.length > 0) {
     warnings.push({
       code: "witness-entry-unattributable",
       id: "witness",
-      detail: `the witness holds ${unattributable.length} statement(s) this chain does not present and which carry no body to say whose they are; first is ${unattributable[0].statementHash}`,
+      detail: `the witness holds ${unattributable.length} statement(s) this chain does not present and which cannot be attributed to it; first is ${unattributable[0].statementHash}`,
       severity: "warn",
     });
   }
@@ -2393,11 +2436,23 @@ function auditDetailed(input: AuditInput): AuditDetailed {
   // its inclusion receipts are a log anyone could have invented, and letting them
   // reach the epoch pool lets an attacker report the honest issuer for publishing
   // two checkpoints of one epoch. The warning says why they were left out.
-  const witnessConfigured = Boolean(input.inclusionReceipts && input.witnessTrust);
+  // Configuration means at least one readable key: an empty or unreadable pin
+  // list is the same as naming no log.
+  const witnessPin = input.witnessTrust
+    ? pinnedKeys(input.witnessTrust.publicKeyPem)
+    : null;
+  const witnessConfigured = Boolean(
+    input.inclusionReceipts && witnessPin && witnessPin.usable.length > 0,
+  );
+  const witnessPem = witnessConfigured
+    ? pinPemsOf((input.witnessTrust as IssuerTrustPin).publicKeyPem).filter(
+        (pem) => toSpkiDer(pem) !== null,
+      )
+    : undefined;
   const witnessCheckpoints = witnessConfigured
     ? verifiedWitnessCheckpoints(
         input.inclusionReceipts!,
-        (input.witnessTrust as IssuerTrustPin).publicKeyPem,
+        witnessPem,
         attestsCheckpoint,
         pinVerify,
       )
@@ -2410,7 +2465,7 @@ function auditDetailed(input: AuditInput): AuditDetailed {
       const witness = findTransparencyWitness(
         attestedCheckpoints,
         input.inclusionReceipts,
-        (input.witnessTrust as IssuerTrustPin).publicKeyPem,
+        witnessPem,
         attestsCheckpoint,
       );
       findings.push(...witness.findings);
@@ -2420,7 +2475,9 @@ function auditDetailed(input: AuditInput): AuditDetailed {
         code: "unauthenticated-witness",
         id: "witness",
         detail:
-          "no verifier-supplied witness key; an inclusion receipt verified against the key it carries would say a log exists rather than that the named log anchored anything, so none was verified here and the receipt was left out of the comparison",
+          input.witnessTrust !== undefined
+            ? "a witness pin was supplied but no key in it could be read as a public key; an inclusion receipt verified against the key it carries would say a log exists rather than that the named log anchored anything, so none was verified here and the receipt was left out of the comparison"
+            : "no verifier-supplied witness key; an inclusion receipt verified against the key it carries would say a log exists rather than that the named log anchored anything, so none was verified here and the receipt was left out of the comparison",
         severity: "warn",
       });
     }
@@ -2433,6 +2490,12 @@ function auditDetailed(input: AuditInput): AuditDetailed {
         code: "witness-inclusion-invalid",
         id: "witness-layer2",
         detail: "layer-2 inclusion input was presented without an inclusion proof",
+      });
+    } else if (proof.alg !== undefined && proof.alg !== "rfc9162-sha256") {
+      findings.push({
+        code: "witness-inclusion-invalid",
+        id: "witness-layer2",
+        detail: "layer-2 inclusion proof names an unknown tree algorithm",
       });
     } else if (!validInclusionProof(proof)) {
       // Same rule as verifyInclusion: the walk is defined over 32-byte
@@ -2452,22 +2515,83 @@ function auditDetailed(input: AuditInput): AuditDetailed {
         if (!candidate) {
           throw new Error("hex");
         }
-        const leaf = createHash("sha256").update(candidate).digest("hex");
-        const root = applyInclusionProof(leaf, proof);
+        const statementHash = createHash("sha256").update(candidate).digest("hex");
         const pinned = input.witnessTrust?.publicKeyPem;
-        const hit = (input.inclusionReceipts ?? []).some((rec) => {
-          if (rec.statementHash !== leaf || rec.treeHead !== root || proof.leafIndex !== rec.index) {
-            return false;
-          }
-          return inclusionFromPinnedLog(rec, pinned);
-        });
-        if (!hit) {
+        const leafHash = rfc9162LeafHash(candidate);
+        // MUST-T11-15 / MUST-T11-18: layer-2 accepts only under a verifier-held
+        // witness pin. Without one, a receipt that verifies against the key it
+        // carries would let an invented log pass.
+        if (pinned === undefined) {
           findings.push({
             code: "witness-inclusion-invalid",
             id: "witness-layer2",
             detail:
-              "candidate statement bytes and inclusion proof do not reproduce a witness-signed tree head",
+              "layer-2 inclusion requires a pinned witness key; none was supplied",
           });
+        } else if (pinnedKeys(pinned).usable.length === 0) {
+          findings.push({
+            code: "witness-inclusion-invalid",
+            id: "witness-layer2",
+            detail:
+              "layer-2 inclusion requires a pinned witness key; the supplied pin could not be read",
+          });
+        } else {
+          let hit = false;
+          for (const rec of input.inclusionReceipts ?? []) {
+            if (
+              rec.statementHash !== statementHash ||
+              proof.leafIndex !== rec.index ||
+              !inclusionFromPinnedLog(rec, pinned)
+            ) {
+              continue;
+            }
+            let signed: ReturnType<typeof decodeInclusionPayload>;
+            try {
+              signed = decodeInclusionPayload(rec.coseHex);
+            } catch {
+              continue;
+            }
+            if (signed.alg === "rfc9162-sha256") {
+              if (
+                proof.alg !== "rfc9162-sha256" ||
+                proof.treeSize !== signed.treeSize ||
+                (rec.leafHash !== undefined && rec.leafHash !== leafHash)
+              ) {
+                continue;
+              }
+              const rfcProof: InclusionProof = {
+                leafIndex: proof.leafIndex,
+                siblings: proof.siblings,
+                treeSize: signed.treeSize,
+                alg: "rfc9162-sha256",
+              };
+              if (!rfc9162VerifyInclusion(leafHash, rfcProof, rec.treeHead)) {
+                continue;
+              }
+              hit = true;
+              break;
+            }
+            // Legacy three-entry signed payload: proof must omit alg and treeSize.
+            // The audit accepts a verified legacy receipt without a separate
+            // finding; verifyInclusionDetailed reports legacyTree to callers.
+            if (proof.alg !== undefined || proof.treeSize !== undefined) {
+              continue;
+            }
+            const root = applyInclusionProof(statementHash, proof);
+            if (rec.treeHead !== root) {
+              continue;
+            }
+            hit = true;
+            break;
+          }
+          if (!hit) {
+            findings.push({
+              code: "witness-inclusion-invalid",
+              id: "witness-layer2",
+              detail:
+                "candidate statement bytes and inclusion proof do not reproduce a witness-signed tree head",
+            });
+          }
         }
       } catch {
         findings.push({

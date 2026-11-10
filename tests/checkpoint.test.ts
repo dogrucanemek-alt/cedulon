@@ -90,6 +90,8 @@ describe("mock transparency service", () => {
     const inc = anchorReceipt(ts, receipt);
     assert.equal(ts.verifyInclusion(inc, receipt.coseHex!), true);
     assert.equal(inc.index, 0);
+    assert.equal(inc.alg, "rfc9162-sha256");
+    assert.equal(inc.treeSize, 1);
     assert.equal(ts.size(), 1);
   });
 

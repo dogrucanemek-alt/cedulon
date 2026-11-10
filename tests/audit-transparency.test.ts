@@ -224,6 +224,267 @@ describe("A — transparency witness on the audit path", () => {
       false,
     );
   });
+
+  it("a grafted body from the issuer on another statement does not accuse withholding", () => {
+    const honest = generateReceiptKeys();
+    const receipts = chainReceipts(honest, ["1"]);
+    const presented = oneCheckpoint(honest, receipts, 1);
+    const withheld = signCheckpoint(
+      buildCheckpointClaims(2, receipts, 1_700_000_000_010, 1_700_000_000_020, statementHashOfCheckpoint(presented)),
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const foreign = ts.register("deadbeef");
+    const grafted = { ...foreign, checkpoint: presented };
+    const framed = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, grafted],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.equal(
+      framed.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `a body that is not the logged statement must not accuse: ${JSON.stringify(framed.findings)}`,
+    );
+    assert.equal(
+      framed.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "a body that does not bind the logged statement still needs a counted warning",
+    );
+
+    const withheldReceipt = anchorCheckpoint(ts, withheld);
+    const real = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, withheldReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+    });
+    assert.equal(
+      real.findings.some((f) => f.code === "checkpoint-withheld"),
+      true,
+      `a real withheld epoch must still accuse: ${JSON.stringify(real.findings)}`,
+    );
+  });
+
+  it("without an issuer pin a foreign checkpoint in the log does not accuse withholding", () => {
+    const honest = generateReceiptKeys();
+    const foreign = generateReceiptKeys();
+    const receipts = chainReceipts(honest, ["1"]);
+    const presented = oneCheckpoint(honest, receipts, 1);
+    const stranger = signCheckpoint(
+      buildCheckpointClaims(9, receipts, 1_700_000_000_010, 1_700_000_000_020, null),
+      foreign.privateKeyPem,
+      foreign.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const strangerReceipt = anchorCheckpoint(ts, stranger);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, strangerReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `foreign entry must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "foreign entry is counted as unattributable",
+    );
+  });
+
+  it("without an issuer pin a same-key withheld body still accuses", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const presented = oneCheckpoint(k, receipts, 1);
+    const withheld = signCheckpoint(
+      buildCheckpointClaims(2, receipts, 1_700_000_000_010, 1_700_000_000_020, statementHashOfCheckpoint(presented)),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const withheldReceipt = anchorCheckpoint(ts, withheld);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, withheldReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      true,
+      `same-key withheld must accuse: ${JSON.stringify(report.findings)}`,
+    );
+  });
+
+  it("without an issuer pin a key-swapped attacker body does not accuse withholding", () => {
+    const honest = generateReceiptKeys();
+    const attacker = generateReceiptKeys();
+    const receipts = chainReceipts(honest, ["1"]);
+    const presented = oneCheckpoint(honest, receipts, 1);
+    const attackerCp = signCheckpoint(
+      buildCheckpointClaims(9, receipts, 1_700_000_000_010, 1_700_000_000_020, null),
+      attacker.privateKeyPem,
+      attacker.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const attackerReceipt = anchorCheckpoint(ts, attackerCp);
+    const swapped = {
+      ...attackerReceipt,
+      checkpoint: {
+        ...attackerReceipt.checkpoint!,
+        publicKeyPem: honest.publicKeyPem,
+      },
+    };
+    assert.equal(statementHashOfCheckpoint(swapped.checkpoint), attackerReceipt.statementHash);
+    assert.equal(verifyCheckpoint(swapped.checkpoint), false);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, swapped],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `key-swapped attacker body must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "key-swapped attacker body is counted as unattributable",
+    );
+  });
+
+  it("without an issuer pin a swapped key on a presented checkpoint does not accuse withholding", () => {
+    const honest = generateReceiptKeys();
+    const attacker = generateReceiptKeys();
+    const receipts = chainReceipts(honest, ["1"]);
+    const honestPresented = oneCheckpoint(honest, receipts, 1);
+    const presented = {
+      ...honestPresented,
+      publicKeyPem: attacker.publicKeyPem,
+    };
+    assert.equal(verifyCheckpoint(presented), false);
+    const attackerCp = signCheckpoint(
+      buildCheckpointClaims(9, receipts, 1_700_000_000_010, 1_700_000_000_020, null),
+      attacker.privateKeyPem,
+      attacker.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, honestPresented);
+    const attackerReceipt = anchorCheckpoint(ts, attackerCp);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, attackerReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `swapped presented key must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "attacker entry is counted as unattributable",
+    );
+  });
+
+  it("a body whose claims disagree with its COSE is not silent in the witness", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const presented = oneCheckpoint(k, receipts, 1);
+    const withheld = signCheckpoint(
+      buildCheckpointClaims(2, receipts, 1_700_000_000_010, 1_700_000_000_020, statementHashOfCheckpoint(presented)),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const withheldReceipt = anchorCheckpoint(ts, withheld);
+    const tampered = {
+      ...withheldReceipt,
+      checkpoint: {
+        ...withheldReceipt.checkpoint!,
+        claims: { ...withheldReceipt.checkpoint!.claims, epoch: 99 },
+      },
+    };
+    assert.equal(statementHashOfCheckpoint(tampered.checkpoint), withheldReceipt.statementHash);
+    assert.equal(verifyCheckpoint(tampered.checkpoint), false);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, tampered],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+      issuerTrust: { publicKeyPem: k.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `tampered claims must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "tampered body still enters the unattributable count",
+    );
+  });
+
+  it("an empty or unreadable witness pin warns as unauthenticated, not as unanchored", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const cp = oneCheckpoint(k, receipts);
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const inc = anchorCheckpoint(ts, cp);
+    const base = {
+      receipts,
+      checkpoints: [cp],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [inc],
+      issuerTrust: { publicKeyPem: k.publicKeyPem },
+    };
+
+    for (const publicKeyPem of [[], ["not a key"]] as const) {
+      const report = audit({
+        ...base,
+        witnessTrust: { publicKeyPem },
+      });
+      assert.equal(
+        report.warnings.some((w) => w.code === "unauthenticated-witness"),
+        true,
+        `pin ${JSON.stringify(publicKeyPem)} must warn unauthenticated-witness`,
+      );
+      assert.equal(
+        report.warnings.some((w) => w.code === "checkpoint-not-anchored"),
+        false,
+        `pin ${JSON.stringify(publicKeyPem)} must not invent checkpoint-not-anchored`,
+      );
+      assert.match(
+        report.warnings.find((w) => w.code === "unauthenticated-witness")!.detail,
+        /pin was supplied but no key in it could be read/,
+      );
+    }
+  });
 });
 
 describe("B — equivocation via the witness", () => {
