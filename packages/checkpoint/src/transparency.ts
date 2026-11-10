@@ -438,7 +438,15 @@ export class MemoryTransparencyService {
       return { ok: false, legacyTree: signed === undefined ? false : legacyTree };
     }
     if (signed?.alg === RFC9162_ALG) {
-      if (receipt.leafHash !== stored) {
+      const bytes = strictHexBytes(candidateStatementHex);
+      if (!bytes) {
+        return { ok: false, legacyTree: false };
+      }
+      const fromCandidate = rfc9162LeafHash(bytes);
+      if (stored !== fromCandidate) {
+        return { ok: false, legacyTree: false };
+      }
+      if (receipt.leafHash !== undefined && receipt.leafHash !== stored) {
         return { ok: false, legacyTree: false };
       }
     } else if (signed?.alg !== undefined) {
@@ -545,9 +553,6 @@ export function verifyInclusionDetailed(
   candidateStatementHex: string,
   expectedWitnessKeyPem?: string,
 ): InclusionVerifyResult {
-  if (receipt.alg !== undefined && receipt.alg !== RFC9162_ALG) {
-    return { ok: false, legacyTree: false };
-  }
   let signed: ReturnType<typeof decodeInclusionPayload>;
   try {
     signed = decodeInclusionPayload(receipt.coseHex);
@@ -555,6 +560,9 @@ export function verifyInclusionDetailed(
     return { ok: false, legacyTree: false };
   }
   const legacyTree = signed.alg === undefined;
+  if (receipt.alg !== undefined && receipt.alg !== RFC9162_ALG) {
+    return { ok: false, legacyTree };
+  }
   if (!verifyInclusionEnvelope(receipt, expectedWitnessKeyPem)) {
     return { ok: false, legacyTree };
   }
@@ -637,6 +645,9 @@ export function decodeInclusionPayload(coseHex: string): {
   const index = mapGet(claims, 2);
   const treeHead = mapGet(claims, 3);
   if (typeof statementHash !== "string" || typeof index !== "number" || typeof treeHead !== "string") {
+    throw new Error("inclusion-payload");
+  }
+  if (!Number.isSafeInteger(index) || index < 0) {
     throw new Error("inclusion-payload");
   }
   if (n === 3) {

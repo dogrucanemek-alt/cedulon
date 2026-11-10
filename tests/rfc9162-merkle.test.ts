@@ -305,6 +305,56 @@ describe("MemoryTransparencyService issues RFC 9162 receipts", () => {
       legacyTree: false,
     });
   });
+
+  it("a five-entry receipt without leafHash verifies the same on the log and the free function", () => {
+    const keys = generateReceiptKeys();
+    const log = new MemoryTransparencyService(keys);
+    const statementHex = "aa";
+    const rec = log.register(statementHex);
+    const { leafHash: _drop, ...withoutLeaf } = rec;
+    void _drop;
+    assert.equal(verifyInclusion(withoutLeaf, statementHex, keys.publicKeyPem), true);
+    assert.equal(log.verifyInclusion(withoutLeaf, statementHex), true);
+    const flipped =
+      (rec.leafHash!.startsWith("0") ? "1" : "0") + rec.leafHash!.slice(1);
+    const wrong = { ...rec, leafHash: flipped };
+    assert.equal(verifyInclusion(wrong, statementHex, keys.publicKeyPem), false);
+    assert.equal(log.verifyInclusion(wrong, statementHex), false);
+  });
+});
+
+describe("legacyTree before unknown receipt.alg", () => {
+  it("a three-entry receipt with mystery alg reports legacyTree true", () => {
+    const keys = generateReceiptKeys();
+    const statementHex = "aabb";
+    const statement = Buffer.from(statementHex, "hex");
+    const statementHash = createHash("sha256").update(statement).digest("hex");
+    const other = createHash("sha256").update(Buffer.from("cafebabe", "hex")).digest("hex");
+    const leaves = [statementHash, other];
+    const treeHead = merkleRoot(leaves);
+    const inclusionProof = buildInclusionProof(leaves, 0);
+    const payload = encodeCbor(
+      cborMap([
+        [1, statementHash],
+        [2, 0],
+        [3, treeHead],
+      ]),
+    );
+    const cose = signCoseSign1(payload, keys.privateKeyPem, CTY_INCLUSION);
+    const legacy: InclusionReceipt = {
+      statementHash,
+      index: 0,
+      treeHead,
+      issuerPublicKeyPem: keys.publicKeyPem,
+      coseHex: Buffer.from(cose).toString("hex"),
+      inclusionProof,
+      alg: "mystery-hash" as never,
+    };
+    assert.deepEqual(verifyInclusionDetailed(legacy, statementHex, keys.publicKeyPem), {
+      ok: false,
+      legacyTree: true,
+    });
+  });
 });
 
 describe("RFC 9162 treeSize 32-bit bound", () => {

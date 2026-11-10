@@ -6,6 +6,12 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## Unreleased
 
+`audit` layer 2 (candidate statement bytes plus an inclusion proof) accepts a
+receipt only under a verifier-supplied pinned witness key (`witnessTrust`).
+Earlier builds accepted a receipt that verified against the key it carried when
+no pin was present. Callers that exercised layer 2 without `witnessTrust` now
+see `witness-inclusion-invalid`; supply the log's key out of band.
+
 `audit` walks the checkpoint hash chain in epoch order, as the verification
 algorithm requires. A bundle whose `prevCheckpointHash` links follow
 presentation order while epochs are shuffled (for example 3 then 1 then 2) is

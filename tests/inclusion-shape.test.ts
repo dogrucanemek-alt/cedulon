@@ -109,6 +109,103 @@ describe("witness receipt shape", () => {
     const six = resigned(inc, witness.privateKeyPem, [...five, [6, "extra"]], CTY_INCLUSION);
     assert.equal(verifyInclusionEnvelope(six, witness.publicKeyPem), false);
   });
+
+  it("decodeInclusionPayload refuses a four-entry or six-entry map", () => {
+    const four = resigned(
+      inc,
+      witness.privateKeyPem,
+      [
+        [1, inc.statementHash],
+        [2, inc.index],
+        [3, inc.treeHead],
+        [4, 1],
+      ],
+      CTY_INCLUSION,
+    );
+    const six = resigned(inc, witness.privateKeyPem, [...five, [6, "extra"]], CTY_INCLUSION);
+    assert.throws(() => decodeInclusionPayload(four.coseHex), /inclusion-payload/);
+    assert.throws(() => decodeInclusionPayload(six.coseHex), /inclusion-payload/);
+  });
+
+  it("a signed index that is negative or fractional is refused", () => {
+    const negative = resigned(
+      inc,
+      witness.privateKeyPem,
+      [
+        [1, inc.statementHash],
+        [2, -1],
+        [3, inc.treeHead],
+        [4, inc.treeSize!],
+        [5, "rfc9162-sha256"],
+      ],
+      CTY_INCLUSION,
+    );
+    assert.throws(() => decodeInclusionPayload(negative.coseHex), /inclusion-payload/);
+    assert.equal(verifyInclusion(negative, "deadbeef", witness.publicKeyPem), false);
+
+    // A float index cannot be written by encodeCbor; build the map octets by
+    // hand (float64 1.5 at label 2) and sign them. decodeCbor refuses major 7
+    // before the unsigned-integer rule runs, so the receipt still fails closed.
+    const hashBin = Buffer.from(inc.statementHash, "utf8");
+    const headBin = Buffer.from(inc.treeHead, "utf8");
+    const algBin = Buffer.from("rfc9162-sha256", "utf8");
+    const floatPayload = Buffer.concat([
+      Buffer.from([0xa5]),
+      Buffer.from([0x01, 0x58, hashBin.length]),
+      hashBin,
+      Buffer.from([0x02, 0xfb, 0x3f, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+      Buffer.from([0x03, 0x58, headBin.length]),
+      headBin,
+      Buffer.from([0x04, inc.treeSize!]),
+      Buffer.from([0x05, 0x6f]),
+      algBin,
+    ]);
+    const floatCose = signCoseSign1(floatPayload, witness.privateKeyPem, CTY_INCLUSION);
+    const fractional: InclusionReceipt = {
+      ...inc,
+      index: 1.5 as never,
+      coseHex: Buffer.from(floatCose).toString("hex"),
+    };
+    assert.throws(() => decodeInclusionPayload(fractional.coseHex));
+    assert.equal(verifyInclusion(fractional, "deadbeef", witness.publicKeyPem), false);
+  });
+
+  it("a three-entry receipt must omit unsigned alg and treeSize", () => {
+    const statementHex = "deadbeef";
+    const statementHash = createHash("sha256").update(Buffer.from(statementHex, "hex")).digest("hex");
+    const treeHead = statementHash;
+    const cose = signCoseSign1(
+      encodeCbor(cborMap([[1, statementHash], [2, 0], [3, treeHead]])),
+      witness.privateKeyPem,
+      CTY_INCLUSION,
+    );
+    const legacy: InclusionReceipt = {
+      statementHash,
+      index: 0,
+      treeHead,
+      issuerPublicKeyPem: witness.publicKeyPem,
+      coseHex: Buffer.from(cose).toString("hex"),
+      inclusionProof: { leafIndex: 0, siblings: [] },
+    };
+    assert.equal(verifyInclusionEnvelope(legacy, witness.publicKeyPem), true);
+    assert.equal(verifyInclusion(legacy, statementHex, witness.publicKeyPem), true);
+    assert.equal(
+      verifyInclusionEnvelope({ ...legacy, alg: "rfc9162-sha256" }, witness.publicKeyPem),
+      false,
+    );
+    assert.equal(
+      verifyInclusion({ ...legacy, alg: "rfc9162-sha256" }, statementHex, witness.publicKeyPem),
+      false,
+    );
+    assert.equal(
+      verifyInclusionEnvelope({ ...legacy, treeSize: 1 }, witness.publicKeyPem),
+      false,
+    );
+    assert.equal(
+      verifyInclusion({ ...legacy, treeSize: 1 }, statementHex, witness.publicKeyPem),
+      false,
+    );
+  });
 });
 
 describe("receipt binding: inclusion leaf vs caller candidate", () => {

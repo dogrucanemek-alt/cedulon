@@ -2474,61 +2474,80 @@ function auditDetailed(input: AuditInput): AuditDetailed {
         const statementHash = createHash("sha256").update(candidate).digest("hex");
         const pinned = input.witnessTrust?.publicKeyPem;
         const leafHash = rfc9162LeafHash(candidate);
-        let hit = false;
-        for (const rec of input.inclusionReceipts ?? []) {
-          if (
-            rec.statementHash !== statementHash ||
-            proof.leafIndex !== rec.index ||
-            !inclusionFromPinnedLog(rec, pinned)
-          ) {
-            continue;
-          }
-          let signed: ReturnType<typeof decodeInclusionPayload>;
-          try {
-            signed = decodeInclusionPayload(rec.coseHex);
-          } catch {
-            continue;
-          }
-          if (signed.alg === "rfc9162-sha256") {
+        // MUST-T11-15 / MUST-T11-18: layer-2 accepts only under a verifier-held
+        // witness pin. Without one, a receipt that verifies against the key it
+        // carries would let an invented log pass.
+        if (pinned === undefined) {
+          findings.push({
+            code: "witness-inclusion-invalid",
+            id: "witness-layer2",
+            detail:
+              "layer-2 inclusion requires a pinned witness key; none was supplied",
+          });
+        } else if (pinnedKeys(pinned).usable.length === 0) {
+          findings.push({
+            code: "witness-inclusion-invalid",
+            id: "witness-layer2",
+            detail:
+              "layer-2 inclusion requires a pinned witness key; the supplied pin could not be read",
+          });
+        } else {
+          let hit = false;
+          for (const rec of input.inclusionReceipts ?? []) {
             if (
-              proof.alg !== "rfc9162-sha256" ||
-              proof.treeSize !== signed.treeSize ||
-              (rec.leafHash !== undefined && rec.leafHash !== leafHash)
+              rec.statementHash !== statementHash ||
+              proof.leafIndex !== rec.index ||
+              !inclusionFromPinnedLog(rec, pinned)
             ) {
               continue;
             }
-            const rfcProof: InclusionProof = {
-              leafIndex: proof.leafIndex,
-              siblings: proof.siblings,
-              treeSize: signed.treeSize,
-              alg: "rfc9162-sha256",
-            };
-            if (!rfc9162VerifyInclusion(leafHash, rfcProof, rec.treeHead)) {
+            let signed: ReturnType<typeof decodeInclusionPayload>;
+            try {
+              signed = decodeInclusionPayload(rec.coseHex);
+            } catch {
+              continue;
+            }
+            if (signed.alg === "rfc9162-sha256") {
+              if (
+                proof.alg !== "rfc9162-sha256" ||
+                proof.treeSize !== signed.treeSize ||
+                (rec.leafHash !== undefined && rec.leafHash !== leafHash)
+              ) {
+                continue;
+              }
+              const rfcProof: InclusionProof = {
+                leafIndex: proof.leafIndex,
+                siblings: proof.siblings,
+                treeSize: signed.treeSize,
+                alg: "rfc9162-sha256",
+              };
+              if (!rfc9162VerifyInclusion(leafHash, rfcProof, rec.treeHead)) {
+                continue;
+              }
+              hit = true;
+              break;
+            }
+            // Legacy three-entry signed payload: proof must omit alg and treeSize.
+            // The audit accepts a verified legacy receipt without a separate
+            // finding; verifyInclusionDetailed reports legacyTree to callers.
+            if (proof.alg !== undefined || proof.treeSize !== undefined) {
+              continue;
+            }
+            const root = applyInclusionProof(statementHash, proof);
+            if (rec.treeHead !== root) {
               continue;
             }
             hit = true;
             break;
           }
-          // Legacy three-entry signed payload: proof must omit alg and treeSize.
-          // The audit accepts a verified legacy receipt without a separate
-          // finding; verifyInclusionDetailed reports legacyTree to callers.
-          if (proof.alg !== undefined || proof.treeSize !== undefined) {
-            continue;
+          if (!hit) {
+            findings.push({
+              code: "witness-inclusion-invalid",
+              id: "witness-layer2",
+              detail:
+                "candidate statement bytes and inclusion proof do not reproduce a witness-signed tree head",
+            });
           }
-          const root = applyInclusionProof(statementHash, proof);
-          if (rec.treeHead !== root) {
-            continue;
-          }
-          hit = true;
-          break;
-        }
-        if (!hit) {
-          findings.push({
-            code: "witness-inclusion-invalid",
-            id: "witness-layer2",
-            detail:
-              "candidate statement bytes and inclusion proof do not reproduce a witness-signed tree head",
-          });
         }
       } catch {
         findings.push({
