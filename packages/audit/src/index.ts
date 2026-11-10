@@ -1305,6 +1305,9 @@ function findTransparencyWitness(
   // and is not an accusation against this chain. An empty presented chain has
   // no key to match, so it cannot accuse.
   const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
+  const presentedVerified = checkpoints.filter(
+    (cp) => verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex).ok,
+  );
   const accusing = anchoring.filter((r) => {
     if (!r.checkpoint) {
       return false;
@@ -1321,7 +1324,7 @@ function findTransparencyWitness(
     if (!verifiesOrRefusal(() => verifyCheckpoint(r.checkpoint!), r.checkpoint.coseHex).ok) {
       return false;
     }
-    return checkpoints.some((cp) => sameSpkiKey(r.checkpoint!.publicKeyPem, cp.publicKeyPem));
+    return presentedVerified.some((cp) => sameSpkiKey(r.checkpoint!.publicKeyPem, cp.publicKeyPem));
   });
 
   for (const cp of checkpoints) {

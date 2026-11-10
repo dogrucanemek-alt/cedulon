@@ -372,6 +372,43 @@ describe("A — transparency witness on the audit path", () => {
     );
   });
 
+  it("without an issuer pin a swapped key on a presented checkpoint does not accuse withholding", () => {
+    const honest = generateReceiptKeys();
+    const attacker = generateReceiptKeys();
+    const receipts = chainReceipts(honest, ["1"]);
+    const honestPresented = oneCheckpoint(honest, receipts, 1);
+    const presented = {
+      ...honestPresented,
+      publicKeyPem: attacker.publicKeyPem,
+    };
+    assert.equal(verifyCheckpoint(presented), false);
+    const attackerCp = signCheckpoint(
+      buildCheckpointClaims(9, receipts, 1_700_000_000_010, 1_700_000_000_020, null),
+      attacker.privateKeyPem,
+      attacker.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, honestPresented);
+    const attackerReceipt = anchorCheckpoint(ts, attackerCp);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt, attackerReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `swapped presented key must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "attacker entry is counted as unattributable",
+    );
+  });
+
   it("a body whose claims disagree with its COSE is not silent in the witness", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
