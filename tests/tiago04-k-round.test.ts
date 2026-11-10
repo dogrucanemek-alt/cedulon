@@ -11,6 +11,7 @@ import {
   signCheckpoint,
   verifyInclusionEnvelope,
 } from "@cedulon/checkpoint";
+import { buildInclusionProof, merkleRoot, rfc9162VerifyInclusion } from "@cedulon/checkpoint";
 import { generateManifestKeys, manifestHash, signManifest } from "@cedulon/manifest";
 import {
   counterSign,
@@ -480,8 +481,20 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
     );
     const forgedLog = new MemoryTransparencyService(attacker);
     const forged = forgedLog.register(cp.coseHex);
+    // Internally consistent under RFC 9162; the witness pin below is what refuses it.
+    assert.equal(
+      rfc9162VerifyInclusion(forged.leafHash!, forged.inclusionProof!, forged.treeHead),
+      true,
+    );
     const leaf = createHash("sha256").update(Buffer.from(cp.coseHex, "hex")).digest("hex");
+    // Legacy pad-even proof so the historical applyInclusionProof assert still holds.
+    const rfcProof = forged.inclusionProof!;
+    const rfcHead = forged.treeHead;
+    forged.inclusionProof = buildInclusionProof([leaf], 0);
+    forged.treeHead = merkleRoot([leaf]);
     assert.equal(applyInclusionProof(leaf, forged.inclusionProof!), forged.treeHead);
+    forged.inclusionProof = rfcProof;
+    forged.treeHead = rfcHead;
     const report = audit({
       receipts: [receipt],
       checkpoints: [cp],
@@ -501,5 +514,100 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
     const { inclusionProof: _proof, ...legacy } = inc;
     assert.equal(verifyInclusionEnvelope(legacy, honest.publicKeyPem), true);
     void _proof;
+  });
+
+  it("layer-2 proof with an unknown alg is witness-inclusion-invalid", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const receipt = settledReceipt(honest);
+    const cp = signCheckpoint(
+      buildCheckpointClaims(1, [receipt], NOW, WINDOW_END, null),
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
+    const log = new MemoryTransparencyService(honest);
+    const inc = log.register(cp.coseHex);
+    assert.ok(inc.inclusionProof);
+    const extract = signRailExtract(
+      {
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+        settlements: [{ ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [receipt],
+      checkpoints: [cp],
+      extract,
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      witnessTrust: { publicKeyPem: honest.publicKeyPem },
+      inclusionReceipts: [{ ...inc, checkpoint: cp }],
+      trust: {
+        publicKeyPem: rail.publicKeyPem,
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+      },
+      layer2: {
+        candidateStatementHex: cp.coseHex,
+        inclusionProof: { ...inc.inclusionProof!, alg: "something-else" as never },
+      },
+    });
+    const finding = report.findings.find((f) => f.code === "witness-inclusion-invalid");
+    assert.ok(finding);
+    assert.equal(finding!.detail, "layer-2 inclusion proof names an unknown tree algorithm");
+  });
+
+  it("layer-2 receipt with a one-bit flipped leafHash is witness-inclusion-invalid", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const receipt = settledReceipt(honest);
+    const cp = signCheckpoint(
+      buildCheckpointClaims(1, [receipt], NOW, WINDOW_END, null),
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
+    const log = new MemoryTransparencyService(honest);
+    const inc = log.register(cp.coseHex);
+    assert.ok(inc.leafHash);
+    assert.ok(inc.inclusionProof);
+    const flippedLeaf =
+      (inc.leafHash!.startsWith("0") ? "1" : "0") + inc.leafHash!.slice(1);
+    const extract = signRailExtract(
+      {
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+        settlements: [{ ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [receipt],
+      checkpoints: [cp],
+      extract,
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      witnessTrust: { publicKeyPem: honest.publicKeyPem },
+      inclusionReceipts: [{ ...inc, leafHash: flippedLeaf, checkpoint: cp }],
+      trust: {
+        publicKeyPem: rail.publicKeyPem,
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+      },
+      layer2: { candidateStatementHex: cp.coseHex, inclusionProof: inc.inclusionProof },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "witness-inclusion-invalid"),
+      true,
+    );
   });
 });

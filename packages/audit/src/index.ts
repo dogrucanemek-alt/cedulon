@@ -13,6 +13,8 @@ import {
   checkpointHash,
   findCheckpointChainBreak,
   findEquivocation,
+  rfc9162LeafHash,
+  rfc9162VerifyInclusion,
   statementHashOfCheckpoint,
   strictHexBytes,
   totalsFromReceipts,
@@ -2434,6 +2436,12 @@ function auditDetailed(input: AuditInput): AuditDetailed {
         id: "witness-layer2",
         detail: "layer-2 inclusion input was presented without an inclusion proof",
       });
+    } else if (proof.alg !== undefined && proof.alg !== "rfc9162-sha256") {
+      findings.push({
+        code: "witness-inclusion-invalid",
+        id: "witness-layer2",
+        detail: "layer-2 inclusion proof names an unknown tree algorithm",
+      });
     } else if (!validInclusionProof(proof)) {
       // Same rule as verifyInclusion: the walk is defined over 32-byte
       // siblings and an index that resolves to the root. An empty path at
@@ -2452,15 +2460,57 @@ function auditDetailed(input: AuditInput): AuditDetailed {
         if (!candidate) {
           throw new Error("hex");
         }
-        const leaf = createHash("sha256").update(candidate).digest("hex");
-        const root = applyInclusionProof(leaf, proof);
+        const statementHash = createHash("sha256").update(candidate).digest("hex");
         const pinned = input.witnessTrust?.publicKeyPem;
-        const hit = (input.inclusionReceipts ?? []).some((rec) => {
-          if (rec.statementHash !== leaf || rec.treeHead !== root || proof.leafIndex !== rec.index) {
-            return false;
+        const rfc =
+          proof.alg === "rfc9162-sha256" ||
+          (input.inclusionReceipts ?? []).some(
+            (rec) => rec.alg === "rfc9162-sha256" && proof.leafIndex === rec.index,
+          );
+        let hit = false;
+        if (rfc) {
+          const leafHash = rfc9162LeafHash(candidate);
+          const treeSize =
+            proof.treeSize ??
+            (input.inclusionReceipts ?? []).find(
+              (rec) => proof.leafIndex === rec.index && rec.treeSize !== undefined,
+            )?.treeSize;
+          if (typeof treeSize !== "number") {
+            throw new Error("tree-size");
           }
-          return inclusionFromPinnedLog(rec, pinned);
-        });
+          const rfcProof: InclusionProof = {
+            leafIndex: proof.leafIndex,
+            siblings: proof.siblings,
+            treeSize,
+            alg: "rfc9162-sha256",
+          };
+          hit = (input.inclusionReceipts ?? []).some((rec) => {
+            if (
+              rec.statementHash !== statementHash ||
+              proof.leafIndex !== rec.index ||
+              (rec.leafHash !== undefined && rec.leafHash !== leafHash)
+            ) {
+              return false;
+            }
+            if (!rfc9162VerifyInclusion(leafHash, rfcProof, rec.treeHead)) {
+              return false;
+            }
+            return inclusionFromPinnedLog(rec, pinned);
+          });
+        } else {
+          // Legacy tree (no alg): same applyInclusionProof walk as before.
+          const root = applyInclusionProof(statementHash, proof);
+          hit = (input.inclusionReceipts ?? []).some((rec) => {
+            if (
+              rec.statementHash !== statementHash ||
+              rec.treeHead !== root ||
+              proof.leafIndex !== rec.index
+            ) {
+              return false;
+            }
+            return inclusionFromPinnedLog(rec, pinned);
+          });
+        }
         if (!hit) {
           findings.push({
             code: "witness-inclusion-invalid",

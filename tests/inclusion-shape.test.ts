@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 
 import { MemoryTransparencyService, applyInclusionProof, decodeInclusionPayload, validInclusionProof, verifyInclusion, verifyInclusionEnvelope, type InclusionReceipt } from "@cedulon/checkpoint";
+import { buildInclusionProof, merkleRoot, rfc9162VerifyInclusion } from "@cedulon/checkpoint";
 import { CTY_CHECKPOINT, CTY_INCLUSION, cborMap, encodeCbor, signCoseSign1 } from "@cedulon/cose";
 import { generateReceiptKeys } from "@cedulon/receipts";
 
@@ -243,8 +244,21 @@ describe("holes and the two hex readers the review pass left open", () => {
   it("decodeInclusionPayload and applyInclusionProof read hex the same strict way", () => {
     assert.throws(() => decodeInclusionPayload(`${recA.coseHex}zz`), /cose-hex/);
     assert.throws(() => decodeInclusionPayload(recA.coseHex.toUpperCase()), /cose-hex/);
+    // RFC 9162 proofs are refused by the legacy applyInclusionProof walk.
+    assert.throws(() => applyInclusionProof(recA.leafHash!, recA.inclusionProof!), /inclusion-proof/);
+    assert.equal(
+      rfc9162VerifyInclusion(recA.leafHash!, recA.inclusionProof!, recA.treeHead),
+      true,
+    );
     assert.throws(() => applyInclusionProof("aazz", recA.inclusionProof!), /inclusion-proof/);
     assert.throws(() => applyInclusionProof(recA.statementHash.toUpperCase(), recA.inclusionProof!), /inclusion-proof/);
+    // Legacy pad-even proof over statementHash leaves keeps the historical assert green.
+    const legacyLeaves = [
+      createHash("sha256").update(Buffer.from("bb", "hex")).digest("hex"),
+      recA.statementHash,
+    ];
+    recA.inclusionProof = buildInclusionProof(legacyLeaves, recA.index);
+    recA.treeHead = merkleRoot(legacyLeaves);
     assert.equal(applyInclusionProof(recA.statementHash, recA.inclusionProof!), recA.treeHead);
   });
 });
