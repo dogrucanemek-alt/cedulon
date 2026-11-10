@@ -33,6 +33,7 @@ normative:
   RFC6838:
   RFC8949:
   RFC9052:
+  RFC9162:
   RFC9942:
   RFC9943:
 informative:
@@ -215,6 +216,18 @@ entries or carries one of another type, does not verify: the content
 type is the check {{CEDULON-CORE}} (COSE Profile) makes on every object of this
 profile, and the payload map is the one this paragraph states.
 
+When the witness issues under {{RFC9162}}, the receipt may also carry
+`alg` with the value `rfc9162-sha256`, `treeSize` (the number of leaves
+at issuance), and `leafHash` (`HASH(0x00 || statement octets)` per
+{{RFC9162}} Section 2.1.1). Those three fields sit beside the COSE
+object; they are not entries of the signed payload map above. The
+signed fields remain the statement hash, the entry index, and the tree
+head, and verification is against that signed tree head. A receipt that
+omits `alg` is verified by the older domain-separation-free walk this
+revision replaces. A receipt that names an unknown `alg` is refused.
+An inclusion proof whose `treeSize` is greater than 2^32 - 1 is
+refused.
+
 A verifier MAY be given witness receipts for the period under audit.
 It is a distinct input from the presented checkpoint chain, and
 supplying it is optional: a verifier given none performs the same
@@ -246,26 +259,29 @@ that needs a body, because it compares claims rather than hashes.
 **Tier 2 - log membership.** A verifier MAY additionally be given,
 for one recorded statement, the registered Signed Statement bytes
 (the candidate entry) and an inclusion proof. When both are present,
-the verifier MUST perform the verification of {{RFC9942}} Section
-5.2.1 over them: hash the candidate entry bytes to obtain the leaf,
-apply the proof to reproduce a root, and accept only when the leaf
-hash, the proof's leaf index, and the reproduced root are all equal
-to the statement hash, entry index, and tree head of one witness
-receipt that verifies under the pinned witness key (`MUST-T11-18`).
+the verifier MUST verify log membership under the Merkle Tree Hash
+and inclusion-proof verification of {{RFC9162}} Sections 2.1.1 and
+2.1.3, as consumed by the receipt verification of {{RFC9942}} Section
+5.2.1: the leaf of the walk is `HASH(0x00 || candidate)`, each
+interior node is `HASH(0x01 || left || right)`, and the proof carries
+the tree size at issuance. Accept only when the candidate's statement
+hash (SHA-256 of the candidate octets), the proof's leaf index, and
+the reproduced root are all equal to the statement hash, entry index,
+and tree head of one witness receipt that verifies under the pinned
+witness key (`MUST-T11-18`). The RFC 9162 leaf hash is distinct from
+the statement hash; matching the signed statement hash is a separate
+check from reproducing the root from the 0x00-prefixed leaf.
 Reproducing a root is deliberately not sufficient on its own: the
-proof format below carries no domain separation between leaves and
-interior nodes, and the exact match against a witness-signed receipt
-is what closes the ambiguities that follow from that. A pair that
+exact match against a witness-signed receipt is required. A pair that
 fails this check, or a candidate entry presented without a proof,
 MUST be reported as a failing finding; the identifier
 `witness-inclusion-invalid` names it.
 
-The inclusion proof is an audit path: the leaf index, and the sibling
-hashes from the leaf's level up to the root, lowest level first. The
-tree is built over statement hashes as leaves; an interior node is
-the SHA-256 of the concatenation of its two children's 32 raw bytes;
-a level with an odd count pairs its last node with itself, so the
-path needs no separate leaf count.
+The inclusion proof is an audit path: the leaf index, the tree size,
+and the sibling hashes from the leaf up to the root, as {{RFC9162}}
+Section 2.1.3 defines. The tree separates leaves from interior nodes
+by the 0x00 and 0x01 prefixes of Section 2.1.1, so a single leftover
+leaf is not paired with itself.
 
 Where witness receipts are supplied and this pair is not, tier 2 was
 not exercised, and the report MUST say so rather than letting the
@@ -474,7 +490,7 @@ The remaining T11 identities are defined here.
 | MUST-T11-15 | A verifier MUST obtain the transparency service public key out of band and MUST verify inclusion receipts against it. Receipts that cannot be checked that way MUST NOT be used as evidence in either direction, and the verifier SHOULD report that they were left out. |
 | MUST-T11-16 | A statement held by a pinned log MUST additionally verify against the issuer root before it counts as something that issuer published, so that another user's epoch in a shared log is not read as equivocation by this issuer. |
 | MUST-T11-17 | An inclusion receipt carrying no statement body MUST NOT be used to report a withheld checkpoint, because it cannot say whose statement it binds. It MUST NOT be discarded silently either: a real withholding must not be buried by removing the body. |
-| MUST-T11-18 | Where candidate Signed Statement bytes and an inclusion proof are both supplied, a verifier MUST verify log membership by the mechanics of RFC 9942 Section 5.2.1 and MUST accept only when the leaf hash, leaf index, and reproduced root exactly match a witness receipt that verifies under the pinned witness key. Root reproduction alone is not acceptance. A pair that fails, or a candidate supplied without a proof, MUST be reported as a failing finding. |
+| MUST-T11-18 | Where candidate Signed Statement bytes and an inclusion proof are both supplied, a verifier MUST verify log membership by the Merkle Tree Hash and inclusion-proof verification of RFC 9162 Sections 2.1.1 and 2.1.3, as consumed by RFC 9942 Section 5.2.1, and MUST accept only when the candidate's statement hash, the proof's leaf index, and the reproduced root exactly match the statement hash, entry index, and tree head of a witness receipt that verifies under the pinned witness key, with the walk's leaf equal to HASH(0x00 || candidate). Root reproduction alone is not acceptance. A pair that fails, or a candidate supplied without a proof, MUST be reported as a failing finding. |
 | MUST-T11-19 | Where witness receipts are supplied and the tier-2 pair is not, the report MUST state that log membership was not exercised rather than passing the tier silently. |
 | MUST-T11-20 | Where an audit presents an anchor, the first presented checkpoint MUST be chained to the anchor's checkpoint hash rather than to null only when the anchor is valid: it answers to the issuer root of {{CEDULON-CORE}}, its `epoch` is one less than the first presented checkpoint's, its `endMs` equals that checkpoint's `startMs`, and that checkpoint's `prevCheckpointHash` equals the anchor's checkpoint hash. An anchor that is not valid MUST anchor nothing. One that answers to the issuer root and fails any of the other three conditions MUST be reported as `window-coverage`, identified by `anchor`. |
 

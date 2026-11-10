@@ -4,6 +4,25 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## Unreleased
+
+New inclusion receipts from the in-process transparency log use the RFC 9162
+Merkle Tree Hash (Section 2.1): leaf `HASH(0x00 || entry)`, interior node
+`HASH(0x01 || left || right)`. Each new receipt carries `alg: "rfc9162-sha256"`,
+`treeSize`, and `leafHash`. Those three fields are not inside the log-signed
+payload; the signed map still holds `statementHash`, `index`, and `treeHead`,
+and verification is against that signed root. A proof with `treeSize` greater
+than `2^32 - 1` is refused.
+
+Receipts that omit `alg` still verify under the older domain-separation-free
+walk. Callers of `verifyInclusion` see the same boolean contract; call
+`verifyInclusionDetailed` when you need `{ ok, legacyTree }` to tell the two
+walks apart (`legacyTree: true` means the older walk ran).
+
+The older tree paired an odd last node with itself and did not separate leaves
+from interior nodes, so the leaf set `[a, b, c]` and `[a, b, c, c]` produced
+the same root. The RFC 9162 tree does not.
+
 ## 0.17.0: a mainnet rail by its own name, the window that was asked for, and refusals that say what they refused
 
 These changes came out of an independent run of 0.15.0 on Base mainnet USDC.

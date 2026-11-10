@@ -15,12 +15,12 @@ import { receiptHash, type SignedReceipt } from "@cedulon/receipts";
 import { checkpointHash, type SignedCheckpoint } from "./checkpoint.ts";
 
 /**
- * RFC 6962-style audit path: sibling hashes plus the leaf index.
- * A level with an odd last leaf is paired with itself so the path
- * applies without a separate leaf count.
+ * Inclusion proof: sibling hashes plus the leaf index.
  *
- * New receipts use RFC 9162 (§2.1.1 / §2.1.3) and carry optional
- * `alg` / `treeSize`. Absent `alg` keeps the legacy walk above.
+ * New receipts use RFC 9162 Section 2.1 (leaf 0x00 / node 0x01) and
+ * carry `alg` / `treeSize`. The legacy helpers `merkleParent`,
+ * `padEven`, `merkleRoot`, and `applyInclusionProof` remain only to
+ * verify receipts that omit `alg`.
  */
 export type InclusionProof = {
   leafIndex: number;
