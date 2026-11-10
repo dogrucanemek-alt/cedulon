@@ -2240,9 +2240,10 @@ Coverage:
   reversal branch of `MUST-T12-4` is specified and not executed,
   because this tree carries no authenticated external-rail path.
   `MUST-T6-7`, the one requirement this document adds beyond that
-  series, is likewise specified and not executed: no case in the suite
-  compares a settlement's `timestampMs` to a Decision Token's
-  `expiryMs`. The escrow role, reversal, refund and partial settlement
+  series, is covered on the x402 adapter settle path: consumption and
+  the receipt stamp use the same clock value; the suite asserts the
+  boundary and one millisecond past it, and the refusal name is
+  `decision-expired`. The escrow role, reversal, refund and partial settlement
   are not implemented. The witness used in the suite is the in-process log
   that `MAY-T11-6` permits, a Merkle tree that issues inclusion
   proofs; tier 2 of {{CEDULON-CHECKPOINT}} (The transparency witness) is exercised against it red-then-green,
@@ -2261,7 +2262,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 795 of 795,
+  this revision describes, all three assert every case, 797 of 797,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.
