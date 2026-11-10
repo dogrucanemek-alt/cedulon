@@ -128,7 +128,7 @@ export function buildInclusionProof(leaves: readonly string[], leafIndex: number
 const LOWER_HEX_RE = /^(?:[0-9a-f]{2})+$/;
 const HASH_HEX_RE = /^[0-9a-f]{64}$/;
 
-/** SHA-256 of the empty string — RFC 9162 §2.1.1 empty-list MTH. */
+/** SHA-256 of the empty string: the RFC 9162 §2.1.1 empty-list MTH. */
 export const RFC9162_EMPTY_ROOT =
   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 

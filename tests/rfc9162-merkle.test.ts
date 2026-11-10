@@ -84,7 +84,7 @@ describe("RFC 9162 Merkle tree hash", () => {
 
         // treeSize±1: path-length mismatch always refuses. When lengths coincide
         // (e.g. n=3→4 at i=0), the same siblings can still hash to this root under
-        // RFC §2.1.3.2 — then refuse against the neighbouring tree's root instead.
+        // RFC §2.1.3.2; then refuse against the neighbouring tree's root instead.
         const plus = { ...proof, treeSize: n + 1 };
         const plusOk = rfc9162VerifyInclusion(leaves[i]!, plus, root);
         if (plusOk) {
