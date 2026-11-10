@@ -11,7 +11,14 @@ import {
   signCheckpoint,
   verifyInclusionEnvelope,
 } from "@cedulon/checkpoint";
-import { buildInclusionProof, merkleRoot, rfc9162VerifyInclusion } from "@cedulon/checkpoint";
+import {
+  buildInclusionProof,
+  merkleRoot,
+  rfc9162InclusionProof,
+  rfc9162LeafHash,
+  rfc9162Root,
+  rfc9162VerifyInclusion,
+} from "@cedulon/checkpoint";
 import { generateManifestKeys, manifestHash, signManifest } from "@cedulon/manifest";
 import {
   counterSign,
@@ -399,6 +406,8 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
           statementHash: leaf,
           index: 1,
           treeHead: leaf,
+          alg: undefined,
+          treeSize: undefined,
           coseHex: Buffer.from(impossibleCose).toString("hex"),
           inclusionProof: { leafIndex: 1, siblings: [] },
           checkpoint: cp,
@@ -608,6 +617,97 @@ describe("Tiago -04 K1 layer-2 inclusion (decided)", () => {
     assert.equal(
       report.findings.some((f) => f.code === "witness-inclusion-invalid"),
       true,
+    );
+  });
+
+  it("layer-2 proof treeSize from another receipt is witness-inclusion-invalid", () => {
+    const honest = generateReceiptKeys();
+    const otherKeys = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const receipt = settledReceipt(honest);
+    const cp = signCheckpoint(
+      buildCheckpointClaims(1, [receipt], NOW, WINDOW_END, null),
+      honest.privateKeyPem,
+      honest.publicKeyPem,
+    );
+    // Index 0 in a 3-leaf tree: treeSize 3→4 keeps the same path and root (B1).
+    const fillers = ["aa", "bb"];
+    const leafHashes = [cp.coseHex, ...fillers].map((hex) =>
+      rfc9162LeafHash(Buffer.from(hex, "hex")),
+    );
+    const treeHead = rfc9162Root(leafHashes);
+    const inclusionProof = rfc9162InclusionProof(leafHashes, 0);
+    const treeSize = 3;
+    const statementHash = createHash("sha256").update(Buffer.from(cp.coseHex, "hex")).digest("hex");
+    const leafHash = rfc9162LeafHash(Buffer.from(cp.coseHex, "hex"));
+    const payload = encodeCbor(
+      cborMap([
+        [1, statementHash],
+        [2, 0],
+        [3, treeHead],
+        [4, treeSize],
+        [5, "rfc9162-sha256"],
+      ]),
+    );
+    const inc = {
+      statementHash,
+      leafHash,
+      index: 0,
+      treeHead,
+      treeSize,
+      alg: "rfc9162-sha256" as const,
+      issuerPublicKeyPem: honest.publicKeyPem,
+      coseHex: Buffer.from(signCoseSign1(payload, honest.privateKeyPem, CTY_INCLUSION)).toString("hex"),
+      inclusionProof,
+      checkpoint: cp,
+    };
+    const otherLog = new MemoryTransparencyService(otherKeys);
+    otherLog.register("aa");
+    otherLog.register("bb");
+    otherLog.register("cc");
+    otherLog.register("dd");
+    const foreign = { ...otherLog.register(cp.coseHex), checkpoint: cp };
+    assert.notEqual(foreign.treeSize, treeSize);
+    // Neighbouring size 4 still walks this path against the size-3 root (B1).
+    const borrowed = 4;
+    assert.equal(
+      rfc9162VerifyInclusion(leafHash, { ...inclusionProof, treeSize: borrowed }, treeHead),
+      true,
+    );
+    const extract = signRailExtract(
+      {
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+        settlements: [{ ref: "ref-ok", amount: "1", currency: "USD", timestampMs: NOW }],
+      },
+      rail.privateKeyPem,
+      rail.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [receipt],
+      checkpoints: [cp],
+      extract,
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      witnessTrust: { publicKeyPem: honest.publicKeyPem },
+      inclusionReceipts: [inc, foreign],
+      trust: {
+        publicKeyPem: rail.publicKeyPem,
+        accountId: "acct",
+        railId: "rail",
+        windowStartMs: NOW,
+        windowEndMs: WINDOW_END,
+      },
+      layer2: {
+        candidateStatementHex: cp.coseHex,
+        inclusionProof: { ...inclusionProof, treeSize: borrowed },
+      },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "witness-inclusion-invalid"),
+      true,
+      JSON.stringify(report.findings),
     );
   });
 });

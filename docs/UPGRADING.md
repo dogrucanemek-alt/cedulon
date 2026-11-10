@@ -15,19 +15,27 @@ presentation-order linking without epoch order do not.
 
 New inclusion receipts from the in-process transparency log use the RFC 9162
 Merkle Tree Hash (Section 2.1): leaf `HASH(0x00 || entry)`, interior node
-`HASH(0x01 || left || right)`. Each new receipt carries `alg: "rfc9162-sha256"`,
-`treeSize`, and `leafHash`. Those three fields are not inside the log-signed
-payload; the signed map still holds `statementHash`, `index`, and `treeHead`,
-and verification is against that signed root. A proof with `treeSize` greater
-than `2^32 - 1` is refused.
+`HASH(0x01 || left || right)`. Each new receipt signs a five-entry CBOR map:
+`statementHash`, `index`, `treeHead`, `treeSize` (unsigned int), and
+`alg` (`rfc9162-sha256`). Unsigned `alg` and `treeSize` on the receipt and
+on the inclusion proof must equal those signed values. `leafHash` sits
+beside the COSE and is not signed; when present it is recomputed from the
+candidate and compared. A proof with `treeSize` greater than `2^32 - 1` is
+refused. `applyInclusionProof` throws `inclusion-proof` for an RFC 9162
+proof, because that helper is the legacy pad-even walk. Verifiers at 0.17.0
+and earlier do not verify a five-entry receipt.
 
-Receipts that omit `alg` still verify under the older domain-separation-free
-walk. Acceptance on that walk still requires the statement digest, the leaf
-index, and the reproduced root to match the payload the log signed; a shared
-root alone was never enough. Callers of `verifyInclusion` see the same
-boolean contract; call `verifyInclusionDetailed` when you need
-`{ ok, legacyTree }` to tell the two walks apart (`legacyTree: true` means
-the older walk ran).
+A three-entry signed payload is the -00 (legacy) map: `statementHash`,
+`index`, and `treeHead`. That receipt must omit unsigned `alg` and
+`treeSize`, and its proof must omit them too. Callers of `verifyInclusion`
+see the same boolean contract; call `verifyInclusionDetailed` when you need
+`{ ok, legacyTree }`. `legacyTree` is true when the signed payload is the
+three-entry map; false when it is five-entry or when the payload cannot be
+read (including early envelope failures). Three-entry receipts still verify
+under the older walk, in `verifyInclusion` and in tier 2 of `audit`; acceptance
+there still requires the statement hash, the index, and the reproduced root to
+match the payload the log signed. `audit` raises no separate finding when it
+accepts one.
 
 The older tree paired an odd last node with itself and did not separate leaves
 from interior nodes, so the leaf lists `[a, b, c]` and `[a, b, c, c]` produced

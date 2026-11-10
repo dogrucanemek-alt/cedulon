@@ -59,10 +59,6 @@ describe("checkpoint chain walks in epoch order", () => {
     const cp3 = emptyCheckpoint(k, 3, T2, T3, checkpointHash(cp2));
     const report = audit({ receipts: [], checkpoints: [cp1, cp2, cp3], settlements: [] });
     assert.equal(report.ok, true, JSON.stringify(report.findings));
-    assert.equal(
-      report.findings.some((f) => f.id.startsWith("checkpoint-chain-")),
-      false,
-    );
   });
 
   it("honest epoch links presented as 2 then 1 then 3 have no chain break", () => {
@@ -72,9 +68,18 @@ describe("checkpoint chain walks in epoch order", () => {
     const cp3 = emptyCheckpoint(k, 3, T2, T3, checkpointHash(cp2));
     const report = audit({ receipts: [], checkpoints: [cp2, cp1, cp3], settlements: [] });
     assert.equal(report.ok, true, JSON.stringify(report.findings));
-    assert.equal(
-      report.findings.some((f) => f.id.startsWith("checkpoint-chain-")),
-      false,
+  });
+
+  it("the same checkpoint object twice reports the chain break at the second presented index", () => {
+    const k = generateReceiptKeys();
+    const cp1 = emptyCheckpoint(k, 1, T0, T1, null);
+    const cp2 = emptyCheckpoint(k, 2, T1, T2, "11".repeat(32));
+    const presented = [cp1, cp2, cp1];
+    const report = audit({ receipts: [], checkpoints: presented, settlements: [] });
+    const chain = report.findings.find(
+      (f) => f.code === "checkpoint-total-mismatch" && f.id.startsWith("checkpoint-chain-"),
     );
+    assert.ok(chain, JSON.stringify(report.findings));
+    assert.equal(chain.id, "checkpoint-chain-2", JSON.stringify(report.findings));
   });
 });

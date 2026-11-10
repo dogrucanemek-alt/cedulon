@@ -8,15 +8,13 @@ import { CTY_CHECKPOINT, CTY_INCLUSION, cborMap, encodeCbor, signCoseSign1 } fro
 import { generateReceiptKeys } from "@cedulon/receipts";
 
 /**
- * The witness receipt's wire form is stated in -07: a COSE_Sign1 under the
- * inclusion content type whose payload is a CBOR map with label 1 the
- * statement hash, 2 the entry index, 3 the tree head. The draft says a
- * receipt under another content type, or with one of the three entries
- * missing or of another type, does not verify, and that an entry under a
- * label the map does not define is not refused. Test 42 locks the pin and
- * the envelope-versus-payload binding; nothing locked the shape sentence
- * until this file, which re-signs the same map under the witness key so the
- * false results below come from the shape and not from the signature.
+ * The witness receipt's wire form: a COSE_Sign1 under the inclusion content
+ * type whose payload is a CBOR map. RFC receipts carry five entries (labels
+ * 1..5); -00 receipts carry three (labels 1..3). A receipt under another
+ * content type, or with the wrong entry count or types, does not verify.
+ * Test 42 locks the pin and the envelope-versus-payload binding; this file
+ * re-signs the same map under the witness key so the false results below
+ * come from the shape and not from the signature.
  */
 
 type Payload = Array<[number, string | number]>;
@@ -35,29 +33,31 @@ describe("witness receipt shape", () => {
   const witness = generateReceiptKeys();
   const log = new MemoryTransparencyService(witness);
   const inc = log.register("deadbeef");
-  const three: Payload = [
+  const five: Payload = [
     [1, inc.statementHash],
     [2, inc.index],
     [3, inc.treeHead],
+    [4, inc.treeSize!],
+    [5, "rfc9162-sha256"],
   ];
 
   it("the issued receipt, and the same map re-signed by the witness, verify", () => {
     assert.equal(verifyInclusionEnvelope(inc, witness.publicKeyPem), true);
-    const same = resigned(inc, witness.privateKeyPem, three, CTY_INCLUSION);
+    const same = resigned(inc, witness.privateKeyPem, five, CTY_INCLUSION);
     assert.equal(verifyInclusionEnvelope(same, witness.publicKeyPem), true, "the harness itself must pass");
   });
 
   it("another content type over the same map does not verify", () => {
-    const wrongType = resigned(inc, witness.privateKeyPem, three, CTY_CHECKPOINT);
+    const wrongType = resigned(inc, witness.privateKeyPem, five, CTY_CHECKPOINT);
     assert.equal(verifyInclusionEnvelope(wrongType, witness.publicKeyPem), false);
   });
 
-  it("a map missing one of the three entries does not verify", () => {
-    for (const drop of [1, 2, 3]) {
+  it("a map missing one of the five entries does not verify", () => {
+    for (const drop of [1, 2, 3, 4, 5]) {
       const short = resigned(
         inc,
         witness.privateKeyPem,
-        three.filter(([label]) => label !== drop),
+        five.filter(([label]) => label !== drop),
         CTY_INCLUSION,
       );
       assert.equal(verifyInclusionEnvelope(short, witness.publicKeyPem), false, `label ${drop} missing`);
@@ -72,6 +72,8 @@ describe("witness receipt shape", () => {
         [1, inc.statementHash],
         [2, String(inc.index)],
         [3, inc.treeHead],
+        [4, inc.treeSize!],
+        [5, "rfc9162-sha256"],
       ],
       CTY_INCLUSION,
     );
@@ -83,15 +85,29 @@ describe("witness receipt shape", () => {
         [1, 7],
         [2, inc.index],
         [3, inc.treeHead],
+        [4, inc.treeSize!],
+        [5, "rfc9162-sha256"],
       ],
       CTY_INCLUSION,
     );
     assert.equal(verifyInclusionEnvelope(hashAsInt, witness.publicKeyPem), false, "statement hash as an integer");
   });
 
-  it("an entry under a label the map does not define is not refused, as the draft says", () => {
-    const extra = resigned(inc, witness.privateKeyPem, [...three, [4, "undefined here"]], CTY_INCLUSION);
-    assert.equal(verifyInclusionEnvelope(extra, witness.publicKeyPem), true);
+  it("a fourth or sixth entry count does not verify", () => {
+    const four = resigned(
+      inc,
+      witness.privateKeyPem,
+      [
+        [1, inc.statementHash],
+        [2, inc.index],
+        [3, inc.treeHead],
+        [4, "undefined here"],
+      ],
+      CTY_INCLUSION,
+    );
+    assert.equal(verifyInclusionEnvelope(four, witness.publicKeyPem), false);
+    const six = resigned(inc, witness.privateKeyPem, [...five, [6, "extra"]], CTY_INCLUSION);
+    assert.equal(verifyInclusionEnvelope(six, witness.publicKeyPem), false);
   });
 });
 
@@ -181,11 +197,20 @@ describe("hex and proof shape: what the verifier refuses without throwing", () =
   });
 
   it("a proof whose path does not resolve to the root is refused even when the witness signed the envelope", () => {
-    // The witness signs {H(aa), index 1, treeHead H(aa)}: a one-leaf root at index 1 is structurally impossible,
-    // and an empty path returns the leaf unchanged, so leaf == treeHead would pass a verifier that only compares.
+    // The witness signs a three-entry {H(aa), index 1, treeHead H(aa)}: a one-leaf
+    // root at index 1 is structurally impossible, and an empty path returns the
+    // leaf unchanged, so leaf == treeHead would pass a verifier that only compares.
     const leaf = hashOf("aa");
     const envelope = resigned(recA, keys.privateKeyPem, [[1, leaf], [2, 1], [3, leaf]], CTY_INCLUSION);
-    const impossible = { ...envelope, statementHash: leaf, index: 1, treeHead: leaf, inclusionProof: { leafIndex: 1, siblings: [] } };
+    const impossible = {
+      ...envelope,
+      statementHash: leaf,
+      index: 1,
+      treeHead: leaf,
+      alg: undefined,
+      treeSize: undefined,
+      inclusionProof: { leafIndex: 1, siblings: [] },
+    };
     assert.equal(verifyInclusionEnvelope(impossible, keys.publicKeyPem), true, "the envelope itself is witness-signed");
     assert.equal(verifyInclusion(impossible, "aa", keys.publicKeyPem), false);
   });

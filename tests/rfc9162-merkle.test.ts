@@ -63,7 +63,7 @@ describe("RFC 9162 Merkle tree hash", () => {
     assert.notEqual(rfc9162NodeHash(left, right), merkleParent(left, right));
   });
 
-  it("every index in trees of size 1..33 verifies; sibling bit-flip and treeSize±1 fail", () => {
+  it("every index in trees of size 1..33 verifies; sibling bit-flip fails; treeSize is bound by the signed payload, see signed treeSize and alg bind inclusion (C7)", () => {
     for (let n = 1; n <= 33; n += 1) {
       const leaves = Array.from({ length: n }, (_, i) => leafOf(`e${i}`));
       const root = rfc9162Root(leaves);
@@ -82,38 +82,31 @@ describe("RFC 9162 Merkle tree hash", () => {
           assert.equal(rfc9162VerifyInclusion(leaves[i]!, flipped, root), false, `flip n=${n} i=${i}`);
         }
 
-        // treeSize±1: path-length mismatch always refuses. When lengths coincide
-        // (e.g. n=3→4 at i=0), the same siblings can still hash to this root under
-        // RFC §2.1.3.2; then refuse against the neighbouring tree's root instead.
+        // rfc9162VerifyInclusion alone does not bind treeSize to a log epoch.
+        // When path lengths coincide (e.g. n=3→4 at i=0), the same siblings can
+        // still hash to this root; the neighbouring tree's root must refuse.
         const plus = { ...proof, treeSize: n + 1 };
-        const plusOk = rfc9162VerifyInclusion(leaves[i]!, plus, root);
-        if (plusOk) {
+        if (rfc9162VerifyInclusion(leaves[i]!, plus, root)) {
           const bigger = [...leaves, leafOf(`x${n}`)];
           assert.equal(
             rfc9162VerifyInclusion(leaves[i]!, plus, rfc9162Root(bigger)),
             false,
             `treeSize+1 vs neighbouring root n=${n} i=${i}`,
           );
-        } else {
-          assert.equal(plusOk, false, `treeSize+1 n=${n} i=${i}`);
         }
-        if (n > 1) {
+        if (n > 1 && i < n - 1) {
           const minus = { ...proof, treeSize: n - 1 };
-          if (i >= n - 1) {
-            assert.equal(rfc9162VerifyInclusion(leaves[i]!, minus, root), false, `treeSize-1 idx n=${n} i=${i}`);
-          } else {
-            const minusOk = rfc9162VerifyInclusion(leaves[i]!, minus, root);
-            if (minusOk) {
-              const smaller = leaves.slice(0, n - 1);
-              assert.equal(
-                rfc9162VerifyInclusion(leaves[i]!, minus, rfc9162Root(smaller)),
-                false,
-                `treeSize-1 vs neighbouring root n=${n} i=${i}`,
-              );
-            } else {
-              assert.equal(minusOk, false, `treeSize-1 n=${n} i=${i}`);
-            }
+          if (rfc9162VerifyInclusion(leaves[i]!, minus, root)) {
+            const smaller = leaves.slice(0, n - 1);
+            assert.equal(
+              rfc9162VerifyInclusion(leaves[i]!, minus, rfc9162Root(smaller)),
+              false,
+              `treeSize-1 vs neighbouring root n=${n} i=${i}`,
+            );
           }
+        } else if (n > 1 && i >= n - 1) {
+          const minus = { ...proof, treeSize: n - 1 };
+          assert.equal(rfc9162VerifyInclusion(leaves[i]!, minus, root), false, `treeSize-1 idx n=${n} i=${i}`);
         }
       }
     }
@@ -165,6 +158,78 @@ describe("legacy inclusion receipts still verify and are marked", () => {
     const unknown = { ...rec, alg: "mystery-hash" as never };
     assert.equal(verifyInclusion(unknown, "aa", keys.publicKeyPem), false);
     assert.equal(verifyInclusionDetailed(unknown, "aa", keys.publicKeyPem).ok, false);
+  });
+});
+
+describe("signed treeSize and alg bind inclusion (C7)", () => {
+  function abcIndex0Receipt(keys: { publicKeyPem: string; privateKeyPem: string }): {
+    receipt: InclusionReceipt;
+    statementHex: string;
+  } {
+    const statementHex = "aa";
+    const statement = Buffer.from(statementHex, "hex");
+    const statementHash = createHash("sha256").update(statement).digest("hex");
+    const leafHashes = ["aa", "bb", "cc"].map((s) => rfc9162LeafHash(Buffer.from(s, "hex")));
+    const treeHead = rfc9162Root(leafHashes);
+    const inclusionProof = rfc9162InclusionProof(leafHashes, 0);
+    const treeSize = 3;
+    const payload = encodeCbor(
+      cborMap([
+        [1, statementHash],
+        [2, 0],
+        [3, treeHead],
+        [4, treeSize],
+        [5, "rfc9162-sha256"],
+      ]),
+    );
+    const cose = signCoseSign1(payload, keys.privateKeyPem, CTY_INCLUSION);
+    const leafHash = rfc9162LeafHash(statement);
+    return {
+      statementHex,
+      receipt: {
+        statementHash,
+        leafHash,
+        index: 0,
+        treeHead,
+        treeSize,
+        alg: "rfc9162-sha256",
+        issuerPublicKeyPem: keys.publicKeyPem,
+        coseHex: Buffer.from(cose).toString("hex"),
+        inclusionProof,
+      },
+    };
+  }
+
+  it("treeSize bumped 3 to 4 on receipt and proof fails verifyInclusion", () => {
+    const keys = generateReceiptKeys();
+    const { receipt, statementHex } = abcIndex0Receipt(keys);
+    assert.equal(verifyInclusion(receipt, statementHex, keys.publicKeyPem), true);
+    const bumped: InclusionReceipt = {
+      ...receipt,
+      treeSize: 4,
+      inclusionProof: { ...receipt.inclusionProof!, treeSize: 4 },
+    };
+    assert.equal(verifyInclusion(bumped, statementHex, keys.publicKeyPem), false);
+  });
+
+  it("missing receipt.alg fails verifyInclusion", () => {
+    const keys = generateReceiptKeys();
+    const { receipt, statementHex } = abcIndex0Receipt(keys);
+    const { alg: _alg, ...stripped } = receipt;
+    void _alg;
+    assert.equal(verifyInclusion(stripped, statementHex, keys.publicKeyPem), false);
+  });
+
+  it("missing inclusionProof.alg fails verifyInclusion", () => {
+    const keys = generateReceiptKeys();
+    const { receipt, statementHex } = abcIndex0Receipt(keys);
+    const { alg: _alg, ...proofRest } = receipt.inclusionProof!;
+    void _alg;
+    const stripped: InclusionReceipt = {
+      ...receipt,
+      inclusionProof: proofRest,
+    };
+    assert.equal(verifyInclusion(stripped, statementHex, keys.publicKeyPem), false);
   });
 });
 

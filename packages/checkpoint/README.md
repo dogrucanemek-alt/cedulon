@@ -18,22 +18,25 @@ node `HASH(0x01 || left || right)`. A new receipt carries:
 
 ```ts
 {
-  statementHash, // SHA-256(statement); COSE label 1
-  index,         // COSE label 2
-  treeHead,      // COSE label 3
-  alg: "rfc9162-sha256", // beside the COSE; not signed
-  treeSize,              // beside the COSE; not signed
-  leafHash,              // HASH(0x00 || statement); beside the COSE; not signed
+  statementHash, // SHA-256(statement); COSE label 1 (signed)
+  index,         // COSE label 2 (signed)
+  treeHead,      // COSE label 3 (signed)
+  treeSize,      // COSE label 4 (signed); unsigned copy must match
+  alg: "rfc9162-sha256", // COSE label 5 (signed); unsigned copy must match
+  leafHash,      // HASH(0x00 || statement); beside the COSE; compared when present
   inclusionProof: { leafIndex, siblings, alg: "rfc9162-sha256", treeSize },
   issuerPublicKeyPem,
   coseHex,
 }
 ```
 
-`alg`, `treeSize`, and `leafHash` are not inside the log-signed payload.
-The signed fields are `statementHash`, `index`, and `treeHead`, and
-verification is against that signed root. A proof with `treeSize`
-greater than `2^32 - 1` is refused.
+The log-signed payload is the five-entry map above. `leafHash` is not
+signed; when present it is recomputed from the candidate and compared.
+The inclusion proof's `alg` and `treeSize` must equal the signed values.
+A proof with `treeSize` greater than `2^32 - 1` is refused.
+`applyInclusionProof` throws `inclusion-proof` for an RFC 9162 proof
+(that helper is the legacy pad-even walk). Verifiers at 0.17.0 and
+earlier do not verify a five-entry receipt.
 
 ```ts
 import { verifyInclusion, verifyInclusionDetailed } from "@cedulon/checkpoint";
@@ -44,8 +47,9 @@ const detailed = verifyInclusionDetailed(receipt, candidateHex, witnessKey);
 ```
 
 `verifyInclusion` stays a boolean. Call `verifyInclusionDetailed` when
-you need `legacyTree`. A receipt that omits `alg` uses the older
-domain-separation-free walk; a verifying legacy receipt returns
-`legacyTree: true`. An unknown `alg` is refused.
+you need `legacyTree`. `legacyTree` is true when the signed payload is
+the three-entry (-00) map and that walk was selected; false when the
+payload is five-entry or cannot be read. A three-entry receipt must
+omit unsigned `alg` and `treeSize`. An unknown `alg` is refused.
 
 Repository: https://github.com/dogrucanemek-alt/cedulon

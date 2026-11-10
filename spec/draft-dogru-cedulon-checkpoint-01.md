@@ -143,16 +143,16 @@ genesis checkpoint of that chain, and its `prevCheckpointHash` MUST
 be null. A window under audit usually does not begin a stream, so an
 audit MAY instead present an anchor, as the audit procedure of
 {{CEDULON-CORE}} describes: the issuer-signed checkpoint immediately
-preceding the first presented checkpoint. The anchor is resolved
+preceding the presented checkpoint with the lowest epoch. The anchor is resolved
 against the issuer root like any checkpoint, and it is valid only
-when, in addition, its `epoch` is one less than the first presented
-checkpoint's, its `endMs` equals that checkpoint's `startMs`, and
+when, in addition, its `epoch` is one less than that checkpoint's,
+its `endMs` equals that checkpoint's `startMs`, and
 that checkpoint's `prevCheckpointHash` equals the SHA-256 of the
-anchor's COSE bytes. With a valid anchor the first presented
-checkpoint is not a genesis checkpoint: its `prevCheckpointHash` is
+anchor's COSE bytes. With a valid anchor the presented checkpoint with
+the lowest epoch is not a genesis checkpoint: its `prevCheckpointHash` is
 checked against the anchor rather than against null. An anchor that
 is not valid anchors nothing. One that answers to the issuer root and
-still does not meet the first presented checkpoint is reported as
+still does not meet the presented checkpoint with the lowest epoch is reported as
 `window-coverage`, identified by `anchor` (`MUST-T11-20`); what is
 reported for an anchor that does not answer to the issuer root is
 stated in {{CEDULON-CORE}}. The anchor's own window is not audited;
@@ -188,46 +188,48 @@ two named tiers.
 
 **Tier 1 - the witness receipt.** The witness returns a co-signature
 over the statement hash of what it recorded: a COSE_Sign1 whose
-payload binds the statement hash, the entry index, and the witness's
-tree head. Verifying it establishes exactly one sentence - "the
-witness signed for this hash" - and nothing more; in particular it
-does not establish membership in an append-only log. The receipt is
-a signature over a statement rather than a proof of log membership.
+payload binds the statement hash, the entry index, the witness's
+tree head, the tree size, and the algorithm name. Verifying it
+establishes that the witness signed those fields, and nothing more;
+in particular it does not establish membership in an append-only log.
+The receipt is a signature over a statement rather than a proof of log
+membership.
 The {{RFC9942}} citation applies in tier 2, where its mechanics are
 actually performed.
 
 On the wire the witness receipt is a COSE_Sign1 under {{CEDULON-CORE}} (COSE Profile),
 signed by the witness key, with content type
 `application/cedulon-inclusion+cbor` ({{iana-inclusion}}). Its payload
-is a deterministic CBOR map carrying three entries and is not a CWT
+is a deterministic CBOR map carrying five entries and is not a CWT
 claim set: label `1` is the statement hash, label `2` the entry index,
-label `3` the tree head. The two hashes are text strings holding the
+label `3` the tree head, label `4` the tree size (the number of leaves
+at issuance, an unsigned integer), label `5` the algorithm name (text,
+`rfc9162-sha256`). The two hashes are text strings holding the
 lowercase hexadecimal of a 32-octet SHA-256, the statement hash taken
 over the octets of the statement the witness recorded; the entry index
 is an unsigned integer. The hash strings are compared as issued and are
 not passed through the hash-claim grammar the claim sets use; the
 revision that moves them to byte strings will close that difference.
-Entries under other labels are not defined, and a verifier of this
-revision does not refuse them. The map carries no statement body: a
+A payload with another entry count, or with an unknown label among those
+entries, does not verify. The map carries no statement body: a
 receipt that travels with the body carries it beside the COSE object,
 not inside it ({{witness-root}}, `MUST-T11-17`). A receipt whose
-content type is another value, or whose payload lacks one of the three
+content type is another value, or whose payload lacks one of the five
 entries or carries one of another type, does not verify: the content
 type is the check {{CEDULON-CORE}} (COSE Profile) makes on every object of this
 profile, and the payload map is the one this paragraph states.
 
-When the witness issues under {{RFC9162}}, the receipt carries
-`alg` with the value `rfc9162-sha256`, `treeSize` (the number of leaves
-at issuance), and `leafHash` (`HASH(0x00 || statement octets)` per
-{{RFC9162}} Section 2.1.1). Those three fields sit beside the COSE
-object; they are not entries of the signed payload map above. The
-signed fields remain the statement hash, the entry index, and the tree
-head, and verification is against that signed tree head. The -00
-revision of this document described a different tree: leaves and
-interior nodes carried no prefix, and a level with an odd count paired
-its last node with itself. Receipts published under that tree omit
-`alg`, and this revision does not define their verification. A receipt
-that names an unknown `alg` does not verify.
+When the witness issues under {{RFC9162}}, the receipt also carries
+`leafHash` (`HASH(0x00 || statement octets)` per {{RFC9162}} Section
+2.1.1) beside the COSE object; that field is not an entry of the signed
+payload map above. Unsigned copies of `alg` and `treeSize` beside the
+COSE must equal the signed labels `5` and `4`. Verification is against
+the signed tree head at the signed tree size. The -00 revision of this
+document described a different tree and a three-entry signed payload:
+leaves and interior nodes carried no prefix, and a level with an odd
+count paired its last node with itself. This revision does not define
+verification of those -00 receipts. A receipt that names an unknown
+`alg` does not verify.
 
 A verifier MAY be given witness receipts for the period under audit.
 It is a distinct input from the presented checkpoint chain, and
@@ -369,7 +371,7 @@ identifiers are not an interoperability surface.
     in the report.
 3. Walk checkpoints in epoch order. `prevCheckpointHash` MUST
     equal the SHA-256 of the previous checkpoint COSE bytes. For the
-    first presented checkpoint it MUST equal the anchor's checkpoint
+    presented checkpoint with the lowest epoch it MUST equal the anchor's checkpoint
     hash where a valid anchor is presented, and MUST be null
     otherwise ({{genesis}}, `MUST-T11-4`, `MUST-T11-20`). The identifier
     `checkpoint-total-mismatch` SHOULD be used for a broken chain,
@@ -442,7 +444,7 @@ appear in operator-facing output (`MUST-T10-14`).
 | checkpoint-total-mismatch | audit fails | Totals, count, signature, or checkpoint chain failed. The signature branch is reached where no issuer pin has already excluded the checkpoint: under a pin a checkpoint that does not verify is `issuer-key-mismatch` and never reaches the totals comparison |
 | checkpoint-head-mismatch | audit fails | `chainHeadHash` is not the last link, in issuer order, of the chain inside the window, or the expected head could not be computed at all because the last receipt on the chain refused canonical encoding; the refusal is named and is not a signature verdict |
 | equivocation | audit fails | Two distinct hashes for one epoch |
-| window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows; also an anchor that does not meet the first presented checkpoint, identified by `anchor` ({{genesis}}) |
+| window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows; also an anchor that does not meet the presented checkpoint with the lowest epoch, identified by `anchor` ({{genesis}}) |
 | unauthenticated-witness | conditional | No verifier-supplied witness key; inclusion receipts were left out of the comparison |
 | witness-entry-unattributable | conditional | The witness holds a statement this chain does not present, carrying no body to say whose it is |
 | checkpoint-withheld | audit fails | A verified witness receipt binds a checkpoint the presented chain does not contain |
@@ -493,7 +495,7 @@ The remaining T11 identities are defined here.
 | MUST-T11-17 | An inclusion receipt carrying no statement body MUST NOT be used to report a withheld checkpoint, because it cannot say whose statement it binds. It MUST NOT be discarded silently either: a real withholding must not be buried by removing the body. |
 | MUST-T11-18 | Where candidate Signed Statement bytes and an inclusion proof are both supplied, a verifier MUST verify log membership by the Merkle Tree Hash and inclusion-proof verification of RFC 9162 Sections 2.1.1 and 2.1.3, as consumed by RFC 9942 Section 5.2.1, and MUST accept only when the candidate's statement hash, the proof's leaf index, and the reproduced root exactly match the statement hash, entry index, and tree head of a witness receipt that verifies under the pinned witness key, with the walk's leaf equal to HASH(0x00 || candidate). Root reproduction alone is not acceptance. A pair that fails, or a candidate supplied without a proof, MUST be reported as a failing finding. |
 | MUST-T11-19 | Where witness receipts are supplied and the tier-2 pair is not, the report MUST state that log membership was not exercised rather than passing the tier silently. |
-| MUST-T11-20 | Where an audit presents an anchor, the first presented checkpoint MUST be chained to the anchor's checkpoint hash rather than to null only when the anchor is valid: it answers to the issuer root of {{CEDULON-CORE}}, its `epoch` is one less than the first presented checkpoint's, its `endMs` equals that checkpoint's `startMs`, and that checkpoint's `prevCheckpointHash` equals the anchor's checkpoint hash. An anchor that is not valid MUST anchor nothing. One that answers to the issuer root and fails any of the other three conditions MUST be reported as `window-coverage`, identified by `anchor`. |
+| MUST-T11-20 | Where an audit presents an anchor, the presented checkpoint with the lowest epoch MUST be chained to the anchor's checkpoint hash rather than to null only when the anchor is valid: it answers to the issuer root of {{CEDULON-CORE}}, its `epoch` is one less than that checkpoint's, its `endMs` equals that checkpoint's `startMs`, and that checkpoint's `prevCheckpointHash` equals the anchor's checkpoint hash. An anchor that is not valid MUST anchor nothing. One that answers to the issuer root and fails any of the other three conditions MUST be reported as `window-coverage`, identified by `anchor`. |
 
 Issuer self-attestation:
 : A Receipt Issuer that also produces the only copy of the extract
@@ -580,8 +582,9 @@ Subtype name:
 
 Encoding considerations:
 : binary. A COSE_Sign1 structure in deterministic CBOR, untagged, as
-  profiled in {{CEDULON-CORE}} (COSE Profile), whose payload is the three-entry map
-  {{witness}} states: statement hash, entry index, tree head.
+  profiled in {{CEDULON-CORE}} (COSE Profile), whose payload is the five-entry map
+  {{witness}} states: statement hash, entry index, tree head, tree size,
+  algorithm name.
 
 Security considerations:
 : See {{security}} of this document. A witness receipt verified under
@@ -594,7 +597,7 @@ Security considerations:
 
 Interoperability considerations:
 : As for application/cedulon-receipt+cbor, except that the payload is
-  not a CWT claim set: its three labels are local to the map and are
+  not a CWT claim set: its five labels are local to the map and are
   stated, with their types, in {{witness}}.
 
 Published specification:

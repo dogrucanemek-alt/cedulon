@@ -65,10 +65,10 @@ describe("MUST-T6-7 settlement time vs Decision Token expiry", () => {
 
     assert.equal(result.status, 200);
     if (result.status !== 200) return;
-    assert.equal(result.receipt.claims.timestampMs, expiryMs);
-    assert.ok(
-      result.receipt.claims.timestampMs <= expiryMs,
-      "accepted receipt timestamp must stay inside token expiry",
+    assert.equal(
+      result.receipt.claims.timestampMs,
+      expiryMs,
+      "accepted receipt timestamp must equal token expiry on the boundary",
     );
   });
 

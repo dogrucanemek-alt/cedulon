@@ -44,20 +44,17 @@ export type InclusionReceipt = {
   /**
    * RFC 9162 leaf hash: SHA-256(0x00 ‖ statement). Distinct from
    * `statementHash` (SHA-256(statement)), whose meaning is unchanged.
-   * Not inside the log-signed payload; signed fields are statementHash,
-   * index, and treeHead, and verification is against that signed root.
+   * Not inside the log-signed payload; computed and compared when present.
    */
   leafHash?: string;
   /**
-   * Discriminator. Absent ⇒ legacy tree.
-   * Not inside the log-signed payload; signed fields are statementHash,
-   * index, and treeHead, and verification is against that signed root.
+   * Discriminator. Absent ⇒ legacy (-00) three-entry signed payload.
+   * On RFC receipts this equals signed payload label 5.
    */
   alg?: "rfc9162-sha256";
   /**
    * Tree size at issuance. Required when `alg` is `rfc9162-sha256`.
-   * Not inside the log-signed payload; signed fields are statementHash,
-   * index, and treeHead, and verification is against that signed root.
+   * On RFC receipts this equals signed payload label 4.
    */
   treeSize?: number;
 };
@@ -398,6 +395,8 @@ export class MemoryTransparencyService {
         [1, statementHash],
         [2, index],
         [3, this.treeHead],
+        [4, treeSize],
+        [5, RFC9162_ALG],
       ]),
     );
     const cose = signCoseSign1(payload, this.privateKeyPem, CTY_INCLUSION);
@@ -427,20 +426,29 @@ export class MemoryTransparencyService {
     receipt: InclusionReceipt,
     candidateStatementHex: string,
   ): InclusionVerifyResult {
+    let signed: ReturnType<typeof decodeInclusionPayload> | undefined;
+    try {
+      signed = decodeInclusionPayload(receipt.coseHex);
+    } catch {
+      signed = undefined;
+    }
+    const legacyTree = signed !== undefined && signed.alg === undefined;
     const stored = this.leaves[receipt.index];
     if (stored === undefined) {
-      return { ok: false, legacyTree: receipt.alg === undefined };
+      return { ok: false, legacyTree: signed === undefined ? false : legacyTree };
     }
-    if (receipt.alg === RFC9162_ALG) {
+    if (signed?.alg === RFC9162_ALG) {
       if (receipt.leafHash !== stored) {
         return { ok: false, legacyTree: false };
       }
-    } else if (receipt.alg !== undefined) {
+    } else if (signed?.alg !== undefined) {
       return { ok: false, legacyTree: false };
-    } else if (stored !== receipt.statementHash) {
+    } else if (signed !== undefined && stored !== receipt.statementHash) {
       // Legacy receipt against an RFC log: leaf slots hold domain-separated
       // hashes, so a bare statementHash never matches. Still mark legacy.
       return { ok: false, legacyTree: true };
+    } else if (signed === undefined) {
+      return { ok: false, legacyTree: false };
     }
     return verifyInclusionDetailed(receipt, candidateStatementHex, this.publicKeyPem);
   }
@@ -458,17 +466,17 @@ export function anchorReceipt(ts: MemoryTransparencyService, signed: SignedRecei
 }
 
 /**
- * Establishes that the log signed this envelope: hash, index, tree head. It
- * does NOT establish that the receipt covers any statement the caller holds;
- * for that, `verifyInclusion`.
+ * Establishes that the log signed this envelope: hash, index, tree head, and
+ * on RFC receipts also treeSize and alg. It does NOT establish that the
+ * receipt covers any statement the caller holds; for that, `verifyInclusion`.
  *
  * `expectedWitnessKeyPem` is the log's key, held out of band. Without it this
  * checks the receipt against the key it carries, so anyone able to mint a
  * keypair can assert that a statement is in a log they invented.
  *
- * The signed payload carries `index` and `treeHead` as well; comparing only
- * `statementHash` would let the envelope claim a position in the log that its
- * own signature does not support.
+ * A five-entry signed payload requires `receipt.alg` and `receipt.treeSize`
+ * to equal the signed values. A three-entry (-00) payload requires those
+ * fields to be absent on the receipt.
  */
 export function verifyInclusionEnvelope(
   receipt: InclusionReceipt,
@@ -489,11 +497,17 @@ export function verifyInclusionEnvelope(
   }
   try {
     const signed = decodeInclusionPayload(receipt.coseHex);
-    return (
-      signed.statementHash === receipt.statementHash &&
-      signed.index === receipt.index &&
-      signed.treeHead === receipt.treeHead
-    );
+    if (
+      signed.statementHash !== receipt.statementHash ||
+      signed.index !== receipt.index ||
+      signed.treeHead !== receipt.treeHead
+    ) {
+      return false;
+    }
+    if (signed.alg !== undefined) {
+      return receipt.alg === signed.alg && receipt.treeSize === signed.treeSize;
+    }
+    return receipt.alg === undefined && receipt.treeSize === undefined;
   } catch {
     return false;
   }
@@ -506,8 +520,10 @@ export function verifyInclusionEnvelope(
  * the shape the walk is defined over (`validInclusionProof`) before it is
  * applied; a proof of another shape is false here, not an exception.
  *
- * `alg === 'rfc9162-sha256'` selects the RFC 9162 walk (`treeSize` required).
- * Absent `alg` keeps the legacy walk. Unknown `alg` is refused.
+ * Walk mode comes from the signed payload: five entries select RFC 9162
+ * (`inclusionProof.alg` and `inclusionProof.treeSize` must match the signed
+ * values); three entries select the legacy walk (`alg` / `treeSize` absent
+ * on the proof).
  */
 export function verifyInclusion(
   receipt: InclusionReceipt,
@@ -519,8 +535,10 @@ export function verifyInclusion(
 
 /**
  * Same decisions as `verifyInclusion`, returning whether the legacy (pre-RFC
- * 9162) walk was used. Call this when the caller needs `legacyTree`; keep
- * `verifyInclusion` for the published boolean contract.
+ * 9162) walk was used. `legacyTree` is true when the signed payload is the
+ * three-entry map; false when it is five-entry or when the payload cannot be
+ * read. Call this when the caller needs `legacyTree`; keep `verifyInclusion`
+ * for the published boolean contract.
  */
 export function verifyInclusionDetailed(
   receipt: InclusionReceipt,
@@ -530,7 +548,13 @@ export function verifyInclusionDetailed(
   if (receipt.alg !== undefined && receipt.alg !== RFC9162_ALG) {
     return { ok: false, legacyTree: false };
   }
-  const legacyTree = receipt.alg === undefined;
+  let signed: ReturnType<typeof decodeInclusionPayload>;
+  try {
+    signed = decodeInclusionPayload(receipt.coseHex);
+  } catch {
+    return { ok: false, legacyTree: false };
+  }
+  const legacyTree = signed.alg === undefined;
   if (!verifyInclusionEnvelope(receipt, expectedWitnessKeyPem)) {
     return { ok: false, legacyTree };
   }
@@ -550,12 +574,8 @@ export function verifyInclusionDetailed(
     return { ok: false, legacyTree };
   }
 
-  if (receipt.alg === RFC9162_ALG || proof.alg === RFC9162_ALG) {
-    const treeSize = proof.treeSize ?? receipt.treeSize;
-    if (typeof treeSize !== "number" || !Number.isSafeInteger(treeSize) || treeSize < 1) {
-      return { ok: false, legacyTree: false };
-    }
-    if (receipt.treeSize !== undefined && receipt.treeSize !== treeSize) {
+  if (signed.alg === RFC9162_ALG) {
+    if (proof.alg !== RFC9162_ALG || proof.treeSize !== signed.treeSize) {
       return { ok: false, legacyTree: false };
     }
     const leafHash = rfc9162LeafHash(bytes);
@@ -565,7 +585,7 @@ export function verifyInclusionDetailed(
     const rfcProof: InclusionProof = {
       leafIndex: proof.leafIndex,
       siblings: proof.siblings,
-      treeSize,
+      treeSize: signed.treeSize,
       alg: RFC9162_ALG,
     };
     return {
@@ -574,7 +594,10 @@ export function verifyInclusionDetailed(
     };
   }
 
-  // Legacy: domain-separation-free walk over statementHash leaves.
+  // Legacy three-entry payload: proof must omit alg and treeSize.
+  if (proof.alg !== undefined || proof.treeSize !== undefined) {
+    return { ok: false, legacyTree: true };
+  }
   if (applyInclusionProof(statementHash, proof) !== receipt.treeHead) {
     return { ok: false, legacyTree: true };
   }
@@ -600,6 +623,8 @@ export function decodeInclusionPayload(coseHex: string): {
   statementHash: string;
   index: number;
   treeHead: string;
+  treeSize?: number;
+  alg?: "rfc9162-sha256";
 } {
   const cose = strictHexBytes(coseHex);
   if (!cose) {
@@ -607,11 +632,32 @@ export function decodeInclusionPayload(coseHex: string): {
   }
   const msg = decodeCoseSign1(cose);
   const claims = asMap(decodeCbor(msg.payload));
+  const n = claims.$map.length;
   const statementHash = mapGet(claims, 1);
   const index = mapGet(claims, 2);
   const treeHead = mapGet(claims, 3);
   if (typeof statementHash !== "string" || typeof index !== "number" || typeof treeHead !== "string") {
     throw new Error("inclusion-payload");
   }
-  return { statementHash, index, treeHead };
+  if (n === 3) {
+    if (mapGet(claims, 4) !== undefined || mapGet(claims, 5) !== undefined) {
+      throw new Error("inclusion-payload");
+    }
+    return { statementHash, index, treeHead };
+  }
+  if (n === 5) {
+    const treeSize = mapGet(claims, 4);
+    const alg = mapGet(claims, 5);
+    if (
+      typeof treeSize !== "number" ||
+      !Number.isSafeInteger(treeSize) ||
+      treeSize < 1 ||
+      treeSize > 0xffffffff ||
+      alg !== RFC9162_ALG
+    ) {
+      throw new Error("inclusion-payload");
+    }
+    return { statementHash, index, treeHead, treeSize, alg };
+  }
+  throw new Error("inclusion-payload");
 }

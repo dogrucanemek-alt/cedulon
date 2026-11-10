@@ -11,6 +11,7 @@ import {
 import {
   applyInclusionProof,
   checkpointHash,
+  decodeInclusionPayload,
   findCheckpointChainBreak,
   findEquivocation,
   rfc9162LeafHash,
@@ -1191,10 +1192,17 @@ export function findCheckpointTotalMismatches(
     }
   }
   // Spec walk is epoch order; remap the break index to the presented array.
-  const byEpoch = [...checkpoints].sort((a, b) => a.claims.epoch - b.claims.epoch);
-  const chain = findCheckpointChainBreak(byEpoch, undefined, expectedFirstPrevCheckpoint, verify);
+  const byEpoch = checkpoints
+    .map((cp, presentedIndex) => ({ cp, presentedIndex }))
+    .sort((a, b) => a.cp.claims.epoch - b.cp.claims.epoch);
+  const chain = findCheckpointChainBreak(
+    byEpoch.map((row) => row.cp),
+    undefined,
+    expectedFirstPrevCheckpoint,
+    verify,
+  );
   if (chain) {
-    const presentedIndex = checkpoints.indexOf(byEpoch[chain.index]!);
+    const presentedIndex = byEpoch[chain.index]!.presentedIndex;
     findings.push({
       code: "checkpoint-total-mismatch",
       id: `checkpoint-chain-${presentedIndex}`,
@@ -2465,54 +2473,54 @@ function auditDetailed(input: AuditInput): AuditDetailed {
         }
         const statementHash = createHash("sha256").update(candidate).digest("hex");
         const pinned = input.witnessTrust?.publicKeyPem;
-        const rfc =
-          proof.alg === "rfc9162-sha256" ||
-          (input.inclusionReceipts ?? []).some(
-            (rec) => rec.alg === "rfc9162-sha256" && proof.leafIndex === rec.index,
-          );
+        const leafHash = rfc9162LeafHash(candidate);
         let hit = false;
-        if (rfc) {
-          const leafHash = rfc9162LeafHash(candidate);
-          const treeSize =
-            proof.treeSize ??
-            (input.inclusionReceipts ?? []).find(
-              (rec) => proof.leafIndex === rec.index && rec.treeSize !== undefined,
-            )?.treeSize;
-          if (typeof treeSize !== "number") {
-            throw new Error("tree-size");
+        for (const rec of input.inclusionReceipts ?? []) {
+          if (
+            rec.statementHash !== statementHash ||
+            proof.leafIndex !== rec.index ||
+            !inclusionFromPinnedLog(rec, pinned)
+          ) {
+            continue;
           }
-          const rfcProof: InclusionProof = {
-            leafIndex: proof.leafIndex,
-            siblings: proof.siblings,
-            treeSize,
-            alg: "rfc9162-sha256",
-          };
-          hit = (input.inclusionReceipts ?? []).some((rec) => {
+          let signed: ReturnType<typeof decodeInclusionPayload>;
+          try {
+            signed = decodeInclusionPayload(rec.coseHex);
+          } catch {
+            continue;
+          }
+          if (signed.alg === "rfc9162-sha256") {
             if (
-              rec.statementHash !== statementHash ||
-              proof.leafIndex !== rec.index ||
+              proof.alg !== "rfc9162-sha256" ||
+              proof.treeSize !== signed.treeSize ||
               (rec.leafHash !== undefined && rec.leafHash !== leafHash)
             ) {
-              return false;
+              continue;
             }
+            const rfcProof: InclusionProof = {
+              leafIndex: proof.leafIndex,
+              siblings: proof.siblings,
+              treeSize: signed.treeSize,
+              alg: "rfc9162-sha256",
+            };
             if (!rfc9162VerifyInclusion(leafHash, rfcProof, rec.treeHead)) {
-              return false;
+              continue;
             }
-            return inclusionFromPinnedLog(rec, pinned);
-          });
-        } else {
-          // Legacy tree (no alg): same applyInclusionProof walk as before.
+            hit = true;
+            break;
+          }
+          // Legacy three-entry signed payload: proof must omit alg and treeSize.
+          // The audit accepts a verified legacy receipt without a separate
+          // finding; verifyInclusionDetailed reports legacyTree to callers.
+          if (proof.alg !== undefined || proof.treeSize !== undefined) {
+            continue;
+          }
           const root = applyInclusionProof(statementHash, proof);
-          hit = (input.inclusionReceipts ?? []).some((rec) => {
-            if (
-              rec.statementHash !== statementHash ||
-              rec.treeHead !== root ||
-              proof.leafIndex !== rec.index
-            ) {
-              return false;
-            }
-            return inclusionFromPinnedLog(rec, pinned);
-          });
+          if (rec.treeHead !== root) {
+            continue;
+          }
+          hit = true;
+          break;
         }
         if (!hit) {
           findings.push({
