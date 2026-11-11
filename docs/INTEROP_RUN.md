@@ -64,14 +64,13 @@ npm run audit
 ```
 
 ```
-audit: balanced
-receipts=2
-findings=0
-guarantee=conditional
+summary	audit: balanced
+result	balanced findings=0
+guarantee	conditional
 counts	receipts	submitted=2 attested=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
 counts	settlements	rows=2 matched=2 deferred=0 unmatched=0 repeated=0 unreconciled=0
-warn	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
-warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional
+warning	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
+warning	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional
 ```
 
 The warnings are the point: a balance without a pinned extract and a pinned
@@ -130,14 +129,14 @@ npm run demo:live
 ```
 
 ```
-(usage line unless --address --from --to and CEDULON_RPC_URL are set; against an account whose receipts you do not hold, every settlement is settlement-without-receipt and guarantee=conditional)
+(usage line unless --address --from --to and CEDULON_RPC_URL are set; against an account whose receipts you do not hold, every settlement is settlement-without-receipt and guarantee	conditional)
 ```
 
 ## What this run proves
 
 - The tree typechecks before packages are built.
 - The suite is green.
-- The audit names `guarantee=` on the passing path.
+- The audit names `guarantee` on the passing path.
 - The four bypass kinds fail.
 - The published MCP server still answers `initialize` (if you ran §6).
 

@@ -88,17 +88,16 @@ npm run audit
 Expected stdout:
 
 ```
-audit: balanced
-receipts=2
-findings=0
-guarantee=conditional
+summary	audit: balanced
+result	balanced findings=0
+guarantee	conditional
 counts	receipts	submitted=2 attested=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
 counts	settlements	rows=2 matched=2 deferred=0 unmatched=0 repeated=0 unreconciled=0
-warn	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
-warn	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional
+warning	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
+warning	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional
 ```
 
-Read the warnings before you trust the first line. This demo passes no rail
+Read the warnings before you trust the `result` line. This demo passes no rail
 extract, no pin and no issuer key, so the books balance against what the issuer
 itself recorded, checked against the key those same records carry. That is a
 conditional result, and the audit says so. Section 8 shows what an
@@ -200,13 +199,21 @@ receipts you do not hold, every settlement the chain reports is a gap:
 ```
 rail=base-sepolia-usdc
 account=0x2e0c37b721124e2558baf75f6f8e6cc9f14aec29
-window=2026-08-26T01:30:22.000Z..2026-08-26T01:46:32.001Z
-settlements=128 total=200000 receipts=0
-audit: 128 settlement without receipt → FAIL
+window=2026-11-11T11:23:48.000Z..2026-11-11T11:24:25.001Z
+settlements=3 total=3000 receipts=0
+summary	audit: 3 settlement without receipt → FAIL
+result	fail findings=3
+finding	settlement-without-receipt	0xcae972c2b2b0eda38f0a7fd20bf57b538f46674cf586efc0b6d8eab0247deeca:1	settlement 0xcae972c2b2b0eda38f0a7fd20bf57b538f46674cf586efc0b6d8eab0247deeca:1 1000 USDC has no spend receipt
+finding	settlement-without-receipt	0x98fb67a557c77506a9adda85e23f5c22785ade5e1abd068310a2a8ec78092001:12	settlement 0x98fb67a557c77506a9adda85e23f5c22785ade5e1abd068310a2a8ec78092001:12 1000 USDC has no spend receipt
+finding	settlement-without-receipt	0x6189c31e4333051d747a7ca4f8c50a12b637ea96841b9b539c4cb3257fd08498:9	settlement 0x6189c31e4333051d747a7ca4f8c50a12b637ea96841b9b539c4cb3257fd08498:9 1000 USDC has no spend receipt
+guarantee	conditional
+counts	receipts	submitted=0 attested=0 in-scope=0 aborted=0 settled=0 matched=0 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
+counts	settlements	rows=3 matched=0 deferred=0 unmatched=3 repeated=0 unreconciled=0
+warning	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
 ```
 
-Your numbers will differ; the shape is the point. `guarantee=conditional`,
-because a chain read is not a signed extract from the rail operator — the
+Your numbers will differ; the shape is the point. `guarantee	conditional`,
+because a chain read is not a signed extract from the rail operator - the
 window is whatever you asked for, and nothing countersigned it. Exit is
 non-zero whenever the window does not reconcile, which is the whole job:
 the rail is not yours to edit, and what it reports has to be accounted for.

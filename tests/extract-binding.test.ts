@@ -275,8 +275,8 @@ describe("rail extract binding", () => {
     // pinned one in the only output an operator reads.
     const unpinned = audit({ receipts: [], checkpoints: [], settlements: [] });
     const red = formatAudit(unpinned, 0);
-    assert.match(red, /guarantee=conditional/);
-    assert.match(red, /warn\tunauthenticated-extract/);
+    assert.match(red, /^guarantee\tconditional$/m);
+    assert.match(red, /^warning\tunauthenticated-extract\t/m);
 
     const rail = generateExtractKeys();
     const green = formatAudit(
@@ -288,8 +288,8 @@ describe("rail extract binding", () => {
       }),
       0,
     );
-    assert.match(green, /guarantee=unconditional/);
-    assert.equal(/warn\t(?!counterparty-unbound)/.test(green), false);
+    assert.match(green, /^guarantee\tunconditional$/m);
+    assert.equal(/warning\t(?!counterparty-unbound)/.test(green), false);
   });
 
   it("26 RED then GREEN: the same rail key in another encoding still matches the pin", () => {
@@ -718,12 +718,8 @@ describe("rail extract binding", () => {
     // something the report never measured, so the report says what it covered.
     const printed = formatAudit(report, 0);
     assert.ok(
-      printed.includes("scope=mock-account/mock-rail"),
+      printed.includes(`scope\taccountId=mock-account\trailId=mock-rail\twindowStartMs=${NOW}\twindowEndMs=${WINDOW_END}`),
       `expected the covered account and rail in the output, got:\n${printed}`,
-    );
-    assert.ok(
-      printed.includes(`[${NOW},${WINDOW_END})`),
-      `expected the covered period in the output, got:\n${printed}`,
     );
   });
 

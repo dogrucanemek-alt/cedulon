@@ -202,9 +202,16 @@ describe("edge resolver: the operator output lists what to fetch", () => {
     assert.ok(needLines.includes(`need\tnextExtract\tr-close\twindowStartMs=${E} row in [${E},${E + SKEW})`));
     assert.ok(needLines.includes("need\treceipts\tw-open"));
     assert.ok(needLines.includes("need\treceipts\tw-close"));
-    const lastWarn = lines.map((l) => l.startsWith("warn\t")).lastIndexOf(true);
+    const lastWarn = lines.map((l) => l.startsWith("warning\t")).lastIndexOf(true);
     const firstNeed = lines.findIndex((l) => l.startsWith("need\t"));
-    assert.ok(firstNeed > lastWarn, "need lines come after the warn lines");
+    assert.equal(
+      lines.filter((l) => l.startsWith("warning\t")).length,
+      report.warnings.length,
+      "every warning is printed as its own tagged line",
+    );
+    assert.ok(report.warnings.length > 0);
+    assert.ok(lastWarn >= 0);
+    assert.ok(firstNeed > lastWarn, "need lines come after the warning lines");
   });
 
   it("no deferral, no need line", () => {

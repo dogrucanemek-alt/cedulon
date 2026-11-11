@@ -318,8 +318,14 @@ describe("Round 5: the report publishes the class counts it already computes", (
     // Counts describe the population; the guarantee line and the scope line
     // still come first, and the warnings still close the report.
     const lines = printed.split("\n");
-    assert.ok(lines.indexOf("guarantee=unconditional") < lines.findIndex((l) => l.startsWith("counts\t")));
-    assert.ok(lines.findIndex((l) => l.startsWith("scope=")) < lines.findIndex((l) => l.startsWith("counts\t")));
+    const guaranteeIdx = lines.indexOf("guarantee\tunconditional");
+    const scopeIdx = lines.findIndex((l) => l.startsWith("scope\t"));
+    const countsIdx = lines.findIndex((l) => l.startsWith("counts\t"));
+    assert.ok(guaranteeIdx >= 0, printed);
+    assert.ok(scopeIdx >= 0, printed);
+    assert.ok(countsIdx >= 0, printed);
+    assert.ok(guaranteeIdx < countsIdx, printed);
+    assert.ok(scopeIdx < countsIdx, printed);
   });
 
   it("8 RED then GREEN: the receipt total is the measured count, not a number the caller hands over", () => {
@@ -340,8 +346,8 @@ describe("Round 5: the report publishes the class counts it already computes", (
     // get a report that disagrees with its own counts.
     assert.equal(toFindingObject(report, 99).receipts, 2);
     assert.equal(toFindingObject(report).receipts, 2);
-    assert.match(formatAudit(report, 99), /^receipts=2$/m);
-    assert.match(formatAudit(report), /^receipts=2$/m);
+    assert.match(formatAudit(report, 99), /^counts\treceipts\tsubmitted=2 /m);
+    assert.match(formatAudit(report), /^counts\treceipts\tsubmitted=2 /m);
   });
 
   it("9 RED then GREEN: a refused extract does not get to sieve the population with the window it declared", () => {

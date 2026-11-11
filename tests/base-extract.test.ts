@@ -429,9 +429,11 @@ describe("live-audit demo source", () => {
     "utf8",
   );
 
-  it("does not print guarantee= a second time after formatAudit", () => {
+  it("does not print guarantee a second time after formatAudit", () => {
     assert.match(liveAudit, /formatAudit\(report\)/);
-    assert.equal(/console\.log\(`guarantee=/.test(liveAudit), false);
+    // formatAudit already emits the tagged guarantee line; a second print
+    // would use the TAB form (or the retired equals form).
+    assert.equal(/console\.log\(`guarantee[\t=]/.test(liveAudit), false);
   });
 
   it("header and --usdc cover Base mainnet as well as Sepolia", () => {

@@ -2790,12 +2790,13 @@ export function toFindingObject(report: AuditReport, _receiptCount?: number): Fi
 }
 
 /** The two lines `formatAudit` prints for the counts; one per side. */
-function formatCounts(counts: AuditCounts): string[] {
+function formatCounts(counts: AuditCounts, slots: SlotSink): string[] {
   const r = counts.receipts;
   const s = counts.settlements;
+  const n = (value: unknown) => slots.nonNeg(value);
   return [
-    `counts\treceipts\tsubmitted=${r.submitted} attested=${r.attested} in-scope=${r.inScope} aborted=${r.aborted} settled=${r.settled} matched=${r.matched} deferred=${r.deferred} carried=${r.carried} unmatched=${r.unmatched} repeated=${r.repeated} unreconciled=${r.unreconciled}`,
-    `counts\tsettlements\trows=${s.rows} matched=${s.matched} deferred=${s.deferred} unmatched=${s.unmatched} repeated=${s.repeated} unreconciled=${s.unreconciled}`,
+    `counts\treceipts\tsubmitted=${n(r.submitted)} attested=${n(r.attested)} in-scope=${n(r.inScope)} aborted=${n(r.aborted)} settled=${n(r.settled)} matched=${n(r.matched)} deferred=${n(r.deferred)} carried=${n(r.carried)} unmatched=${n(r.unmatched)} repeated=${n(r.repeated)} unreconciled=${n(r.unreconciled)}`,
+    `counts\tsettlements\trows=${n(s.rows)} matched=${n(s.matched)} deferred=${n(s.deferred)} unmatched=${n(s.unmatched)} repeated=${n(s.repeated)} unreconciled=${n(s.unreconciled)}`,
   ];
 }
 
@@ -2805,6 +2806,10 @@ function formatCounts(counts: AuditCounts): string[] {
  * from rewriting the screen. Combining marks are left alone so non-Latin
  * scripts keep their legitimate combining sequences. `toFindingObject` does
  * not call this: JSON carries the raw values.
+ *
+ * The public contract is strings only. Non-string input still throws: the
+ * typed callers (`live-extract-ids`, direct tests) pass strings, and
+ * `formatAudit` converts through its own writers before calling this.
  */
 export function escapeReportText(value: string): string {
   let out = "";
@@ -2846,75 +2851,553 @@ export function escapeReportText(value: string): string {
   return out;
 }
 
-/** Scope ids only: `/` is a field separator on the `scope=` line. */
-function escapeScopeField(value: string): string {
-  return escapeReportText(value).replaceAll("/", "\\u002f");
-}
-
-/** Finding and warning `code` columns: `=` would look like a key=value line. */
-function escapeFindingCode(value: string): string {
-  return escapeReportText(value).replaceAll("=", "\\u003d");
+/**
+ * Scope `name=value` fields: after `escapeReportText`, also escape the
+ * characters that would forge another field or a `[start,end)` window token
+ * inside a value. TAB is already escaped by `escapeReportText`.
+ */
+function escapeScopeValue(value: string): string {
+  return escapeReportText(value)
+    .replaceAll("=", "\\u003d")
+    .replaceAll("[", "\\u005b")
+    .replaceAll(")", "\\u0029")
+    .replaceAll(",", "\\u002c");
 }
 
 /**
- * Built-in profiles emit a failing summary that starts with `audit: ` and does
- * not start with `audit: balanced`. A summary that misses that prefix, or that
- * starts with `audit: balanced`, is printed as `summary\t...` so it is not
- * mistaken for the balanced first line (for example `findings=0`).
+ * Unforgeable marker for a slot whose value is not the expected type.
+ * `escapeReportText` never emits brace-form `\u{0}` (brace form is only for
+ * code points above U+FFFF; U+0000 becomes `\u0000`), so a real string,
+ * including the empty string and the literal characters `undefined`, cannot
+ * equal this after escaping. A valid number slot prints decimal digits only,
+ * so it cannot equal the marker either. One marker covers both missing and
+ * wrong-typed values: the operator needs to know the slot is not content, not
+ * which failure mode produced the gap.
  */
-function formatFailFirstLine(summary: string): string {
-  const escaped = escapeReportText(summary);
-  if (escaped.startsWith("audit: ") && !escaped.startsWith("audit: balanced")) {
-    return escaped;
+const INVALID_SLOT_VALUE = "\\u{0}";
+
+/**
+ * Collects whether any slot printed the invalid marker. `formatAudit` refuses
+ * to call a report balanced when this is set.
+ */
+type SlotSink = {
+  invalid: boolean;
+  text: (value: unknown) => string;
+  scope: (value: unknown) => string;
+  int: (value: unknown) => string;
+  nonNeg: (value: unknown) => string;
+};
+
+function makeSlotSink(): SlotSink {
+  const sink: SlotSink = {
+    invalid: false,
+    text(value: unknown): string {
+      if (typeof value === "string") return escapeReportText(value);
+      sink.invalid = true;
+      return INVALID_SLOT_VALUE;
+    },
+    scope(value: unknown): string {
+      if (typeof value === "string") return escapeScopeValue(value);
+      sink.invalid = true;
+      return INVALID_SLOT_VALUE;
+    },
+    int(value: unknown): string {
+      if (typeof value === "number" && Number.isSafeInteger(value)) {
+        return String(value);
+      }
+      sink.invalid = true;
+      return INVALID_SLOT_VALUE;
+    },
+    nonNeg(value: unknown): string {
+      if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+        return String(value);
+      }
+      sink.invalid = true;
+      return INVALID_SLOT_VALUE;
+    },
+  };
+  return sink;
+}
+
+function formatResultLine(
+  ok: unknown,
+  findings: readonly unknown[] | null,
+  slotInvalid: boolean,
+): string {
+  const okBool = ok === true || ok === false;
+  if (!okBool || findings === null || slotInvalid) {
+    // Fixed words only: never print String(ok) or a forged length.
+    return "result\tinconsistent ok=invalid findings=invalid";
   }
-  return `summary\t${escaped}`;
+  // Length is always the plain snapshot array's real numeric length.
+  const n = String(findings.length);
+  if (ok === true && findings.length > 0) {
+    // ok=true with findings is a hand-built contradiction; never call it balanced.
+    return `result\tinconsistent ok=true findings=${n}`;
+  }
+  if (ok === true) return "result\tbalanced findings=0";
+  return `result\tfail findings=${n}`;
+}
+
+type PlainNeed = {
+  evidence: unknown;
+  ref: unknown;
+  windowEndMs: unknown;
+  windowStartMs: unknown;
+  rowFromMs: unknown;
+  rowToMs: unknown;
+};
+
+type PlainFinding = {
+  code: unknown;
+  id: unknown;
+  detail: unknown;
+};
+
+type PlainWarning = {
+  code: unknown;
+  detail: unknown;
+  needs: PlainNeed | undefined;
+};
+
+type PlainScope = {
+  accountId: unknown;
+  railId: unknown;
+  windowStartMs: unknown;
+  windowEndMs: unknown;
+};
+
+type PlainCounts = {
+  receipts: {
+    submitted: unknown;
+    attested: unknown;
+    inScope: unknown;
+    aborted: unknown;
+    settled: unknown;
+    matched: unknown;
+    deferred: unknown;
+    carried: unknown;
+    unmatched: unknown;
+    repeated: unknown;
+    unreconciled: unknown;
+  };
+  settlements: {
+    rows: unknown;
+    matched: unknown;
+    deferred: unknown;
+    unmatched: unknown;
+    repeated: unknown;
+    unreconciled: unknown;
+  };
+};
+
+type AuditReportSnapshot = {
+  ok: unknown;
+  findings: PlainFinding[] | null;
+  warnings: PlainWarning[] | null;
+  guarantee: unknown;
+  summary: unknown;
+  scope: PlainScope | undefined;
+  counts: PlainCounts | null;
+  inconsistent: boolean;
+  /** Whole report unreadable (wrong runtime type or revoked Proxy); print only the result line. */
+  fatal: boolean;
+};
+
+function readOwn(obj: object, key: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: (obj as Record<string, unknown>)[key] };
+  } catch {
+    return { ok: false };
+  }
+}
+
+const INVALID_PLAIN_NEED: PlainNeed = {
+  evidence: undefined,
+  ref: undefined,
+  windowEndMs: undefined,
+  windowStartMs: undefined,
+  rowFromMs: undefined,
+  rowToMs: undefined,
+};
+
+function snapshotNeed(raw: unknown): { need: PlainNeed | undefined; inconsistent: boolean } {
+  // Absence is only undefined. Any other value is present; falsy non-objects are invalid.
+  if (raw === undefined) return { need: undefined, inconsistent: false };
+  if (raw === null || typeof raw !== "object") {
+    return { need: { ...INVALID_PLAIN_NEED }, inconsistent: true };
+  }
+  const evidence = readOwn(raw, "evidence");
+  const ref = readOwn(raw, "ref");
+  const windowEndMs = readOwn(raw, "windowEndMs");
+  const windowStartMs = readOwn(raw, "windowStartMs");
+  const rowFromMs = readOwn(raw, "rowFromMs");
+  const rowToMs = readOwn(raw, "rowToMs");
+  if (
+    !evidence.ok ||
+    !ref.ok ||
+    !windowEndMs.ok ||
+    !windowStartMs.ok ||
+    !rowFromMs.ok ||
+    !rowToMs.ok
+  ) {
+    return { need: { ...INVALID_PLAIN_NEED }, inconsistent: true };
+  }
+  return {
+    need: {
+      evidence: evidence.value,
+      ref: ref.value,
+      windowEndMs: windowEndMs.value,
+      windowStartMs: windowStartMs.value,
+      rowFromMs: rowFromMs.value,
+      rowToMs: rowToMs.value,
+    },
+    inconsistent: false,
+  };
+}
+
+function snapshotFinding(el: unknown): { item: PlainFinding; inconsistent: boolean } {
+  if (el === null || typeof el !== "object") {
+    return { item: { code: undefined, id: undefined, detail: undefined }, inconsistent: false };
+  }
+  const code = readOwn(el, "code");
+  const id = readOwn(el, "id");
+  const detail = readOwn(el, "detail");
+  if (!code.ok || !id.ok || !detail.ok) {
+    return {
+      item: { code: undefined, id: undefined, detail: undefined },
+      inconsistent: true,
+    };
+  }
+  return { item: { code: code.value, id: id.value, detail: detail.value }, inconsistent: false };
+}
+
+function snapshotWarning(el: unknown): { item: PlainWarning; inconsistent: boolean } {
+  if (el === null || typeof el !== "object") {
+    return {
+      item: { code: undefined, detail: undefined, needs: undefined },
+      inconsistent: false,
+    };
+  }
+  const code = readOwn(el, "code");
+  const detail = readOwn(el, "detail");
+  const needsRaw = readOwn(el, "needs");
+  if (!code.ok || !detail.ok || !needsRaw.ok) {
+    return {
+      item: { code: undefined, detail: undefined, needs: undefined },
+      inconsistent: true,
+    };
+  }
+  const needSnap = snapshotNeed(needsRaw.value);
+  return {
+    item: { code: code.value, detail: detail.value, needs: needSnap.need },
+    inconsistent: needSnap.inconsistent,
+  };
+}
+
+/**
+ * Copy an array-like report field once into a new plain array. There is no
+ * AUDIT_MAX_* bound for findings or warnings on the report; this path does not
+ * invent one.
+ */
+function snapshotArray<T>(
+  raw: unknown,
+  mapEl: (el: unknown) => { item: T; inconsistent: boolean },
+): { list: T[] | null; inconsistent: boolean } {
+  // Type queries (Array.isArray) can throw on a revoked Proxy; keep them inside the guard.
+  try {
+    if (!Array.isArray(raw)) return { list: null, inconsistent: true };
+    let inconsistent = false;
+    const list = Array.from(raw, (el) => {
+      const mapped = mapEl(el);
+      if (mapped.inconsistent) inconsistent = true;
+      return mapped.item;
+    });
+    return { list, inconsistent };
+  } catch {
+    return { list: null, inconsistent: true };
+  }
+}
+
+const INVALID_PLAIN_SCOPE: PlainScope = {
+  accountId: undefined,
+  railId: undefined,
+  windowStartMs: undefined,
+  windowEndMs: undefined,
+};
+
+function snapshotScope(raw: unknown): {
+  scope: PlainScope | undefined;
+  inconsistent: boolean;
+} {
+  // Absence is only undefined. Any other value is present; falsy non-objects are invalid.
+  if (raw === undefined) return { scope: undefined, inconsistent: false };
+  if (raw === null || typeof raw !== "object") {
+    return { scope: { ...INVALID_PLAIN_SCOPE }, inconsistent: true };
+  }
+  const accountId = readOwn(raw, "accountId");
+  const railId = readOwn(raw, "railId");
+  const windowStartMs = readOwn(raw, "windowStartMs");
+  const windowEndMs = readOwn(raw, "windowEndMs");
+  const inconsistent =
+    !accountId.ok || !railId.ok || !windowStartMs.ok || !windowEndMs.ok;
+  return {
+    scope: {
+      accountId: accountId.ok ? accountId.value : undefined,
+      railId: railId.ok ? railId.value : undefined,
+      windowStartMs: windowStartMs.ok ? windowStartMs.value : undefined,
+      windowEndMs: windowEndMs.ok ? windowEndMs.value : undefined,
+    },
+    inconsistent,
+  };
+}
+
+function snapshotCounts(raw: unknown): { counts: PlainCounts | null; inconsistent: boolean } {
+  if (raw === null || typeof raw !== "object") {
+    return { counts: null, inconsistent: true };
+  }
+  const receiptsRaw = readOwn(raw, "receipts");
+  const settlementsRaw = readOwn(raw, "settlements");
+  if (!receiptsRaw.ok || !settlementsRaw.ok) {
+    return { counts: null, inconsistent: true };
+  }
+  if (
+    receiptsRaw.value === null ||
+    typeof receiptsRaw.value !== "object" ||
+    settlementsRaw.value === null ||
+    typeof settlementsRaw.value !== "object"
+  ) {
+    return { counts: null, inconsistent: true };
+  }
+  const r = receiptsRaw.value;
+  const s = settlementsRaw.value;
+  const receiptKeys = [
+    "submitted",
+    "attested",
+    "inScope",
+    "aborted",
+    "settled",
+    "matched",
+    "deferred",
+    "carried",
+    "unmatched",
+    "repeated",
+    "unreconciled",
+  ] as const;
+  const settlementKeys = [
+    "rows",
+    "matched",
+    "deferred",
+    "unmatched",
+    "repeated",
+    "unreconciled",
+  ] as const;
+  const receipts: PlainCounts["receipts"] = {
+    submitted: undefined,
+    attested: undefined,
+    inScope: undefined,
+    aborted: undefined,
+    settled: undefined,
+    matched: undefined,
+    deferred: undefined,
+    carried: undefined,
+    unmatched: undefined,
+    repeated: undefined,
+    unreconciled: undefined,
+  };
+  const settlements: PlainCounts["settlements"] = {
+    rows: undefined,
+    matched: undefined,
+    deferred: undefined,
+    unmatched: undefined,
+    repeated: undefined,
+    unreconciled: undefined,
+  };
+  for (const key of receiptKeys) {
+    const got = readOwn(r, key);
+    if (!got.ok) return { counts: null, inconsistent: true };
+    receipts[key] = got.value;
+  }
+  for (const key of settlementKeys) {
+    const got = readOwn(s, key);
+    if (!got.ok) return { counts: null, inconsistent: true };
+    settlements[key] = got.value;
+  }
+  return { counts: { receipts, settlements }, inconsistent: false };
+}
+
+const EMPTY_INVALID_SNAPSHOT: AuditReportSnapshot = {
+  ok: undefined,
+  findings: null,
+  warnings: null,
+  guarantee: undefined,
+  summary: undefined,
+  scope: undefined,
+  counts: null,
+  inconsistent: true,
+  fatal: true,
+};
+
+/**
+ * The formatter treats the report as data of unknown runtime types; it reads
+ * each field once and prints from a plain snapshot.
+ */
+function snapshotAuditReport(report: AuditReport): AuditReportSnapshot {
+  try {
+    if (report === null || typeof report !== "object") {
+      return { ...EMPTY_INVALID_SNAPSHOT };
+    }
+    let inconsistent = false;
+    const okRead = readOwn(report, "ok");
+    const findingsRead = readOwn(report, "findings");
+    const warningsRead = readOwn(report, "warnings");
+    const guaranteeRead = readOwn(report, "guarantee");
+    const summaryRead = readOwn(report, "summary");
+    const scopeRead = readOwn(report, "scope");
+    const countsRead = readOwn(report, "counts");
+    if (
+      !okRead.ok &&
+      !findingsRead.ok &&
+      !warningsRead.ok &&
+      !guaranteeRead.ok &&
+      !summaryRead.ok &&
+      !scopeRead.ok &&
+      !countsRead.ok
+    ) {
+      // Every top-level get failed (revoked Proxy): nothing to print but the verdict.
+      return { ...EMPTY_INVALID_SNAPSHOT };
+    }
+    if (
+      !okRead.ok ||
+      !findingsRead.ok ||
+      !warningsRead.ok ||
+      !guaranteeRead.ok ||
+      !summaryRead.ok ||
+      !scopeRead.ok ||
+      !countsRead.ok
+    ) {
+      inconsistent = true;
+    }
+    const findingsSnap = findingsRead.ok
+      ? snapshotArray(findingsRead.value, snapshotFinding)
+      : { list: null as PlainFinding[] | null, inconsistent: true };
+    const warningsSnap = warningsRead.ok
+      ? snapshotArray(warningsRead.value, snapshotWarning)
+      : { list: null as PlainWarning[] | null, inconsistent: true };
+    const scopeSnap = scopeRead.ok
+      ? snapshotScope(scopeRead.value)
+      : { scope: undefined, inconsistent: true };
+    const countsSnap = countsRead.ok
+      ? snapshotCounts(countsRead.value)
+      : { counts: null as PlainCounts | null, inconsistent: true };
+    if (findingsSnap.inconsistent) inconsistent = true;
+    if (warningsSnap.inconsistent) inconsistent = true;
+    if (scopeSnap.inconsistent) inconsistent = true;
+    if (countsSnap.inconsistent) inconsistent = true;
+    return {
+      ok: okRead.ok ? okRead.value : undefined,
+      findings: findingsSnap.list,
+      warnings: warningsSnap.list,
+      guarantee: guaranteeRead.ok ? guaranteeRead.value : undefined,
+      summary: summaryRead.ok ? summaryRead.value : undefined,
+      scope: scopeSnap.scope,
+      counts: countsSnap.counts,
+      inconsistent,
+      fatal: false,
+    };
+  } catch {
+    return { ...EMPTY_INVALID_SNAPSHOT };
+  }
 }
 
 /** @param _receiptCount ignored since 0.11.0; the printed total is `report.counts.receipts.submitted`. */
 export function formatAudit(report: AuditReport, _receiptCount?: number): string {
-  const lines = report.ok
-    ? [`audit: balanced`, `receipts=${report.counts.receipts.submitted}`, "findings=0"]
-    : [
-        formatFailFirstLine(report.summary),
-        ...report.findings.map(
-          (f) => `${escapeFindingCode(f.code)}\t${escapeReportText(f.id)}\t${escapeReportText(f.detail)}`,
-        ),
-      ];
-  // Warnings decide whether the balance means anything, so an operator has to
-  // see them on the passing path too, not only in the returned object.
-  lines.push(`guarantee=${escapeReportText(report.guarantee)}`);
-  // And a guarantee is over something. The extract that supplied the population
-  // covers one account on one rail, so the line that carries the strongest
-  // claim also carries the path it was measured on.
-  if (report.scope) {
-    const s = report.scope;
-    lines.push(
-      `scope=${escapeScopeField(s.accountId)}/${escapeScopeField(s.railId)} [${s.windowStartMs},${s.windowEndMs})`,
-    );
-  }
-  // The classes every row landed in. A balanced line over a window that
-  // carried one row into the next window and a balanced line over a window
-  // that held none read the same without these.
-  lines.push(...formatCounts(report.counts));
-  for (const w of report.warnings) {
-    lines.push(`warn\t${escapeFindingCode(w.code)}\t${escapeReportText(w.detail)}`);
-  }
-  for (const w of report.warnings) {
-    const need = w.needs;
-    if (!need) continue;
-    if (need.evidence === "previousExtract") {
-      lines.push(
-        `need\tpreviousExtract\t${escapeReportText(need.ref)}\twindowEndMs=${need.windowEndMs} row in [${need.rowFromMs},${need.rowToMs})`,
-      );
-    } else if (need.evidence === "nextExtract") {
-      lines.push(
-        `need\tnextExtract\t${escapeReportText(need.ref)}\twindowStartMs=${need.windowStartMs} row in [${need.rowFromMs},${need.rowToMs})`,
-      );
-    } else {
-      lines.push(`need\treceipts\t${escapeReportText(need.ref)}`);
+  // Every line starts with a code-authored tag and a TAB. External text never
+  // opens a line; the verdict is a separate fixed-word `result` line so a
+  // summary cannot look like a balanced pass. Writers trust no report field's
+  // runtime type: wrong-typed values print the marker, never String(value).
+  // The formatter treats the report as data of unknown runtime types; it reads
+  // each field once and prints from a plain snapshot.
+  // Absence of an optional report field is only `undefined`; any other value is
+  // present and, if wrong-typed, prints a marked line and makes the result
+  // inconsistent. formatAudit never throws on any runtime input.
+  try {
+    if (report === null || typeof report !== "object") {
+      return "result\tinconsistent ok=invalid findings=invalid";
     }
+    const snap = snapshotAuditReport(report);
+    if (snap.fatal) {
+      return "result\tinconsistent ok=invalid findings=invalid";
+    }
+    const slots = makeSlotSink();
+    if (snap.inconsistent) slots.invalid = true;
+    if (snap.findings === null || snap.warnings === null || snap.counts === null) {
+      slots.invalid = true;
+    }
+
+    const findings = snap.findings !== undefined && snap.findings !== null ? snap.findings : [];
+    const warnings = snap.warnings !== undefined && snap.warnings !== null ? snap.warnings : [];
+
+    const body: string[] = [];
+    for (const f of findings) {
+      body.push(`finding\t${slots.text(f.code)}\t${slots.text(f.id)}\t${slots.text(f.detail)}`);
+    }
+    // Warnings decide whether the balance means anything, so an operator has to
+    // see them on the passing path too, not only in the returned object.
+    body.push(`guarantee\t${slots.text(snap.guarantee)}`);
+    // And a guarantee is over something. The extract that supplied the population
+    // covers one account on one rail, so the line that carries the strongest
+    // claim also carries the path it was measured on. Named fields and escaped
+    // values keep account, rail and window from forging each other.
+    if (snap.scope !== undefined) {
+      const s = snap.scope;
+      body.push(
+        `scope\taccountId=${slots.scope(s.accountId)}\trailId=${slots.scope(s.railId)}\twindowStartMs=${slots.int(s.windowStartMs)}\twindowEndMs=${slots.int(s.windowEndMs)}`,
+      );
+    }
+    // The classes every row landed in. A balanced line over a window that
+    // carried one row into the next window and a balanced line over a window
+    // that held none read the same without these.
+    if (snap.counts !== undefined && snap.counts !== null) {
+      body.push(...formatCounts(snap.counts as AuditCounts, slots));
+    } else {
+      // Keep two count lines so line tags stay stable when counts could not be read.
+      body.push(
+        `counts\treceipts\tsubmitted=${slots.nonNeg(undefined)} attested=${slots.nonNeg(undefined)} in-scope=${slots.nonNeg(undefined)} aborted=${slots.nonNeg(undefined)} settled=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} carried=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
+        `counts\tsettlements\trows=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
+      );
+    }
+    for (const w of warnings) {
+      body.push(`warning\t${slots.text(w.code)}\t${slots.text(w.detail)}`);
+    }
+    for (const w of warnings) {
+      const need = w.needs;
+      if (need === undefined) continue;
+      if (need.evidence === "previousExtract") {
+        body.push(
+          `need\tpreviousExtract\t${slots.text(need.ref)}\twindowEndMs=${slots.int(need.windowEndMs)} row in [${slots.int(need.rowFromMs)},${slots.int(need.rowToMs)})`,
+        );
+      } else if (need.evidence === "nextExtract") {
+        body.push(
+          `need\tnextExtract\t${slots.text(need.ref)}\twindowStartMs=${slots.int(need.windowStartMs)} row in [${slots.int(need.rowFromMs)},${slots.int(need.rowToMs)})`,
+        );
+      } else if (need.evidence === "receipts") {
+        body.push(`need\treceipts\t${slots.text(need.ref)}`);
+      } else {
+        // evidence must be exactly one of the three allowed values; otherwise mark the tag.
+        slots.invalid = true;
+        body.push(`need\t${INVALID_SLOT_VALUE}\t${slots.text(need.ref)}`);
+      }
+    }
+
+    return [
+      `summary\t${slots.text(snap.summary)}`,
+      formatResultLine(snap.ok, snap.findings, slots.invalid),
+      ...body,
+    ].join("\n");
+  } catch {
+    return "result\tinconsistent ok=invalid findings=invalid";
   }
-  return lines.join("\n");
 }
 
 export type PresentedEntry = {

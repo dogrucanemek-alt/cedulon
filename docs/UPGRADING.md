@@ -12,6 +12,61 @@ extract and the rows of `nextExtract` / `previousExtract`; oversized arrays
 that previously ran are refused as `audit-too-large` before comparison or
 sorting work.
 
+The formatter reads the report once and prints from a plain snapshot.
+
+`formatAudit` text report lines are now tagged. Every line starts with a
+fixed tag written by the package, then a TAB, then fields. External text never
+opens a line: every slot has one expected runtime type. A string slot prints
+only when `typeof value === "string"` (then `escapeReportText`, and scope
+identity also escapes `=`, `[`, `)`, `,`); a number slot prints only when
+`Number.isSafeInteger(value)` (counts and finding totals also require
+`>= 0`); `ok` accepts only `=== true` or `=== false`. Absence of an optional
+report field (`scope`, a warning's `needs`) is only `undefined` (missing
+property or value `undefined`); any other value is present. A wrong-typed or
+otherwise invalid present value prints the unforgeable marker `\u{0}` on the
+marked line for that field (for `scope`, one line with every scope slot
+marked; for `needs`, a `need` line whose evidence tag is marked unless
+evidence is exactly one of `previousExtract`, `nextExtract`, or `receipts`)
+and never `String(value)`, so a wrong-typed payload cannot forge another
+field or silently drop a line. The verdict is a separate fixed-word `result`
+line: `balanced findings=0` only when `ok === true`, findings is an empty
+array, and no slot printed the marker; `fail findings=N` when `ok` is false
+and every slot is well typed; `inconsistent ok=true findings=N` when `ok` is
+true but findings are present; `inconsistent ok=invalid findings=invalid`
+when `ok` is not boolean, findings is not an array, any slot printed the
+marker, or an optional field was present but invalid. `formatAudit` does not
+throw on a non-object or revoked Proxy report: it prints a single
+`result\tinconsistent ok=invalid findings=invalid` line. Old to new:
+
+```
+audit: balanced
+receipts=2
+findings=0
+guarantee=conditional
+scope=acct/rail [1700000000000,1700003600000)
+counts	receipts	...
+warn	unauthenticated-extract	...
+```
+
+becomes:
+
+```
+summary	audit: balanced
+result	balanced findings=0
+guarantee	conditional
+scope	accountId=acct	railId=rail	windowStartMs=1700000000000	windowEndMs=1700003600000
+counts	receipts	...
+warning	unauthenticated-extract	...
+```
+
+A failing report prints `summary\t...`, then `result\tfail findings=N`, then
+`finding\t<code>\t<id>\t<detail>` for each finding. Scope values escape
+`=`, `[`, `)`, and `,` after `escapeReportText` so a rail id cannot forge a
+window token. TAB was already escaped by `escapeReportText` (`\u0009`).
+Parsers that keyed on untagged first lines, `warn\t`, `scope=`, `guarantee=`,
+or bare `receipts=` / `findings=0` lines must follow the tags instead.
+`toFindingObject` and `audit()` are unchanged.
+
 Checkpoint verification now consumes `coseHex` only as whole lowercase hex
 (`strictHexBytes`): a trailing non-hex suffix, odd length, uppercase, or an
 empty string no longer verifies, and `checkpointHash` throws `cose-hex` for
@@ -37,13 +92,7 @@ U+061C, U+115F-U+1160, U+17B4-U+17B5, U+180B-U+180F, lone surrogates
 U+3164, variation selectors U+FE00-U+FE0F, U+FEFF, U+FFA0, U+FFF0-U+FFFB,
 U+1BCA0-U+1BCA3, U+1D173-U+1D17A, tag characters U+E0000-U+E007F, and
 variation selectors U+E0100-U+E01EF in every untrusted field it prints;
-non-BMP code points use `\u{...}`. Combining marks are not escaped. On the
-`scope=` line only, `/` inside `accountId` and `railId` becomes `\u002f` so
-the two fields stay distinct. On finding and warning `code` columns, `=`
-becomes `\u003d`. A failing report whose escaped `summary` does not start
-with `audit: `, or whose escaped `summary` starts with `audit: balanced`, is
-printed as `summary\t...`; a built-in failing summary such as
-`audit: N finding(s) → FAIL` is printed without that frame.
+non-BMP code points use `\u{...}`. Combining marks are not escaped.
 `escapeReportText` is exported for callers that print the same fields beside
 the report. Parsers of that text report must treat `\uXXXX`, `\u{...}`, and
 `\\` in those fields as escapes rather than as the raw extract or finding
