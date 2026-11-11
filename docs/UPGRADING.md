@@ -24,6 +24,7 @@ with a valid presented checkpoint, produces no signature finding; the
 inclusion receipt's `statementHash` can still anchor the presented
 checkpoint. Ledger export reports `hash: null` for a stored checkpoint whose
 encoding is not strict hex.
+
 `formatAudit` visibly escapes backslash, C0/C1 controls, DEL, U+00AD, U+034F,
 U+061C, U+115F-U+1160, U+17B4-U+17B5, U+180B-U+180F, lone surrogates
 (U+D800-U+DFFF), U+200B-U+200F, U+2028, U+2029, U+202A-U+202E, U+2060-U+206F,
