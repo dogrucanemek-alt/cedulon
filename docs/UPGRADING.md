@@ -6,6 +6,15 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## Unreleased
 
+Checkpoint verification now consumes `coseHex` only as whole lowercase hex
+(`strictHexBytes`): a trailing non-hex suffix, odd length, uppercase, or an
+empty string no longer verifies, and `checkpointHash` throws `cose-hex` for
+those inputs. Decoded checkpoint integers (`epoch`, `startMs`, `endMs`,
+`receiptCount`) must be safe non-negative integers, so a well-signed payload
+that carries a negative in any of those fields fails verification. Audit
+`findWindowCoverage` reports `window-coverage` (id `epoch-N-bounds`) when a
+checkpoint has `startMs >= endMs`, matching the half-open window rule.
+
 When an audit is run without an issuer pin, `checkpoint-withheld` is raised
 for a log entry whose body verifies under a key that also signed a presented
 checkpoint; other log entries that this chain does not present are counted

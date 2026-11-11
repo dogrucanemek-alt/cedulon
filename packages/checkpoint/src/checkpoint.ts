@@ -17,6 +17,7 @@ import {
   type CborVal,
 } from "@cedulon/cose";
 import { receiptHash, type SignedReceipt } from "@cedulon/receipts";
+import { strictHexBytes } from "./transparency.ts";
 
 export const CHECKPOINT_CLAIM = {
   epoch: -70101,
@@ -156,7 +157,9 @@ export function checkpointFromCbor(bytes: Uint8Array): CheckpointClaims {
   const map = asMap(decodeCbor(bytes));
   const num = (key: number): number => {
     const v = mapGet(map, key);
-    if (typeof v !== "number") throw new Error("checkpoint-uint");
+    if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) {
+      throw new Error("checkpoint-uint");
+    }
     return v;
   };
   const textOrNull = (key: number): string | null => {
@@ -220,8 +223,8 @@ export function verifyCheckpoint(signed: SignedCheckpoint, expectedIssuerKeyPem?
   if (expectedIssuerKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedIssuerKeyPem)) {
     return false;
   }
-  const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_CHECKPOINT)) {
+  const bytes = strictHexBytes(signed.coseHex);
+  if (!bytes || !verifyCoseSign1(bytes, signed.publicKeyPem, CTY_CHECKPOINT)) {
     return false;
   }
   try {
@@ -235,8 +238,8 @@ export function verifyCheckpoint(signed: SignedCheckpoint, expectedIssuerKeyPem?
 
 /** Signature under this pin, ignoring the carried PEM. Same question as receipts. */
 export function verifyCheckpointUnderPin(signed: SignedCheckpoint, pinPem: string): boolean {
-  const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, pinPem, CTY_CHECKPOINT)) {
+  const bytes = strictHexBytes(signed.coseHex);
+  if (!bytes || !verifyCoseSign1(bytes, pinPem, CTY_CHECKPOINT)) {
     return false;
   }
   try {
@@ -249,7 +252,11 @@ export function verifyCheckpointUnderPin(signed: SignedCheckpoint, pinPem: strin
 }
 
 export function checkpointHash(signed: SignedCheckpoint): string {
-  return sha256Hex(Buffer.from(signed.coseHex, "hex"));
+  const bytes = strictHexBytes(signed.coseHex);
+  if (!bytes) {
+    throw new Error("cose-hex");
+  }
+  return sha256Hex(bytes);
 }
 
 export type ChainBreak = { index: number; reason: string };

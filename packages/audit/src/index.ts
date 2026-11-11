@@ -1056,6 +1056,15 @@ export function findWindowCoverage(
 ): Finding[] {
   const findings: Finding[] = [];
   const ordered = [...checkpoints].sort((a, b) => a.claims.epoch - b.claims.epoch);
+  for (const cp of ordered) {
+    if (!(cp.claims.startMs < cp.claims.endMs)) {
+      findings.push({
+        code: "window-coverage",
+        id: `epoch-${cp.claims.epoch}-bounds`,
+        detail: `checkpoint window must satisfy startMs < endMs; epoch ${cp.claims.epoch} has startMs ${cp.claims.startMs} endMs ${cp.claims.endMs}`,
+      });
+    }
+  }
   for (let i = 1; i < ordered.length; i += 1) {
     const prev = ordered[i - 1];
     const cur = ordered[i];
