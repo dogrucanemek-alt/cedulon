@@ -20,6 +20,7 @@ import { fetchUsdcExtract, makeRpc } from "@cedulon/base-extract";
 import { audit, formatAudit } from "@cedulon/audit";
 import { parseIJson } from "@cedulon/core";
 import type { SignedReceipt } from "@cedulon/receipts";
+import { formatLiveExtractIds } from "./live-extract-ids.ts";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -54,8 +55,9 @@ const receipts: SignedReceipt[] = receiptsFile
   : [];
 
 const total = extract.settlements.reduce((sum, s) => sum + BigInt(s.amount), 0n);
-console.log(`rail=${extract.railId}`);
-console.log(`account=${extract.accountId}`);
+for (const line of formatLiveExtractIds(extract.accountId, extract.railId)) {
+  console.log(line);
+}
 console.log(`window=${new Date(extract.windowStartMs).toISOString()}..${new Date(extract.windowEndMs).toISOString()}`);
 console.log(`settlements=${extract.settlements.length} total=${total} receipts=${receipts.length}`);
 
