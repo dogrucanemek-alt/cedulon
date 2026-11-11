@@ -621,7 +621,7 @@ function pushDuplicateRefsFromGroups(
       findings.push({
         code: "duplicate-ref",
         id: ref,
-        detail: `${group[0]?.side ?? "item"} ref ${ref} appears ${group.length} times`,
+        detail: `${group.find((x) => x.ref === ref)?.side ?? "item"} ref ${ref} appears ${group.length} times`,
       });
     }
   }
@@ -875,8 +875,12 @@ function classifySettlementMatches(
   // aggregate settled amount against the aggregate receipted amount instead.
   // Otherwise a repeated ref hides the amount that is unaccounted for.
   for (const ref of skip) {
-    const records = (receiptGroups.get(ref) ?? []).map((item) => item.receipt);
-    const rows = (settlementGroups.get(ref) ?? []).map((item) => item.settlement);
+    const records = (receiptGroups.get(ref) ?? [])
+      .filter((item) => item.ref === ref)
+      .map((item) => item.receipt);
+    const rows = (settlementGroups.get(ref) ?? [])
+      .filter((item) => item.ref === ref)
+      .map((item) => item.settlement);
     for (const f of profile.aggregate(ref, records, rows)) {
       findings.push({
         code: f.code as FindingCode,
@@ -1594,6 +1598,17 @@ function throwAuditTooLarge(axis: string, count: number, max: number): never {
   throw err;
 }
 
+function neighbourExtractRowCount(extract: unknown, pop: Population): number | null {
+  if (extract === null || typeof extract !== "object") return null;
+  const body = (extract as { body?: unknown }).body;
+  if (body === null || typeof body !== "object") return null;
+  const rows = pop === "decision"
+    ? (body as { effects?: unknown }).effects
+    : (body as { settlements?: unknown }).settlements;
+  if (!Array.isArray(rows)) return null;
+  return rows.length;
+}
+
 function assertAuditBounds(input: AuditInput): void {
   if (input.receipts.length > AUDIT_MAX_RECEIPTS) {
     throwAuditTooLarge("receipts", input.receipts.length, AUDIT_MAX_RECEIPTS);
@@ -1610,16 +1625,18 @@ function assertAuditBounds(input: AuditInput): void {
   if (input.extract) {
     boundSettlements(extractRows(input.extract, pop).length);
   }
-  if (input.settlements !== undefined) {
+  if (input.settlements != null) {
     boundSettlements(input.settlements.length);
   } else if (!input.extract) {
     boundSettlements(0);
   }
   if (input.nextExtract) {
-    boundSettlements(extractRows(input.nextExtract, pop).length);
+    const n = neighbourExtractRowCount(input.nextExtract, pop);
+    if (n !== null) boundSettlements(n);
   }
   if (input.previousExtract) {
-    boundSettlements(extractRows(input.previousExtract, pop).length);
+    const n = neighbourExtractRowCount(input.previousExtract, pop);
+    if (n !== null) boundSettlements(n);
   }
   if ((input.inclusionReceipts?.length ?? 0) > AUDIT_MAX_INCLUSIONS) {
     throwAuditTooLarge("inclusions", input.inclusionReceipts?.length ?? 0, AUDIT_MAX_INCLUSIONS);

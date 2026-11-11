@@ -5,10 +5,11 @@ import {
   audit,
   AUDIT_MAX_SETTLEMENTS,
   findSettlementMatches,
+  SPEND_PROFILE,
   type Finding,
 } from "@cedulon/audit";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
-import { generateReceiptKeys, signReceipt, type SpendReceiptClaims } from "@cedulon/receipts";
+import { generateReceiptKeys, signReceipt, type SpendReceiptClaims, type SignedReceipt } from "@cedulon/receipts";
 import { TEST_HASH } from "./hash-fixtures.ts";
 
 const NOW = 1_700_000_000_000;
@@ -101,6 +102,128 @@ function claims(ref: string, amount: string, nonce: string): SpendReceiptClaims 
   };
 }
 
+type RowLike = { ref: unknown; amount: string; currency: string; timestampMs: number };
+
+/**
+ * Master-era grouping for duplicate refs: count with a Map, then resolve the
+ * side label via `items.find((x) => x.ref === ref)` (so NaN falls back to
+ * "item"). Aggregate membership also uses `===`. Lives only in this test.
+ */
+function masterStylePushDuplicateRefs(
+  items: Array<{ ref: unknown; id: unknown; side: string; receipt?: SignedReceipt; settlement?: RowLike }>,
+  findings: Finding[],
+): Set<unknown> {
+  const seen = new Map<unknown, number>();
+  for (const item of items) {
+    seen.set(item.ref, (seen.get(item.ref) ?? 0) + 1);
+  }
+  const dupes = new Set<unknown>();
+  for (const [ref, n] of seen) {
+    if (n > 1) {
+      dupes.add(ref);
+      findings.push({
+        code: "duplicate-ref",
+        id: ref as string,
+        detail: `${items.find((x) => x.ref === ref)?.side ?? "item"} ref ${String(ref)} appears ${n} times`,
+      });
+    }
+  }
+  return dupes;
+}
+
+function masterStyleFindSettlementMatches(
+  receipts: SignedReceipt[],
+  settlements: RowLike[],
+): Finding[] {
+  const profile = SPEND_PROFILE;
+  const findings: Finding[] = [];
+  const settled = receipts.filter((r) => profile.expectsRow(r));
+  const refusalRefs = new Set(
+    receipts
+      .filter((r) => !profile.expectsRow(r))
+      .map((r) => profile.recordRef(r))
+      .filter((ref): ref is string => ref !== null),
+  );
+  const receiptItems = settled
+    .map((r) => ({ ref: profile.recordRef(r) as unknown, id: r.claims.nonce, side: profile.words.record, receipt: r }))
+    .filter((x): x is typeof x & { ref: unknown } => x.ref !== null);
+  const settlementItems = settlements.map((s) => ({
+    ref: s.ref,
+    id: s.ref,
+    side: profile.words.row,
+    settlement: s,
+  }));
+  const dupeReceipt = masterStylePushDuplicateRefs(receiptItems, []);
+  const dupeSettlement = masterStylePushDuplicateRefs(settlementItems, findings);
+  const skip = new Set<unknown>([...dupeReceipt, ...dupeSettlement]);
+  for (const ref of skip) {
+    const records = receiptItems.filter((item) => item.ref === ref).map((item) => item.receipt!);
+    const rows = settlementItems.filter((item) => item.ref === ref).map((item) => item.settlement!) as Parameters<
+      typeof profile.aggregate
+    >[2];
+    for (const f of profile.aggregate(ref as string, records, rows)) {
+      findings.push({
+        code: f.code as Finding["code"],
+        id: f.id,
+        detail: f.detail,
+        ...(f.severity ? { severity: f.severity } : {}),
+      });
+    }
+  }
+  const receiptsByRef = new Map<unknown, SignedReceipt>();
+  for (const item of receiptItems) {
+    if (!skip.has(item.ref)) receiptsByRef.set(item.ref, item.receipt!);
+  }
+  const settlementsByRef = new Map<unknown, RowLike>();
+  for (const item of settlementItems) {
+    if (!skip.has(item.ref)) settlementsByRef.set(item.ref, item.settlement!);
+  }
+  for (const [ref, s] of settlementsByRef) {
+    const r = receiptsByRef.get(ref);
+    if (!r) {
+      const againstRefusal = typeof ref === "string" && refusalRefs.has(ref);
+      findings.push({
+        code: (againstRefusal
+          ? profile.codes.rowAgainstRefusal
+          : profile.codes.rowWithoutRecord) as Finding["code"],
+        id: ref as string,
+        detail: againstRefusal
+          ? profile.rowAgainstRefusalDetail(s as never)
+          : profile.rowWithoutRecordDetail(s as never),
+      });
+      continue;
+    }
+    const bound = profile.bind(r, s as never);
+    if (!bound.ok) {
+      findings.push({
+        code: (bound.code ?? profile.codes.bindFailure) as Finding["code"],
+        id: ref as string,
+        detail: bound.detail,
+      });
+    }
+  }
+  for (const [ref, r] of receiptsByRef) {
+    if (!settlementsByRef.has(ref)) {
+      findings.push({
+        code: profile.codes.recordWithoutRow as Finding["code"],
+        id: r.claims.nonce,
+        detail: profile.recordWithoutRowDetail(r, ref as string),
+      });
+    }
+  }
+  return findings;
+}
+
+function mulberry32(seed: number): () => number {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 describe("audit input bounds on every presented row array", () => {
   it("refuses a separate settlements array above the bound when an extract is also present", () => {
     const extract = signedExtract([row("ok", "1", NOW)], NOW, WINDOW_END);
@@ -190,6 +313,74 @@ describe("audit input bounds on every presented row array", () => {
       audit({ receipts: [], checkpoints: [], extract, previousExtract: at }),
     );
   });
+
+  it("leaves a neighbour extract with a null body on master's report path", () => {
+    const extract = signedExtract([row("ok", "1", NOW)], NOW, WINDOW_END);
+    const neighbor = { body: null, signature: "", publicKeyPem: "" };
+    const nextReport = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      nextExtract: neighbor as never,
+    });
+    assert.equal(nextReport.ok, true);
+    assert.equal(nextReport.findings.length, 0);
+    const prevReport = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      previousExtract: neighbor as never,
+    });
+    assert.equal(prevReport.ok, true);
+    assert.equal(prevReport.findings.length, 0);
+  });
+
+  it("treats null settlements as absent the way master did", () => {
+    const extract = signedExtract([row("ok", "1", NOW)], NOW, WINDOW_END);
+    const withExtract = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      settlements: null as never,
+    });
+    assert.equal(withExtract.ok, true);
+    assert.equal(withExtract.findings.length, 0);
+    const withoutExtract = audit({
+      receipts: [],
+      checkpoints: [],
+      settlements: null as never,
+    });
+    assert.equal(withoutExtract.ok, true);
+  });
+
+  it("keeps master's non-array settlements outcomes beside an extract", () => {
+    const extract = signedExtract([row("ok", "1", NOW)], NOW, WINDOW_END);
+    const numberSettlements = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      settlements: 5 as never,
+    });
+    assert.equal(numberSettlements.ok, false);
+    assert.equal(numberSettlements.findings.length, 1);
+    assert.equal(numberSettlements.findings[0]?.code, "extract-settlement-mismatch");
+    assert.throws(
+      () => audit({ receipts: [], checkpoints: [], extract, settlements: "x" as never }),
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError);
+        assert.match((err as Error).message, /a\.map is not a function/);
+        return true;
+      },
+    );
+    assert.throws(
+      () => audit({ receipts: [], checkpoints: [], extract, settlements: { length: 1 } as never }),
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError);
+        assert.match((err as Error).message, /a\.map is not a function/);
+        return true;
+      },
+    );
+  });
 });
 
 describe("settlement match ref grouping is linear", () => {
@@ -205,7 +396,8 @@ describe("settlement match ref grouping is linear", () => {
       findings = findSettlementMatches([], settlements);
     });
     assert.equal(findings.filter((f) => f.code === "duplicate-ref").length, N);
-    // Quadratic path: per skipped ref, find plus two full filters over 2N items.
+    // Quadratic path: per skipped ref, find over the group plus one filter over
+    // the settlement items (receipt list is empty here, so that filter is idle).
     // Linear grouping keeps total predicate visits under c*N.
     assert.ok(scans < 40 * N, `expected linear find/filter scans, got ${scans} for N=${N}`);
   });
@@ -282,5 +474,125 @@ describe("settlement match ref grouping is linear", () => {
         },
       ],
     );
+  });
+
+  it("non-string duplicate refs keep master's detail text and order", () => {
+    const cases: Array<{ label: string; refs: unknown[]; detail: string; extraCodes: string[] }> = [
+      { label: "NaN", refs: [NaN, NaN], detail: "item ref NaN appears 2 times", extraCodes: [] },
+      {
+        label: "undefined",
+        refs: [undefined, undefined],
+        detail: "settlement ref undefined appears 2 times",
+        extraCodes: ["settlement-without-receipt"],
+      },
+      {
+        label: "null",
+        refs: [null, null],
+        detail: "settlement ref null appears 2 times",
+        extraCodes: ["settlement-without-receipt"],
+      },
+      {
+        label: "number",
+        refs: [7, 7],
+        detail: "settlement ref 7 appears 2 times",
+        extraCodes: ["settlement-without-receipt"],
+      },
+    ];
+    for (const c of cases) {
+      const settlements = c.refs.map((ref, i) => ({
+        ref,
+        amount: String(i + 1),
+        currency: "USD",
+        timestampMs: NOW + i,
+      })) as never;
+      const findings = findSettlementMatches([], settlements);
+      assert.equal(findings[0]?.code, "duplicate-ref", c.label);
+      assert.equal(findings[0]?.detail, c.detail, c.label);
+      assert.deepEqual(
+        findings.slice(1).map((f) => f.code),
+        c.extraCodes,
+        c.label,
+      );
+    }
+    const objectSettlements = [
+      { ref: { a: 1 }, amount: "1", currency: "USD", timestampMs: NOW },
+      { ref: { a: 1 }, amount: "2", currency: "USD", timestampMs: NOW + 1 },
+    ] as never;
+    const objectFindings = findSettlementMatches([], objectSettlements);
+    assert.deepEqual(
+      objectFindings.map((f) => ({ code: f.code, detail: f.detail })),
+      [
+        {
+          code: "settlement-without-receipt",
+          detail: "settlement [object Object] 1 USD has no spend receipt",
+        },
+        {
+          code: "settlement-without-receipt",
+          detail: "settlement [object Object] 2 USD has no spend receipt",
+        },
+      ],
+    );
+  });
+
+  it("seeded random row sets match the copied master grouping reference", () => {
+    const rand = mulberry32(0xced01);
+    const keys = generateReceiptKeys();
+    const refPool: unknown[] = [
+      "alpha",
+      "beta",
+      "",
+      "__proto__",
+      "constructor",
+      NaN,
+      undefined,
+      null,
+      0,
+      1,
+      { tag: "obj" },
+    ];
+    for (let trial = 0; trial < 40; trial++) {
+      const settlements: RowLike[] = [];
+      const nRows = 1 + Math.floor(rand() * 8);
+      for (let i = 0; i < nRows; i++) {
+        const ref = refPool[Math.floor(rand() * refPool.length)];
+        settlements.push({
+          ref,
+          amount: String(1 + Math.floor(rand() * 5)),
+          currency: "USD",
+          timestampMs: NOW + i,
+        });
+        if (rand() < 0.45) {
+          settlements.push({
+            ref,
+            amount: String(1 + Math.floor(rand() * 5)),
+            currency: "USD",
+            timestampMs: NOW + 100 + i,
+          });
+        }
+      }
+      const receipts: SignedReceipt[] = [];
+      if (rand() < 0.7) {
+        const ref = refPool[Math.floor(rand() * refPool.length)];
+        if (typeof ref === "string") {
+          const n = 1 + Math.floor(rand() * 2);
+          for (let i = 0; i < n; i++) {
+            receipts.push(
+              signReceipt(
+                claims(ref, String(1 + Math.floor(rand() * 5)), `n${trial}-${i}`.padEnd(16, "-")),
+                keys.privateKeyPem,
+                keys.publicKeyPem,
+              ),
+            );
+          }
+        }
+      }
+      const actual = findSettlementMatches(receipts, settlements as never);
+      const expected = masterStyleFindSettlementMatches(receipts, settlements);
+      assert.deepEqual(
+        actual.map((f) => ({ code: f.code, id: f.id, detail: f.detail })),
+        expected.map((f) => ({ code: f.code, id: f.id, detail: f.detail })),
+        `trial ${trial}`,
+      );
+    }
   });
 });
