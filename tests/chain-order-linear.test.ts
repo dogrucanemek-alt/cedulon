@@ -2,7 +2,7 @@ import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
-import { audit, orderByIssuerChain } from "@cedulon/audit";
+import { audit, findCheckpointTotalMismatches, orderByIssuerChain } from "@cedulon/audit";
 import { buildCheckpointClaims, checkpointHash, signCheckpoint, type SignedCheckpoint } from "@cedulon/checkpoint";
 import { generateReceiptKeys, receiptHash, type SignedReceipt, signReceipt } from "@cedulon/receipts";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
@@ -151,6 +151,24 @@ function throwOnHash(receipt: SignedReceipt): SignedReceipt {
   };
 }
 
+function withPrev(receipt: SignedReceipt, prev: unknown): SignedReceipt {
+  return {
+    ...receipt,
+    claims: {
+      ...receipt.claims,
+      prevReceiptHash: prev as SignedReceipt["claims"]["prevReceiptHash"],
+    },
+  };
+}
+
+function assertThrowsClaimsRead(run: () => unknown): void {
+  assert.throws(run, (err: unknown) => {
+    assert.ok(err instanceof TypeError);
+    assert.match(String(err.message), /claims/);
+    return true;
+  });
+}
+
 describe("orderByIssuerChain linear equivalence", () => {
   it("matches the reference body on fixed-seed small bags", () => {
     const keys = generateReceiptKeys();
@@ -210,7 +228,48 @@ describe("orderByIssuerChain linear equivalence", () => {
       cases.push({ receipts: shuffled, expectedRootPrev: null });
     }
 
-    while (cases.length < 200) {
+    {
+      const self = signOne(keys, null, "self0", NOW);
+      cases.push({
+        receipts: [withPrev(self, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")],
+        expectedRootPrev: null,
+      });
+      cases.push({
+        receipts: [withPrev(self, receiptHash(self))],
+        expectedRootPrev: null,
+      });
+      const a = signOne(keys, null, "cycA", NOW);
+      const b = signOne(keys, null, "cycB", NOW + 1);
+      const hand = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+      cases.push({
+        receipts: [withPrev(a, hand), withPrev(b, hand)],
+        expectedRootPrev: hand,
+      });
+      cases.push({
+        receipts: [withPrev(a, receiptHash(b)), withPrev(b, receiptHash(a))],
+        expectedRootPrev: null,
+      });
+    }
+
+    {
+      const base = signOne(keys, null, "prevX", NOW);
+      const mid = signOne(keys, TEST_HASH, "prevY", NOW + 1);
+      cases.push({ receipts: [withPrev(base, undefined)], expectedRootPrev: null });
+      cases.push({
+        receipts: [base, withPrev(mid, null), signOne(keys, receiptHash(mid), "prevZ", NOW + 2)],
+        expectedRootPrev: null,
+      });
+      cases.push({ receipts: [withPrev(base, 7)], expectedRootPrev: null });
+      cases.push({ receipts: [withPrev(base, { k: 1 })], expectedRootPrev: null });
+      cases.push({ receipts: [withPrev(base, "__proto__")], expectedRootPrev: null });
+      cases.push({
+        receipts: [withPrev(base, "__proto__")],
+        expectedRootPrev: "__proto__" as unknown as string | null,
+      });
+    }
+
+    const targetCaseCount = 200;
+    while (cases.length < targetCaseCount) {
       const n = 1 + Math.floor(rand() * 10);
       const chain = straightChain(keys, n);
       const bag = [...chain];
@@ -221,13 +280,162 @@ describe("orderByIssuerChain linear equivalence", () => {
       cases.push({ receipts: bag, expectedRootPrev });
     }
 
-    assert.ok(cases.length >= 200);
+    assert.equal(cases.length, targetCaseCount);
     for (const c of cases) {
       assertSamePlacement(
         orderByIssuerChain(c.receipts, c.expectedRootPrev),
         orderByIssuerChainReference(c.receipts, c.expectedRootPrev),
       );
     }
+  });
+
+  it("start matching uses === so NaN roots do not join", () => {
+    const keys = generateReceiptKeys();
+    const base = signOne(keys, null, "nan0", NOW);
+    const nanRoot = withPrev(base, Number.NaN);
+    const expectedRootPrev = Number.NaN as unknown as string | null;
+    assertSamePlacement(
+      orderByIssuerChain([nanRoot], expectedRootPrev),
+      orderByIssuerChainReference([nanRoot], expectedRootPrev),
+    );
+    assert.deepEqual(orderByIssuerChain([nanRoot], expectedRootPrev), {
+      ordered: [],
+      leftover: [nanRoot],
+    });
+  });
+
+  it("start matching covers undefined, null, 0, and -0 roots", () => {
+    const keys = generateReceiptKeys();
+    const base = signOne(keys, null, "root0", NOW);
+    // A missing or undefined root argument is the default null on both bodies.
+    const nullPrevBag = [withPrev(base, null)];
+    assertSamePlacement(
+      orderByIssuerChain(nullPrevBag, undefined as unknown as string | null),
+      orderByIssuerChain(nullPrevBag, null),
+    );
+    assertSamePlacement(
+      orderByIssuerChainReference(nullPrevBag, undefined as unknown as string | null),
+      orderByIssuerChainReference(nullPrevBag, null),
+    );
+    const cases: Array<{ prev: unknown; root: unknown; expectOrdered: boolean }> = [
+      { prev: undefined, root: null, expectOrdered: false },
+      { prev: null, root: null, expectOrdered: true },
+      { prev: 0, root: 0, expectOrdered: true },
+      { prev: -0, root: -0, expectOrdered: true },
+      { prev: 0, root: -0, expectOrdered: true },
+      { prev: -0, root: 0, expectOrdered: true },
+    ];
+    for (const c of cases) {
+      const receipt = withPrev(base, c.prev);
+      const root = c.root as string | null;
+      assertSamePlacement(orderByIssuerChain([receipt], root), orderByIssuerChainReference([receipt], root));
+      const live = orderByIssuerChain([receipt], root);
+      if (c.expectOrdered) {
+        assert.deepEqual(live, { ordered: [receipt], leftover: [] });
+      } else {
+        assert.deepEqual(live, { ordered: [], leftover: [receipt] });
+      }
+    }
+  });
+
+  it("matches reference hole and hole-adjacent bag behaviour", () => {
+    const keys = generateReceiptKeys();
+    const a = signOne(keys, null, "holeA", NOW);
+    const b = signOne(keys, receiptHash(a), "holeB", NOW + 1);
+
+    const len1 = Array(1) as SignedReceipt[];
+    assertSamePlacement(orderByIssuerChain(len1, null), orderByIssuerChainReference(len1, null));
+    assert.deepEqual(orderByIssuerChain(len1, null), { ordered: [], leftover: [undefined] });
+
+    const holeStart = Array(3) as SignedReceipt[];
+    holeStart[1] = a;
+    holeStart[2] = b;
+    assertThrowsClaimsRead(() => orderByIssuerChain(holeStart, null));
+    assertThrowsClaimsRead(() => orderByIssuerChainReference(holeStart, null));
+
+    const holeMid = Array(3) as SignedReceipt[];
+    holeMid[0] = a;
+    holeMid[2] = b;
+    assertThrowsClaimsRead(() => orderByIssuerChain(holeMid, null));
+    assertThrowsClaimsRead(() => orderByIssuerChainReference(holeMid, null));
+
+    const holeEnd = Array(3) as SignedReceipt[];
+    holeEnd[0] = a;
+    holeEnd[1] = b;
+    assertThrowsClaimsRead(() => orderByIssuerChain(holeEnd, null));
+    assertThrowsClaimsRead(() => orderByIssuerChainReference(holeEnd, null));
+
+    assertThrowsClaimsRead(() => orderByIssuerChain([undefined as unknown as SignedReceipt], null));
+    assertThrowsClaimsRead(() => orderByIssuerChainReference([undefined as unknown as SignedReceipt], null));
+    assertThrowsClaimsRead(() => orderByIssuerChain([null as unknown as SignedReceipt], null));
+    assertThrowsClaimsRead(() => orderByIssuerChainReference([null as unknown as SignedReceipt], null));
+  });
+});
+
+describe("findCheckpointTotalMismatches defers issuer ordering", () => {
+  it("empty checkpoints with a broken receipt return [] without throwing", () => {
+    assert.deepEqual(findCheckpointTotalMismatches([{} as never], []), []);
+  });
+
+  it("unverifiable checkpoints leave a broken receipt bag unordered", () => {
+    const cp = {
+      claims: {
+        epoch: 1,
+        startMs: NOW,
+        endMs: NOW + WINDOW,
+        prevCheckpointHash: null,
+        receiptCount: 0,
+        totals: null,
+        chainHeadHash: null,
+      },
+      encoding: "cose",
+      coseHex: "00",
+    } as SignedCheckpoint;
+    const findings = findCheckpointTotalMismatches(
+      [{} as never],
+      [cp],
+      () => ({}),
+      "spend",
+      {
+        record: "receipt",
+        row: "settlement",
+        extract: "rail extract",
+        extractKey: "rail key",
+        scope: "settlement path",
+        account: "account",
+        rail: "rail",
+        issuer: "issuer",
+      },
+      null,
+      null,
+      () => false,
+    );
+    assert.ok(findings.length >= 1);
+    assert.ok(findings.every((f) => f.code === "checkpoint-total-mismatch"));
+  });
+
+  it("orders the issuer chain once across many verifying checkpoints", () => {
+    const issuer = generateReceiptKeys();
+    const receipts = straightChain(issuer, 3);
+    const cps: SignedCheckpoint[] = [];
+    let prevHash: string | null = null;
+    for (let i = 0; i < 8; i += 1) {
+      const start = NOW + i * WINDOW;
+      const end = start + WINDOW;
+      const inWindow = i === 0 ? receipts : [];
+      const cp = signCheckpoint(
+        buildCheckpointClaims(i + 1, inWindow, start, end, prevHash),
+        issuer.privateKeyPem,
+        issuer.publicKeyPem,
+      );
+      cps.push(cp);
+      prevHash = checkpointHash(cp);
+    }
+    const reads = withPrevReceiptHashReads(receipts, (wrapped) => {
+      findCheckpointTotalMismatches(wrapped, cps, undefined, "spend", undefined, null, null, () => true);
+    });
+    const n = receipts.length;
+    assert.ok(reads <= 4 * n, `expected a single ordering pass, got reads=${reads} for N=${n}`);
   });
 });
 
