@@ -496,12 +496,24 @@ export function orderByIssuerChain(
   // twice is two occurrences to every other check in this file, and a Set of
   // objects folded them into one here, so the walk and the counts that read
   // it saw fewer receipts than were submitted.
+  // Out of scope: a prevReceiptHash accessor that returns a different value on every read.
   const remaining = new Set<number>(receipts.map((_, i) => i));
-  const starts = receipts
-    .map((r, i) => i)
-    .filter((i) => receipts[i].claims.prevReceiptHash === expectedRootPrev);
+  const byPrev = new Map<string | null, number[]>();
+  const starts: number[] = [];
+  receipts.forEach((receipt, i) => {
+    const prev = receipt.claims.prevReceiptHash;
+    if (prev === expectedRootPrev) {
+      starts.push(i);
+    }
+    const list = byPrev.get(prev);
+    if (list) {
+      list.push(i);
+    } else {
+      byPrev.set(prev, [i]);
+    }
+  });
   const ordered: SignedReceipt[] = [];
-  let current: number | null = starts.length === 1 ? starts[0] : null;
+  let current: number | null = starts.length === 1 ? starts[0]! : null;
   while (current !== null && remaining.has(current)) {
     remaining.delete(current);
     ordered.push(receipts[current]);
@@ -511,11 +523,11 @@ export function orderByIssuerChain(
     } catch {
       break;
     }
-    const nexts = [...remaining].filter((i) => receipts[i].claims.prevReceiptHash === nextHash);
+    const nexts = (byPrev.get(nextHash) ?? []).filter((i) => remaining.has(i));
     if (nexts.length !== 1) {
       break;
     }
-    current = nexts[0];
+    current = nexts[0]!;
   }
   return { ordered, leftover: [...remaining].map((i) => receipts[i]) };
 }
@@ -1141,6 +1153,8 @@ export function findCheckpointTotalMismatches(
   verify: (cp: SignedCheckpoint) => boolean = (cp) => verifyCheckpoint(cp),
 ): Finding[] {
   const findings: Finding[] = [];
+  // Out of scope: verify / totalsFn mutating receipts during the audit.
+  let chainedOrdered: SignedReceipt[] | undefined;
   for (const cp of checkpoints) {
     const v = verifiesOrRefusal(() => verify(cp), cp.coseHex);
     if (!v.ok) {
@@ -1157,7 +1171,13 @@ export function findCheckpointTotalMismatches(
     const inWindow = receiptsInWindow(receipts, cp);
     const inWindowOnChain =
       pop === "spend"
-        ? receiptsInWindow(orderByIssuerChain(receipts as SignedReceipt[], expectedRootPrev).ordered, cp)
+        ? receiptsInWindow(
+            (chainedOrdered ??= orderByIssuerChain(
+              receipts as SignedReceipt[],
+              expectedRootPrev,
+            ).ordered),
+            cp,
+          )
         : inWindow;
     // MUST-T10-13: an amount that cannot be read is a finding. It must not
     // abort the audit. Only the totals comparison is skipped for this
