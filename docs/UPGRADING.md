@@ -6,6 +6,12 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## Unreleased
 
+`audit` now applies the existing settlement-row bound to every presented row
+array on its own, including a caller-supplied `settlements` list beside an
+extract and the rows of `nextExtract` / `previousExtract`; oversized arrays
+that previously ran are refused as `audit-too-large` before comparison or
+sorting work.
+
 Checkpoint verification now consumes `coseHex` only as whole lowercase hex
 (`strictHexBytes`): a trailing non-hex suffix, odd length, uppercase, or an
 empty string no longer verifies, and `checkpointHash` throws `cose-hex` for
