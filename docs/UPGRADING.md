@@ -11,9 +11,12 @@ Checkpoint verification now consumes `coseHex` only as whole lowercase hex
 empty string no longer verifies, and `checkpointHash` throws `cose-hex` for
 those inputs. Decoded checkpoint integers (`epoch`, `startMs`, `endMs`,
 `receiptCount`) must be safe non-negative integers, so a well-signed payload
-that carries a negative in any of those fields fails verification. Audit
-`findWindowCoverage` reports `window-coverage` (id `epoch-N-bounds`) when a
-checkpoint has `startMs >= endMs`, matching the half-open window rule.
+that carries a negative in any of those fields fails verification. The same
+uint gate runs on encode and sign (`checkpointToCbor` / `signCheckpoint`),
+which throw `checkpoint-uint` rather than emitting a negative. `audit` and
+`auditWindows` do not throw when a presented checkpoint or witness body has
+dirty `coseHex`: they leave the unreadable hash out and keep the existing
+hard finding (`checkpoint-total-mismatch`, signature failed).
 
 When an audit is run without an issuer pin, `checkpoint-withheld` is raised
 for a log entry whose body verifies under a key that also signed a presented

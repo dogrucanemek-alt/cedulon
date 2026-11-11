@@ -139,7 +139,24 @@ function totalsFromCbor(value: CborVal): Record<string, string> {
   return out;
 }
 
+function isCheckpointUint(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** Epoch, startMs, endMs, and receiptCount: safe non-negative integers. */
+function assertCheckpointUints(claims: CheckpointClaims): void {
+  if (
+    !isCheckpointUint(claims.epoch) ||
+    !isCheckpointUint(claims.startMs) ||
+    !isCheckpointUint(claims.endMs) ||
+    !isCheckpointUint(claims.receiptCount)
+  ) {
+    throw new Error("checkpoint-uint");
+  }
+}
+
 export function checkpointToCbor(claims: CheckpointClaims): Uint8Array {
+  assertCheckpointUints(claims);
   return encodeCbor(
     cborMap([
       [CHECKPOINT_CLAIM.epoch, claims.epoch],
@@ -157,7 +174,7 @@ export function checkpointFromCbor(bytes: Uint8Array): CheckpointClaims {
   const map = asMap(decodeCbor(bytes));
   const num = (key: number): number => {
     const v = mapGet(map, key);
-    if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) {
+    if (!isCheckpointUint(v)) {
       throw new Error("checkpoint-uint");
     }
     return v;
