@@ -204,6 +204,13 @@ describe("edge resolver: the operator output lists what to fetch", () => {
     assert.ok(needLines.includes("need\treceipts\tw-close"));
     const lastWarn = lines.map((l) => l.startsWith("warning\t")).lastIndexOf(true);
     const firstNeed = lines.findIndex((l) => l.startsWith("need\t"));
+    assert.equal(
+      lines.filter((l) => l.startsWith("warning\t")).length,
+      report.warnings.length,
+      "every warning is printed as its own tagged line",
+    );
+    assert.ok(report.warnings.length > 0);
+    assert.ok(lastWarn >= 0);
     assert.ok(firstNeed > lastWarn, "need lines come after the warning lines");
   });
 

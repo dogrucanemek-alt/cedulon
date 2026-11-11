@@ -162,7 +162,10 @@ describe("cedulon-audit detections", () => {
     });
     assert.equal(report.ok, true);
     assert.equal(report.findings.length, 0);
-    assert.equal(formatAudit(report, receipts.length).includes("result\tbalanced"), true);
+    assert.equal(
+      formatAudit(report, receipts.length).split("\n").includes("result\tbalanced findings=0"),
+      true,
+    );
     const ledger = new RailLedger();
     for (const s of settlementsOf(receipts)) ledger.record(s);
     assert.equal(RailLedger.fromJson(ledger.toJson()).length, 3);
