@@ -3000,6 +3000,8 @@ type AuditReportSnapshot = {
   scope: PlainScope | undefined;
   counts: PlainCounts | null;
   inconsistent: boolean;
+  /** Whole report unreadable (wrong runtime type or revoked Proxy); print only the result line. */
+  fatal: boolean;
 };
 
 function readOwn(obj: object, key: string): { ok: true; value: unknown } | { ok: false } {
@@ -3010,20 +3012,20 @@ function readOwn(obj: object, key: string): { ok: true; value: unknown } | { ok:
   }
 }
 
+const INVALID_PLAIN_NEED: PlainNeed = {
+  evidence: undefined,
+  ref: undefined,
+  windowEndMs: undefined,
+  windowStartMs: undefined,
+  rowFromMs: undefined,
+  rowToMs: undefined,
+};
+
 function snapshotNeed(raw: unknown): { need: PlainNeed | undefined; inconsistent: boolean } {
-  if (!raw) return { need: undefined, inconsistent: false };
-  if (typeof raw !== "object") {
-    return {
-      need: {
-        evidence: undefined,
-        ref: undefined,
-        windowEndMs: undefined,
-        windowStartMs: undefined,
-        rowFromMs: undefined,
-        rowToMs: undefined,
-      },
-      inconsistent: false,
-    };
+  // Absence is only undefined. Any other value is present; falsy non-objects are invalid.
+  if (raw === undefined) return { need: undefined, inconsistent: false };
+  if (raw === null || typeof raw !== "object") {
+    return { need: { ...INVALID_PLAIN_NEED }, inconsistent: true };
   }
   const evidence = readOwn(raw, "evidence");
   const ref = readOwn(raw, "ref");
@@ -3039,7 +3041,7 @@ function snapshotNeed(raw: unknown): { need: PlainNeed | undefined; inconsistent
     !rowFromMs.ok ||
     !rowToMs.ok
   ) {
-    return { need: undefined, inconsistent: true };
+    return { need: { ...INVALID_PLAIN_NEED }, inconsistent: true };
   }
   return {
     need: {
@@ -3102,8 +3104,9 @@ function snapshotArray<T>(
   raw: unknown,
   mapEl: (el: unknown) => { item: T; inconsistent: boolean },
 ): { list: T[] | null; inconsistent: boolean } {
-  if (!Array.isArray(raw)) return { list: null, inconsistent: true };
+  // Type queries (Array.isArray) can throw on a revoked Proxy; keep them inside the guard.
   try {
+    if (!Array.isArray(raw)) return { list: null, inconsistent: true };
     let inconsistent = false;
     const list = Array.from(raw, (el) => {
       const mapped = mapEl(el);
@@ -3116,21 +3119,21 @@ function snapshotArray<T>(
   }
 }
 
+const INVALID_PLAIN_SCOPE: PlainScope = {
+  accountId: undefined,
+  railId: undefined,
+  windowStartMs: undefined,
+  windowEndMs: undefined,
+};
+
 function snapshotScope(raw: unknown): {
   scope: PlainScope | undefined;
   inconsistent: boolean;
 } {
-  if (!raw) return { scope: undefined, inconsistent: false };
-  if (typeof raw !== "object") {
-    return {
-      scope: {
-        accountId: undefined,
-        railId: undefined,
-        windowStartMs: undefined,
-        windowEndMs: undefined,
-      },
-      inconsistent: false,
-    };
+  // Absence is only undefined. Any other value is present; falsy non-objects are invalid.
+  if (raw === undefined) return { scope: undefined, inconsistent: false };
+  if (raw === null || typeof raw !== "object") {
+    return { scope: { ...INVALID_PLAIN_SCOPE }, inconsistent: true };
   }
   const accountId = readOwn(raw, "accountId");
   const railId = readOwn(raw, "railId");
@@ -3223,56 +3226,88 @@ function snapshotCounts(raw: unknown): { counts: PlainCounts | null; inconsisten
   return { counts: { receipts, settlements }, inconsistent: false };
 }
 
+const EMPTY_INVALID_SNAPSHOT: AuditReportSnapshot = {
+  ok: undefined,
+  findings: null,
+  warnings: null,
+  guarantee: undefined,
+  summary: undefined,
+  scope: undefined,
+  counts: null,
+  inconsistent: true,
+  fatal: true,
+};
+
 /**
  * The formatter treats the report as data of unknown runtime types; it reads
  * each field once and prints from a plain snapshot.
  */
 function snapshotAuditReport(report: AuditReport): AuditReportSnapshot {
-  let inconsistent = false;
-  const okRead = readOwn(report, "ok");
-  const findingsRead = readOwn(report, "findings");
-  const warningsRead = readOwn(report, "warnings");
-  const guaranteeRead = readOwn(report, "guarantee");
-  const summaryRead = readOwn(report, "summary");
-  const scopeRead = readOwn(report, "scope");
-  const countsRead = readOwn(report, "counts");
-  if (
-    !okRead.ok ||
-    !findingsRead.ok ||
-    !warningsRead.ok ||
-    !guaranteeRead.ok ||
-    !summaryRead.ok ||
-    !scopeRead.ok ||
-    !countsRead.ok
-  ) {
-    inconsistent = true;
+  try {
+    if (report === null || typeof report !== "object") {
+      return { ...EMPTY_INVALID_SNAPSHOT };
+    }
+    let inconsistent = false;
+    const okRead = readOwn(report, "ok");
+    const findingsRead = readOwn(report, "findings");
+    const warningsRead = readOwn(report, "warnings");
+    const guaranteeRead = readOwn(report, "guarantee");
+    const summaryRead = readOwn(report, "summary");
+    const scopeRead = readOwn(report, "scope");
+    const countsRead = readOwn(report, "counts");
+    if (
+      !okRead.ok &&
+      !findingsRead.ok &&
+      !warningsRead.ok &&
+      !guaranteeRead.ok &&
+      !summaryRead.ok &&
+      !scopeRead.ok &&
+      !countsRead.ok
+    ) {
+      // Every top-level get failed (revoked Proxy): nothing to print but the verdict.
+      return { ...EMPTY_INVALID_SNAPSHOT };
+    }
+    if (
+      !okRead.ok ||
+      !findingsRead.ok ||
+      !warningsRead.ok ||
+      !guaranteeRead.ok ||
+      !summaryRead.ok ||
+      !scopeRead.ok ||
+      !countsRead.ok
+    ) {
+      inconsistent = true;
+    }
+    const findingsSnap = findingsRead.ok
+      ? snapshotArray(findingsRead.value, snapshotFinding)
+      : { list: null as PlainFinding[] | null, inconsistent: true };
+    const warningsSnap = warningsRead.ok
+      ? snapshotArray(warningsRead.value, snapshotWarning)
+      : { list: null as PlainWarning[] | null, inconsistent: true };
+    const scopeSnap = scopeRead.ok
+      ? snapshotScope(scopeRead.value)
+      : { scope: undefined, inconsistent: true };
+    const countsSnap = countsRead.ok
+      ? snapshotCounts(countsRead.value)
+      : { counts: null as PlainCounts | null, inconsistent: true };
+    if (findingsSnap.inconsistent) inconsistent = true;
+    if (warningsSnap.inconsistent) inconsistent = true;
+    if (scopeSnap.inconsistent) inconsistent = true;
+    if (countsSnap.inconsistent) inconsistent = true;
+    return {
+      ok: okRead.ok ? okRead.value : undefined,
+      findings: findingsSnap.list,
+      warnings: warningsSnap.list,
+      guarantee: guaranteeRead.ok ? guaranteeRead.value : undefined,
+      summary: summaryRead.ok ? summaryRead.value : undefined,
+      scope: scopeSnap.scope,
+      counts: countsSnap.counts,
+      inconsistent,
+      fatal: false,
+    };
+  } catch {
+    return { ...EMPTY_INVALID_SNAPSHOT };
   }
-  const findingsSnap = findingsRead.ok
-    ? snapshotArray(findingsRead.value, snapshotFinding)
-    : { list: null as PlainFinding[] | null, inconsistent: true };
-  const warningsSnap = warningsRead.ok
-    ? snapshotArray(warningsRead.value, snapshotWarning)
-    : { list: null as PlainWarning[] | null, inconsistent: true };
-  const scopeSnap = scopeRead.ok
-    ? snapshotScope(scopeRead.value)
-    : { scope: undefined, inconsistent: true };
-  const countsSnap = countsRead.ok
-    ? snapshotCounts(countsRead.value)
-    : { counts: null as PlainCounts | null, inconsistent: true };
-  if (findingsSnap.inconsistent) inconsistent = true;
-  if (warningsSnap.inconsistent) inconsistent = true;
-  if (scopeSnap.inconsistent) inconsistent = true;
-  if (countsSnap.inconsistent) inconsistent = true;
-  return {
-    ok: okRead.ok ? okRead.value : undefined,
-    findings: findingsSnap.list,
-    warnings: warningsSnap.list,
-    guarantee: guaranteeRead.ok ? guaranteeRead.value : undefined,
-    summary: summaryRead.ok ? summaryRead.value : undefined,
-    scope: scopeSnap.scope,
-    counts: countsSnap.counts,
-    inconsistent,
-  };
 }
 
 /** @param _receiptCount ignored since 0.11.0; the printed total is `report.counts.receipts.submitted`. */
@@ -3283,69 +3318,86 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   // runtime type: wrong-typed values print the marker, never String(value).
   // The formatter treats the report as data of unknown runtime types; it reads
   // each field once and prints from a plain snapshot.
-  const snap = snapshotAuditReport(report);
-  const slots = makeSlotSink();
-  if (snap.inconsistent) slots.invalid = true;
-  if (snap.findings === null || snap.warnings === null || snap.counts === null) {
-    slots.invalid = true;
-  }
-
-  const findings = snap.findings ?? [];
-  const warnings = snap.warnings ?? [];
-
-  const body: string[] = [];
-  for (const f of findings) {
-    body.push(`finding\t${slots.text(f.code)}\t${slots.text(f.id)}\t${slots.text(f.detail)}`);
-  }
-  // Warnings decide whether the balance means anything, so an operator has to
-  // see them on the passing path too, not only in the returned object.
-  body.push(`guarantee\t${slots.text(snap.guarantee)}`);
-  // And a guarantee is over something. The extract that supplied the population
-  // covers one account on one rail, so the line that carries the strongest
-  // claim also carries the path it was measured on. Named fields and escaped
-  // values keep account, rail and window from forging each other.
-  if (snap.scope) {
-    const s = snap.scope;
-    body.push(
-      `scope\taccountId=${slots.scope(s.accountId)}\trailId=${slots.scope(s.railId)}\twindowStartMs=${slots.int(s.windowStartMs)}\twindowEndMs=${slots.int(s.windowEndMs)}`,
-    );
-  }
-  // The classes every row landed in. A balanced line over a window that
-  // carried one row into the next window and a balanced line over a window
-  // that held none read the same without these.
-  if (snap.counts) {
-    body.push(...formatCounts(snap.counts as AuditCounts, slots));
-  } else {
-    // Keep two count lines so line tags stay stable when counts could not be read.
-    body.push(
-      `counts\treceipts\tsubmitted=${slots.nonNeg(undefined)} attested=${slots.nonNeg(undefined)} in-scope=${slots.nonNeg(undefined)} aborted=${slots.nonNeg(undefined)} settled=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} carried=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
-      `counts\tsettlements\trows=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
-    );
-  }
-  for (const w of warnings) {
-    body.push(`warning\t${slots.text(w.code)}\t${slots.text(w.detail)}`);
-  }
-  for (const w of warnings) {
-    const need = w.needs;
-    if (!need) continue;
-    if (need.evidence === "previousExtract") {
-      body.push(
-        `need\tpreviousExtract\t${slots.text(need.ref)}\twindowEndMs=${slots.int(need.windowEndMs)} row in [${slots.int(need.rowFromMs)},${slots.int(need.rowToMs)})`,
-      );
-    } else if (need.evidence === "nextExtract") {
-      body.push(
-        `need\tnextExtract\t${slots.text(need.ref)}\twindowStartMs=${slots.int(need.windowStartMs)} row in [${slots.int(need.rowFromMs)},${slots.int(need.rowToMs)})`,
-      );
-    } else {
-      body.push(`need\treceipts\t${slots.text(need.ref)}`);
+  // Absence of an optional report field is only `undefined`; any other value is
+  // present and, if wrong-typed, prints a marked line and makes the result
+  // inconsistent. formatAudit never throws on any runtime input.
+  try {
+    if (report === null || typeof report !== "object") {
+      return "result\tinconsistent ok=invalid findings=invalid";
     }
-  }
+    const snap = snapshotAuditReport(report);
+    if (snap.fatal) {
+      return "result\tinconsistent ok=invalid findings=invalid";
+    }
+    const slots = makeSlotSink();
+    if (snap.inconsistent) slots.invalid = true;
+    if (snap.findings === null || snap.warnings === null || snap.counts === null) {
+      slots.invalid = true;
+    }
 
-  return [
-    `summary\t${slots.text(snap.summary)}`,
-    formatResultLine(snap.ok, snap.findings, slots.invalid),
-    ...body,
-  ].join("\n");
+    const findings = snap.findings !== undefined && snap.findings !== null ? snap.findings : [];
+    const warnings = snap.warnings !== undefined && snap.warnings !== null ? snap.warnings : [];
+
+    const body: string[] = [];
+    for (const f of findings) {
+      body.push(`finding\t${slots.text(f.code)}\t${slots.text(f.id)}\t${slots.text(f.detail)}`);
+    }
+    // Warnings decide whether the balance means anything, so an operator has to
+    // see them on the passing path too, not only in the returned object.
+    body.push(`guarantee\t${slots.text(snap.guarantee)}`);
+    // And a guarantee is over something. The extract that supplied the population
+    // covers one account on one rail, so the line that carries the strongest
+    // claim also carries the path it was measured on. Named fields and escaped
+    // values keep account, rail and window from forging each other.
+    if (snap.scope !== undefined) {
+      const s = snap.scope;
+      body.push(
+        `scope\taccountId=${slots.scope(s.accountId)}\trailId=${slots.scope(s.railId)}\twindowStartMs=${slots.int(s.windowStartMs)}\twindowEndMs=${slots.int(s.windowEndMs)}`,
+      );
+    }
+    // The classes every row landed in. A balanced line over a window that
+    // carried one row into the next window and a balanced line over a window
+    // that held none read the same without these.
+    if (snap.counts !== undefined && snap.counts !== null) {
+      body.push(...formatCounts(snap.counts as AuditCounts, slots));
+    } else {
+      // Keep two count lines so line tags stay stable when counts could not be read.
+      body.push(
+        `counts\treceipts\tsubmitted=${slots.nonNeg(undefined)} attested=${slots.nonNeg(undefined)} in-scope=${slots.nonNeg(undefined)} aborted=${slots.nonNeg(undefined)} settled=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} carried=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
+        `counts\tsettlements\trows=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
+      );
+    }
+    for (const w of warnings) {
+      body.push(`warning\t${slots.text(w.code)}\t${slots.text(w.detail)}`);
+    }
+    for (const w of warnings) {
+      const need = w.needs;
+      if (need === undefined) continue;
+      if (need.evidence === "previousExtract") {
+        body.push(
+          `need\tpreviousExtract\t${slots.text(need.ref)}\twindowEndMs=${slots.int(need.windowEndMs)} row in [${slots.int(need.rowFromMs)},${slots.int(need.rowToMs)})`,
+        );
+      } else if (need.evidence === "nextExtract") {
+        body.push(
+          `need\tnextExtract\t${slots.text(need.ref)}\twindowStartMs=${slots.int(need.windowStartMs)} row in [${slots.int(need.rowFromMs)},${slots.int(need.rowToMs)})`,
+        );
+      } else if (need.evidence === "receipts") {
+        body.push(`need\treceipts\t${slots.text(need.ref)}`);
+      } else {
+        // evidence must be exactly one of the three allowed values; otherwise mark the tag.
+        slots.invalid = true;
+        body.push(`need\t${INVALID_SLOT_VALUE}\t${slots.text(need.ref)}`);
+      }
+    }
+
+    return [
+      `summary\t${slots.text(snap.summary)}`,
+      formatResultLine(snap.ok, snap.findings, slots.invalid),
+      ...body,
+    ].join("\n");
+  } catch {
+    return "result\tinconsistent ok=invalid findings=invalid";
+  }
 }
 
 export type PresentedEntry = {

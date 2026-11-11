@@ -20,15 +20,23 @@ opens a line: every slot has one expected runtime type. A string slot prints
 only when `typeof value === "string"` (then `escapeReportText`, and scope
 identity also escapes `=`, `[`, `)`, `,`); a number slot prints only when
 `Number.isSafeInteger(value)` (counts and finding totals also require
-`>= 0`); `ok` accepts only `=== true` or `=== false`. Any other value prints
-the unforgeable marker `\u{0}` and never `String(value)`, so a wrong-typed
-payload cannot forge another field. The verdict is a separate fixed-word
-`result` line: `balanced findings=0` only when `ok === true`, findings is an
-empty array, and no slot printed the marker; `fail findings=N` when `ok` is
-false and every slot is well typed; `inconsistent ok=true findings=N` when
-`ok` is true but findings are present; `inconsistent ok=invalid
-findings=invalid` when `ok` is not boolean, findings is not an array, or any
-slot printed the marker. Old to new:
+`>= 0`); `ok` accepts only `=== true` or `=== false`. Absence of an optional
+report field (`scope`, a warning's `needs`) is only `undefined` (missing
+property or value `undefined`); any other value is present. A wrong-typed or
+otherwise invalid present value prints the unforgeable marker `\u{0}` on the
+marked line for that field (for `scope`, one line with every scope slot
+marked; for `needs`, a `need` line whose evidence tag is marked unless
+evidence is exactly one of `previousExtract`, `nextExtract`, or `receipts`)
+and never `String(value)`, so a wrong-typed payload cannot forge another
+field or silently drop a line. The verdict is a separate fixed-word `result`
+line: `balanced findings=0` only when `ok === true`, findings is an empty
+array, and no slot printed the marker; `fail findings=N` when `ok` is false
+and every slot is well typed; `inconsistent ok=true findings=N` when `ok` is
+true but findings are present; `inconsistent ok=invalid findings=invalid`
+when `ok` is not boolean, findings is not an array, any slot printed the
+marker, or an optional field was present but invalid. `formatAudit` does not
+throw on a non-object or revoked Proxy report: it prints a single
+`result\tinconsistent ok=invalid findings=invalid` line. Old to new:
 
 ```
 audit: balanced

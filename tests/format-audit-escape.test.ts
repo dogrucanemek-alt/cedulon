@@ -1182,3 +1182,204 @@ describe("formatAudit prints from a plain one-read snapshot", () => {
     }
   });
 });
+
+describe("formatAudit absence is only undefined", () => {
+  const MARKED_SCOPE = `scope\taccountId=${ABSENT}\trailId=${ABSENT}\twindowStartMs=${ABSENT}\twindowEndMs=${ABSENT}`;
+
+  it("falsy scope values print a marked scope line and inconsistent, not balanced", () => {
+    const balanced = formatAudit(
+      reportWith({
+        ok: true,
+        findings: [],
+        summary: "audit: balanced",
+        warnings: [],
+      }),
+    );
+    assert.equal(balanced.split("\n")[1], "result\tbalanced findings=0", balanced);
+
+    for (const scope of [0, false, null, "", NaN] as unknown[]) {
+      let printed = "";
+      assert.doesNotThrow(() => {
+        printed = formatAudit(
+          reportWith({
+            ok: true,
+            findings: [],
+            summary: "audit: balanced",
+            warnings: [],
+            scope: scope as AuditReport["scope"],
+          }),
+        );
+      });
+      assert.equal(
+        printed.split("\n")[1],
+        "result\tinconsistent ok=invalid findings=invalid",
+        `scope=${String(scope)}\n${printed}`,
+      );
+      assert.equal(
+        printed.split("\n").some((l) => l === "result\tbalanced findings=0"),
+        false,
+        printed,
+      );
+      const scopeLine = printed.split("\n").find((l) => l.startsWith("scope\t"));
+      assert.equal(scopeLine, MARKED_SCOPE, `scope=${String(scope)}\n${printed}`);
+    }
+  });
+
+  it("undefined scope omits the scope line and can stay balanced", () => {
+    const printed = formatAudit(
+      reportWith({
+        ok: true,
+        findings: [],
+        summary: "audit: balanced",
+        warnings: [],
+        scope: undefined,
+      }),
+    );
+    assert.equal(printed.split("\n")[1], "result\tbalanced findings=0", printed);
+    assert.equal(
+      printed.split("\n").some((l) => l.startsWith("scope\t")),
+      false,
+      printed,
+    );
+  });
+
+  it("falsy needs values print a marked need line and inconsistent", () => {
+    for (const needs of [0, false, null, "", NaN] as unknown[]) {
+      const printed = formatAudit(
+        reportWith({
+          ok: true,
+          findings: [],
+          summary: "audit: balanced",
+          warnings: [
+            {
+              code: "boundary-deferred",
+              id: "w",
+              detail: "deferred",
+              needs: needs as Finding["needs"],
+            },
+          ],
+        }),
+      );
+      assert.equal(
+        printed.split("\n")[1],
+        "result\tinconsistent ok=invalid findings=invalid",
+        `needs=${String(needs)}\n${printed}`,
+      );
+      assert.equal(
+        printed.split("\n").some((l) => l === "result\tbalanced findings=0"),
+        false,
+        printed,
+      );
+      const needLine = printed.split("\n").find((l) => l.startsWith("need\t"));
+      assert.equal(needLine, `need\t${ABSENT}\t${ABSENT}`, `needs=${String(needs)}\n${printed}`);
+    }
+  });
+
+  it("undefined needs omits the need line", () => {
+    const printed = formatAudit(
+      reportWith({
+        warnings: [
+          {
+            code: "boundary-deferred",
+            id: "w",
+            detail: "deferred",
+          },
+        ],
+      }),
+    );
+    assert.equal(
+      printed.split("\n").some((l) => l.startsWith("need\t")),
+      false,
+      printed,
+    );
+  });
+
+  it("evidence outside the three allowed values prints a marked need line, not receipts", () => {
+    const allowed = ["previousExtract", "nextExtract", "receipts"] as const;
+    const good = formatAudit(
+      reportWith({
+        warnings: [
+          {
+            code: "boundary-deferred",
+            id: "w",
+            detail: "deferred",
+            needs: { evidence: "receipts", ref: "r" },
+          },
+        ],
+      }),
+    );
+    assert.equal(
+      good.split("\n").find((l) => l.startsWith("need\t")),
+      "need\treceipts\tr",
+      good,
+    );
+
+    for (const evidence of ["result", "receipt", "PreviousExtract", "", 0, null, true] as unknown[]) {
+      const printed = formatAudit(
+        reportWith({
+          ok: true,
+          findings: [],
+          summary: "audit: balanced",
+          warnings: [
+            {
+              code: "boundary-deferred",
+              id: "w",
+              detail: "deferred",
+              needs: { evidence: evidence as "receipts", ref: "r" },
+            },
+          ],
+        }),
+      );
+      assert.equal(
+        printed.split("\n")[1],
+        "result\tinconsistent ok=invalid findings=invalid",
+        `evidence=${String(evidence)}\n${printed}`,
+      );
+      const needLine = printed.split("\n").find((l) => l.startsWith("need\t"))!;
+      assert.equal(needLine, `need\t${ABSENT}\tr`, `evidence=${String(evidence)}\n${printed}`);
+      assert.equal(needLine.startsWith("need\treceipts\t"), false, printed);
+      for (const tag of allowed) {
+        if (evidence === tag) continue;
+        assert.equal(needLine.startsWith(`need\t${tag}\t`), false, printed);
+      }
+    }
+  });
+
+  it("revoked Proxy array as findings does not throw and prints inconsistent", () => {
+    const { proxy, revoke } = Proxy.revocable([] as Finding[], {});
+    revoke();
+    let printed = "";
+    assert.doesNotThrow(() => {
+      printed = formatAudit(
+        reportWith({
+          ok: true,
+          findings: proxy,
+          summary: "audit: balanced",
+        }),
+      );
+    });
+    assert.equal(printed.split("\n")[1], "result\tinconsistent ok=invalid findings=invalid", printed);
+  });
+
+  it("formatAudit never throws on null, number, revoked report Proxy, or undefined", () => {
+    const { proxy, revoke } = Proxy.revocable(reportWith({}), {});
+    revoke();
+    const cases: Array<{ label: string; report: unknown }> = [
+      { label: "null", report: null },
+      { label: "number", report: 5 },
+      { label: "revokedProxy", report: proxy },
+      { label: "undefined", report: undefined },
+    ];
+    for (const { label, report } of cases) {
+      let printed = "";
+      assert.doesNotThrow(() => {
+        printed = formatAudit(report as AuditReport);
+      }, label);
+      assert.equal(
+        printed,
+        "result\tinconsistent ok=invalid findings=invalid",
+        `input=${label}\n${printed}`,
+      );
+    }
+  });
+});
