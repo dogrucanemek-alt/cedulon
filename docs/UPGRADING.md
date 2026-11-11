@@ -13,10 +13,14 @@ those inputs. Decoded checkpoint integers (`epoch`, `startMs`, `endMs`,
 `receiptCount`) must be safe non-negative integers, so a well-signed payload
 that carries a negative in any of those fields fails verification. The same
 uint gate runs on encode and sign (`checkpointToCbor` / `signCheckpoint`),
-which throw `checkpoint-uint` rather than emitting a negative. `audit` and
-`auditWindows` do not throw when a presented checkpoint or witness body has
-dirty `coseHex`: they leave the unreadable hash out and keep the existing
-hard finding (`checkpoint-total-mismatch`, signature failed).
+which throw `checkpoint-uint` rather than emitting a negative or a non-safe
+integer. `audit` and `auditWindows` do not throw when a presented checkpoint
+or witness body has dirty `coseHex`: they leave the unreadable hash out. A
+dirty presented checkpoint keeps the existing hard finding
+(`checkpoint-total-mismatch`, signature failed). A dirty witness body alone,
+with a valid presented checkpoint, produces no signature finding; the
+inclusion receipt's `statementHash` can still anchor the presented
+checkpoint.
 
 When an audit is run without an issuer pin, `checkpoint-withheld` is raised
 for a log entry whose body verifies under a key that also signed a presented

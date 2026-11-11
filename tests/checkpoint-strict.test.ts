@@ -129,7 +129,7 @@ describe("checkpoint coseHex is consumed as strict lowercase hex", () => {
   });
 });
 
-describe("checkpoint uint claims reject negatives", () => {
+describe("checkpoint uint claims reject negatives and non-safe integers", () => {
   for (const field of ["epoch", "startMs", "endMs", "receiptCount"] as const) {
     it(`a well-signed checkpoint with ${field} = -1 does not verify`, () => {
       const k = generateReceiptKeys();
@@ -151,11 +151,31 @@ describe("checkpoint uint claims reject negatives", () => {
         /checkpoint-uint/,
       );
     });
+
+    it(`signCheckpoint and checkpointToCbor refuse ${field} = 1.5 as checkpoint-uint`, () => {
+      const claims = emptyClaims({ [field]: 1.5 });
+      assert.throws(() => checkpointToCbor(claims), /checkpoint-uint/);
+      const k = generateReceiptKeys();
+      assert.throws(
+        () => signCheckpoint(claims, k.privateKeyPem, k.publicKeyPem),
+        /checkpoint-uint/,
+      );
+    });
+
+    it(`signCheckpoint and checkpointToCbor refuse ${field} = MAX_SAFE_INTEGER + 1 as checkpoint-uint`, () => {
+      const claims = emptyClaims({ [field]: Number.MAX_SAFE_INTEGER + 1 });
+      assert.throws(() => checkpointToCbor(claims), /checkpoint-uint/);
+      const k = generateReceiptKeys();
+      assert.throws(
+        () => signCheckpoint(claims, k.privateKeyPem, k.publicKeyPem),
+        /checkpoint-uint/,
+      );
+    });
   }
 });
 
 describe("findWindowCoverage does not invent a length rule the draft omits", () => {
-  it("startMs === endMs is not window-coverage", () => {
+  it("startMs === endMs yields no window-coverage finding", () => {
     const k = generateReceiptKeys();
     const cp = signCheckpoint(
       buildCheckpointClaims(1, [], 100, 100, null),
@@ -164,13 +184,13 @@ describe("findWindowCoverage does not invent a length rule the draft omits", () 
     );
     const findings = findWindowCoverage([], [cp]);
     assert.equal(
-      findings.some((f) => f.code === "window-coverage" && f.id === "epoch-1-bounds"),
+      findings.some((f) => f.code === "window-coverage"),
       false,
       JSON.stringify(findings),
     );
   });
 
-  it("endMs < startMs is not window-coverage", () => {
+  it("endMs < startMs yields no window-coverage finding", () => {
     const k = generateReceiptKeys();
     const cp = signCheckpoint(
       buildCheckpointClaims(2, [], 200, 100, null),
@@ -179,7 +199,7 @@ describe("findWindowCoverage does not invent a length rule the draft omits", () 
     );
     const findings = findWindowCoverage([], [cp]);
     assert.equal(
-      findings.some((f) => f.code === "window-coverage" && f.id === "epoch-2-bounds"),
+      findings.some((f) => f.code === "window-coverage"),
       false,
       JSON.stringify(findings),
     );
@@ -209,27 +229,33 @@ describe("audit does not throw when checkpointHash would refuse dirty coseHex", 
     assert.equal(hasSignatureFailed(report.findings), true, JSON.stringify(report.findings));
   });
 
-  it("a witness inclusion body whose coseHex gains a zz suffix returns a hard finding", () => {
+  it("a dirty witness body with a valid presented checkpoint does not throw and yields no signature finding", () => {
     const k = generateReceiptKeys();
     const signed = signCheckpoint(
       buildCheckpointClaims(1, [], START, END, null),
       k.privateKeyPem,
       k.publicKeyPem,
     );
-    const dirty = { ...signed, coseHex: `${signed.coseHex}zz` };
+    const dirtyBody = { ...signed, coseHex: `${signed.coseHex}zz` };
     const ts = new MemoryTransparencyService(fixtureEd25519Pems());
-    const inc = { ...anchorCheckpoint(ts, signed), checkpoint: dirty };
+    const inc = { ...anchorCheckpoint(ts, signed), checkpoint: dirtyBody };
     let report!: ReturnType<typeof audit>;
     assert.doesNotThrow(() => {
       report = audit({
         receipts: [],
-        checkpoints: [dirty],
+        checkpoints: [signed],
         inclusionReceipts: [inc],
         witnessTrust: { publicKeyPem: ts.publicKeyPem },
       });
     });
-    assert.equal(report.ok, false);
-    assert.equal(hasSignatureFailed(report.findings), true, JSON.stringify(report.findings));
+    assert.equal(report.ok, true);
+    assert.equal(report.findings.length, 0, JSON.stringify(report.findings));
+    assert.equal(hasSignatureFailed(report.findings), false, JSON.stringify(report.findings));
+    assert.equal(
+      report.warnings.some((w) => w.code === "checkpoint-not-anchored"),
+      false,
+      JSON.stringify(report.warnings),
+    );
   });
 
   it("auditWindows does not throw for the dirty presented checkpoint and returns the hard finding", () => {
@@ -255,27 +281,34 @@ describe("audit does not throw when checkpointHash would refuse dirty coseHex", 
     assert.equal(hasSignatureFailed(windowFindings), true, JSON.stringify(windowFindings));
   });
 
-  it("auditWindows does not throw for a dirty witness body and returns the hard finding", () => {
+  it("auditWindows with a dirty witness body and a valid presented checkpoint does not throw and yields no signature finding", () => {
     const k = generateReceiptKeys();
     const signed = signCheckpoint(
       buildCheckpointClaims(1, [], START, END, null),
       k.privateKeyPem,
       k.publicKeyPem,
     );
-    const dirty = { ...signed, coseHex: `${signed.coseHex}zz` };
+    const dirtyBody = { ...signed, coseHex: `${signed.coseHex}zz` };
     const ts = new MemoryTransparencyService(fixtureEd25519Pems());
-    const inc = { ...anchorCheckpoint(ts, signed), checkpoint: dirty };
+    const inc = { ...anchorCheckpoint(ts, signed), checkpoint: dirtyBody };
     const extract = emptyExtract();
     let report!: ReturnType<typeof auditWindows>;
     assert.doesNotThrow(() => {
       report = auditWindows({
         inclusionReceipts: [inc],
         witnessTrust: { publicKeyPem: ts.publicKeyPem },
-        windows: [{ receipts: [], checkpoints: [dirty], extract }],
+        windows: [{ receipts: [], checkpoints: [signed], extract }],
       });
     });
-    assert.equal(report.ok, false);
+    assert.equal(report.ok, true);
     const windowFindings = report.windows.flatMap((w) => w.findings);
-    assert.equal(hasSignatureFailed(windowFindings), true, JSON.stringify(windowFindings));
+    assert.equal(windowFindings.length, 0, JSON.stringify(windowFindings));
+    assert.equal(hasSignatureFailed(windowFindings), false, JSON.stringify(windowFindings));
+    const windowWarnings = report.windows.flatMap((w) => w.warnings);
+    assert.equal(
+      windowWarnings.some((w) => w.code === "checkpoint-not-anchored"),
+      false,
+      JSON.stringify(windowWarnings),
+    );
   });
 });
