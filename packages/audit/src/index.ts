@@ -2771,19 +2771,24 @@ export function escapeReportText(value: string): string {
       cp === 0x7f ||
       (cp >= 0x80 && cp <= 0x9f) ||
       cp === 0x00ad ||
-      (cp >= 0xd800 && cp <= 0xdfff) ||
-      cp === 0x180e ||
-      (cp >= 0x200b && cp <= 0x200d) ||
-      cp === 0x200e ||
-      cp === 0x200f ||
+      cp === 0x034f ||
       cp === 0x061c ||
+      (cp >= 0x115f && cp <= 0x1160) ||
+      (cp >= 0x17b4 && cp <= 0x17b5) ||
+      (cp >= 0x180b && cp <= 0x180f) ||
+      (cp >= 0xd800 && cp <= 0xdfff) ||
+      (cp >= 0x200b && cp <= 0x200f) ||
       cp === 0x2028 ||
       cp === 0x2029 ||
       (cp >= 0x202a && cp <= 0x202e) ||
-      (cp >= 0x2060 && cp <= 0x2064) ||
-      (cp >= 0x2066 && cp <= 0x2069) ||
+      (cp >= 0x2060 && cp <= 0x206f) ||
+      cp === 0x3164 ||
       (cp >= 0xfe00 && cp <= 0xfe0f) ||
       cp === 0xfeff ||
+      cp === 0xffa0 ||
+      (cp >= 0xfff0 && cp <= 0xfffb) ||
+      (cp >= 0x1bca0 && cp <= 0x1bca3) ||
+      (cp >= 0x1d173 && cp <= 0x1d17a) ||
       (cp >= 0xe0000 && cp <= 0xe007f) ||
       (cp >= 0xe0100 && cp <= 0xe01ef)
     ) {
@@ -2800,15 +2805,20 @@ function escapeScopeField(value: string): string {
   return escapeReportText(value).replaceAll("/", "\\u002f");
 }
 
+/** Finding and warning `code` columns: `=` would look like a key=value line. */
+function escapeFindingCode(value: string): string {
+  return escapeReportText(value).replaceAll("=", "\\u003d");
+}
+
 /**
- * Built-in profiles always emit a failing summary that starts with `audit: `
- * and is not the balanced first line. Anything else is framed so a hand-built
- * `summary` cannot equal or begin a balanced-report line (for example
- * `findings=0`).
+ * Built-in profiles emit a failing summary that starts with `audit: ` and does
+ * not start with `audit: balanced`. A summary that misses that prefix, or that
+ * starts with `audit: balanced`, is printed as `summary\t...` so it is not
+ * mistaken for the balanced first line (for example `findings=0`).
  */
 function formatFailFirstLine(summary: string): string {
   const escaped = escapeReportText(summary);
-  if (escaped.startsWith("audit: ") && escaped !== "audit: balanced") {
+  if (escaped.startsWith("audit: ") && !escaped.startsWith("audit: balanced")) {
     return escaped;
   }
   return `summary\t${escaped}`;
@@ -2821,7 +2831,7 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
     : [
         formatFailFirstLine(report.summary),
         ...report.findings.map(
-          (f) => `${escapeReportText(f.code)}\t${escapeReportText(f.id)}\t${escapeReportText(f.detail)}`,
+          (f) => `${escapeFindingCode(f.code)}\t${escapeReportText(f.id)}\t${escapeReportText(f.detail)}`,
         ),
       ];
   // Warnings decide whether the balance means anything, so an operator has to
@@ -2841,7 +2851,7 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   // that held none read the same without these.
   lines.push(...formatCounts(report.counts));
   for (const w of report.warnings) {
-    lines.push(`warn\t${escapeReportText(w.code)}\t${escapeReportText(w.detail)}`);
+    lines.push(`warn\t${escapeFindingCode(w.code)}\t${escapeReportText(w.detail)}`);
   }
   for (const w of report.warnings) {
     const need = w.needs;

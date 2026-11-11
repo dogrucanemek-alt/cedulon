@@ -206,6 +206,30 @@ describe("formatAudit escapes untrusted text", () => {
     assert.equal(builtIn.split("\n")[0], "audit: 1 finding(s) → FAIL", builtIn);
   });
 
+  it("a failing summary that starts with audit: balanced is framed; built-in FAIL is not", () => {
+    for (const summary of ["audit: balanced ", "audit: balanced x", "audit: balanced"]) {
+      const printed = formatAudit(reportWith({ summary }));
+      const first = printed.split("\n")[0]!;
+      assert.equal(first, `summary\t${escapeReportText(summary)}`, printed);
+      assert.equal(first.startsWith("audit: balanced"), false, printed);
+    }
+    const builtIn = formatAudit(reportWith({}));
+    assert.equal(builtIn.split("\n")[0], "audit: 1 finding(s) → FAIL", builtIn);
+  });
+
+  it("equals in finding and warning code is escaped; built-in codes stay plain", () => {
+    const printed = formatAudit(
+      reportWith({
+        findings: [{ code: "findings=0" as Finding["code"], id: "id", detail: "d" }],
+        warnings: [{ code: "warn=code" as Finding["code"], id: "w", detail: "wd" }],
+      }),
+    );
+    assert.match(printed, /^findings\\u003d0\tid\td$/m);
+    assert.match(printed, /^warn\twarn\\u003dcode\twd$/m);
+    const builtIn = formatAudit(reportWith({}));
+    assert.match(builtIn, /^settlement-without-receipt\tref-honest\t/m);
+  });
+
   it("scope accountId and railId slash cannot swap field boundaries", () => {
     const left = formatAudit(reportWith({ scopeAccountId: "a/b", scopeRailId: "c" }));
     const right = formatAudit(reportWith({ scopeAccountId: "a", scopeRailId: "b/c" }));
@@ -245,6 +269,55 @@ describe("formatAudit escapes untrusted text", () => {
     assert.match(printed, /\\u\{e0100\}/);
     assert.equal(printed.includes(combining), true, printed);
     assert.equal(escapeReportText(combining), combining);
+  });
+
+  it("every escape-set range leaves no raw sample and prints its escape", () => {
+    // One sample per range escapeReportText treats as invisible or control.
+    const samples: Array<{ cp: number; label: string }> = [
+      { cp: 0x001b, label: "C0" },
+      { cp: 0x007f, label: "DEL" },
+      { cp: 0x009f, label: "C1" },
+      { cp: 0x00ad, label: "soft-hyphen" },
+      { cp: 0x034f, label: "CGJ" },
+      { cp: 0x061c, label: "ALM" },
+      { cp: 0x115f, label: "Hangul-choseong-filler" },
+      { cp: 0x17b4, label: "Khmer-inherent-ah" },
+      { cp: 0x180b, label: "Mongolian-FVS1" },
+      { cp: 0xd800, label: "lone-surrogate" },
+      { cp: 0x200b, label: "ZWSP" },
+      { cp: 0x200e, label: "LRM" },
+      { cp: 0x2028, label: "line-separator" },
+      { cp: 0x2029, label: "paragraph-separator" },
+      { cp: 0x202a, label: "LRE" },
+      { cp: 0x2060, label: "WJ" },
+      { cp: 0x2065, label: "invisible-plus-reserve" },
+      { cp: 0x206a, label: "inhibit-symmetric-swapping" },
+      { cp: 0x3164, label: "Hangul-filler" },
+      { cp: 0xfe00, label: "VS1" },
+      { cp: 0xfeff, label: "BOM" },
+      { cp: 0xffa0, label: "halfwidth-Hangul-filler" },
+      { cp: 0xfff0, label: "specials-reserve" },
+      { cp: 0x1bca0, label: "shorthand-format" },
+      { cp: 0x1d173, label: "musical-begin-beam" },
+      { cp: 0xe0001, label: "tag" },
+      { cp: 0xe0100, label: "VS17" },
+    ];
+    for (const { cp, label } of samples) {
+      const raw = cp <= 0xffff ? String.fromCharCode(cp) : String.fromCodePoint(cp);
+      const escaped = escapeReportText(raw);
+      const expect =
+        cp > 0xffff ? `\\u{${cp.toString(16)}}` : "\\u" + cp.toString(16).padStart(4, "0");
+      assert.equal(escaped.includes(raw), false, `${label}: raw still in escapeReportText`);
+      assert.equal(escaped, expect, `${label}: expected ${expect}, got ${escaped}`);
+      const printed = formatAudit(
+        reportWith({
+          findings: [{ code: "settlement-without-receipt", id: raw, detail: "x" }],
+        }),
+      );
+      assert.equal(printed.includes(raw), false, `${label}: raw in report`);
+      assert.equal(printed.includes(expect), true, `${label}: escape missing in report`);
+    }
+    assert.equal(escapeReportText("e\u0301"), "e\u0301");
   });
 
   it("live-audit identity lines use the same escape as the report", () => {

@@ -24,14 +24,19 @@ with a valid presented checkpoint, produces no signature finding; the
 inclusion receipt's `statementHash` can still anchor the presented
 checkpoint. Ledger export reports `hash: null` for a stored checkpoint whose
 encoding is not strict hex.
-`formatAudit` visibly escapes backslash, C0/C1 controls, DEL, U+2028, U+2029,
-bidirectional controls, lone surrogates, soft hyphen, zero-width and format
-characters, tag characters, and variation selectors in every untrusted field
-it prints; non-BMP code points use `\u{...}`. On the `scope=` line only,
-`/` inside `accountId` and `railId` becomes `\u002f` so the two fields stay
-distinct. A failing report whose `summary` does not start with the built-in
-`audit: ` prefix (or equals `audit: balanced`) is printed as
-`summary\t...` so it cannot forge a balanced first line such as `findings=0`.
+`formatAudit` visibly escapes backslash, C0/C1 controls, DEL, U+00AD, U+034F,
+U+061C, U+115F-U+1160, U+17B4-U+17B5, U+180B-U+180F, lone surrogates
+(U+D800-U+DFFF), U+200B-U+200F, U+2028, U+2029, U+202A-U+202E, U+2060-U+206F,
+U+3164, variation selectors U+FE00-U+FE0F, U+FEFF, U+FFA0, U+FFF0-U+FFFB,
+U+1BCA0-U+1BCA3, U+1D173-U+1D17A, tag characters U+E0000-U+E007F, and
+variation selectors U+E0100-U+E01EF in every untrusted field it prints;
+non-BMP code points use `\u{...}`. Combining marks are not escaped. On the
+`scope=` line only, `/` inside `accountId` and `railId` becomes `\u002f` so
+the two fields stay distinct. On finding and warning `code` columns, `=`
+becomes `\u003d`. A failing report whose escaped `summary` does not start
+with `audit: `, or whose escaped `summary` starts with `audit: balanced`, is
+printed as `summary\t...`; a built-in failing summary such as
+`audit: N finding(s) → FAIL` is printed without that frame.
 `escapeReportText` is exported for callers that print the same fields beside
 the report. Parsers of that text report must treat `\uXXXX`, `\u{...}`, and
 `\\` in those fields as escapes rather than as the raw extract or finding
