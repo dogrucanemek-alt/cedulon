@@ -1625,10 +1625,10 @@ function assertAuditBounds(input: AuditInput): void {
   if (input.extract) {
     boundSettlements(extractRows(input.extract, pop).length);
   }
-  if (input.settlements != null) {
+  if (Array.isArray(input.settlements)) {
     boundSettlements(input.settlements.length);
   } else if (!input.extract) {
-    boundSettlements(0);
+    boundSettlements((input.settlements ?? []).length);
   }
   if (input.nextExtract) {
     const n = neighbourExtractRowCount(input.nextExtract, pop);

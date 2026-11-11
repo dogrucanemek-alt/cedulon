@@ -4,10 +4,12 @@ import { describe, it } from "node:test";
 import {
   audit,
   AUDIT_MAX_SETTLEMENTS,
+  DECISION_PROFILE,
   findSettlementMatches,
   SPEND_PROFILE,
   type Finding,
 } from "@cedulon/audit";
+import { generateEffectExtractKeys, signEffectExtract } from "@cedulon/effect-extract";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
 import { generateReceiptKeys, signReceipt, type SpendReceiptClaims, type SignedReceipt } from "@cedulon/receipts";
 import { TEST_HASH } from "./hash-fixtures.ts";
@@ -355,6 +357,32 @@ describe("audit input bounds on every presented row array", () => {
 
   it("keeps master's non-array settlements outcomes beside an extract", () => {
     const extract = signedExtract([row("ok", "1", NOW)], NOW, WINDOW_END);
+    const length4097 = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      settlements: { length: 4097 } as never,
+    });
+    assert.equal(length4097.ok, false);
+    assert.equal(length4097.findings.length, 1);
+    assert.equal(length4097.findings[0]?.code, "extract-settlement-mismatch");
+    assert.match(
+      length4097.findings[0]?.detail ?? "",
+      /caller supplied 4097 settlement\(s\) that differ from the 1 in the signed extract/,
+    );
+    const longString = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      settlements: "x".repeat(5000) as never,
+    });
+    assert.equal(longString.ok, false);
+    assert.equal(longString.findings.length, 1);
+    assert.equal(longString.findings[0]?.code, "extract-settlement-mismatch");
+    assert.match(
+      longString.findings[0]?.detail ?? "",
+      /caller supplied 5000 settlement\(s\) that differ from the 1 in the signed extract/,
+    );
     const numberSettlements = audit({
       receipts: [],
       checkpoints: [],
@@ -364,6 +392,10 @@ describe("audit input bounds on every presented row array", () => {
     assert.equal(numberSettlements.ok, false);
     assert.equal(numberSettlements.findings.length, 1);
     assert.equal(numberSettlements.findings[0]?.code, "extract-settlement-mismatch");
+    assert.match(
+      numberSettlements.findings[0]?.detail ?? "",
+      /caller supplied undefined settlement\(s\) that differ from the 1 in the signed extract/,
+    );
     assert.throws(
       () => audit({ receipts: [], checkpoints: [], extract, settlements: "x" as never }),
       (err: unknown) => {
@@ -380,6 +412,118 @@ describe("audit input bounds on every presented row array", () => {
         return true;
       },
     );
+  });
+
+  it("keeps master's non-array settlements outcomes without an extract", () => {
+    assert.throws(
+      () => audit({ receipts: [], checkpoints: [], settlements: { length: 4097 } as never }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.equal((err as Error & { code?: string }).code, "audit-too-large");
+        assert.match(
+          err.message,
+          new RegExp(`^audit-too-large: settlements 4097 > ${AUDIT_MAX_SETTLEMENTS}; split the window$`),
+        );
+        return true;
+      },
+    );
+    assert.throws(
+      () => audit({ receipts: [], checkpoints: [], settlements: "x".repeat(5000) as never }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.equal((err as Error & { code?: string }).code, "audit-too-large");
+        assert.match(
+          err.message,
+          new RegExp(`^audit-too-large: settlements 5000 > ${AUDIT_MAX_SETTLEMENTS}; split the window$`),
+        );
+        return true;
+      },
+    );
+    assert.throws(
+      () => audit({ receipts: [], checkpoints: [], settlements: 5 as never }),
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError);
+        assert.match((err as Error).message, /reconciled\.map is not a function/);
+        return true;
+      },
+    );
+  });
+
+  it("leaves neighbour extracts with non-array row fields on master's report path", () => {
+    const extract = signedExtract([], NOW, WINDOW_END);
+    const nonArrays: unknown[] = [{ length: 4097 }, "x".repeat(5000), 5, { length: 1 }, "x"];
+    for (const settlements of nonArrays) {
+      const next = withSettlements(
+        signedExtract([], WINDOW_END, WINDOW_END + 3_600_000),
+        settlements as never,
+      );
+      const nextReport = audit({
+        receipts: [],
+        checkpoints: [],
+        extract,
+        nextExtract: next as never,
+      });
+      assert.equal(nextReport.ok, true, `next ${String(settlements)}`);
+      assert.equal(nextReport.findings.length, 0, `next ${String(settlements)}`);
+      const previous = withSettlements(
+        signedExtract([], NOW - 3_600_000, NOW),
+        settlements as never,
+      );
+      const prevReport = audit({
+        receipts: [],
+        checkpoints: [],
+        extract,
+        previousExtract: previous as never,
+      });
+      assert.equal(prevReport.ok, true, `prev ${String(settlements)}`);
+      assert.equal(prevReport.findings.length, 0, `prev ${String(settlements)}`);
+    }
+  });
+
+  it("leaves neighbour effect extracts with non-array effects on master's report path", () => {
+    const keys = generateEffectExtractKeys();
+    const signedEffect = (
+      effects: Array<{ ref: string; effectHash: string; effectClass: string; timestampMs: number }>,
+      windowStartMs: number,
+      windowEndMs: number,
+    ) =>
+      signEffectExtract(
+        {
+          deciderId: "decider-1",
+          channelId: "ig-dm",
+          windowStartMs,
+          windowEndMs,
+          effects,
+        },
+        keys.privateKeyPem,
+        keys.publicKeyPem,
+      );
+    const withEffects = <T extends { body: { effects: unknown } }>(base: T, effects: unknown): T =>
+      ({ ...base, body: { ...base.body, effects } });
+    const empty = signedEffect([], NOW, WINDOW_END);
+    const nonArrays: unknown[] = [{ length: 4097 }, "x".repeat(5000), 5];
+    for (const effects of nonArrays) {
+      const next = withEffects(signedEffect([], WINDOW_END, WINDOW_END + 3_600_000), effects);
+      const nextReport = audit({
+        receipts: [],
+        checkpoints: [],
+        extract: empty,
+        nextExtract: next as never,
+        profile: DECISION_PROFILE,
+      });
+      assert.equal(nextReport.ok, true);
+      assert.equal(nextReport.findings.length, 0);
+      const previous = withEffects(signedEffect([], NOW - 3_600_000, NOW), effects);
+      const prevReport = audit({
+        receipts: [],
+        checkpoints: [],
+        extract: empty,
+        previousExtract: previous as never,
+        profile: DECISION_PROFILE,
+      });
+      assert.equal(prevReport.ok, true);
+      assert.equal(prevReport.findings.length, 0);
+    }
   });
 });
 
