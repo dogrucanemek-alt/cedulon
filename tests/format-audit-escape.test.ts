@@ -1024,3 +1024,161 @@ describe("formatAudit inconsistent ok and findings", () => {
     }
   });
 });
+
+describe("formatAudit prints from a plain one-read snapshot", () => {
+  function resultFindingCount(printed: string): number | null {
+    const line = printed.split("\n")[1] ?? "";
+    if (line === "result\tbalanced findings=0") return 0;
+    const m = /^result\t(?:fail|inconsistent ok=true) findings=(\d+)$/.exec(line);
+    return m ? Number(m[1]) : null;
+  }
+
+  function withStringLength<T extends object>(items: T[], lengthValue: string): T[] {
+    return new Proxy(items, {
+      get(target, prop, receiver) {
+        if (prop === "length") return lengthValue;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  }
+
+  it("a shifting findings getter is read once; result count equals printed finding lines", () => {
+    const base = reportWith({
+      ok: true,
+      findings: [REAL_FINDING],
+      summary: "audit: balanced",
+      warnings: [{ code: "unauthenticated-extract", id: "extract", detail: "no extract" }],
+    });
+    let findingsReads = 0;
+    const report = { ...base };
+    Object.defineProperty(report, "findings", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        findingsReads += 1;
+        if (findingsReads === 1) return [];
+        if (findingsReads === 2) return [REAL_FINDING];
+        return [];
+      },
+    });
+    const printed = formatAudit(report as AuditReport);
+    assert.equal(findingsReads, 1, printed);
+    const findingLines = printed.split("\n").filter((l) => l.startsWith("finding\t"));
+    const n = resultFindingCount(printed);
+    assert.notEqual(n, null, printed);
+    assert.equal(n, findingLines.length, printed);
+    assert.equal(
+      printed.split("\n").some((l) => l === "result\tbalanced findings=0") && findingLines.length > 0,
+      false,
+      printed,
+    );
+  });
+
+  it("a Proxy array whose length is a string cannot open a second result line", () => {
+    const forged = "0\nresult\tbalanced findings=0";
+    const printed = formatAudit(
+      reportWith({
+        ok: false,
+        findings: withStringLength([REAL_FINDING], forged),
+        warnings: withStringLength(
+          [{ code: "unauthenticated-extract", id: "extract", detail: "no extract" }],
+          "1\nresult\tbalanced findings=0",
+        ),
+      }),
+    );
+    const resultLines = printed.split("\n").filter((l) => l.startsWith("result\t"));
+    assert.equal(resultLines.length, 1, printed);
+    assert.equal(printed.includes("\nresult\t"), true, printed);
+    assert.equal(
+      printed.split("\n").filter((l) => l === "result\tbalanced findings=0").length,
+      0,
+      printed,
+    );
+  });
+
+  it("finding code getter is read once", () => {
+    let codeReads = 0;
+    const finding = {
+      get code() {
+        codeReads += 1;
+        return codeReads === 1 ? "settlement-without-receipt" : "receipt-without-settlement";
+      },
+      id: "ref-honest",
+      detail: "settled receipt has no matching rail row",
+    };
+    const printed = formatAudit(reportWith({ findings: [finding as Finding] }));
+    assert.equal(codeReads, 1, printed);
+    assert.match(printed, /^finding\tsettlement-without-receipt\tref-honest\t/m);
+    assert.equal(printed.includes("receipt-without-settlement"), false, printed);
+  });
+
+  it("throwing getters at report item and scope fields do not throw and print inconsistent", () => {
+    const base = reportWith({});
+
+    const reportThrows = { ...base };
+    Object.defineProperty(reportThrows, "findings", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        throw new Error("findings boom");
+      },
+    });
+    let printed = "";
+    assert.doesNotThrow(() => {
+      printed = formatAudit(reportThrows as AuditReport);
+    });
+    assert.equal(printed.split("\n")[1], "result\tinconsistent ok=invalid findings=invalid", printed);
+
+    const itemThrows = reportWith({
+      findings: [
+        {
+          get code() {
+            throw new Error("code boom");
+          },
+          id: "id",
+          detail: "d",
+        } as unknown as Finding,
+      ],
+    });
+    assert.doesNotThrow(() => {
+      printed = formatAudit(itemThrows);
+    });
+    assert.equal(printed.split("\n")[1], "result\tinconsistent ok=invalid findings=invalid", printed);
+
+    const scopeThrows = reportWith({
+      scope: {
+        get accountId() {
+          throw new Error("account boom");
+        },
+        railId: "rail",
+        windowStartMs: 1,
+        windowEndMs: 2,
+      } as unknown as AuditReport["scope"],
+    });
+    assert.doesNotThrow(() => {
+      printed = formatAudit(scopeThrows);
+    });
+    assert.equal(printed.split("\n")[1], "result\tinconsistent ok=invalid findings=invalid", printed);
+  });
+
+  it("each listed report field is read exactly once", () => {
+    // Explicit list: if formatAudit starts reading another top-level key, the
+    // Proxy records it and this equality fails without exporting snapshot keys.
+    const expectedKeys = ["ok", "findings", "warnings", "guarantee", "summary", "scope", "counts"];
+    const accessCounts: Record<string, number> = {};
+    const base = reportWith({});
+    const report = new Proxy(base, {
+      get(target, prop, receiver) {
+        if (typeof prop === "string") {
+          accessCounts[prop] = (accessCounts[prop] ?? 0) + 1;
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    formatAudit(report);
+    assert.deepEqual(Object.keys(accessCounts).sort(), [...expectedKeys].sort());
+    for (const key of expectedKeys) {
+      assert.equal(accessCounts[key], 1, key);
+    }
+  });
+});

@@ -12,6 +12,8 @@ extract and the rows of `nextExtract` / `previousExtract`; oversized arrays
 that previously ran are refused as `audit-too-large` before comparison or
 sorting work.
 
+The formatter reads the report once and prints from a plain snapshot.
+
 `formatAudit` text report lines are now tagged. Every line starts with a
 fixed tag written by the package, then a TAB, then fields. External text never
 opens a line: every slot has one expected runtime type. A string slot prints

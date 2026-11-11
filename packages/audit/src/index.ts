@@ -2921,15 +2921,15 @@ function makeSlotSink(): SlotSink {
 
 function formatResultLine(
   ok: unknown,
-  findings: unknown,
+  findings: readonly unknown[] | null,
   slotInvalid: boolean,
 ): string {
   const okBool = ok === true || ok === false;
-  const findingsArr = Array.isArray(findings);
-  if (!okBool || !findingsArr || slotInvalid) {
+  if (!okBool || findings === null || slotInvalid) {
     // Fixed words only: never print String(ok) or a forged length.
     return "result\tinconsistent ok=invalid findings=invalid";
   }
+  // Length is always the plain snapshot array's real numeric length.
   const n = String(findings.length);
   if (ok === true && findings.length > 0) {
     // ok=true with findings is a hand-built contradiction; never call it balanced.
@@ -2939,18 +2939,359 @@ function formatResultLine(
   return `result\tfail findings=${n}`;
 }
 
+type PlainNeed = {
+  evidence: unknown;
+  ref: unknown;
+  windowEndMs: unknown;
+  windowStartMs: unknown;
+  rowFromMs: unknown;
+  rowToMs: unknown;
+};
+
+type PlainFinding = {
+  code: unknown;
+  id: unknown;
+  detail: unknown;
+};
+
+type PlainWarning = {
+  code: unknown;
+  detail: unknown;
+  needs: PlainNeed | undefined;
+};
+
+type PlainScope = {
+  accountId: unknown;
+  railId: unknown;
+  windowStartMs: unknown;
+  windowEndMs: unknown;
+};
+
+type PlainCounts = {
+  receipts: {
+    submitted: unknown;
+    attested: unknown;
+    inScope: unknown;
+    aborted: unknown;
+    settled: unknown;
+    matched: unknown;
+    deferred: unknown;
+    carried: unknown;
+    unmatched: unknown;
+    repeated: unknown;
+    unreconciled: unknown;
+  };
+  settlements: {
+    rows: unknown;
+    matched: unknown;
+    deferred: unknown;
+    unmatched: unknown;
+    repeated: unknown;
+    unreconciled: unknown;
+  };
+};
+
+type AuditReportSnapshot = {
+  ok: unknown;
+  findings: PlainFinding[] | null;
+  warnings: PlainWarning[] | null;
+  guarantee: unknown;
+  summary: unknown;
+  scope: PlainScope | undefined;
+  counts: PlainCounts | null;
+  inconsistent: boolean;
+};
+
+function readOwn(obj: object, key: string): { ok: true; value: unknown } | { ok: false } {
+  try {
+    return { ok: true, value: (obj as Record<string, unknown>)[key] };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function snapshotNeed(raw: unknown): { need: PlainNeed | undefined; inconsistent: boolean } {
+  if (!raw) return { need: undefined, inconsistent: false };
+  if (typeof raw !== "object") {
+    return {
+      need: {
+        evidence: undefined,
+        ref: undefined,
+        windowEndMs: undefined,
+        windowStartMs: undefined,
+        rowFromMs: undefined,
+        rowToMs: undefined,
+      },
+      inconsistent: false,
+    };
+  }
+  const evidence = readOwn(raw, "evidence");
+  const ref = readOwn(raw, "ref");
+  const windowEndMs = readOwn(raw, "windowEndMs");
+  const windowStartMs = readOwn(raw, "windowStartMs");
+  const rowFromMs = readOwn(raw, "rowFromMs");
+  const rowToMs = readOwn(raw, "rowToMs");
+  if (
+    !evidence.ok ||
+    !ref.ok ||
+    !windowEndMs.ok ||
+    !windowStartMs.ok ||
+    !rowFromMs.ok ||
+    !rowToMs.ok
+  ) {
+    return { need: undefined, inconsistent: true };
+  }
+  return {
+    need: {
+      evidence: evidence.value,
+      ref: ref.value,
+      windowEndMs: windowEndMs.value,
+      windowStartMs: windowStartMs.value,
+      rowFromMs: rowFromMs.value,
+      rowToMs: rowToMs.value,
+    },
+    inconsistent: false,
+  };
+}
+
+function snapshotFinding(el: unknown): { item: PlainFinding; inconsistent: boolean } {
+  if (el === null || typeof el !== "object") {
+    return { item: { code: undefined, id: undefined, detail: undefined }, inconsistent: false };
+  }
+  const code = readOwn(el, "code");
+  const id = readOwn(el, "id");
+  const detail = readOwn(el, "detail");
+  if (!code.ok || !id.ok || !detail.ok) {
+    return {
+      item: { code: undefined, id: undefined, detail: undefined },
+      inconsistent: true,
+    };
+  }
+  return { item: { code: code.value, id: id.value, detail: detail.value }, inconsistent: false };
+}
+
+function snapshotWarning(el: unknown): { item: PlainWarning; inconsistent: boolean } {
+  if (el === null || typeof el !== "object") {
+    return {
+      item: { code: undefined, detail: undefined, needs: undefined },
+      inconsistent: false,
+    };
+  }
+  const code = readOwn(el, "code");
+  const detail = readOwn(el, "detail");
+  const needsRaw = readOwn(el, "needs");
+  if (!code.ok || !detail.ok || !needsRaw.ok) {
+    return {
+      item: { code: undefined, detail: undefined, needs: undefined },
+      inconsistent: true,
+    };
+  }
+  const needSnap = snapshotNeed(needsRaw.value);
+  return {
+    item: { code: code.value, detail: detail.value, needs: needSnap.need },
+    inconsistent: needSnap.inconsistent,
+  };
+}
+
+/**
+ * Copy an array-like report field once into a new plain array. There is no
+ * AUDIT_MAX_* bound for findings or warnings on the report; this path does not
+ * invent one.
+ */
+function snapshotArray<T>(
+  raw: unknown,
+  mapEl: (el: unknown) => { item: T; inconsistent: boolean },
+): { list: T[] | null; inconsistent: boolean } {
+  if (!Array.isArray(raw)) return { list: null, inconsistent: true };
+  try {
+    let inconsistent = false;
+    const list = Array.from(raw, (el) => {
+      const mapped = mapEl(el);
+      if (mapped.inconsistent) inconsistent = true;
+      return mapped.item;
+    });
+    return { list, inconsistent };
+  } catch {
+    return { list: null, inconsistent: true };
+  }
+}
+
+function snapshotScope(raw: unknown): {
+  scope: PlainScope | undefined;
+  inconsistent: boolean;
+} {
+  if (!raw) return { scope: undefined, inconsistent: false };
+  if (typeof raw !== "object") {
+    return {
+      scope: {
+        accountId: undefined,
+        railId: undefined,
+        windowStartMs: undefined,
+        windowEndMs: undefined,
+      },
+      inconsistent: false,
+    };
+  }
+  const accountId = readOwn(raw, "accountId");
+  const railId = readOwn(raw, "railId");
+  const windowStartMs = readOwn(raw, "windowStartMs");
+  const windowEndMs = readOwn(raw, "windowEndMs");
+  const inconsistent =
+    !accountId.ok || !railId.ok || !windowStartMs.ok || !windowEndMs.ok;
+  return {
+    scope: {
+      accountId: accountId.ok ? accountId.value : undefined,
+      railId: railId.ok ? railId.value : undefined,
+      windowStartMs: windowStartMs.ok ? windowStartMs.value : undefined,
+      windowEndMs: windowEndMs.ok ? windowEndMs.value : undefined,
+    },
+    inconsistent,
+  };
+}
+
+function snapshotCounts(raw: unknown): { counts: PlainCounts | null; inconsistent: boolean } {
+  if (raw === null || typeof raw !== "object") {
+    return { counts: null, inconsistent: true };
+  }
+  const receiptsRaw = readOwn(raw, "receipts");
+  const settlementsRaw = readOwn(raw, "settlements");
+  if (!receiptsRaw.ok || !settlementsRaw.ok) {
+    return { counts: null, inconsistent: true };
+  }
+  if (
+    receiptsRaw.value === null ||
+    typeof receiptsRaw.value !== "object" ||
+    settlementsRaw.value === null ||
+    typeof settlementsRaw.value !== "object"
+  ) {
+    return { counts: null, inconsistent: true };
+  }
+  const r = receiptsRaw.value;
+  const s = settlementsRaw.value;
+  const receiptKeys = [
+    "submitted",
+    "attested",
+    "inScope",
+    "aborted",
+    "settled",
+    "matched",
+    "deferred",
+    "carried",
+    "unmatched",
+    "repeated",
+    "unreconciled",
+  ] as const;
+  const settlementKeys = [
+    "rows",
+    "matched",
+    "deferred",
+    "unmatched",
+    "repeated",
+    "unreconciled",
+  ] as const;
+  const receipts: PlainCounts["receipts"] = {
+    submitted: undefined,
+    attested: undefined,
+    inScope: undefined,
+    aborted: undefined,
+    settled: undefined,
+    matched: undefined,
+    deferred: undefined,
+    carried: undefined,
+    unmatched: undefined,
+    repeated: undefined,
+    unreconciled: undefined,
+  };
+  const settlements: PlainCounts["settlements"] = {
+    rows: undefined,
+    matched: undefined,
+    deferred: undefined,
+    unmatched: undefined,
+    repeated: undefined,
+    unreconciled: undefined,
+  };
+  for (const key of receiptKeys) {
+    const got = readOwn(r, key);
+    if (!got.ok) return { counts: null, inconsistent: true };
+    receipts[key] = got.value;
+  }
+  for (const key of settlementKeys) {
+    const got = readOwn(s, key);
+    if (!got.ok) return { counts: null, inconsistent: true };
+    settlements[key] = got.value;
+  }
+  return { counts: { receipts, settlements }, inconsistent: false };
+}
+
+/**
+ * The formatter treats the report as data of unknown runtime types; it reads
+ * each field once and prints from a plain snapshot.
+ */
+function snapshotAuditReport(report: AuditReport): AuditReportSnapshot {
+  let inconsistent = false;
+  const okRead = readOwn(report, "ok");
+  const findingsRead = readOwn(report, "findings");
+  const warningsRead = readOwn(report, "warnings");
+  const guaranteeRead = readOwn(report, "guarantee");
+  const summaryRead = readOwn(report, "summary");
+  const scopeRead = readOwn(report, "scope");
+  const countsRead = readOwn(report, "counts");
+  if (
+    !okRead.ok ||
+    !findingsRead.ok ||
+    !warningsRead.ok ||
+    !guaranteeRead.ok ||
+    !summaryRead.ok ||
+    !scopeRead.ok ||
+    !countsRead.ok
+  ) {
+    inconsistent = true;
+  }
+  const findingsSnap = findingsRead.ok
+    ? snapshotArray(findingsRead.value, snapshotFinding)
+    : { list: null as PlainFinding[] | null, inconsistent: true };
+  const warningsSnap = warningsRead.ok
+    ? snapshotArray(warningsRead.value, snapshotWarning)
+    : { list: null as PlainWarning[] | null, inconsistent: true };
+  const scopeSnap = scopeRead.ok
+    ? snapshotScope(scopeRead.value)
+    : { scope: undefined, inconsistent: true };
+  const countsSnap = countsRead.ok
+    ? snapshotCounts(countsRead.value)
+    : { counts: null as PlainCounts | null, inconsistent: true };
+  if (findingsSnap.inconsistent) inconsistent = true;
+  if (warningsSnap.inconsistent) inconsistent = true;
+  if (scopeSnap.inconsistent) inconsistent = true;
+  if (countsSnap.inconsistent) inconsistent = true;
+  return {
+    ok: okRead.ok ? okRead.value : undefined,
+    findings: findingsSnap.list,
+    warnings: warningsSnap.list,
+    guarantee: guaranteeRead.ok ? guaranteeRead.value : undefined,
+    summary: summaryRead.ok ? summaryRead.value : undefined,
+    scope: scopeSnap.scope,
+    counts: countsSnap.counts,
+    inconsistent,
+  };
+}
+
 /** @param _receiptCount ignored since 0.11.0; the printed total is `report.counts.receipts.submitted`. */
 export function formatAudit(report: AuditReport, _receiptCount?: number): string {
   // Every line starts with a code-authored tag and a TAB. External text never
   // opens a line; the verdict is a separate fixed-word `result` line so a
   // summary cannot look like a balanced pass. Writers trust no report field's
   // runtime type: wrong-typed values print the marker, never String(value).
+  // The formatter treats the report as data of unknown runtime types; it reads
+  // each field once and prints from a plain snapshot.
+  const snap = snapshotAuditReport(report);
   const slots = makeSlotSink();
-  const findings = Array.isArray(report.findings) ? report.findings : [];
-  const warnings = Array.isArray(report.warnings) ? report.warnings : [];
-  if (!Array.isArray(report.findings) || !Array.isArray(report.warnings)) {
+  if (snap.inconsistent) slots.invalid = true;
+  if (snap.findings === null || snap.warnings === null || snap.counts === null) {
     slots.invalid = true;
   }
+
+  const findings = snap.findings ?? [];
+  const warnings = snap.warnings ?? [];
 
   const body: string[] = [];
   for (const f of findings) {
@@ -2958,13 +3299,13 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   }
   // Warnings decide whether the balance means anything, so an operator has to
   // see them on the passing path too, not only in the returned object.
-  body.push(`guarantee\t${slots.text(report.guarantee)}`);
+  body.push(`guarantee\t${slots.text(snap.guarantee)}`);
   // And a guarantee is over something. The extract that supplied the population
   // covers one account on one rail, so the line that carries the strongest
   // claim also carries the path it was measured on. Named fields and escaped
   // values keep account, rail and window from forging each other.
-  if (report.scope) {
-    const s = report.scope;
+  if (snap.scope) {
+    const s = snap.scope;
     body.push(
       `scope\taccountId=${slots.scope(s.accountId)}\trailId=${slots.scope(s.railId)}\twindowStartMs=${slots.int(s.windowStartMs)}\twindowEndMs=${slots.int(s.windowEndMs)}`,
     );
@@ -2972,7 +3313,15 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   // The classes every row landed in. A balanced line over a window that
   // carried one row into the next window and a balanced line over a window
   // that held none read the same without these.
-  body.push(...formatCounts(report.counts, slots));
+  if (snap.counts) {
+    body.push(...formatCounts(snap.counts as AuditCounts, slots));
+  } else {
+    // Keep two count lines so line tags stay stable when counts could not be read.
+    body.push(
+      `counts\treceipts\tsubmitted=${slots.nonNeg(undefined)} attested=${slots.nonNeg(undefined)} in-scope=${slots.nonNeg(undefined)} aborted=${slots.nonNeg(undefined)} settled=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} carried=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
+      `counts\tsettlements\trows=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
+    );
+  }
   for (const w of warnings) {
     body.push(`warning\t${slots.text(w.code)}\t${slots.text(w.detail)}`);
   }
@@ -2993,8 +3342,8 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   }
 
   return [
-    `summary\t${slots.text(report.summary)}`,
-    formatResultLine(report.ok, report.findings, slots.invalid),
+    `summary\t${slots.text(snap.summary)}`,
+    formatResultLine(snap.ok, snap.findings, slots.invalid),
     ...body,
   ].join("\n");
 }
