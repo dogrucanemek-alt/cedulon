@@ -39,7 +39,7 @@ npm run demo
 
 `npm run demo:unguarded` shows the unprotected hole: 100/100 allows.
 
-`npm run audit` must exit 0 (`result	balanced` on a tagged report).
+`npm run audit` must exit 0 (`result	balanced findings=0` on a tagged report).
 
 `npm run demo:bypass` must exit non-zero:
 `audit: 1 settlement without receipt → FAIL`.

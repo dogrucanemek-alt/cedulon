@@ -22,7 +22,7 @@ Those demos run on fixtures. `npm run demo:live` does not: it reads a real
 Base Sepolia USDC window over an RPC endpoint and reconciles it against a
 receipt chain. A 128-settlement window was read from the live chain and every
 one of the 128 came back as `settlement-without-receipt`, at
-`guarantee=conditional` — a chain read is not a signed extract from the rail
+`guarantee	conditional` - a chain read is not a signed extract from the rail
 operator. That is the whole of what runs against a real rail today: reading.
 Nothing here holds a wallet or signs a transaction.
 

@@ -45,6 +45,8 @@ const COUNTS_RECEIPTS =
   "counts\treceipts\tsubmitted=1 attested=1 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0";
 const COUNTS_SETTLEMENTS =
   "counts\tsettlements\trows=0 matched=0 deferred=0 unmatched=0 repeated=0 unreconciled=0";
+/** Same unforgeable marker `formatAudit` prints for a wrong-typed slot. */
+const ABSENT = "\\u{0}";
 
 function reportWith(partial: Partial<AuditReport> & { scopeAccountId?: string; scopeRailId?: string }): AuditReport {
   const accountId = partial.scopeAccountId ?? "acct";
@@ -448,6 +450,33 @@ describe("formatAudit tagged lines close the three remaining spoofs", () => {
     const scopeC = c.split("\n").find((l) => l.startsWith("scope\t"))!;
     assert.notEqual(scopeA, scopeB);
     assert.notEqual(scopeA, scopeC);
+    // Real 1 vs "1" must not collide: the string is not a number slot value.
+    const asNumber = formatAudit(
+      reportWith({
+        scope: { accountId: "a", railId: "b", windowStartMs: 1, windowEndMs: 2 },
+      }),
+    );
+    const asString = formatAudit(
+      reportWith({
+        scope: {
+          accountId: "a",
+          railId: "b",
+          windowStartMs: "1" as unknown as number,
+          windowEndMs: 2,
+        },
+      }),
+    );
+    const scopeNum = asNumber.split("\n").find((l) => l.startsWith("scope\t"))!;
+    const scopeStr = asString.split("\n").find((l) => l.startsWith("scope\t"))!;
+    assert.equal(
+      scopeNum,
+      "scope\taccountId=a\trailId=b\twindowStartMs=1\twindowEndMs=2",
+    );
+    assert.equal(
+      scopeStr,
+      `scope\taccountId=a\trailId=b\twindowStartMs=${ABSENT}\twindowEndMs=2`,
+    );
+    assert.notEqual(scopeNum, scopeStr);
     const poisoned = formatAudit(
       reportWith({
         scopeAccountId: "acct\nsummary\tspoof",
@@ -490,7 +519,7 @@ describe("formatAudit tagged lines close the three remaining spoofs", () => {
       formatAudit(report),
       [
         "summary\taudit: balanced",
-        "result\tbalanced",
+        "result\tbalanced findings=0",
         "guarantee\tconditional",
         "scope\taccountId=acct\trailId=rail\twindowStartMs=1700000000000\twindowEndMs=1700003600000",
         COUNTS_RECEIPTS,
@@ -525,6 +554,12 @@ describe("formatAudit numeric slots never open a line", () => {
     assert.equal(printed.split("\n").length, cleanLines.length, printed);
     assert.deepEqual(lineTags(printed), cleanTags, printed);
     assert.equal(printed.split("\n").some((l) => l === "result\tbalanced"), false, printed);
+    assert.equal(printed.split("\n").some((l) => l === "result\tbalanced findings=0"), false, printed);
+    assert.equal(
+      printed.split("\n")[1],
+      "result\tinconsistent ok=invalid findings=invalid",
+      printed,
+    );
     assert.doesNotThrow(() => formatAudit(reportWith({})));
   }
 
@@ -539,13 +574,12 @@ describe("formatAudit numeric slots never open a line", () => {
     "1\nwarning\tfake\tdetail",
     NaN,
     Infinity,
-    -0,
     1.5,
     1n,
     tabObject,
   ];
 
-  it("poisoned windowStartMs and windowEndMs keep tags and line count", () => {
+  it("poisoned windowStartMs and windowEndMs keep tags and full lines", () => {
     for (const bad of badNumbers) {
       const printed = formatAudit(
         reportWith({
@@ -558,21 +592,39 @@ describe("formatAudit numeric slots never open a line", () => {
         }),
       );
       assertStable(printed);
-      assert.equal(printed.includes("\nresult\tbalanced\n") || printed.endsWith("\nresult\tbalanced"), false, printed);
+      const scopeLine = printed.split("\n").find((l) => l.startsWith("scope\t"))!;
+      assert.equal(
+        scopeLine,
+        `scope\taccountId=acct\trailId=rail\twindowStartMs=${ABSENT}\twindowEndMs=${ABSENT}`,
+        printed,
+      );
     }
   });
 
-  it("poisoned count fields keep tags and line count", () => {
-    for (const bad of ["9\nwarning\tx\ty", NaN, Infinity, -0, 1.5, 1n, tabObject]) {
+  it("poisoned count fields keep tags and full count lines", () => {
+    for (const bad of ["9\nwarning\tx\ty", NaN, Infinity, -1, 1.5, 1n, tabObject]) {
       const counts = structuredClone(EMPTY_COUNTS);
       (counts.receipts as { submitted: unknown }).submitted = bad;
       (counts.settlements as { rows: unknown }).rows = bad;
-      assertStable(formatAudit(reportWith({ counts })));
+      const printed = formatAudit(reportWith({ counts }));
+      assertStable(printed);
+      const receiptLine = printed.split("\n").find((l) => l.startsWith("counts\treceipts\t"))!;
+      const settlementLine = printed.split("\n").find((l) => l.startsWith("counts\tsettlements\t"))!;
+      assert.equal(
+        receiptLine,
+        `counts\treceipts\tsubmitted=${ABSENT} attested=1 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
+        printed,
+      );
+      assert.equal(
+        settlementLine,
+        `counts\tsettlements\trows=${ABSENT} matched=0 deferred=0 unmatched=0 repeated=0 unreconciled=0`,
+        printed,
+      );
     }
   });
 
-  it("poisoned need bounds keep tags and line count", () => {
-    for (const bad of ["0\nresult\tbalanced", NaN, Infinity, -0, 1.5, 1n, tabObject]) {
+  it("poisoned need bounds keep tags and full need lines", () => {
+    for (const bad of ["0\nresult\tbalanced", NaN, Infinity, 1.5, 1n, tabObject]) {
       const warnings: Finding[] = [
         {
           code: "boundary-deferred",
@@ -632,14 +684,177 @@ describe("formatAudit numeric slots never open a line", () => {
       const printed = formatAudit(reportWith({ warnings }));
       assert.equal(printed.split("\n").length, cleanNeed.split("\n").length, printed);
       assert.deepEqual(lineTags(printed), lineTags(cleanNeed), printed);
-      assert.equal(printed.split("\n").some((l) => l === "result\tbalanced"), false, printed);
+      assert.equal(printed.split("\n").some((l) => l === "result\tbalanced findings=0"), false, printed);
+      assert.equal(
+        printed.split("\n")[1],
+        "result\tinconsistent ok=invalid findings=invalid",
+        printed,
+      );
+      const needPrev = printed.split("\n").find((l) => l.startsWith("need\tpreviousExtract\t"))!;
+      const needNext = printed.split("\n").find((l) => l.startsWith("need\tnextExtract\t"))!;
+      assert.equal(
+        needPrev,
+        `need\tpreviousExtract\tr\twindowEndMs=${ABSENT} row in [${ABSENT},${ABSENT})`,
+        printed,
+      );
+      assert.equal(
+        needNext,
+        `need\tnextExtract\tr2\twindowStartMs=${ABSENT} row in [${ABSENT},${ABSENT})`,
+        printed,
+      );
     }
+  });
+
+  it("equal-looking typed pairs never share a printed line", () => {
+    const marker = ABSENT;
+    const submittedAttestedSwapA = formatAudit(
+      reportWith({
+        counts: {
+          ...EMPTY_COUNTS,
+          receipts: {
+            ...EMPTY_COUNTS.receipts,
+            submitted: "1 attested=2" as unknown as number,
+            attested: 3,
+          },
+        },
+      }),
+    );
+    const submittedAttestedSwapB = formatAudit(
+      reportWith({
+        counts: {
+          ...EMPTY_COUNTS,
+          receipts: {
+            ...EMPTY_COUNTS.receipts,
+            submitted: 1,
+            attested: "2 attested=3" as unknown as number,
+          },
+        },
+      }),
+    );
+    const lineA = submittedAttestedSwapA.split("\n").find((l) => l.startsWith("counts\treceipts\t"))!;
+    const lineB = submittedAttestedSwapB.split("\n").find((l) => l.startsWith("counts\treceipts\t"))!;
+    assert.equal(
+      lineA,
+      `counts\treceipts\tsubmitted=${marker} attested=3 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
+    );
+    assert.equal(
+      lineB,
+      `counts\treceipts\tsubmitted=1 attested=${marker} in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
+    );
+    assert.notEqual(lineA, lineB);
+
+    const accountNum = formatAudit(
+      reportWith({
+        scope: {
+          accountId: 1 as unknown as string,
+          railId: "rail",
+          windowStartMs: 1,
+          windowEndMs: 2,
+        },
+      }),
+    );
+    const accountStr = formatAudit(
+      reportWith({
+        scope: { accountId: "1", railId: "rail", windowStartMs: 1, windowEndMs: 2 },
+      }),
+    );
+    assert.notEqual(
+      accountNum.split("\n").find((l) => l.startsWith("scope\t")),
+      accountStr.split("\n").find((l) => l.startsWith("scope\t")),
+    );
+
+    const undefLiteral = formatAudit(
+      reportWith({
+        scope: {
+          accountId: "undefined",
+          railId: "rail",
+          windowStartMs: 1,
+          windowEndMs: 2,
+        },
+      }),
+    );
+    const undefAbsent = formatAudit(
+      reportWith({
+        scope: {
+          accountId: undefined as unknown as string,
+          railId: "rail",
+          windowStartMs: 1,
+          windowEndMs: 2,
+        },
+      }),
+    );
+    assert.notEqual(
+      undefLiteral.split("\n").find((l) => l.startsWith("scope\t")),
+      undefAbsent.split("\n").find((l) => l.startsWith("scope\t")),
+    );
+
+    const warnObject = formatAudit(
+      reportWith({
+        warnings: [
+          {
+            code: { toString: () => "warn" } as unknown as Finding["code"],
+            id: "w",
+            detail: "d",
+          },
+        ],
+      }),
+    );
+    const warnString = formatAudit(
+      reportWith({
+        warnings: [{ code: "warn" as Finding["code"], id: "w", detail: "d" }],
+      }),
+    );
+    assert.equal(
+      warnObject.split("\n").find((l) => l.startsWith("warning\t")),
+      `warning\t${marker}\td`,
+    );
+    assert.equal(warnString.split("\n").find((l) => l.startsWith("warning\t")), "warning\twarn\td");
+    assert.notEqual(warnObject, warnString);
+
+    const needBad = formatAudit(
+      reportWith({
+        warnings: [
+          {
+            code: "boundary-deferred",
+            id: "w",
+            detail: "deferred",
+            needs: {
+              evidence: "previousExtract",
+              ref: "r",
+              windowEndMs: "1" as unknown as number,
+              rowFromMs: 1,
+              rowToMs: 2,
+            },
+          },
+        ],
+      }),
+    );
+    const needGood = formatAudit(
+      reportWith({
+        warnings: [
+          {
+            code: "boundary-deferred",
+            id: "w",
+            detail: "deferred",
+            needs: {
+              evidence: "previousExtract",
+              ref: "r",
+              windowEndMs: 1,
+              rowFromMs: 1,
+              rowToMs: 2,
+            },
+          },
+        ],
+      }),
+    );
+    assert.notEqual(
+      needBad.split("\n").find((l) => l.startsWith("need\t")),
+      needGood.split("\n").find((l) => l.startsWith("need\t")),
+    );
   });
 });
 
 describe("formatAudit missing scope fields do not throw", () => {
-  const ABSENT = "\\u{0}";
-
   function printScope(scope: AuditReport["scope"]): string {
     return formatAudit(
       reportWith({
@@ -667,6 +882,14 @@ describe("formatAudit missing scope fields do not throw", () => {
         windowStartMs: 1,
         windowEndMs: 2,
       },
+      { accountId: "acct", railId: null as unknown as string, windowStartMs: 1, windowEndMs: 2 },
+      { accountId: "acct", railId: 9 as unknown as string, windowStartMs: 1, windowEndMs: 2 },
+      {
+        accountId: "acct",
+        railId: { toString: () => "rail-obj" } as unknown as string,
+        windowStartMs: 1,
+        windowEndMs: 2,
+      },
     ];
     for (const scope of cases) {
       let printed = "";
@@ -675,6 +898,11 @@ describe("formatAudit missing scope fields do not throw", () => {
       });
       assert.match(printed, /^warning\tunauthenticated-extract\trefused$/m, printed);
       assert.match(printed, /^finding\tsettlement-without-receipt\tref-honest\t/m, printed);
+      assert.equal(
+        printed.split("\n")[1],
+        "result\tinconsistent ok=invalid findings=invalid",
+        printed,
+      );
       const scopeLine = printed.split("\n").find((l) => l.startsWith("scope\t"))!;
       if (typeof scope!.accountId !== "string") {
         assert.equal(scopeLine.includes(`accountId=${ABSENT}`), true, scopeLine);
@@ -724,6 +952,7 @@ describe("formatAudit inconsistent ok and findings", () => {
     );
     assert.equal(printed.split("\n")[1], "result\tinconsistent ok=true findings=1", printed);
     assert.equal(printed.split("\n").some((l) => l === "result\tbalanced"), false, printed);
+    assert.equal(printed.split("\n").some((l) => l === "result\tbalanced findings=0"), false, printed);
     assert.match(printed, /^finding\tsettlement-without-receipt\tref-honest\t/m);
   });
 
@@ -736,5 +965,62 @@ describe("formatAudit inconsistent ok and findings", () => {
       }),
     );
     assert.equal(printed.split("\n")[1], "result\tfail findings=0", printed);
+  });
+
+  it("ok true with zero findings prints balanced findings=0", () => {
+    const printed = formatAudit(
+      reportWith({
+        ok: true,
+        findings: [],
+        summary: "audit: balanced",
+        warnings: [{ code: "unauthenticated-extract", id: "extract", detail: "no extract" }],
+      }),
+    );
+    assert.equal(printed.split("\n")[1], "result\tbalanced findings=0", printed);
+  });
+
+  it("non-boolean ok never prints balanced and never throws", () => {
+    const badOk: unknown[] = ["false", "true", 1, 0, null, undefined, { ok: true }];
+    for (const ok of badOk) {
+      let printed = "";
+      assert.doesNotThrow(() => {
+        printed = formatAudit(
+          reportWith({
+            ok: ok as boolean,
+            findings: [],
+            summary: "audit: balanced",
+          }),
+        );
+      });
+      assert.equal(
+        printed.split("\n")[1],
+        "result\tinconsistent ok=invalid findings=invalid",
+        `ok=${String(ok)}\n${printed}`,
+      );
+      assert.equal(printed.split("\n").some((l) => l.startsWith("result\tbalanced")), false, printed);
+    }
+  });
+
+  it("non-array findings never prints balanced and never throws", () => {
+    const badFindings: unknown[] = [null, { code: "x" }, { length: 0 }];
+    for (const findings of badFindings) {
+      let printed = "";
+      assert.doesNotThrow(() => {
+        printed = formatAudit(
+          reportWith({
+            ok: true,
+            findings: findings as Finding[],
+            summary: "audit: balanced",
+          }),
+        );
+      });
+      assert.equal(
+        printed.split("\n")[1],
+        "result\tinconsistent ok=invalid findings=invalid",
+        printed,
+      );
+      assert.equal(printed.split("\n").some((l) => l.startsWith("result\tbalanced")), false, printed);
+      assert.equal(printed.split("\n").some((l) => l.startsWith("finding\t")), false, printed);
+    }
   });
 });

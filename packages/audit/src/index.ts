@@ -2790,10 +2790,10 @@ export function toFindingObject(report: AuditReport, _receiptCount?: number): Fi
 }
 
 /** The two lines `formatAudit` prints for the counts; one per side. */
-function formatCounts(counts: AuditCounts): string[] {
+function formatCounts(counts: AuditCounts, slots: SlotSink): string[] {
   const r = counts.receipts;
   const s = counts.settlements;
-  const n = formatReportNumber;
+  const n = (value: unknown) => slots.nonNeg(value);
   return [
     `counts\treceipts\tsubmitted=${n(r.submitted)} attested=${n(r.attested)} in-scope=${n(r.inScope)} aborted=${n(r.aborted)} settled=${n(r.settled)} matched=${n(r.matched)} deferred=${n(r.deferred)} carried=${n(r.carried)} unmatched=${n(r.unmatched)} repeated=${n(r.repeated)} unreconciled=${n(r.unreconciled)}`,
     `counts\tsettlements\trows=${n(s.rows)} matched=${n(s.matched)} deferred=${n(s.deferred)} unmatched=${n(s.unmatched)} repeated=${n(s.repeated)} unreconciled=${n(s.unreconciled)}`,
@@ -2865,44 +2865,77 @@ function escapeScopeValue(value: string): string {
 }
 
 /**
- * Safe integer decimal for numeric report slots (window ms, counts, need
- * bounds). Those slots are typed as `number` and `audit()` fills them with
- * safe integers; that is the only form written unescaped. Anything else
- * (string, float, NaN, Infinity, BigInt, object) becomes `String(value)` then
- * `escapeReportText`, so TAB/LF never open a line.
+ * Unforgeable marker for a slot whose value is not the expected type.
+ * `escapeReportText` never emits brace-form `\u{0}` (brace form is only for
+ * code points above U+FFFF; U+0000 becomes `\u0000`), so a real string,
+ * including the empty string and the literal characters `undefined`, cannot
+ * equal this after escaping. A valid number slot prints decimal digits only,
+ * so it cannot equal the marker either. One marker covers both missing and
+ * wrong-typed values: the operator needs to know the slot is not content, not
+ * which failure mode produced the gap.
  */
-function formatReportNumber(value: unknown): string {
-  if (typeof value === "number" && Number.isSafeInteger(value)) {
-    return String(value);
-  }
-  return escapeReportText(String(value));
-}
-
-/** Text slots: strings go through `escapeReportText`; other values stringify first. */
-function formatReportText(value: unknown): string {
-  return typeof value === "string" ? escapeReportText(value) : escapeReportText(String(value));
-}
+const INVALID_SLOT_VALUE = "\\u{0}";
 
 /**
- * Absent or non-string scope identity. `escapeReportText` never emits `\u{0}`
- * (brace form is only for code points above U+FFFF), so a real accountId or
- * railId cannot collide with this marker after escaping, including the empty
- * string and the literal characters `undefined`.
+ * Collects whether any slot printed the invalid marker. `formatAudit` refuses
+ * to call a report balanced when this is set.
  */
-const ABSENT_SCOPE_VALUE = "\\u{0}";
+type SlotSink = {
+  invalid: boolean;
+  text: (value: unknown) => string;
+  scope: (value: unknown) => string;
+  int: (value: unknown) => string;
+  nonNeg: (value: unknown) => string;
+};
 
-function formatScopeField(value: unknown): string {
-  if (typeof value === "string") return escapeScopeValue(value);
-  return ABSENT_SCOPE_VALUE;
+function makeSlotSink(): SlotSink {
+  const sink: SlotSink = {
+    invalid: false,
+    text(value: unknown): string {
+      if (typeof value === "string") return escapeReportText(value);
+      sink.invalid = true;
+      return INVALID_SLOT_VALUE;
+    },
+    scope(value: unknown): string {
+      if (typeof value === "string") return escapeScopeValue(value);
+      sink.invalid = true;
+      return INVALID_SLOT_VALUE;
+    },
+    int(value: unknown): string {
+      if (typeof value === "number" && Number.isSafeInteger(value)) {
+        return String(value);
+      }
+      sink.invalid = true;
+      return INVALID_SLOT_VALUE;
+    },
+    nonNeg(value: unknown): string {
+      if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+        return String(value);
+      }
+      sink.invalid = true;
+      return INVALID_SLOT_VALUE;
+    },
+  };
+  return sink;
 }
 
-function formatResultLine(report: AuditReport): string {
-  const n = formatReportNumber(report.findings.length);
-  if (report.ok && report.findings.length > 0) {
+function formatResultLine(
+  ok: unknown,
+  findings: unknown,
+  slotInvalid: boolean,
+): string {
+  const okBool = ok === true || ok === false;
+  const findingsArr = Array.isArray(findings);
+  if (!okBool || !findingsArr || slotInvalid) {
+    // Fixed words only: never print String(ok) or a forged length.
+    return "result\tinconsistent ok=invalid findings=invalid";
+  }
+  const n = String(findings.length);
+  if (ok === true && findings.length > 0) {
     // ok=true with findings is a hand-built contradiction; never call it balanced.
     return `result\tinconsistent ok=true findings=${n}`;
   }
-  if (report.ok) return "result\tbalanced";
+  if (ok === true) return "result\tbalanced findings=0";
   return `result\tfail findings=${n}`;
 }
 
@@ -2910,52 +2943,60 @@ function formatResultLine(report: AuditReport): string {
 export function formatAudit(report: AuditReport, _receiptCount?: number): string {
   // Every line starts with a code-authored tag and a TAB. External text never
   // opens a line; the verdict is a separate fixed-word `result` line so a
-  // summary cannot look like a balanced pass.
-  const lines: string[] = [
-    `summary\t${formatReportText(report.summary)}`,
-    formatResultLine(report),
-  ];
-  for (const f of report.findings) {
-    lines.push(
-      `finding\t${formatReportText(f.code)}\t${formatReportText(f.id)}\t${formatReportText(f.detail)}`,
-    );
+  // summary cannot look like a balanced pass. Writers trust no report field's
+  // runtime type: wrong-typed values print the marker, never String(value).
+  const slots = makeSlotSink();
+  const findings = Array.isArray(report.findings) ? report.findings : [];
+  const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+  if (!Array.isArray(report.findings) || !Array.isArray(report.warnings)) {
+    slots.invalid = true;
+  }
+
+  const body: string[] = [];
+  for (const f of findings) {
+    body.push(`finding\t${slots.text(f.code)}\t${slots.text(f.id)}\t${slots.text(f.detail)}`);
   }
   // Warnings decide whether the balance means anything, so an operator has to
   // see them on the passing path too, not only in the returned object.
-  lines.push(`guarantee\t${formatReportText(report.guarantee)}`);
+  body.push(`guarantee\t${slots.text(report.guarantee)}`);
   // And a guarantee is over something. The extract that supplied the population
   // covers one account on one rail, so the line that carries the strongest
   // claim also carries the path it was measured on. Named fields and escaped
   // values keep account, rail and window from forging each other.
   if (report.scope) {
     const s = report.scope;
-    lines.push(
-      `scope\taccountId=${formatScopeField(s.accountId)}\trailId=${formatScopeField(s.railId)}\twindowStartMs=${formatReportNumber(s.windowStartMs)}\twindowEndMs=${formatReportNumber(s.windowEndMs)}`,
+    body.push(
+      `scope\taccountId=${slots.scope(s.accountId)}\trailId=${slots.scope(s.railId)}\twindowStartMs=${slots.int(s.windowStartMs)}\twindowEndMs=${slots.int(s.windowEndMs)}`,
     );
   }
   // The classes every row landed in. A balanced line over a window that
   // carried one row into the next window and a balanced line over a window
   // that held none read the same without these.
-  lines.push(...formatCounts(report.counts));
-  for (const w of report.warnings) {
-    lines.push(`warning\t${formatReportText(w.code)}\t${formatReportText(w.detail)}`);
+  body.push(...formatCounts(report.counts, slots));
+  for (const w of warnings) {
+    body.push(`warning\t${slots.text(w.code)}\t${slots.text(w.detail)}`);
   }
-  for (const w of report.warnings) {
+  for (const w of warnings) {
     const need = w.needs;
     if (!need) continue;
     if (need.evidence === "previousExtract") {
-      lines.push(
-        `need\tpreviousExtract\t${formatReportText(need.ref)}\twindowEndMs=${formatReportNumber(need.windowEndMs)} row in [${formatReportNumber(need.rowFromMs)},${formatReportNumber(need.rowToMs)})`,
+      body.push(
+        `need\tpreviousExtract\t${slots.text(need.ref)}\twindowEndMs=${slots.int(need.windowEndMs)} row in [${slots.int(need.rowFromMs)},${slots.int(need.rowToMs)})`,
       );
     } else if (need.evidence === "nextExtract") {
-      lines.push(
-        `need\tnextExtract\t${formatReportText(need.ref)}\twindowStartMs=${formatReportNumber(need.windowStartMs)} row in [${formatReportNumber(need.rowFromMs)},${formatReportNumber(need.rowToMs)})`,
+      body.push(
+        `need\tnextExtract\t${slots.text(need.ref)}\twindowStartMs=${slots.int(need.windowStartMs)} row in [${slots.int(need.rowFromMs)},${slots.int(need.rowToMs)})`,
       );
     } else {
-      lines.push(`need\treceipts\t${formatReportText(need.ref)}`);
+      body.push(`need\treceipts\t${slots.text(need.ref)}`);
     }
   }
-  return lines.join("\n");
+
+  return [
+    `summary\t${slots.text(report.summary)}`,
+    formatResultLine(report.ok, report.findings, slots.invalid),
+    ...body,
+  ].join("\n");
 }
 
 export type PresentedEntry = {

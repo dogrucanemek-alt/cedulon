@@ -89,7 +89,7 @@ Expected stdout:
 
 ```
 summary	audit: balanced
-result	balanced
+result	balanced findings=0
 guarantee	conditional
 counts	receipts	submitted=2 attested=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
 counts	settlements	rows=2 matched=2 deferred=0 unmatched=0 repeated=0 unreconciled=0
@@ -199,13 +199,17 @@ receipts you do not hold, every settlement the chain reports is a gap:
 ```
 rail=base-sepolia-usdc
 account=0x2e0c37b721124e2558baf75f6f8e6cc9f14aec29
-window=2026-08-26T01:30:22.000Z..2026-08-26T01:46:32.001Z
-settlements=128 total=200000 receipts=0
-summary	audit: 128 settlement without receipt → FAIL
-result	fail findings=128
-finding	settlement-without-receipt	…	…
-(… 127 more finding lines …)
+window=2026-11-11T11:23:48.000Z..2026-11-11T11:24:25.001Z
+settlements=3 total=3000 receipts=0
+summary	audit: 3 settlement without receipt → FAIL
+result	fail findings=3
+finding	settlement-without-receipt	0xcae972c2b2b0eda38f0a7fd20bf57b538f46674cf586efc0b6d8eab0247deeca:1	settlement 0xcae972c2b2b0eda38f0a7fd20bf57b538f46674cf586efc0b6d8eab0247deeca:1 1000 USDC has no spend receipt
+finding	settlement-without-receipt	0x98fb67a557c77506a9adda85e23f5c22785ade5e1abd068310a2a8ec78092001:12	settlement 0x98fb67a557c77506a9adda85e23f5c22785ade5e1abd068310a2a8ec78092001:12 1000 USDC has no spend receipt
+finding	settlement-without-receipt	0x6189c31e4333051d747a7ca4f8c50a12b637ea96841b9b539c4cb3257fd08498:9	settlement 0x6189c31e4333051d747a7ca4f8c50a12b637ea96841b9b539c4cb3257fd08498:9 1000 USDC has no spend receipt
 guarantee	conditional
+counts	receipts	submitted=0 attested=0 in-scope=0 aborted=0 settled=0 matched=0 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
+counts	settlements	rows=3 matched=0 deferred=0 unmatched=3 repeated=0 unreconciled=0
+warning	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
 ```
 
 Your numbers will differ; the shape is the point. `guarantee	conditional`,

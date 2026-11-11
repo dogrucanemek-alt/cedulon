@@ -65,7 +65,7 @@ npm run audit
 
 ```
 summary	audit: balanced
-result	balanced
+result	balanced findings=0
 guarantee	conditional
 counts	receipts	submitted=2 attested=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
 counts	settlements	rows=2 matched=2 deferred=0 unmatched=0 repeated=0 unreconciled=0
@@ -129,7 +129,7 @@ npm run demo:live
 ```
 
 ```
-(usage line unless --address --from --to and CEDULON_RPC_URL are set; against an account whose receipts you do not hold, every settlement is settlement-without-receipt and guarantee=conditional)
+(usage line unless --address --from --to and CEDULON_RPC_URL are set; against an account whose receipts you do not hold, every settlement is settlement-without-receipt and guarantee	conditional)
 ```
 
 ## What this run proves

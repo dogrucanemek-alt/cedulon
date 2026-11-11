@@ -14,15 +14,19 @@ sorting work.
 
 `formatAudit` text report lines are now tagged. Every line starts with a
 fixed tag written by the package, then a TAB, then fields. External text never
-opens a line: every interpolated value goes through a safe writer
-(`formatReportText`, `formatReportNumber`, or `formatScopeField`). Numeric
-slots (window ms, counts, need bounds) print a safe integer in decimal;
-anything else is `String(value)` then `escapeReportText`. Missing or
-non-string `accountId` / `railId` print the unforgeable marker `\u{0}` so
-`formatAudit` does not throw. The verdict is a separate fixed-word `result`
-line: `balanced` only when `ok` is true and there are no findings;
-`fail findings=N` when `ok` is false; `inconsistent ok=true findings=N` when
-`ok` is true but findings are present. Old to new:
+opens a line: every slot has one expected runtime type. A string slot prints
+only when `typeof value === "string"` (then `escapeReportText`, and scope
+identity also escapes `=`, `[`, `)`, `,`); a number slot prints only when
+`Number.isSafeInteger(value)` (counts and finding totals also require
+`>= 0`); `ok` accepts only `=== true` or `=== false`. Any other value prints
+the unforgeable marker `\u{0}` and never `String(value)`, so a wrong-typed
+payload cannot forge another field. The verdict is a separate fixed-word
+`result` line: `balanced findings=0` only when `ok === true`, findings is an
+empty array, and no slot printed the marker; `fail findings=N` when `ok` is
+false and every slot is well typed; `inconsistent ok=true findings=N` when
+`ok` is true but findings are present; `inconsistent ok=invalid
+findings=invalid` when `ok` is not boolean, findings is not an array, or any
+slot printed the marker. Old to new:
 
 ```
 audit: balanced
@@ -38,7 +42,7 @@ becomes:
 
 ```
 summary	audit: balanced
-result	balanced
+result	balanced findings=0
 guarantee	conditional
 scope	accountId=acct	railId=rail	windowStartMs=1700000000000	windowEndMs=1700003600000
 counts	receipts	...
