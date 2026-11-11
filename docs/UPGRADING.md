@@ -6,6 +6,9 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## Unreleased
 
+Issuer-chain ordering inside `audit` is unchanged in behaviour and much faster
+near the documented bounds.
+
 `audit` now applies the existing settlement-row bound to every presented row
 array on its own, including a caller-supplied `settlements` list beside an
 extract and the rows of `nextExtract` / `previousExtract`; oversized arrays
