@@ -169,6 +169,45 @@ function assertThrowsClaimsRead(run: () => unknown): void {
   });
 }
 
+function presentSlots(receipts: SignedReceipt[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < receipts.length; i += 1) {
+    if (Object.prototype.hasOwnProperty.call(receipts, i)) {
+      out.push(i);
+    }
+  }
+  return out;
+}
+
+function assertLiveMatchesReferenceOrSurvivesThrow(
+  receipts: SignedReceipt[],
+  expectedRootPrev: string | null,
+): void {
+  let reference: { ordered: SignedReceipt[]; leftover: SignedReceipt[] } | null = null;
+  let referenceThrew = false;
+  try {
+    reference = orderByIssuerChainReference(receipts, expectedRootPrev);
+  } catch {
+    referenceThrew = true;
+  }
+  if (!referenceThrew) {
+    assertSamePlacement(orderByIssuerChain(receipts, expectedRootPrev), reference!);
+    return;
+  }
+  const live = orderByIssuerChain(receipts, expectedRootPrev);
+  const placed = [...live.ordered, ...live.leftover];
+  const present = presentSlots(receipts).map((i) => receipts[i]);
+  for (const receipt of present) {
+    let hits = 0;
+    for (const slot of placed) {
+      if (slot === receipt) {
+        hits += 1;
+      }
+    }
+    assert.equal(hits, 1, "each present receipt appears once across ordered and leftover");
+  }
+}
+
 describe("orderByIssuerChain linear equivalence", () => {
   it("matches the reference body on fixed-seed small bags", () => {
     const keys = generateReceiptKeys();
@@ -282,10 +321,7 @@ describe("orderByIssuerChain linear equivalence", () => {
 
     assert.equal(cases.length, targetCaseCount);
     for (const c of cases) {
-      assertSamePlacement(
-        orderByIssuerChain(c.receipts, c.expectedRootPrev),
-        orderByIssuerChainReference(c.receipts, c.expectedRootPrev),
-      );
+      assertLiveMatchesReferenceOrSurvivesThrow(c.receipts, c.expectedRootPrev);
     }
   });
 
@@ -343,28 +379,36 @@ describe("orderByIssuerChain linear equivalence", () => {
     const a = signOne(keys, null, "holeA", NOW);
     const b = signOne(keys, receiptHash(a), "holeB", NOW + 1);
 
+    // Length-1 hole: reference does not throw; leftover keeps the hole artifact.
     const len1 = Array(1) as SignedReceipt[];
-    assertSamePlacement(orderByIssuerChain(len1, null), orderByIssuerChainReference(len1, null));
+    assertLiveMatchesReferenceOrSurvivesThrow(len1, null);
     assert.deepEqual(orderByIssuerChain(len1, null), { ordered: [], leftover: [undefined] });
 
+    // Hole-adjacent walks: reference throws on the nexts filter; live must not,
+    // and leftover carries one undefined per hole from Set iteration of the sparse map.
     const holeStart = Array(3) as SignedReceipt[];
     holeStart[1] = a;
     holeStart[2] = b;
-    assertThrowsClaimsRead(() => orderByIssuerChain(holeStart, null));
     assertThrowsClaimsRead(() => orderByIssuerChainReference(holeStart, null));
+    assertLiveMatchesReferenceOrSurvivesThrow(holeStart, null);
+    assert.deepEqual(orderByIssuerChain(holeStart, null), { ordered: [a, b], leftover: [undefined] });
 
     const holeMid = Array(3) as SignedReceipt[];
     holeMid[0] = a;
     holeMid[2] = b;
-    assertThrowsClaimsRead(() => orderByIssuerChain(holeMid, null));
     assertThrowsClaimsRead(() => orderByIssuerChainReference(holeMid, null));
+    assertLiveMatchesReferenceOrSurvivesThrow(holeMid, null);
+    assert.deepEqual(orderByIssuerChain(holeMid, null), { ordered: [a, b], leftover: [undefined] });
 
     const holeEnd = Array(3) as SignedReceipt[];
     holeEnd[0] = a;
     holeEnd[1] = b;
-    assertThrowsClaimsRead(() => orderByIssuerChain(holeEnd, null));
     assertThrowsClaimsRead(() => orderByIssuerChainReference(holeEnd, null));
+    assertLiveMatchesReferenceOrSurvivesThrow(holeEnd, null);
+    assert.deepEqual(orderByIssuerChain(holeEnd, null), { ordered: [a, b], leftover: [undefined] });
 
+    // Present undefined/null elements (not holes): both bodies throw on the starts read.
+    // Contract is SignedReceipt[]; element shape is out of scope. No new guard.
     assertThrowsClaimsRead(() => orderByIssuerChain([undefined as unknown as SignedReceipt], null));
     assertThrowsClaimsRead(() => orderByIssuerChainReference([undefined as unknown as SignedReceipt], null));
     assertThrowsClaimsRead(() => orderByIssuerChain([null as unknown as SignedReceipt], null));

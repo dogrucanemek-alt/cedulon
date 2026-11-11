@@ -523,9 +523,6 @@ export function orderByIssuerChain(
     } catch {
       break;
     }
-    if ((remaining as Set<unknown>).has(undefined)) {
-      void receipts[undefined as unknown as number].claims.prevReceiptHash;
-    }
     const nexts = (byPrev.get(nextHash) ?? []).filter((i) => remaining.has(i));
     if (nexts.length !== 1) {
       break;
