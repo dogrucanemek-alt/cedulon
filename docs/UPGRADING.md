@@ -16,8 +16,10 @@ uint gate runs on encode and sign (`checkpointToCbor` / `signCheckpoint`),
 which throw `checkpoint-uint` rather than emitting a negative or a non-safe
 integer. `audit` and `auditWindows` do not throw when a presented checkpoint
 or witness body has dirty `coseHex`: they leave the unreadable hash out. A
-dirty presented checkpoint keeps the existing hard finding
-(`checkpoint-total-mismatch`, signature failed). A dirty witness body alone,
+dirty presented checkpoint, when audited without an issuer pin, keeps the
+existing hard finding (`checkpoint-total-mismatch`, signature failed); with
+the matching `issuerTrust` pin it is `issuer-key-mismatch` instead. A dirty
+witness body alone,
 with a valid presented checkpoint, produces no signature finding; the
 inclusion receipt's `statementHash` can still anchor the presented
 checkpoint. Ledger export reports `hash: null` for a stored checkpoint whose

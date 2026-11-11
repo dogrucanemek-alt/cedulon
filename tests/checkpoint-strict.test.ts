@@ -272,6 +272,34 @@ describe("audit does not throw when checkpointHash would refuse dirty coseHex", 
     assert.equal(hasSignatureFailed(report.findings), true, JSON.stringify(report.findings));
   });
 
+  it("a dirty presented checkpoint under a matching issuer pin is issuer-key-mismatch and does not throw", () => {
+    const k = generateReceiptKeys();
+    const signed = signCheckpoint(
+      buildCheckpointClaims(1, [], START, END, null),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const dirty = { ...signed, coseHex: `${signed.coseHex}zz` };
+    const witnessTrust = { publicKeyPem: fixtureEd25519Pems().publicKeyPem };
+    let report!: ReturnType<typeof audit>;
+    assert.doesNotThrow(() => {
+      report = audit({
+        receipts: [],
+        checkpoints: [dirty],
+        inclusionReceipts: [],
+        witnessTrust,
+        issuerTrust: { publicKeyPem: k.publicKeyPem },
+      });
+    });
+    assert.equal(report.ok, false);
+    assert.equal(
+      report.findings.some((f) => f.code === "issuer-key-mismatch"),
+      true,
+      JSON.stringify(report.findings),
+    );
+    assert.equal(hasSignatureFailed(report.findings), false, JSON.stringify(report.findings));
+  });
+
   it("a dirty witness body with a valid presented checkpoint does not throw and yields no signature finding", () => {
     const k = generateReceiptKeys();
     const signed = signCheckpoint(
@@ -293,7 +321,6 @@ describe("audit does not throw when checkpointHash would refuse dirty coseHex", 
     });
     assert.equal(report.ok, true);
     assert.equal(report.findings.length, 0, JSON.stringify(report.findings));
-    assert.equal(hasSignatureFailed(report.findings), false, JSON.stringify(report.findings));
     assert.equal(
       report.warnings.some((w) => w.code === "checkpoint-not-anchored"),
       false,
@@ -346,7 +373,6 @@ describe("audit does not throw when checkpointHash would refuse dirty coseHex", 
     assert.equal(report.ok, true);
     const windowFindings = report.windows.flatMap((w) => w.findings);
     assert.equal(windowFindings.length, 0, JSON.stringify(windowFindings));
-    assert.equal(hasSignatureFailed(windowFindings), false, JSON.stringify(windowFindings));
     const windowWarnings = report.windows.flatMap((w) => w.warnings);
     assert.equal(
       windowWarnings.some((w) => w.code === "checkpoint-not-anchored"),
