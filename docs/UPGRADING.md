@@ -24,6 +24,10 @@ with a valid presented checkpoint, produces no signature finding; the
 inclusion receipt's `statementHash` can still anchor the presented
 checkpoint. Ledger export reports `hash: null` for a stored checkpoint whose
 encoding is not strict hex.
+`formatAudit` visibly escapes backslash, C0/C1 controls, DEL, U+2028, U+2029
+and bidirectional controls in every untrusted field it prints.
+Parsers of that text report must treat `\uXXXX` (and `\\`) in those fields as
+escapes rather than as the raw extract or finding bytes.
 
 When an audit is run without an issuer pin, `checkpoint-withheld` is raised
 for a log entry whose body verifies under a key that also signed a presented
