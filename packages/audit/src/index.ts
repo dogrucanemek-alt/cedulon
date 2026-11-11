@@ -600,26 +600,39 @@ function withArticle(word: string): string {
   return `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`;
 }
 
-function pushDuplicateRefs(
-  items: Array<{ ref: string; id: string; side: string }>,
+function groupItemsByRef<T extends { ref: string }>(items: readonly T[]): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const group = groups.get(item.ref);
+    if (group) group.push(item);
+    else groups.set(item.ref, [item]);
+  }
+  return groups;
+}
+
+function pushDuplicateRefsFromGroups(
+  groups: Map<string, Array<{ ref: string; id: string; side: string }>>,
   findings: Finding[],
 ): Set<string> {
-  const seen = new Map<string, number>();
-  for (const item of items) {
-    seen.set(item.ref, (seen.get(item.ref) ?? 0) + 1);
-  }
   const dupes = new Set<string>();
-  for (const [ref, n] of seen) {
-    if (n > 1) {
+  for (const [ref, group] of groups) {
+    if (group.length > 1) {
       dupes.add(ref);
       findings.push({
         code: "duplicate-ref",
         id: ref,
-        detail: `${items.find((x) => x.ref === ref)?.side ?? "item"} ref ${ref} appears ${n} times`,
+        detail: `${group.find((x) => x.ref === ref)?.side ?? "item"} ref ${ref} appears ${group.length} times`,
       });
     }
   }
   return dupes;
+}
+
+function pushDuplicateRefs(
+  items: Array<{ ref: string; id: string; side: string }>,
+  findings: Finding[],
+): Set<string> {
+  return pushDuplicateRefsFromGroups(groupItemsByRef(items), findings);
 }
 
 /**
@@ -828,8 +841,10 @@ function classifySettlementMatches(
 
   // Reported by findReceiptRefClashes over the accepted set; here the set is
   // only needed to know which refs the aggregate walk covers.
-  const dupeReceipt = pushDuplicateRefs(receiptItems, []);
-  const dupeSettlement = pushDuplicateRefs(settlementItems, findings);
+  const receiptGroups = groupItemsByRef(receiptItems);
+  const settlementGroups = groupItemsByRef(settlementItems);
+  const dupeReceipt = pushDuplicateRefsFromGroups(receiptGroups, []);
+  const dupeSettlement = pushDuplicateRefsFromGroups(settlementGroups, findings);
   const skip = new Set<string>([...dupeReceipt, ...dupeSettlement]);
 
   const counts: MatchCounts = {
@@ -860,8 +875,12 @@ function classifySettlementMatches(
   // aggregate settled amount against the aggregate receipted amount instead.
   // Otherwise a repeated ref hides the amount that is unaccounted for.
   for (const ref of skip) {
-    const records = receiptItems.filter((item) => item.ref === ref).map((item) => item.receipt);
-    const rows = settlementItems.filter((item) => item.ref === ref).map((item) => item.settlement);
+    const records = (receiptGroups.get(ref) ?? [])
+      .filter((item) => item.ref === ref)
+      .map((item) => item.receipt);
+    const rows = (settlementGroups.get(ref) ?? [])
+      .filter((item) => item.ref === ref)
+      .map((item) => item.settlement);
     for (const f of profile.aggregate(ref, records, rows)) {
       findings.push({
         code: f.code as FindingCode,
@@ -873,15 +892,15 @@ function classifySettlementMatches(
   }
 
   const receiptsByRef = new Map<string, PresentedRecord>();
-  for (const item of receiptItems) {
-    if (!skip.has(item.ref)) {
-      receiptsByRef.set(item.ref, item.receipt);
+  for (const [ref, group] of receiptGroups) {
+    if (!skip.has(ref)) {
+      receiptsByRef.set(ref, group[0]!.receipt);
     }
   }
   const settlementsByRef = new Map<string, PresentedRow>();
-  for (const item of settlementItems) {
-    if (!skip.has(item.ref)) {
-      settlementsByRef.set(item.ref, item.settlement);
+  for (const [ref, group] of settlementGroups) {
+    if (!skip.has(ref)) {
+      settlementsByRef.set(ref, group[0]!.settlement);
     }
   }
 
@@ -1579,6 +1598,17 @@ function throwAuditTooLarge(axis: string, count: number, max: number): never {
   throw err;
 }
 
+function neighbourExtractRowCount(extract: unknown, pop: Population): number | null {
+  if (extract === null || typeof extract !== "object") return null;
+  const body = (extract as { body?: unknown }).body;
+  if (body === null || typeof body !== "object") return null;
+  const rows = pop === "decision"
+    ? (body as { effects?: unknown }).effects
+    : (body as { settlements?: unknown }).settlements;
+  if (!Array.isArray(rows)) return null;
+  return rows.length;
+}
+
 function assertAuditBounds(input: AuditInput): void {
   if (input.receipts.length > AUDIT_MAX_RECEIPTS) {
     throwAuditTooLarge("receipts", input.receipts.length, AUDIT_MAX_RECEIPTS);
@@ -1586,11 +1616,27 @@ function assertAuditBounds(input: AuditInput): void {
   if (input.checkpoints.length > AUDIT_MAX_CHECKPOINTS) {
     throwAuditTooLarge("checkpoints", input.checkpoints.length, AUDIT_MAX_CHECKPOINTS);
   }
-  const settlements = input.extract
-    ? extractRows(input.extract, populationOf(input.profile))
-    : (input.settlements ?? []);
-  if (settlements.length > AUDIT_MAX_SETTLEMENTS) {
-    throwAuditTooLarge("settlements", settlements.length, AUDIT_MAX_SETTLEMENTS);
+  const pop = populationOf(input.profile);
+  const boundSettlements = (count: number): void => {
+    if (count > AUDIT_MAX_SETTLEMENTS) {
+      throwAuditTooLarge("settlements", count, AUDIT_MAX_SETTLEMENTS);
+    }
+  };
+  if (input.extract) {
+    boundSettlements(extractRows(input.extract, pop).length);
+  }
+  if (Array.isArray(input.settlements)) {
+    boundSettlements(input.settlements.length);
+  } else if (!input.extract) {
+    boundSettlements((input.settlements ?? []).length);
+  }
+  if (input.nextExtract) {
+    const n = neighbourExtractRowCount(input.nextExtract, pop);
+    if (n !== null) boundSettlements(n);
+  }
+  if (input.previousExtract) {
+    const n = neighbourExtractRowCount(input.previousExtract, pop);
+    if (n !== null) boundSettlements(n);
   }
   if ((input.inclusionReceipts?.length ?? 0) > AUDIT_MAX_INCLUSIONS) {
     throwAuditTooLarge("inclusions", input.inclusionReceipts?.length ?? 0, AUDIT_MAX_INCLUSIONS);
