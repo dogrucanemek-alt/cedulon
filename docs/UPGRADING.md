@@ -20,7 +20,8 @@ dirty presented checkpoint keeps the existing hard finding
 (`checkpoint-total-mismatch`, signature failed). A dirty witness body alone,
 with a valid presented checkpoint, produces no signature finding; the
 inclusion receipt's `statementHash` can still anchor the presented
-checkpoint.
+checkpoint. Ledger export reports `hash: null` for a stored checkpoint whose
+encoding is not strict hex.
 
 When an audit is run without an issuer pin, `checkpoint-withheld` is raised
 for a log entry whose body verifies under a key that also signed a presented
