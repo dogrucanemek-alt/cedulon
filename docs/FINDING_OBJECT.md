@@ -20,7 +20,7 @@ call; the recommendation at the end is the one this tree would make.
   findingObjectVersion: 1,
   ok: boolean,
   guarantee: "unconditional" | "conditional",
-  summary: string,          // raw value; formatAudit may escape and frame the first line
+  summary: string,          // raw value; formatAudit prints it on a summary-tagged line
   receipts: number,         // counts.receipts.submitted, the total the audit measured
   findings: Finding[],      // severity is fail or omitted
   warnings: Finding[],

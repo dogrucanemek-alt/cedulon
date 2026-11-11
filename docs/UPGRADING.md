@@ -12,6 +12,41 @@ extract and the rows of `nextExtract` / `previousExtract`; oversized arrays
 that previously ran are refused as `audit-too-large` before comparison or
 sorting work.
 
+`formatAudit` text report lines are now tagged. Every line starts with a
+fixed tag written by the package, then a TAB, then fields. External text never
+opens a line. The verdict is a separate fixed-word `result` line derived from
+`report.ok` and `report.findings.length`, so a summary cannot look like a
+balanced pass. Old to new:
+
+```
+audit: balanced
+receipts=2
+findings=0
+guarantee=conditional
+scope=acct/rail [1700000000000,1700003600000)
+counts	receipts	...
+warn	unauthenticated-extract	...
+```
+
+becomes:
+
+```
+summary	audit: balanced
+result	balanced
+guarantee	conditional
+scope	accountId=acct	railId=rail	windowStartMs=1700000000000	windowEndMs=1700003600000
+counts	receipts	...
+warning	unauthenticated-extract	...
+```
+
+A failing report prints `summary\t...`, then `result\tfail findings=N`, then
+`finding\t<code>\t<id>\t<detail>` for each finding. Scope values escape
+`=`, `[`, `)`, and `,` after `escapeReportText` so a rail id cannot forge a
+window token. TAB was already escaped by `escapeReportText` (`\u0009`).
+Parsers that keyed on untagged first lines, `warn\t`, `scope=`, `guarantee=`,
+or bare `receipts=` / `findings=0` lines must follow the tags instead.
+`toFindingObject` and `audit()` are unchanged.
+
 Checkpoint verification now consumes `coseHex` only as whole lowercase hex
 (`strictHexBytes`): a trailing non-hex suffix, odd length, uppercase, or an
 empty string no longer verifies, and `checkpointHash` throws `cose-hex` for
@@ -37,13 +72,7 @@ U+061C, U+115F-U+1160, U+17B4-U+17B5, U+180B-U+180F, lone surrogates
 U+3164, variation selectors U+FE00-U+FE0F, U+FEFF, U+FFA0, U+FFF0-U+FFFB,
 U+1BCA0-U+1BCA3, U+1D173-U+1D17A, tag characters U+E0000-U+E007F, and
 variation selectors U+E0100-U+E01EF in every untrusted field it prints;
-non-BMP code points use `\u{...}`. Combining marks are not escaped. On the
-`scope=` line only, `/` inside `accountId` and `railId` becomes `\u002f` so
-the two fields stay distinct. On finding and warning `code` columns, `=`
-becomes `\u003d`. A failing report whose escaped `summary` does not start
-with `audit: `, or whose escaped `summary` starts with `audit: balanced`, is
-printed as `summary\t...`; a built-in failing summary such as
-`audit: N finding(s) → FAIL` is printed without that frame.
+non-BMP code points use `\u{...}`. Combining marks are not escaped.
 `escapeReportText` is exported for callers that print the same fields beside
 the report. Parsers of that text report must treat `\uXXXX`, `\u{...}`, and
 `\\` in those fields as escapes rather than as the raw extract or finding

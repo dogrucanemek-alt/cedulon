@@ -2846,50 +2846,46 @@ export function escapeReportText(value: string): string {
   return out;
 }
 
-/** Scope ids only: `/` is a field separator on the `scope=` line. */
-function escapeScopeField(value: string): string {
-  return escapeReportText(value).replaceAll("/", "\\u002f");
-}
-
-/** Finding and warning `code` columns: `=` would look like a key=value line. */
-function escapeFindingCode(value: string): string {
-  return escapeReportText(value).replaceAll("=", "\\u003d");
-}
-
 /**
- * Built-in profiles emit a failing summary that starts with `audit: ` and does
- * not start with `audit: balanced`. A summary that misses that prefix, or that
- * starts with `audit: balanced`, is printed as `summary\t...` so it is not
- * mistaken for the balanced first line (for example `findings=0`).
+ * Scope `name=value` fields: after `escapeReportText`, also escape the
+ * characters that would forge another field or a `[start,end)` window token
+ * inside a value. TAB is already escaped by `escapeReportText`.
  */
-function formatFailFirstLine(summary: string): string {
-  const escaped = escapeReportText(summary);
-  if (escaped.startsWith("audit: ") && !escaped.startsWith("audit: balanced")) {
-    return escaped;
-  }
-  return `summary\t${escaped}`;
+function escapeScopeValue(value: string): string {
+  return escapeReportText(value)
+    .replaceAll("=", "\\u003d")
+    .replaceAll("[", "\\u005b")
+    .replaceAll(")", "\\u0029")
+    .replaceAll(",", "\\u002c");
 }
 
 /** @param _receiptCount ignored since 0.11.0; the printed total is `report.counts.receipts.submitted`. */
 export function formatAudit(report: AuditReport, _receiptCount?: number): string {
-  const lines = report.ok
-    ? [`audit: balanced`, `receipts=${report.counts.receipts.submitted}`, "findings=0"]
-    : [
-        formatFailFirstLine(report.summary),
-        ...report.findings.map(
-          (f) => `${escapeFindingCode(f.code)}\t${escapeReportText(f.id)}\t${escapeReportText(f.detail)}`,
-        ),
-      ];
+  // Every line starts with a code-authored tag and a TAB. External text never
+  // opens a line; the verdict is a separate fixed-word `result` line so a
+  // summary cannot look like a balanced pass.
+  const lines: string[] = [
+    `summary\t${escapeReportText(report.summary)}`,
+    report.ok
+      ? "result\tbalanced"
+      : `result\tfail findings=${report.findings.length}`,
+  ];
+  for (const f of report.findings) {
+    lines.push(
+      `finding\t${escapeReportText(f.code)}\t${escapeReportText(f.id)}\t${escapeReportText(f.detail)}`,
+    );
+  }
   // Warnings decide whether the balance means anything, so an operator has to
   // see them on the passing path too, not only in the returned object.
-  lines.push(`guarantee=${escapeReportText(report.guarantee)}`);
+  lines.push(`guarantee\t${escapeReportText(report.guarantee)}`);
   // And a guarantee is over something. The extract that supplied the population
   // covers one account on one rail, so the line that carries the strongest
-  // claim also carries the path it was measured on.
+  // claim also carries the path it was measured on. Named fields and escaped
+  // values keep account, rail and window from forging each other.
   if (report.scope) {
     const s = report.scope;
     lines.push(
-      `scope=${escapeScopeField(s.accountId)}/${escapeScopeField(s.railId)} [${s.windowStartMs},${s.windowEndMs})`,
+      `scope\taccountId=${escapeScopeValue(s.accountId)}\trailId=${escapeScopeValue(s.railId)}\twindowStartMs=${s.windowStartMs}\twindowEndMs=${s.windowEndMs}`,
     );
   }
   // The classes every row landed in. A balanced line over a window that
@@ -2897,7 +2893,7 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   // that held none read the same without these.
   lines.push(...formatCounts(report.counts));
   for (const w of report.warnings) {
-    lines.push(`warn\t${escapeFindingCode(w.code)}\t${escapeReportText(w.detail)}`);
+    lines.push(`warning\t${escapeReportText(w.code)}\t${escapeReportText(w.detail)}`);
   }
   for (const w of report.warnings) {
     const need = w.needs;

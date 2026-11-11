@@ -162,7 +162,7 @@ describe("cedulon-audit detections", () => {
     });
     assert.equal(report.ok, true);
     assert.equal(report.findings.length, 0);
-    assert.equal(formatAudit(report, receipts.length).includes("findings=0"), true);
+    assert.equal(formatAudit(report, receipts.length).includes("result\tbalanced"), true);
     const ledger = new RailLedger();
     for (const s of settlementsOf(receipts)) ledger.record(s);
     assert.equal(RailLedger.fromJson(ledger.toJson()).length, 3);
@@ -174,7 +174,7 @@ describe("cedulon-audit detections", () => {
     assert.equal(ran.summary, "audit: 1 settlement without receipt → FAIL");
     const amount = runBypass(undefined, "amount");
     assert.equal(amount.exitCode, 1);
-    assert.match(amount.text, /settlement-mismatch/);
+    assert.match(amount.text, /^finding\tsettlement-mismatch\t/m);
     const nullRef = runBypass(undefined, "null-ref");
     assert.equal(nullRef.exitCode, 1);
     assert.match(nullRef.text, /settled-without-ref/);
