@@ -2756,10 +2756,11 @@ function formatCounts(counts: AuditCounts): string[] {
 /**
  * Visible escapes for text the operator report interpolates from the report
  * object. Keeps each value on one physical line and stops terminal controls
- * from rewriting the screen. `toFindingObject` does not call this: JSON
- * carries the raw values.
+ * from rewriting the screen. Combining marks are left alone so non-Latin
+ * scripts keep their legitimate combining sequences. `toFindingObject` does
+ * not call this: JSON carries the raw values.
  */
-function escapeReportText(value: string): string {
+export function escapeReportText(value: string): string {
   let out = "";
   for (const ch of value) {
     const cp = ch.codePointAt(0)!;
@@ -2769,15 +2770,24 @@ function escapeReportText(value: string): string {
       cp <= 0x1f ||
       cp === 0x7f ||
       (cp >= 0x80 && cp <= 0x9f) ||
+      cp === 0x00ad ||
+      (cp >= 0xd800 && cp <= 0xdfff) ||
+      cp === 0x180e ||
+      (cp >= 0x200b && cp <= 0x200d) ||
+      cp === 0x200e ||
+      cp === 0x200f ||
+      cp === 0x061c ||
       cp === 0x2028 ||
       cp === 0x2029 ||
       (cp >= 0x202a && cp <= 0x202e) ||
+      (cp >= 0x2060 && cp <= 0x2064) ||
       (cp >= 0x2066 && cp <= 0x2069) ||
-      cp === 0x200e ||
-      cp === 0x200f ||
-      cp === 0x061c
+      (cp >= 0xfe00 && cp <= 0xfe0f) ||
+      cp === 0xfeff ||
+      (cp >= 0xe0000 && cp <= 0xe007f) ||
+      (cp >= 0xe0100 && cp <= 0xe01ef)
     ) {
-      out += "\\u" + cp.toString(16).padStart(4, "0");
+      out += cp > 0xffff ? `\\u{${cp.toString(16)}}` : "\\u" + cp.toString(16).padStart(4, "0");
     } else {
       out += ch;
     }
@@ -2785,12 +2795,31 @@ function escapeReportText(value: string): string {
   return out;
 }
 
+/** Scope ids only: `/` is a field separator on the `scope=` line. */
+function escapeScopeField(value: string): string {
+  return escapeReportText(value).replaceAll("/", "\\u002f");
+}
+
+/**
+ * Built-in profiles always emit a failing summary that starts with `audit: `
+ * and is not the balanced first line. Anything else is framed so a hand-built
+ * `summary` cannot equal or begin a balanced-report line (for example
+ * `findings=0`).
+ */
+function formatFailFirstLine(summary: string): string {
+  const escaped = escapeReportText(summary);
+  if (escaped.startsWith("audit: ") && escaped !== "audit: balanced") {
+    return escaped;
+  }
+  return `summary\t${escaped}`;
+}
+
 /** @param _receiptCount ignored since 0.11.0; the printed total is `report.counts.receipts.submitted`. */
 export function formatAudit(report: AuditReport, _receiptCount?: number): string {
   const lines = report.ok
     ? [`audit: balanced`, `receipts=${report.counts.receipts.submitted}`, "findings=0"]
     : [
-        escapeReportText(report.summary),
+        formatFailFirstLine(report.summary),
         ...report.findings.map(
           (f) => `${escapeReportText(f.code)}\t${escapeReportText(f.id)}\t${escapeReportText(f.detail)}`,
         ),
@@ -2804,7 +2833,7 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   if (report.scope) {
     const s = report.scope;
     lines.push(
-      `scope=${escapeReportText(s.accountId)}/${escapeReportText(s.railId)} [${s.windowStartMs},${s.windowEndMs})`,
+      `scope=${escapeScopeField(s.accountId)}/${escapeScopeField(s.railId)} [${s.windowStartMs},${s.windowEndMs})`,
     );
   }
   // The classes every row landed in. A balanced line over a window that

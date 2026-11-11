@@ -2,12 +2,14 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
 import {
+  escapeReportText,
   formatAudit,
   toFindingObject,
   type AuditCounts,
   type AuditReport,
   type Finding,
 } from "@cedulon/audit";
+import { formatLiveExtractIds } from "../examples/demo/src/live-extract-ids.ts";
 
 const EMPTY_COUNTS: AuditCounts = {
   receipts: {
@@ -93,6 +95,10 @@ describe("formatAudit escapes untrusted text", () => {
     );
     assert.equal(printed.includes("\r"), false);
     assert.equal(/\nsettlement-without-receipt\t/.test("\n" + printed) || printed.startsWith("settlement"), true);
+    const findingLine = printed.split("\n").find((l) => l.startsWith("settlement-without-receipt\t"));
+    assert.ok(findingLine, printed);
+    assert.equal(findingLine!.includes("\\u0009"), true, findingLine);
+    assert.equal(findingLine!.split("\t").length, 3, findingLine);
   });
 
   it("line/paragraph separators and bidi controls are not raw in the text report", () => {
@@ -188,5 +194,68 @@ describe("formatAudit escapes untrusted text", () => {
     const needLines = poisoned.split("\n").filter((l) => l.startsWith("need\t"));
     assert.equal(needLines.length, 1, poisoned);
     assert.match(needLines[0]!, /need\treceipts\tref\\u000awith\\u000aLF$/);
+  });
+
+  it("a failing report whose summary is findings=0 does not print that balanced line first", () => {
+    const printed = formatAudit(reportWith({ summary: "findings=0" }));
+    const first = printed.split("\n")[0]!;
+    assert.notEqual(first, "findings=0", printed);
+    assert.equal(first.startsWith("findings=0"), false, printed);
+    assert.equal(first, "summary\tfindings=0", printed);
+    const builtIn = formatAudit(reportWith({}));
+    assert.equal(builtIn.split("\n")[0], "audit: 1 finding(s) → FAIL", builtIn);
+  });
+
+  it("scope accountId and railId slash cannot swap field boundaries", () => {
+    const left = formatAudit(reportWith({ scopeAccountId: "a/b", scopeRailId: "c" }));
+    const right = formatAudit(reportWith({ scopeAccountId: "a", scopeRailId: "b/c" }));
+    const leftScope = left.split("\n").find((l) => l.startsWith("scope="))!;
+    const rightScope = right.split("\n").find((l) => l.startsWith("scope="))!;
+    assert.notEqual(leftScope, rightScope, `${leftScope}\n${rightScope}`);
+    assert.match(leftScope, /^scope=a\\u002fb\/c \[/);
+    assert.match(rightScope, /^scope=a\/b\\u002fc \[/);
+    const findingDetail = formatAudit(
+      reportWith({
+        findings: [{ code: "settlement-without-receipt", id: "id", detail: "path/with/slash" }],
+      }),
+    );
+    assert.match(findingDetail, /\tpath\/with\/slash$/m);
+  });
+
+  it("lone surrogates zero-width tags and variation selectors are not raw", () => {
+    const lonely = String.fromCharCode(0xd800);
+    const zw = "a\u00adb\u200bc\u200cd\u200de\u2060f\u2061g\u2062h\u2063i\u2064j\ufeffk\u180el";
+    const tag = String.fromCodePoint(0xe0001);
+    const vs = "a\ufe00b" + String.fromCodePoint(0xe0100);
+    const combining = "e\u0301";
+    const printed = formatAudit(
+      reportWith({
+        findings: [
+          { code: "settlement-without-receipt", id: lonely + zw, detail: tag + vs },
+        ],
+        scopeAccountId: combining,
+      }),
+    );
+    assert.equal(printed.includes(lonely), false, printed);
+    assert.equal(printed.includes("\u00ad"), false, printed);
+    assert.equal(printed.includes("\u200b"), false, printed);
+    assert.equal(printed.includes(tag), false, printed);
+    assert.equal(printed.includes("\ufe00"), false, printed);
+    assert.match(printed, /\\u\{e0001\}/);
+    assert.match(printed, /\\u\{e0100\}/);
+    assert.equal(printed.includes(combining), true, printed);
+    assert.equal(escapeReportText(combining), combining);
+  });
+
+  it("live-audit identity lines use the same escape as the report", () => {
+    const esc = "\u001b[2Jacct";
+    const lines = formatLiveExtractIds(esc, "rail/with\tslash");
+    assert.deepEqual(lines, [
+      `rail=${escapeReportText("rail/with\tslash")}`,
+      `account=${escapeReportText(esc)}`,
+    ]);
+    assert.equal(lines[1]!.includes("\u001b"), false);
+    assert.equal(lines[0]!.includes("\t"), false);
+    assert.match(lines[0]!, /\\u0009/);
   });
 });
