@@ -203,6 +203,8 @@ window=2026-08-26T01:30:22.000Z..2026-08-26T01:46:32.001Z
 settlements=128 total=200000 receipts=0
 summary	audit: 128 settlement without receipt → FAIL
 result	fail findings=128
+finding	settlement-without-receipt	…	…
+(… 127 more finding lines …)
 guarantee	conditional
 ```
 

@@ -2793,9 +2793,10 @@ export function toFindingObject(report: AuditReport, _receiptCount?: number): Fi
 function formatCounts(counts: AuditCounts): string[] {
   const r = counts.receipts;
   const s = counts.settlements;
+  const n = formatReportNumber;
   return [
-    `counts\treceipts\tsubmitted=${r.submitted} attested=${r.attested} in-scope=${r.inScope} aborted=${r.aborted} settled=${r.settled} matched=${r.matched} deferred=${r.deferred} carried=${r.carried} unmatched=${r.unmatched} repeated=${r.repeated} unreconciled=${r.unreconciled}`,
-    `counts\tsettlements\trows=${s.rows} matched=${s.matched} deferred=${s.deferred} unmatched=${s.unmatched} repeated=${s.repeated} unreconciled=${s.unreconciled}`,
+    `counts\treceipts\tsubmitted=${n(r.submitted)} attested=${n(r.attested)} in-scope=${n(r.inScope)} aborted=${n(r.aborted)} settled=${n(r.settled)} matched=${n(r.matched)} deferred=${n(r.deferred)} carried=${n(r.carried)} unmatched=${n(r.unmatched)} repeated=${n(r.repeated)} unreconciled=${n(r.unreconciled)}`,
+    `counts\tsettlements\trows=${n(s.rows)} matched=${n(s.matched)} deferred=${n(s.deferred)} unmatched=${n(s.unmatched)} repeated=${n(s.repeated)} unreconciled=${n(s.unreconciled)}`,
   ];
 }
 
@@ -2805,6 +2806,10 @@ function formatCounts(counts: AuditCounts): string[] {
  * from rewriting the screen. Combining marks are left alone so non-Latin
  * scripts keep their legitimate combining sequences. `toFindingObject` does
  * not call this: JSON carries the raw values.
+ *
+ * The public contract is strings only. Non-string input still throws: the
+ * typed callers (`live-extract-ids`, direct tests) pass strings, and
+ * `formatAudit` converts through its own writers before calling this.
  */
 export function escapeReportText(value: string): string {
   let out = "";
@@ -2859,25 +2864,65 @@ function escapeScopeValue(value: string): string {
     .replaceAll(",", "\\u002c");
 }
 
+/**
+ * Safe integer decimal for numeric report slots (window ms, counts, need
+ * bounds). Those slots are typed as `number` and `audit()` fills them with
+ * safe integers; that is the only form written unescaped. Anything else
+ * (string, float, NaN, Infinity, BigInt, object) becomes `String(value)` then
+ * `escapeReportText`, so TAB/LF never open a line.
+ */
+function formatReportNumber(value: unknown): string {
+  if (typeof value === "number" && Number.isSafeInteger(value)) {
+    return String(value);
+  }
+  return escapeReportText(String(value));
+}
+
+/** Text slots: strings go through `escapeReportText`; other values stringify first. */
+function formatReportText(value: unknown): string {
+  return typeof value === "string" ? escapeReportText(value) : escapeReportText(String(value));
+}
+
+/**
+ * Absent or non-string scope identity. `escapeReportText` never emits `\u{0}`
+ * (brace form is only for code points above U+FFFF), so a real accountId or
+ * railId cannot collide with this marker after escaping, including the empty
+ * string and the literal characters `undefined`.
+ */
+const ABSENT_SCOPE_VALUE = "\\u{0}";
+
+function formatScopeField(value: unknown): string {
+  if (typeof value === "string") return escapeScopeValue(value);
+  return ABSENT_SCOPE_VALUE;
+}
+
+function formatResultLine(report: AuditReport): string {
+  const n = formatReportNumber(report.findings.length);
+  if (report.ok && report.findings.length > 0) {
+    // ok=true with findings is a hand-built contradiction; never call it balanced.
+    return `result\tinconsistent ok=true findings=${n}`;
+  }
+  if (report.ok) return "result\tbalanced";
+  return `result\tfail findings=${n}`;
+}
+
 /** @param _receiptCount ignored since 0.11.0; the printed total is `report.counts.receipts.submitted`. */
 export function formatAudit(report: AuditReport, _receiptCount?: number): string {
   // Every line starts with a code-authored tag and a TAB. External text never
   // opens a line; the verdict is a separate fixed-word `result` line so a
   // summary cannot look like a balanced pass.
   const lines: string[] = [
-    `summary\t${escapeReportText(report.summary)}`,
-    report.ok
-      ? "result\tbalanced"
-      : `result\tfail findings=${report.findings.length}`,
+    `summary\t${formatReportText(report.summary)}`,
+    formatResultLine(report),
   ];
   for (const f of report.findings) {
     lines.push(
-      `finding\t${escapeReportText(f.code)}\t${escapeReportText(f.id)}\t${escapeReportText(f.detail)}`,
+      `finding\t${formatReportText(f.code)}\t${formatReportText(f.id)}\t${formatReportText(f.detail)}`,
     );
   }
   // Warnings decide whether the balance means anything, so an operator has to
   // see them on the passing path too, not only in the returned object.
-  lines.push(`guarantee\t${escapeReportText(report.guarantee)}`);
+  lines.push(`guarantee\t${formatReportText(report.guarantee)}`);
   // And a guarantee is over something. The extract that supplied the population
   // covers one account on one rail, so the line that carries the strongest
   // claim also carries the path it was measured on. Named fields and escaped
@@ -2885,7 +2930,7 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   if (report.scope) {
     const s = report.scope;
     lines.push(
-      `scope\taccountId=${escapeScopeValue(s.accountId)}\trailId=${escapeScopeValue(s.railId)}\twindowStartMs=${s.windowStartMs}\twindowEndMs=${s.windowEndMs}`,
+      `scope\taccountId=${formatScopeField(s.accountId)}\trailId=${formatScopeField(s.railId)}\twindowStartMs=${formatReportNumber(s.windowStartMs)}\twindowEndMs=${formatReportNumber(s.windowEndMs)}`,
     );
   }
   // The classes every row landed in. A balanced line over a window that
@@ -2893,21 +2938,21 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
   // that held none read the same without these.
   lines.push(...formatCounts(report.counts));
   for (const w of report.warnings) {
-    lines.push(`warning\t${escapeReportText(w.code)}\t${escapeReportText(w.detail)}`);
+    lines.push(`warning\t${formatReportText(w.code)}\t${formatReportText(w.detail)}`);
   }
   for (const w of report.warnings) {
     const need = w.needs;
     if (!need) continue;
     if (need.evidence === "previousExtract") {
       lines.push(
-        `need\tpreviousExtract\t${escapeReportText(need.ref)}\twindowEndMs=${need.windowEndMs} row in [${need.rowFromMs},${need.rowToMs})`,
+        `need\tpreviousExtract\t${formatReportText(need.ref)}\twindowEndMs=${formatReportNumber(need.windowEndMs)} row in [${formatReportNumber(need.rowFromMs)},${formatReportNumber(need.rowToMs)})`,
       );
     } else if (need.evidence === "nextExtract") {
       lines.push(
-        `need\tnextExtract\t${escapeReportText(need.ref)}\twindowStartMs=${need.windowStartMs} row in [${need.rowFromMs},${need.rowToMs})`,
+        `need\tnextExtract\t${formatReportText(need.ref)}\twindowStartMs=${formatReportNumber(need.windowStartMs)} row in [${formatReportNumber(need.rowFromMs)},${formatReportNumber(need.rowToMs)})`,
       );
     } else {
-      lines.push(`need\treceipts\t${escapeReportText(need.ref)}`);
+      lines.push(`need\treceipts\t${formatReportText(need.ref)}`);
     }
   }
   return lines.join("\n");

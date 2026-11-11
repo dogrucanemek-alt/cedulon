@@ -14,9 +14,15 @@ sorting work.
 
 `formatAudit` text report lines are now tagged. Every line starts with a
 fixed tag written by the package, then a TAB, then fields. External text never
-opens a line. The verdict is a separate fixed-word `result` line derived from
-`report.ok` and `report.findings.length`, so a summary cannot look like a
-balanced pass. Old to new:
+opens a line: every interpolated value goes through a safe writer
+(`formatReportText`, `formatReportNumber`, or `formatScopeField`). Numeric
+slots (window ms, counts, need bounds) print a safe integer in decimal;
+anything else is `String(value)` then `escapeReportText`. Missing or
+non-string `accountId` / `railId` print the unforgeable marker `\u{0}` so
+`formatAudit` does not throw. The verdict is a separate fixed-word `result`
+line: `balanced` only when `ok` is true and there are no findings;
+`fail findings=N` when `ok` is false; `inconsistent ok=true findings=N` when
+`ok` is true but findings are present. Old to new:
 
 ```
 audit: balanced

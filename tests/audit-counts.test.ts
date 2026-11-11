@@ -318,8 +318,14 @@ describe("Round 5: the report publishes the class counts it already computes", (
     // Counts describe the population; the guarantee line and the scope line
     // still come first, and the warnings still close the report.
     const lines = printed.split("\n");
-    assert.ok(lines.indexOf("guarantee\tunconditional") < lines.findIndex((l) => l.startsWith("counts\t")));
-    assert.ok(lines.findIndex((l) => l.startsWith("scope\t")) < lines.findIndex((l) => l.startsWith("counts\t")));
+    const guaranteeIdx = lines.indexOf("guarantee\tunconditional");
+    const scopeIdx = lines.findIndex((l) => l.startsWith("scope\t"));
+    const countsIdx = lines.findIndex((l) => l.startsWith("counts\t"));
+    assert.ok(guaranteeIdx >= 0, printed);
+    assert.ok(scopeIdx >= 0, printed);
+    assert.ok(countsIdx >= 0, printed);
+    assert.ok(guaranteeIdx < countsIdx, printed);
+    assert.ok(scopeIdx < countsIdx, printed);
   });
 
   it("8 RED then GREEN: the receipt total is the measured count, not a number the caller hands over", () => {

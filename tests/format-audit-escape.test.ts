@@ -158,7 +158,8 @@ describe("formatAudit escapes untrusted text", () => {
   it("LF inside report.summary cannot invent a result balanced line", () => {
     const printed = formatAudit(
       reportWith({
-        summary: "audit: 1 finding(s) → FAIL\nresult\tbalanced\nguarantee\tunconditional",
+        summary:
+          "audit: 1 finding(s) → FAIL\nresult\tbalanced\nfindings=0\nguarantee\tunconditional",
       }),
     );
     const lines = printed.split("\n");
@@ -512,5 +513,228 @@ describe("formatAudit tagged lines close the three remaining spoofs", () => {
         COUNTS_SETTLEMENTS,
       ].join("\n"),
     );
+  });
+});
+
+describe("formatAudit numeric slots never open a line", () => {
+  const clean = formatAudit(reportWith({}));
+  const cleanLines = clean.split("\n");
+  const cleanTags = lineTags(clean);
+
+  function assertStable(printed: string): void {
+    assert.equal(printed.split("\n").length, cleanLines.length, printed);
+    assert.deepEqual(lineTags(printed), cleanTags, printed);
+    assert.equal(printed.split("\n").some((l) => l === "result\tbalanced"), false, printed);
+    assert.doesNotThrow(() => formatAudit(reportWith({})));
+  }
+
+  const tabObject = {
+    toString() {
+      return "0\nresult\tbalanced";
+    },
+  };
+
+  const badNumbers: unknown[] = [
+    "0\nresult\tbalanced",
+    "1\nwarning\tfake\tdetail",
+    NaN,
+    Infinity,
+    -0,
+    1.5,
+    1n,
+    tabObject,
+  ];
+
+  it("poisoned windowStartMs and windowEndMs keep tags and line count", () => {
+    for (const bad of badNumbers) {
+      const printed = formatAudit(
+        reportWith({
+          scope: {
+            accountId: "acct",
+            railId: "rail",
+            windowStartMs: bad as number,
+            windowEndMs: bad as number,
+          },
+        }),
+      );
+      assertStable(printed);
+      assert.equal(printed.includes("\nresult\tbalanced\n") || printed.endsWith("\nresult\tbalanced"), false, printed);
+    }
+  });
+
+  it("poisoned count fields keep tags and line count", () => {
+    for (const bad of ["9\nwarning\tx\ty", NaN, Infinity, -0, 1.5, 1n, tabObject]) {
+      const counts = structuredClone(EMPTY_COUNTS);
+      (counts.receipts as { submitted: unknown }).submitted = bad;
+      (counts.settlements as { rows: unknown }).rows = bad;
+      assertStable(formatAudit(reportWith({ counts })));
+    }
+  });
+
+  it("poisoned need bounds keep tags and line count", () => {
+    for (const bad of ["0\nresult\tbalanced", NaN, Infinity, -0, 1.5, 1n, tabObject]) {
+      const warnings: Finding[] = [
+        {
+          code: "boundary-deferred",
+          id: "w",
+          detail: "deferred",
+          needs: {
+            evidence: "previousExtract",
+            ref: "r",
+            windowEndMs: bad as number,
+            rowFromMs: bad as number,
+            rowToMs: bad as number,
+          },
+        },
+        {
+          code: "boundary-deferred",
+          id: "w2",
+          detail: "deferred",
+          needs: {
+            evidence: "nextExtract",
+            ref: "r2",
+            windowStartMs: bad as number,
+            rowFromMs: bad as number,
+            rowToMs: bad as number,
+          },
+        },
+      ];
+      const cleanNeed = formatAudit(
+        reportWith({
+          warnings: [
+            {
+              code: "boundary-deferred",
+              id: "w",
+              detail: "deferred",
+              needs: {
+                evidence: "previousExtract",
+                ref: "r",
+                windowEndMs: 1,
+                rowFromMs: 1,
+                rowToMs: 2,
+              },
+            },
+            {
+              code: "boundary-deferred",
+              id: "w2",
+              detail: "deferred",
+              needs: {
+                evidence: "nextExtract",
+                ref: "r2",
+                windowStartMs: 1,
+                rowFromMs: 1,
+                rowToMs: 2,
+              },
+            },
+          ],
+        }),
+      );
+      const printed = formatAudit(reportWith({ warnings }));
+      assert.equal(printed.split("\n").length, cleanNeed.split("\n").length, printed);
+      assert.deepEqual(lineTags(printed), lineTags(cleanNeed), printed);
+      assert.equal(printed.split("\n").some((l) => l === "result\tbalanced"), false, printed);
+    }
+  });
+});
+
+describe("formatAudit missing scope fields do not throw", () => {
+  const ABSENT = "\\u{0}";
+
+  function printScope(scope: AuditReport["scope"]): string {
+    return formatAudit(
+      reportWith({
+        scope,
+        warnings: [{ code: "unauthenticated-extract", id: "extract", detail: "refused" }],
+      }),
+    );
+  }
+
+  it("absent accountId railId null number object print without throwing", () => {
+    const cases: Array<AuditReport["scope"]> = [
+      { accountId: undefined as unknown as string, railId: "rail", windowStartMs: 1, windowEndMs: 2 },
+      { accountId: "acct", railId: undefined as unknown as string, windowStartMs: 1, windowEndMs: 2 },
+      {
+        accountId: undefined as unknown as string,
+        railId: undefined as unknown as string,
+        windowStartMs: 1,
+        windowEndMs: 2,
+      },
+      { accountId: null as unknown as string, railId: "rail", windowStartMs: 1, windowEndMs: 2 },
+      { accountId: 7 as unknown as string, railId: "rail", windowStartMs: 1, windowEndMs: 2 },
+      {
+        accountId: { toString: () => "obj" } as unknown as string,
+        railId: "rail",
+        windowStartMs: 1,
+        windowEndMs: 2,
+      },
+    ];
+    for (const scope of cases) {
+      let printed = "";
+      assert.doesNotThrow(() => {
+        printed = printScope(scope);
+      });
+      assert.match(printed, /^warning\tunauthenticated-extract\trefused$/m, printed);
+      assert.match(printed, /^finding\tsettlement-without-receipt\tref-honest\t/m, printed);
+      const scopeLine = printed.split("\n").find((l) => l.startsWith("scope\t"))!;
+      if (typeof scope!.accountId !== "string") {
+        assert.equal(scopeLine.includes(`accountId=${ABSENT}`), true, scopeLine);
+      }
+      if (typeof scope!.railId !== "string") {
+        assert.equal(scopeLine.includes(`railId=${ABSENT}`), true, scopeLine);
+      }
+    }
+  });
+
+  it("absent marker does not collide with empty string or literal undefined", () => {
+    const absent = printScope({
+      accountId: undefined as unknown as string,
+      railId: undefined as unknown as string,
+      windowStartMs: 1,
+      windowEndMs: 2,
+    });
+    const empty = printScope({ accountId: "", railId: "", windowStartMs: 1, windowEndMs: 2 });
+    const undefText = printScope({
+      accountId: "undefined",
+      railId: "undefined",
+      windowStartMs: 1,
+      windowEndMs: 2,
+    });
+    const absentScope = absent.split("\n").find((l) => l.startsWith("scope\t"))!;
+    const emptyScope = empty.split("\n").find((l) => l.startsWith("scope\t"))!;
+    const undefScope = undefText.split("\n").find((l) => l.startsWith("scope\t"))!;
+    assert.equal(absentScope, `scope\taccountId=${ABSENT}\trailId=${ABSENT}\twindowStartMs=1\twindowEndMs=2`);
+    assert.equal(emptyScope, "scope\taccountId=\trailId=\twindowStartMs=1\twindowEndMs=2");
+    assert.equal(
+      undefScope,
+      "scope\taccountId=undefined\trailId=undefined\twindowStartMs=1\twindowEndMs=2",
+    );
+    assert.notEqual(absentScope, emptyScope);
+    assert.notEqual(absentScope, undefScope);
+  });
+});
+
+describe("formatAudit inconsistent ok and findings", () => {
+  it("ok true with findings prints inconsistent, not balanced", () => {
+    const printed = formatAudit(
+      reportWith({
+        ok: true,
+        findings: [REAL_FINDING],
+        summary: "audit: balanced",
+      }),
+    );
+    assert.equal(printed.split("\n")[1], "result\tinconsistent ok=true findings=1", printed);
+    assert.equal(printed.split("\n").some((l) => l === "result\tbalanced"), false, printed);
+    assert.match(printed, /^finding\tsettlement-without-receipt\tref-honest\t/m);
+  });
+
+  it("ok false with zero findings keeps fail findings=0", () => {
+    const printed = formatAudit(
+      reportWith({
+        ok: false,
+        findings: [],
+        summary: "audit: 0 finding(s) → FAIL",
+      }),
+    );
+    assert.equal(printed.split("\n")[1], "result\tfail findings=0", printed);
   });
 });
