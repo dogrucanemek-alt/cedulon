@@ -6,6 +6,25 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## Unreleased
 
+Checkpoint verification now consumes `coseHex` only as whole lowercase hex
+(`strictHexBytes`): a trailing non-hex suffix, odd length, uppercase, or an
+empty string no longer verifies, and `checkpointHash` throws `cose-hex` for
+those inputs. Decoded checkpoint integers (`epoch`, `startMs`, `endMs`,
+`receiptCount`) must be safe non-negative integers, so a well-signed payload
+that carries a negative in any of those fields fails verification. The same
+uint gate runs on encode and sign (`checkpointToCbor` / `signCheckpoint`),
+which throw `checkpoint-uint` rather than emitting a negative or a non-safe
+integer. `audit` and `auditWindows` do not throw when a presented checkpoint
+or witness body has dirty `coseHex`: they leave the unreadable hash out. A
+dirty presented checkpoint, when audited without an issuer pin, keeps the
+existing hard finding (`checkpoint-total-mismatch`, signature failed); with
+the matching `issuerTrust` pin it is `issuer-key-mismatch` instead. A dirty
+witness body alone,
+with a valid presented checkpoint, produces no signature finding; the
+inclusion receipt's `statementHash` can still anchor the presented
+checkpoint. Ledger export reports `hash: null` for a stored checkpoint whose
+encoding is not strict hex.
+
 When an audit is run without an issuer pin, `checkpoint-withheld` is raised
 for a log entry whose body verifies under a key that also signed a presented
 checkpoint; other log entries that this chain does not present are counted

@@ -144,7 +144,8 @@ export type PanelCheckpoint = {
   /** `null` when the checkpoint was signed with its totals withheld. */
   totals: Record<string, string> | null;
   chainHead: string | null;
-  hash: string;
+  /** `null` when the stored checkpoint's encoding is not strict hex. */
+  hash: string | null;
 };
 
 export type LedgerExport = {
@@ -869,15 +870,23 @@ export class CedulonSession {
       })),
       gapAfter: gap ? Math.max(this.receipts.length - 1, 0) : null,
       settlements: this.ledger.extract(),
-      checkpoints: this.checkpoints.map((cp) => ({
-        epoch: cp.claims.epoch,
-        startMs: cp.claims.startMs,
-        endMs: cp.claims.endMs,
-        receiptCount: cp.claims.receiptCount,
-        totals: cp.claims.totals,
-        chainHead: cp.claims.chainHeadHash,
-        hash: checkpointHash(cp),
-      })),
+      checkpoints: this.checkpoints.map((cp) => {
+        let hash: string | null = null;
+        try {
+          hash = checkpointHash(cp);
+        } catch {
+          hash = null;
+        }
+        return {
+          epoch: cp.claims.epoch,
+          startMs: cp.claims.startMs,
+          endMs: cp.claims.endMs,
+          receiptCount: cp.claims.receiptCount,
+          totals: cp.claims.totals,
+          chainHead: cp.claims.chainHeadHash,
+          hash,
+        };
+      }),
       findings: report.findings,
       guarantee: report.guarantee,
       warnings: report.warnings,

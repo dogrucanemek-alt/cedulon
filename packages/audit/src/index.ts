@@ -1246,6 +1246,18 @@ function inclusionFromPinnedLog(
 }
 
 /**
+ * `checkpointHash` / `statementHashOfCheckpoint` throw `cose-hex` on dirty
+ * hex. Audit must report findings instead of aborting, so unreadable bodies
+ * are left out here the same way an unverifiable signature is.
+ */
+function statementHashIfReadable(signed: SignedCheckpoint): string | null {
+  if (!strictHexBytes(signed.coseHex)) {
+    return null;
+  }
+  return statementHashOfCheckpoint(signed);
+}
+
+/**
  * `attestsIssuer` is the second question: the witness pin says which log spoke,
  * and this says whether the statement that log holds was signed by the issuer
  * under audit. Without it a pinned log can carry a body anyone minted into the
@@ -1265,7 +1277,8 @@ function verifiedWitnessCheckpoints(
     if (attestsCheckpoint && !attestsCheckpoint(rec.checkpoint)) {
       continue;
     }
-    if (statementHashOfCheckpoint(rec.checkpoint) !== rec.statementHash) {
+    const bodyHash = statementHashIfReadable(rec.checkpoint);
+    if (bodyHash === null || bodyHash !== rec.statementHash) {
       continue;
     }
     const carried = rec.checkpoint;
@@ -1304,7 +1317,11 @@ function findTransparencyWitness(
   // the presented chain; otherwise the entry names some other issuer (or none)
   // and is not an accusation against this chain. An empty presented chain has
   // no key to match, so it cannot accuse.
-  const presentedHashes = new Set(checkpoints.map(statementHashOfCheckpoint));
+  const presentedHashes = new Set(
+    checkpoints
+      .map(statementHashIfReadable)
+      .filter((hash): hash is string => hash !== null),
+  );
   const presentedVerified = checkpoints.filter(
     (cp) => verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex).ok,
   );
@@ -1312,7 +1329,8 @@ function findTransparencyWitness(
     if (!r.checkpoint) {
       return false;
     }
-    if (statementHashOfCheckpoint(r.checkpoint) !== r.statementHash) {
+    const bodyHash = statementHashIfReadable(r.checkpoint);
+    if (bodyHash === null || bodyHash !== r.statementHash) {
       return false;
     }
     if (attestsCheckpoint) {
@@ -1328,7 +1346,10 @@ function findTransparencyWitness(
   });
 
   for (const cp of checkpoints) {
-    const hash = statementHashOfCheckpoint(cp);
+    const hash = statementHashIfReadable(cp);
+    if (hash === null) {
+      continue;
+    }
     if (!witnessHashes.has(hash)) {
       warnings.push({
         code: "checkpoint-not-anchored",
