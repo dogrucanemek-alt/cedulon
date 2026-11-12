@@ -52,6 +52,30 @@ The repository is archived at `10.5281/zenodo.22099792`. The core packages
 carry no runtime dependencies; `@cedulon/mcp-server` depends only on the
 official MCP SDK.
 
+`0.18.0` is prepared in this tree and is not a published npm release; the tag
+publishes it, and this paragraph is brought up to what was published once the
+registry answers. It comes out of a line-by-line review of the audit and
+checkpoint packages and of a public question about checkpoint order. `audit`
+and `auditWindows` return one fixed failing report with
+`presented-object-malformed` instead of throwing on evidence or configuration
+they cannot read, and on a presented `settlements` or `inclusionReceipts` that
+is not a list; `audit-too-large` still throws. `formatAudit` prints tagged
+lines and escapes the text it did not write. Checkpoint verification reads
+`coseHex` only as whole lowercase hex and refuses integers that are negative
+or not safe. `audit` walks the checkpoint chain in epoch order, raises
+`checkpoint-withheld` without an issuer pin only for a key that also signed a
+presented checkpoint, and accepts a tier-2 inclusion only under a pinned
+witness key. New inclusion receipts from the in-process log sign the RFC 9162
+tree; three-entry receipts still verify. The launchers `cedulon` and
+`cedulon-mcp` move to 1.5.0 and `^0.18.0`. `docs/UPGRADING.md` describes each
+change in its own paragraph. Unchanged, and named here because the gate reads
+this version's own paragraph: `audit()` reports `manifest-terms-mismatch` with
+the split 0.6.0 introduced, where with a usable issuer pin the departure is a
+finding that fails the audit, and without a pin the same departure is a
+warning that does not by itself fail it; and `requestHash` is still the
+SHA-256 of the six-field canonical document in lowercase hex, the digest the
+posted core-04 names in Section 9 (MUST-T6-1).
+
 `0.17.0` is published on npm across all nine packages, each with a SLSA v1
 provenance attestation and reporting `gitHead` `85ecee2`, and it is what an
 installed package now answers. It comes out of an independent run of 0.15.0 on

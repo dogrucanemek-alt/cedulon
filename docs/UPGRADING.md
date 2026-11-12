@@ -4,7 +4,13 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
-## Unreleased
+## 0.18.0: an audit that reports instead of throwing, tagged report lines, and an RFC 9162 log
+
+These changes came out of a line-by-line review of the audit and checkpoint
+packages and of a public question about checkpoint order. They change what
+`audit` returns for input it cannot read, what `formatAudit` prints, how a
+checkpoint is read and ordered, and the tree the in-process transparency log
+signs. Each paragraph below describes one change.
 
 `audit` and `auditWindows` wrap the existing walk in a call-scoped safety net:
 unexpected exceptions become a fixed `presented-object-malformed` report
@@ -167,6 +173,18 @@ The older tree paired an odd last node with itself and did not separate leaves
 from interior nodes, so the leaf lists `[a, b, c]` and `[a, b, c, c]` produced
 the same root and could not be told apart from the root alone. The RFC 9162
 tree removes that collision.
+
+The launchers `cedulon` and `cedulon-mcp` move to 1.5.0 and depend on
+`^0.18.0`. A `^0.17.0` range does not accept 0.18.0, so 1.4.0 keeps
+installing 0.17.0.
+
+Unchanged, and repeated here because the gate reads each version's own
+section: `audit()` reports `manifest-terms-mismatch` with the split 0.6.0
+introduced, where with a usable issuer pin the departure is a finding that
+fails the audit, and without a pin the same departure is a warning that
+does not by itself fail it; and `requestHash` is still the SHA-256 of the
+six-field canonical document in lowercase hex, the digest the posted core-04
+names in Section 9 (MUST-T6-1).
 
 ## 0.17.0: a mainnet rail by its own name, the window that was asked for, and refusals that say what they refused
 
