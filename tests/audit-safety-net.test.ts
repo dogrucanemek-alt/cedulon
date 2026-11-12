@@ -1039,37 +1039,9 @@ describe("audit safety net", () => {
       assert.deepEqual(snap(audit(input as never)), MASTER_EQUIV[name], name);
     }
 
-    const extract = {
-      body: { accountId: "a", railId: "r", windowStartMs: 1, windowEndMs: 2, settlements: [] },
-      signature: "x",
-      publicKeyPem: "y",
-    };
-    const settlements0 = audit({
-      receipts: [],
-      checkpoints: [],
-      extract: extract as never,
-      settlements: 0 as never,
-    });
-    assert.equal(settlements0.findings.some((f) => f.code === "presented-object-malformed"), false);
-
-    const settlementsLen = audit({
-      receipts: [],
-      checkpoints: [],
-      extract: extract as never,
-      settlements: { length: 4097 } as never,
-    });
-    assert.equal(settlementsLen.ok, false);
-    assert.equal(settlementsLen.findings.some((f) => f.code === "presented-object-malformed"), false);
-    assert.equal(settlementsLen.findings[0]?.code, "extract-settlement-mismatch");
-
     const emptyWindows = auditWindows({ windows: [], issuerTrust: {} } as never);
     assert.equal(emptyWindows.ok, false);
     assert.deepEqual(emptyWindows.findings.map((f) => f.code), ["extract-scope-mismatch"]);
-
-    for (const bad of [{}, 0, 5] as const) {
-      const report = audit({ receipts: [], checkpoints: [], inclusionReceipts: bad as never });
-      assert.equal(report.findings.some((f) => f.code === "presented-object-malformed"), false);
-    }
 
     const idleTrust = audit({
       receipts: [],
@@ -1266,31 +1238,103 @@ describe("audit safety net", () => {
     }
   });
 
-  it("silent-empty master cells keep the master report without inventing a nest finding", () => {
+  it("a presented collection that is neither absent nor a list fails the audit", () => {
     const extract = {
       body: { accountId: "a", railId: "r", windowStartMs: 1, windowEndMs: 2, settlements: [] },
       signature: "x",
       publicKeyPem: "y",
     };
-    const silentCells: Array<[string, unknown]> = [
-      ["inclusionReceipts", 0],
-      ["inclusionReceipts", ""],
-      ["inclusionReceipts", true],
-      ["inclusionReceipts", {}],
-      ["inclusionReceipts", { length: 0 }],
-      ["settlements", 0],
-      ["settlements", ""],
-    ];
-    for (const [nest, bad] of silentCells) {
-      const balanced: Record<string, unknown> = { receipts: [], checkpoints: [], [nest]: bad };
-      if (nest === "settlements") balanced.extract = extract;
-      const balancedReport = audit(balanced as never);
-      assert.equal(
-        balancedReport.findings.some((f) => f.code === "presented-object-malformed"),
-        false,
-        `balanced ${nest}=${JSON.stringify(bad)}`,
+    const notLists: unknown[] = [0, "", false, 5, "x", true, {}, { length: 0 }];
+    for (const bad of notLists) {
+      const emptyRun = auditWindows({ windows: [], inclusionReceipts: bad } as never);
+      const label = `empty run inclusionReceipts=${JSON.stringify(bad)}`;
+      assert.equal(emptyRun.ok, false, label);
+      assert.notEqual(emptyRun.guarantee, "unconditional", label);
+      assert.deepEqual(emptyRun.findings.map((f) => f.code), ["presented-object-malformed"], label);
+    }
+    for (const absent of [undefined, null, []]) {
+      const emptyRun = auditWindows({ windows: [], inclusionReceipts: absent } as never);
+      assert.deepEqual(
+        emptyRun.findings.map((f) => f.code),
+        ["extract-scope-mismatch"],
+        `empty run inclusionReceipts=${JSON.stringify(absent)}`,
       );
     }
+    for (const nest of ["settlements", "inclusionReceipts"] as const) {
+      for (const bad of notLists) {
+        for (const withExtract of [false, true]) {
+          const input: Record<string, unknown> = { receipts: [], checkpoints: [], [nest]: bad };
+          if (withExtract) input.extract = extract;
+          const label = `${nest}=${JSON.stringify(bad)} extract=${withExtract}`;
+          assert.deepEqual(snap(audit(input as never)), snap(FIXED_SAFETY_REPORT), label);
+          if (nest === "inclusionReceipts") {
+            const run = auditWindows({
+              windows: [{ receipts: [], checkpoints: [], extract }],
+              inclusionReceipts: bad,
+            } as never);
+            assert.equal(run.ok, false, `windows ${label}`);
+            assert.notEqual(run.guarantee, "unconditional", `windows ${label}`);
+            assert.deepEqual(
+              run.findings.map((f) => f.code),
+              ["presented-object-malformed"],
+              `windows ${label}`,
+            );
+          }
+        }
+      }
+    }
+  });
+
+  it("an absent or null collection is nothing presented, and an empty list is read as a list", () => {
+    const extract = {
+      body: { accountId: "a", railId: "r", windowStartMs: 1, windowEndMs: 2, settlements: [] },
+      signature: "x",
+      publicKeyPem: "y",
+    };
+    const base = snap(audit({ receipts: [], checkpoints: [], extract } as never));
+    assert.equal(
+      base.findings.some((f) => f.code === "presented-object-malformed"),
+      false,
+    );
+    for (const nest of ["settlements", "inclusionReceipts"] as const) {
+      for (const absent of [undefined, null]) {
+        const input = { receipts: [], checkpoints: [], extract, [nest]: absent };
+        assert.deepEqual(snap(audit(input as never)), base, `${nest}=${JSON.stringify(absent)}`);
+      }
+    }
+    // An empty settlements list beside an extract with no rows agrees with it.
+    assert.deepEqual(
+      snap(audit({ receipts: [], checkpoints: [], extract, settlements: [] } as never)),
+      base,
+    );
+    // An empty inclusionReceipts list is presented: with no witness key the
+    // walk says so, exactly as it does for a non-empty one.
+    const emptyInclusions = snap(
+      audit({ receipts: [], checkpoints: [], extract, inclusionReceipts: [] } as never),
+    );
+    assert.deepEqual(emptyInclusions.findings, base.findings);
+    assert.deepEqual(
+      emptyInclusions.warnings.map((w) => w.code).sort(),
+      [...base.warnings.map((w) => w.code), "unauthenticated-witness"].sort(),
+    );
+  });
+
+  it("the documented bound is still raised before the shape of a collection is judged", () => {
+    for (const big of [{ length: AUDIT_MAX_SETTLEMENTS + 1 }, "x".repeat(AUDIT_MAX_SETTLEMENTS + 1)]) {
+      assert.throws(
+        () => audit({ receipts: [], checkpoints: [], settlements: big } as never),
+        (err: unknown) => (err as { code?: string }).code === "audit-too-large",
+      );
+    }
+    assert.throws(
+      () =>
+        audit({
+          receipts: [],
+          checkpoints: [],
+          inclusionReceipts: { length: AUDIT_MAX_INCLUSIONS + 1 },
+        } as never),
+      (err: unknown) => (err as { code?: string }).code === "audit-too-large",
+    );
   });
 });
 

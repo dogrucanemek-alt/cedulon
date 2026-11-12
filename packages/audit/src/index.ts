@@ -1788,8 +1788,22 @@ export function audit(input: AuditInput): AuditReport {
   return auditDetailed(input).report;
 }
 
+/**
+ * A presented collection is either absent or a list. A value of another type
+ * cannot be read as rows, and a falsy one (`0`, `""`, `false`) would otherwise
+ * pass for "nothing presented". The throw is not marked, so the entry point
+ * turns it into the fixed failing report.
+ */
+function assertPresentedList(value: unknown): void {
+  if (value !== undefined && value !== null && !Array.isArray(value)) {
+    throw new TypeError("a presented collection is not a list");
+  }
+}
+
 function auditDetailedWalk(input: AuditInput): AuditDetailed {
   assertAuditBounds(input);
+  assertPresentedList(input.settlements);
+  assertPresentedList(input.inclusionReceipts);
   return auditDetailedBody(input);
 }
 
@@ -3596,12 +3610,16 @@ export type { WindowInput, WindowsInput, WindowsReport };
 export function auditWindows(input: WindowsInput): WindowsReport {
   return withIntentionalThrowScope(() => {
     try {
-      return runWindows(input, {
+      const report = runWindows(input, {
         auditDetailed: (windowInput) => auditDetailedWalk(windowInput),
         guarantee: reportGuarantee,
         summary: reportSummary,
         defaultProfile: SPEND_PROFILE,
       });
+      // Each window walk checks the run-level collection it is handed; a run
+      // with no window never reaches a walk, so the run checks it as well.
+      assertPresentedList(input.inclusionReceipts);
+      return report;
     } catch (err) {
       if (isIntentionalThrow(err)) throw err;
       return safetyNetWindowsReport();

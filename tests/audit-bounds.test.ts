@@ -355,7 +355,7 @@ describe("audit input bounds on every presented row array", () => {
     assert.equal(withoutExtract.ok, true);
   });
 
-  it("keeps master's non-array settlements outcomes beside an extract", () => {
+  it("a settlements value that is not a list fails as unreadable input beside an extract", () => {
     const extract = signedExtract([row("ok", "1", NOW)], NOW, WINDOW_END);
     const length4097 = audit({
       receipts: [],
@@ -365,11 +365,9 @@ describe("audit input bounds on every presented row array", () => {
     });
     assert.equal(length4097.ok, false);
     assert.equal(length4097.findings.length, 1);
-    assert.equal(length4097.findings[0]?.code, "extract-settlement-mismatch");
-    assert.match(
-      length4097.findings[0]?.detail ?? "",
-      /caller supplied 4097 settlement\(s\) that differ from the 1 in the signed extract/,
-    );
+    assert.equal(length4097.findings[0]?.code, "presented-object-malformed");
+    assert.equal(length4097.findings[0]?.id, "input");
+    assert.notEqual(length4097.guarantee, "unconditional");
     const longString = audit({
       receipts: [],
       checkpoints: [],
@@ -378,11 +376,9 @@ describe("audit input bounds on every presented row array", () => {
     });
     assert.equal(longString.ok, false);
     assert.equal(longString.findings.length, 1);
-    assert.equal(longString.findings[0]?.code, "extract-settlement-mismatch");
-    assert.match(
-      longString.findings[0]?.detail ?? "",
-      /caller supplied 5000 settlement\(s\) that differ from the 1 in the signed extract/,
-    );
+    assert.equal(longString.findings[0]?.code, "presented-object-malformed");
+    assert.equal(longString.findings[0]?.id, "input");
+    assert.notEqual(longString.guarantee, "unconditional");
     const numberSettlements = audit({
       receipts: [],
       checkpoints: [],
@@ -391,11 +387,9 @@ describe("audit input bounds on every presented row array", () => {
     });
     assert.equal(numberSettlements.ok, false);
     assert.equal(numberSettlements.findings.length, 1);
-    assert.equal(numberSettlements.findings[0]?.code, "extract-settlement-mismatch");
-    assert.match(
-      numberSettlements.findings[0]?.detail ?? "",
-      /caller supplied undefined settlement\(s\) that differ from the 1 in the signed extract/,
-    );
+    assert.equal(numberSettlements.findings[0]?.code, "presented-object-malformed");
+    assert.equal(numberSettlements.findings[0]?.id, "input");
+    assert.notEqual(numberSettlements.guarantee, "unconditional");
     const shortString = audit({
       receipts: [],
       checkpoints: [],
