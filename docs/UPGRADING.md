@@ -157,9 +157,12 @@ see `witness-inclusion-invalid`; supply the log's key out of band.
 `audit` walks the checkpoint hash chain in epoch order, as the verification
 algorithm requires. A bundle whose `prevCheckpointHash` links follow
 presentation order while epochs are shuffled (for example 3 then 1 then 2) is
-now a `checkpoint-total-mismatch` chain break. Callers that already present an
-honest chain in any array order keep a clean audit; callers that relied on
-presentation-order linking without epoch order do not.
+now a `checkpoint-total-mismatch` chain break. The change runs the other way
+too: a chain linked in epoch order and presented in another array order (for
+example 2 then 1 then 3) was a chain break in 0.17.0 and is a clean audit in
+0.18.0. The exported helper `findCheckpointChainBreak` is unchanged in this
+respect: it walks the array in the order it is given, and `audit` sorts by
+epoch before calling it.
 
 New inclusion receipts from the in-process transparency log use the RFC 9162
 Merkle Tree Hash (Section 2.1): leaf `HASH(0x00 || entry)`, interior node
