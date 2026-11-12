@@ -15,6 +15,16 @@ longer throws; it returns the same fixed failed report. This is a behaviour
 change. `auditWindows` applies the net at run level and shares the stamp set
 with each window walk.
 
+A presented `settlements` or `inclusionReceipts` that is neither absent
+(`undefined` or `null`) nor a list now returns that same fixed failed report.
+Before, a falsy value of the wrong type (`0`, `""`, `false`) was read as
+nothing presented, and a truthy one produced `extract-settlement-mismatch`,
+an `unauthenticated-witness` warning or the fixed failed report, depending on
+where the walk met it. This is a behaviour change. The documented bound is
+still checked first, so a value that already threw `audit-too-large` still
+throws it. `auditWindows` applies the same check to its run-level
+`inclusionReceipts`, including for a run with no window.
+
 Issuer-chain ordering inside `audit` returns the same results for inputs that
 are unchanged while read, and is much faster near the documented bounds.
 
