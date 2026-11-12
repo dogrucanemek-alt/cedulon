@@ -156,7 +156,8 @@
             "effect-without-decision",
             "effect-against-refusal",
             "effect-mismatch",
-            "effect-class-mismatch"
+            "effect-class-mismatch",
+            "presented-object-malformed"
           ]
         },
         "id": { "type": "string", "minLength": 1 },

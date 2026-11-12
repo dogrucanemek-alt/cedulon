@@ -6,6 +6,15 @@ kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
 ## Unreleased
 
+`audit` and `auditWindows` wrap the existing walk in a call-scoped safety net:
+unexpected exceptions become a fixed `presented-object-malformed` report
+(finding id `input`) instead of escaping to the caller. The net rethrows only
+errors stamped by `audit-too-large` in that call (same message and `code` as
+before). Broken caller trust configuration (for example `issuerTrust: {}`) no
+longer throws; it returns the same fixed failed report. This is a behaviour
+change. `auditWindows` applies the net at run level and shares the stamp set
+with each window walk.
+
 Issuer-chain ordering inside `audit` returns the same results for inputs that
 are unchanged while read, and is much faster near the documented bounds.
 

@@ -396,22 +396,32 @@ describe("audit input bounds on every presented row array", () => {
       numberSettlements.findings[0]?.detail ?? "",
       /caller supplied undefined settlement\(s\) that differ from the 1 in the signed extract/,
     );
-    assert.throws(
-      () => audit({ receipts: [], checkpoints: [], extract, settlements: "x" as never }),
-      (err: unknown) => {
-        assert.ok(err instanceof TypeError);
-        assert.match((err as Error).message, /a\.map is not a function/);
-        return true;
-      },
+    const shortString = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      settlements: "x" as never,
+    });
+    assert.equal(shortString.ok, false);
+    assert.ok(
+      shortString.findings.some(
+        (f) => f.code === "presented-object-malformed" && f.id === "input",
+      ),
     );
-    assert.throws(
-      () => audit({ receipts: [], checkpoints: [], extract, settlements: { length: 1 } as never }),
-      (err: unknown) => {
-        assert.ok(err instanceof TypeError);
-        assert.match((err as Error).message, /a\.map is not a function/);
-        return true;
-      },
+    assert.notEqual(shortString.guarantee, "unconditional");
+    const lengthOne = audit({
+      receipts: [],
+      checkpoints: [],
+      extract,
+      settlements: { length: 1 } as never,
+    });
+    assert.equal(lengthOne.ok, false);
+    assert.ok(
+      lengthOne.findings.some(
+        (f) => f.code === "presented-object-malformed" && f.id === "input",
+      ),
     );
+    assert.notEqual(lengthOne.guarantee, "unconditional");
   });
 
   it("keeps master's non-array settlements outcomes without an extract", () => {
@@ -439,14 +449,18 @@ describe("audit input bounds on every presented row array", () => {
         return true;
       },
     );
-    assert.throws(
-      () => audit({ receipts: [], checkpoints: [], settlements: 5 as never }),
-      (err: unknown) => {
-        assert.ok(err instanceof TypeError);
-        assert.match((err as Error).message, /reconciled\.map is not a function/);
-        return true;
-      },
+    const numberSettlements = audit({
+      receipts: [],
+      checkpoints: [],
+      settlements: 5 as never,
+    });
+    assert.equal(numberSettlements.ok, false);
+    assert.ok(
+      numberSettlements.findings.some(
+        (f) => f.code === "presented-object-malformed" && f.id === "input",
+      ),
     );
+    assert.notEqual(numberSettlements.guarantee, "unconditional");
   });
 
   it("leaves neighbour extracts with non-array row fields on master's report path", () => {

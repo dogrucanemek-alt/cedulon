@@ -83,6 +83,10 @@ Decision-profile codes (0.13.0 prepared, not published):
 the same ref; the worst), `effect-mismatch` (allow, row, hash differs),
 `effect-class-mismatch` (allow, row, `effectClass` differs, hash equal).
 
+`presented-object-malformed` (audit fails): the audit input or its
+configuration could not be read; no report could be computed. Used by the
+safety net around `audit` / `auditWindows` with finding id `input`.
+
 Unknown properties on a finding are allowed. The schema says so. A
 producer may add `ref`, `amount`, or a language tag without a version
 bump, as long as it does not rename or reuse `code` / `id` / `detail`.
