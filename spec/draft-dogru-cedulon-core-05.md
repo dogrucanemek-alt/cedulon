@@ -1634,6 +1634,10 @@ A refusal MUST be reported by name, and the refused object is not
 counted: it is attested nowhere, covers no settlement and no
 checkpoint window, and adds to no total, so whatever its absence
 leaves uncovered is reported by the steps that would have counted it.
+An audit input or a verifier configuration that the verifier cannot
+read at all is not a refusal of one object: the audit is not carried
+out, and the report fails with `presented-object-malformed` as its
+only finding.
 A content type that is not the expected one, and a decoded claim map
 that does not match the presented claims, are not refusals: the
 object does not verify, and the row of the table in {{issuer-root}}
