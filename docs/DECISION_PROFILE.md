@@ -165,7 +165,7 @@ so that per-row finding is never reached on this profile.
 | `effect-mismatch` | allow, row, `effectHash` differs (SUBSTITUTION) |
 | `effect-class-mismatch` | allow, row, `effectClass` differs, hash equal (CLASS SUBSTITUTION) |
 
-`FINDING_CODES` is 55. The schema enum lists the same 55. Hash difference
+`FINDING_CODES` is 56. The schema enum lists the same 56. Hash difference
 is reported first and alone; a class difference beside a hash difference
 is not a second finding. `BindResult.code` lets the decision profile
 name `effect-class-mismatch`; spend still omits `code` and stays

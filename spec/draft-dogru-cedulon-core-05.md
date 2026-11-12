@@ -2262,7 +2262,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 911 of 911,
+  this revision describes, all three assert every case, 925 of 925,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.
@@ -2609,6 +2609,7 @@ ae447dc74ccb0f13383f0f43f0f67f288d61a6395e95e2038e320d
 | counterparty-unbound | scope record; verdict and guarantee unchanged | Neither the manifest names a `payee` nor any settlement record declares a `beneficiary`: ref, amount and currency closed against the payer's account extract, and the counterparty's identity was not bound |
 | delivery-mismatch | audit fails | An attributable countersignature carries `deliveredHash`, its receipt names a Trade Manifest the audit did not refuse, and the digest differs from that manifest's acceptance-criteria hash; both ends are signed (`MAY-T8-11`). A receipt that names no manifest, or another one, is not compared. Where a stated publisher pin refuses the manifest, its acceptance hash founds nothing and this comparison is not made (`MUST-T8-9`) |
 | malformed-policy-hash (and its family: malformed-request-hash, malformed-acceptance-criteria-hash, malformed-manifest-hash, malformed-receipt-hash, malformed-prev-receipt-hash, malformed-chain-head-hash, malformed-prev-checkpoint-hash, malformed-ap-two-mandate-hash) | audit fails | A hash-shaped claim does not match the 64-lowercase-hex grammar of {{receipt-labels}}; the claim is named in the code |
+| presented-object-malformed | audit fails | the audit input or its configuration could not be read; no report could be computed |
 
 The refusals of the Finding codes section are named, and the name
 travels with the condition the refused object leaves behind in the

@@ -60,6 +60,11 @@ import {
 } from "@cedulon/effect-extract";
 import { SPEND_PROFILE, type ProfileWords, type ReconciliationProfile } from "./profile.ts";
 import { DECISION_PROFILE } from "./profiles/decision.ts";
+import {
+  isIntentionalThrow,
+  stampIntentionalThrow,
+  withIntentionalThrowScope,
+} from "./intentional-throw.ts";
 import { runWindows, type WindowInput, type WindowsInput, type WindowsReport } from "./windows.ts";
 
 export { DEFAULT_CLOCK_SKEW_MS };
@@ -129,6 +134,7 @@ export const FINDING_CODES = [
   "effect-against-refusal",
   "effect-mismatch",
   "effect-class-mismatch",
+  "presented-object-malformed",
 ] as const;
 
 export type FindingCode = (typeof FINDING_CODES)[number];
@@ -1615,7 +1621,74 @@ function throwAuditTooLarge(axis: string, count: number, max: number): never {
     code: string;
   };
   err.code = "audit-too-large";
+  stampIntentionalThrow(err);
   throw err;
+}
+
+const SAFETY_NET_DETAIL =
+  "the audit input or its configuration could not be read; no report could be computed";
+
+function emptyAuditCounts(): AuditCounts {
+  return {
+    receipts: {
+      submitted: 0,
+      attested: 0,
+      inScope: 0,
+      aborted: 0,
+      settled: 0,
+      matched: 0,
+      deferred: 0,
+      carried: 0,
+      unmatched: 0,
+      repeated: 0,
+      unreconciled: 0,
+    },
+    settlements: {
+      rows: 0,
+      matched: 0,
+      deferred: 0,
+      unmatched: 0,
+      repeated: 0,
+      unreconciled: 0,
+    },
+  };
+}
+
+function safetyNetReport(): AuditReport {
+  const findings: Finding[] = [
+    { code: "presented-object-malformed", id: "input", detail: SAFETY_NET_DETAIL },
+  ];
+  return {
+    ok: false,
+    findings,
+    warnings: [],
+    guarantee: reportGuarantee([], findings),
+    summary: reportSummary(findings, SPEND_PROFILE.words, SPEND_PROFILE.codes.rowWithoutRecord),
+    counts: emptyAuditCounts(),
+  };
+}
+
+function safetyNetDetailed(): AuditDetailed {
+  return {
+    report: safetyNetReport(),
+    carried: [],
+    deferredRows: [],
+    matched: [],
+  };
+}
+
+function safetyNetWindowsReport(): WindowsReport {
+  const findings: Finding[] = [
+    { code: "presented-object-malformed", id: "input", detail: SAFETY_NET_DETAIL },
+  ];
+  return {
+    ok: false,
+    guarantee: reportGuarantee([], findings),
+    summary: reportSummary(findings, SPEND_PROFILE.words, SPEND_PROFILE.codes.rowWithoutRecord),
+    windows: [],
+    findings,
+    resolved: 0,
+  };
 }
 
 function neighbourExtractRowCount(extract: unknown, pop: Population): number | null {
@@ -1715,8 +1788,23 @@ export function audit(input: AuditInput): AuditReport {
   return auditDetailed(input).report;
 }
 
-function auditDetailed(input: AuditInput): AuditDetailed {
+function auditDetailedWalk(input: AuditInput): AuditDetailed {
   assertAuditBounds(input);
+  return auditDetailedBody(input);
+}
+
+function auditDetailed(input: AuditInput): AuditDetailed {
+  return withIntentionalThrowScope(() => {
+    try {
+      return auditDetailedWalk(input);
+    } catch (err) {
+      if (isIntentionalThrow(err)) throw err;
+      return safetyNetDetailed();
+    }
+  });
+}
+
+function auditDetailedBody(input: AuditInput): AuditDetailed {
   const profile = (input.profile ?? SPEND_PROFILE) as ReconciliationProfile<PresentedRecord, PresentedRow>;
   const pop = populationOf(profile);
   const w = profile.words;
@@ -2756,7 +2844,8 @@ function reportGuarantee(warnings: Finding[], hard: Finding[]): AuditReport["gua
       f.code === "extract-scope-mismatch" ||
       f.code === "extract-settlement-mismatch" ||
       f.code === "issuer-key-mismatch" ||
-      f.code === "manifest-key-mismatch",
+      f.code === "manifest-key-mismatch" ||
+      f.code === "presented-object-malformed",
   );
   return guaranteeWarnings.length === 0 && !doubtedEvidence ? "unconditional" : "conditional";
 }
@@ -3505,10 +3594,17 @@ export type { WindowInput, WindowsInput, WindowsReport };
  * adjacent window carried a receipt for its ref.
  */
 export function auditWindows(input: WindowsInput): WindowsReport {
-  return runWindows(input, {
-    auditDetailed,
-    guarantee: reportGuarantee,
-    summary: reportSummary,
-    defaultProfile: SPEND_PROFILE,
+  return withIntentionalThrowScope(() => {
+    try {
+      return runWindows(input, {
+        auditDetailed: (windowInput) => auditDetailedWalk(windowInput),
+        guarantee: reportGuarantee,
+        summary: reportSummary,
+        defaultProfile: SPEND_PROFILE,
+      });
+    } catch (err) {
+      if (isIntentionalThrow(err)) throw err;
+      return safetyNetWindowsReport();
+    }
   });
 }
