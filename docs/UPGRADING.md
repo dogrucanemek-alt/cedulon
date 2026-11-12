@@ -23,10 +23,12 @@ with each window walk.
 
 A presented `settlements` or `inclusionReceipts` that is neither absent
 (`undefined` or `null`) nor a list now returns that same fixed failed report.
-Before, a falsy value of the wrong type (`0`, `""`, `false`) was read as
-nothing presented, and a truthy one produced `extract-settlement-mismatch`,
-an `unauthenticated-witness` warning or the fixed failed report, depending on
-where the walk met it. This is a behaviour change. The documented bound is
+In 0.17.0 a falsy value of the wrong type (`0`, `""`, `false`) was read as
+nothing presented when it was `inclusionReceipts`, or `settlements` beside an
+extract; as `settlements` without an extract it threw a `TypeError`. A truthy
+value of the wrong type produced `extract-settlement-mismatch`, an
+`unauthenticated-witness` warning or a thrown `TypeError`, depending on where
+the walk met it. This is a behaviour change. The documented bound is
 still checked first, so a value that already threw `audit-too-large` still
 throws it. `auditWindows` applies the same check to its run-level
 `inclusionReceipts`, including for a run with no window.
@@ -126,11 +128,25 @@ the report. Parsers of that text report must treat `\uXXXX`, `\u{...}`, and
 `\\` in those fields as escapes rather than as the raw extract or finding
 bytes.
 
-When an audit is run without an issuer pin, `checkpoint-withheld` is raised
-for a log entry whose body verifies under a key that also signed a presented
-checkpoint; other log entries that this chain does not present are counted
-under `witness-entry-unattributable` instead of being treated as withholding
-by the presented issuer.
+`checkpoint-withheld` is raised only for a log entry that can be attributed to
+the presented issuer. With or without an issuer pin, the unsigned checkpoint
+body beside an inclusion receipt must hash to the statement that receipt
+signed. 0.17.0 did not compare them, so a receipt for one statement that
+carried the pinned issuer's body for another was reported as
+`checkpoint-withheld` and failed the audit; that entry is now counted under
+the `witness-entry-unattributable` warning and does not fail the audit by
+itself. When an audit is run without an issuer pin, `checkpoint-withheld` is
+raised for a log entry whose body verifies under a key that also signed a
+presented checkpoint; other log entries that this chain does not present are
+counted under `witness-entry-unattributable` instead of being treated as
+withholding by the presented issuer.
+
+A witness pin counts as configured only when at least one key in it can be
+read as a public key. When `inclusionReceipts` is presented beside a
+`witnessTrust` whose key list is empty or unreadable, 0.17.0 treated the
+witness as configured. The audit now adds the `unauthenticated-witness`
+warning and leaves the receipts out of the comparison, so the guarantee is
+conditional.
 
 `audit` layer 2 (candidate statement bytes plus an inclusion proof) accepts a
 receipt only under a verifier-supplied pinned witness key (`witnessTrust`).
@@ -162,8 +178,8 @@ A three-entry signed payload is the -00 (legacy) map: `statementHash`,
 `treeSize`, and its proof must omit them too. Callers of `verifyInclusion`
 see the same boolean contract; call `verifyInclusionDetailed` when you need
 `{ ok, legacyTree }`. `legacyTree` is true when the signed payload is the
-three-entry map; false when it is five-entry or when the payload cannot be
-read (including early envelope failures). Three-entry receipts still verify
+three-entry map, including when a later check on that receipt fails; it is
+false when the payload is five-entry or cannot be read. Three-entry receipts still verify
 under the older walk, in `verifyInclusion` and in tier 2 of `audit`; acceptance
 there still requires the statement hash, the index, and the reproduced root to
 match the payload the log signed. `audit` raises no separate finding when it
@@ -173,6 +189,18 @@ The older tree paired an odd last node with itself and did not separate leaves
 from interior nodes, so the leaf lists `[a, b, c]` and `[a, b, c, c]` produced
 the same root and could not be told apart from the root alone. The RFC 9162
 tree removes that collision.
+
+The signed inclusion payload is read strictly, for both forms. It is a map of
+exactly three or exactly five entries, `statementHash` and `treeHead` are
+64-character lowercase hex, and `index` is a safe non-negative integer. Under
+0.17.0 a payload with an extra entry, a hash in another form or a negative
+index could verify when the rest matched. It no longer verifies, and
+`decodeInclusionPayload` throws `inclusion-payload` for it.
+
+`@cedulon/checkpoint` adds exports: `verifyInclusionDetailed` with the type
+`InclusionVerifyResult`, and the RFC 9162 helpers `RFC9162_EMPTY_ROOT`,
+`rfc9162LeafHash`, `rfc9162NodeHash`, `rfc9162Root`, `rfc9162InclusionProof`
+and `rfc9162VerifyInclusion`. `@cedulon/audit` adds `escapeReportText`.
 
 The launchers `cedulon` and `cedulon-mcp` move to 1.5.0 and depend on
 `^0.18.0`. A `^0.17.0` range does not accept 0.18.0, so 1.4.0 keeps

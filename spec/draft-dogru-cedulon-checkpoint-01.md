@@ -446,7 +446,7 @@ appear in operator-facing output (`MUST-T10-14`).
 | equivocation | audit fails | Two distinct hashes for one epoch |
 | window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows; also an anchor that does not meet the presented checkpoint with the lowest epoch, identified by `anchor` ({{genesis}}) |
 | unauthenticated-witness | conditional | No verifier-supplied witness key; inclusion receipts were left out of the comparison |
-| witness-entry-unattributable | conditional | The witness holds a statement this chain does not present, carrying no body to say whose it is |
+| witness-entry-unattributable | conditional | The witness holds a statement this chain does not present and that cannot be attributed to it: it carries no body, a body that is not the statement the receipt signed, a body that does not verify, or a body whose issuer cannot be tied to the presented chain |
 | checkpoint-withheld | audit fails | A verified witness receipt binds a checkpoint the presented chain does not contain |
 | checkpoint-not-anchored | guarantee conditional | A witness was supplied and holds no verified receipt for this checkpoint |
 | checkpoint-totals-redacted | guarantee conditional | The checkpoint was signed with `totals` null, so the totals comparison could not be made |
