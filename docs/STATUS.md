@@ -86,10 +86,14 @@ notes; the bundle downloaded from the release hashes to that value. The
 tagged run published, registered and attached the bundle in one pass; its
 post-release job was red by design until this page named 0.18.0 as published.
 The launchers `cedulon` and `cedulon-mcp` move to 1.5.0 and depend on
-`^0.18.0` in this tree: a `^0.17.0` range does not accept 0.18.0, so 1.4.0
-keeps installing 0.17.0. `release.yml` does not publish the launchers;
-`cedulon@1.5.0` and `cedulon-mcp@1.5.0` are not published, and npm marks 1.4.0
-as `latest` for both. Unchanged, and named here because the gate reads
+`^0.18.0`: a `^0.17.0` range does not accept 0.18.0, so 1.4.0 kept
+installing 0.17.0. `release.yml` does not publish the launchers;
+`cedulon@1.5.0` and `cedulon-mcp@1.5.0` were published by hand on 12 November
+2026; npm's shasum for each equals that of the tarball installed into an empty
+folder and run before publishing, and npm now marks 1.5.0 as `latest` for
+both. Measured from npm in an empty folder: both install
+`@cedulon/mcp-server@0.18.0`, and each launcher starts the server and its
+`initialize` reports `0.18.0`. Unchanged, and named here because the gate reads
 this version's own paragraph: `audit()` reports `manifest-terms-mismatch` with
 the split 0.6.0 introduced, where with a usable issuer pin the departure is a
 finding that fails the audit, and without a pin the same departure is a
@@ -126,8 +130,8 @@ named 0.17.0 as published. The launchers `cedulon` and `cedulon-mcp` move to
 1.3.0 kept installing 0.16.0. `release.yml` does not publish the launchers;
 `cedulon@1.4.0` and `cedulon-mcp@1.4.0` were published by hand on 31 October
 2026; npm's shasum for each equals that of the tarball installed into an empty
-folder and run before publishing, and npm now marks 1.4.0 as `latest` for
-both. Measured from npm in an empty folder: both install
+folder and run before publishing, and npm marked 1.4.0 as `latest` for
+both until 1.5.0. Measured from npm in an empty folder: both install
 `@cedulon/mcp-server@0.17.0`, and each launcher starts the server and its
 `initialize` reports `0.17.0`. Unchanged, and named here because the gate
 reads this version's own paragraph: `audit()` reports
