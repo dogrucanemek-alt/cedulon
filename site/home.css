@@ -213,3 +213,6 @@ footer{position:relative;z-index:3;background:var(--void);border-top:1px solid v
 .faq p{margin:10px 0 0;font-size:15.5px;color:var(--dim);max-width:60ch}
 .faq a{color:var(--ink);text-decoration-color:var(--accent);text-underline-offset:3px}
 @media (max-width:860px){.faq{grid-template-columns:minmax(0,1fr)}}
+
+article blockquote { margin: 10px 0 0; padding-left: 14px; border-left: 1px solid var(--rule); }
+article blockquote p { margin: 0 0 8px; }
