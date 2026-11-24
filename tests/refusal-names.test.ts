@@ -139,7 +139,7 @@ const SIGNED = signReceipt(CLAIMS, KEYS.privateKeyPem, KEYS.publicKeyPem);
 const BODY = { accountId: "a", railId: "r", windowStartMs: 1, windowEndMs: 2, settlements: [] as unknown[] };
 const ROW = { ref: "ref-1", amount: "1", currency: "USD", timestampMs: 1 };
 
-function without<T extends object>(value: T, key: string): Record<string, unknown> {
+function without(value: Readonly<Record<string, unknown>>, key: string): Record<string, unknown> {
   const copy: Record<string, unknown> = { ...value };
   delete copy[key];
   return copy;

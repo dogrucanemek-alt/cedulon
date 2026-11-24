@@ -31,10 +31,10 @@ export const REQUIRED_URLS = [
   "https://doi.org/10.5281/zenodo.22811593",
 ] as const;
 
-export const VERAX_VERSION = "0.8.2";
+export const VERAX_VERSION = "0.9.0";
 /** The newest Verax version archived on Zenodo; it trails npm when a release is not deposited. */
-export const VERAX_ARCHIVED_VERSION = "0.8.2";
-export const CEDULON_VERSION = "0.13.1";
+export const VERAX_ARCHIVED_VERSION = "0.9.0";
+export const CEDULON_VERSION = "0.16.0";
 
 /** The Verax packages the entry names on npm at VERAX_VERSION. */
 export const VERAX_PACKAGES = ["@verax-ai/body", "@verax-ai/proxy", "@verax-ai/inventory"] as const;

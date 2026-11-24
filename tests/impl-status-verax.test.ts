@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { core00FamilyPaths } from "../scripts/latest-draft.ts";
 import {
+  CEDULON_VERSION,
   REQUIRED_SENTENCE,
   REQUIRED_URLS,
   VERAX_VERSION,
@@ -83,8 +84,8 @@ describe("Verax Implementation Status entries stay aligned", () => {
 
   it("RED: @cedulon/* at another version beside the current one is caught", () => {
     const stale = status.replace(
-      "all at `@cedulon/*` 0.13.1,",
-      "all at `@cedulon/*` 0.13.1, earlier `@cedulon/*` 0.12.0,",
+      `all at \`@cedulon/*\` ${CEDULON_VERSION},`,
+      `all at \`@cedulon/*\` ${CEDULON_VERSION}, earlier \`@cedulon/*\` 0.12.0,`,
     );
     assert.notEqual(stale, status);
     const failures = implStatusVeraxFailures(draft, stale);
