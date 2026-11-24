@@ -1,6 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, verify } from "node:crypto";
 import { asSigner, type Signer } from "./signer.ts";
-import { asArray, asMap, cborMap, decodeCbor, encodeCbor, hexToBytes, isCborMap, mapGet, namedDecodeRefusal } from "./cbor.ts";
+import { asArray, cborMap, decodeCbor, encodeCbor, hexToBytes, isCborMap, mapGet, namedDecodeRefusal } from "./cbor.ts";
 
 /** RFC 9052 EdDSA. Deprecated for this profile; use Ed25519 (-19). */
 export const COSE_ALG_EDDSA = -8;
@@ -90,7 +90,11 @@ export function encodeProtectedHeader(header: ProtectedHeader): Uint8Array {
 }
 
 export function decodeProtectedHeader(bytes: Uint8Array): ProtectedHeader {
-  const map = asMap(decodeCbor(bytes));
+  const map = decodeCbor(bytes);
+  // Not a map at all is the same refusal as a map missing a label.
+  if (!isCborMap(map)) {
+    throw new Error("cose-protected-header");
+  }
   // Label 2 is crit. RFC 9052 requires rejecting a critical parameter this
   // profile does not understand, and the only labels it understands are
   // alg, content type, and kid.

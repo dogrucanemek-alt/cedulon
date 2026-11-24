@@ -338,6 +338,10 @@ export function hexToBytes(hex: string): Uint8Array {
 export const NAMED_DECODE_REFUSALS: ReadonlySet<string> = new Set([
   "cbor-too-large",
   "cbor-too-deep",
+  // An item shorter than its declared length, and octets after the one
+  // item, are shape refusals, not signature verdicts.
+  "cbor-eof",
+  "cbor-trailing",
   "cbor-duplicate-key",
   // Two writings of one value are two identities. receiptHash is SHA-256 of
   // the transport octets, so a second spelling mints a second hash.
@@ -350,6 +354,8 @@ export const NAMED_DECODE_REFUSALS: ReadonlySet<string> = new Set([
   // public name path returned null, which is the "kept the bound, lost the
   // name" failure the path exists to prevent.
   "cose-sign1-unprotected",
+  // The protected header is not the map the profile requires.
+  "cose-protected-header",
 ]);
 
 export function namedDecodeRefusal(err: unknown): string | null {
