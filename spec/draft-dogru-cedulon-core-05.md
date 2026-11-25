@@ -323,11 +323,32 @@ Pinned key:
 : A public key the verifier obtained out of band, as opposed to a key an
   object carries beside its signature. See {{trust-roots}}.
 
+Coverage set:
+: The receipts and checkpoints that count as settlement coverage and
+  as attested. Under a usable pinned issuer key it is the attested
+  set - the receipts and checkpoints that verify under a usable
+  pinned issuer key. When no issuer key is pinned, the same members
+  as the diagnostic set (presented-unattested). When a pin is stated
+  but no key in it can be read, empty: nothing is attested and no
+  settlement is covered. See {{issuer-root}}.
+
+Diagnostic set:
+: The receipts and checkpoints consumed for refusal naming and for
+  genesis, epoch, and window continuity. Under a usable pinned issuer
+  key, the same members as the coverage set. When no usable issuer key
+  is pinned - including a stated pin that cannot be read - every
+  presented one that no refusal of Appendix B ({{finding-code-table}})
+  has refused. A member of the diagnostic set is not thereby attested
+  or valid. Totals, `receiptCount`, and `chainHeadHash` checks compare
+  a checkpoint only against receipts of the same set; an empty
+  coverage set MUST NOT make those checks report a mismatch against
+  diagnostic checkpoints. See {{verification}}.
+
 Working set:
-: The receipts and checkpoints the verification steps consume: those
-  that verify under a usable pinned issuer key (the attested set), or,
-  when no usable issuer key is pinned, every presented one that no
-  refusal of Appendix B ({{refusal-names}}) has refused. See
+: Where a step does not need the coverage/diagnostic split, the set
+  it consumes: the coverage set for settlement and attested counting,
+  and the diagnostic set for refusal naming and continuity. The two
+  coincide except when a stated issuer pin cannot be read. See
   {{verification}}.
 
 Presented-unattested:
@@ -1341,20 +1362,20 @@ The first is the index of refs: step 7 builds it, and steps 8 and 9
 reconcile it.
 
 The second is the issuer pin. The step that resolves it decides the
-**working set**: the attested set - the receipts and checkpoints that
-verify under a usable pinned issuer key - or, when no usable key is
-pinned, the presented set less every object a refusal of Appendix B
-has refused, whose members are presented-unattested. A refused object
-counts for nothing whether or not a key is pinned (Finding codes
-section): the pin decides who signed, and a refusal is decided before
-that question is asked. Every later step that walks receipts consumes
-the working set: the indexing and reconciliation in steps 7 through 9
-and the `MUST-T8-9` comparison. The chain walk in step 6 consumes the
-working set plus one addition named in {{issuer-root}}: a receipt that
-claims the pin and fails to verify under it is walked so the break can
-be named, and is attested nowhere. A receipt that neither claims the
-pin nor verifies under it is reported once (issuer-key-mismatch) and
-then excluded, which is what keeps the settlement it names visible as
+**coverage set** and the **diagnostic set** defined in Terminology.
+Settlement indexing and reconciliation (steps 7 through 9 and the
+`MUST-T8-9` comparison) consume the coverage set. Refusal naming and
+genesis, epoch, and window continuity consume the diagnostic set;
+checkpoint totals, `receiptCount`, and `chainHeadHash` compare each
+checkpoint only against receipts of that same set. A refused object
+counts for nothing whether or not a key is pinned ({{finding-code-table}}):
+the pin decides who signed, and a refusal is decided before that
+question is asked. The chain walk in step 6 consumes the coverage set
+plus one addition named in {{issuer-root}}: a receipt that claims the
+pin and fails to verify under it is walked so the break can be named,
+and is attested nowhere. A receipt that neither claims the pin nor
+verifies under it is reported once (issuer-key-mismatch) and then
+excluded, which is what keeps the settlement it names visible as
 uncovered (`MUST-T4-10`); an
 implementation that let it back into any of those steps would let a
 forged receipt cover a settlement, satisfy a checkpoint count, or
@@ -2318,7 +2339,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 1030 of 1030,
+  this revision describes, all three assert every case, 1051 of 1051,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.

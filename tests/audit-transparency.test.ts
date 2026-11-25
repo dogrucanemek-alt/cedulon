@@ -128,6 +128,7 @@ describe("A — transparency witness on the audit path", () => {
       settlements: settlementsOf(receipts),
       inclusionReceipts: [presentedReceipt, withheldReceipt],
       witnessTrust: { publicKeyPem: ts.publicKeyPem },
+      issuerTrust: { publicKeyPem: k.publicKeyPem },
     });
     assert.equal(report.ok, false);
     assert.equal(
@@ -306,7 +307,7 @@ describe("A — transparency witness on the audit path", () => {
     );
   });
 
-  it("without an issuer pin a same-key withheld body still accuses", () => {
+  it("without an issuer pin a same-key withheld body is unattributable, not withheld (MUST-T11-16 requires the issuer root)", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
     const presented = oneCheckpoint(k, receipts, 1);
@@ -327,8 +328,13 @@ describe("A — transparency witness on the audit path", () => {
     });
     assert.equal(
       report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `without an issuer root carried-key equality must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
       true,
-      `same-key withheld must accuse: ${JSON.stringify(report.findings)}`,
+      "same-key body without an issuer pin is unattributable",
     );
   });
 
@@ -489,7 +495,7 @@ describe("A — transparency witness on the audit path", () => {
 });
 
 describe("B — equivocation via the witness", () => {
-  it("RED: same epoch, one checkpoint presented, a different verified copy in the witness", () => {
+  it("RED then GREEN: without an issuer pin a witness twin is unattributable, not equivocation (MUST-T11-16)", () => {
     const k = generateReceiptKeys();
     const a = chainReceipts(k, ["1"]);
     const b = chainReceipts(k, ["2"]);
@@ -512,6 +518,43 @@ describe("B — equivocation via the witness", () => {
       settlements: settlementsOf(a),
       inclusionReceipts: [presentedReceipt, otherReceipt],
       witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "equivocation" && f.id === "epoch-7"),
+      false,
+      `without an issuer root a witness twin must not equivocate: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "witness twin without an issuer pin is unattributable",
+    );
+  });
+
+  it("with a usable issuer pin, same epoch presented vs witness twin is equivocation", () => {
+    const k = generateReceiptKeys();
+    const a = chainReceipts(k, ["1"]);
+    const b = chainReceipts(k, ["2"]);
+    const presented = signCheckpoint(
+      buildCheckpointClaims(7, a, 1_700_000_000_000, 1_700_000_000_010, null),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const other = signCheckpoint(
+      buildCheckpointClaims(7, b, 1_700_000_000_000, 1_700_000_000_010, null),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const otherReceipt = anchorCheckpoint(ts, other);
+    const report = audit({
+      receipts: a,
+      checkpoints: [presented],
+      settlements: settlementsOf(a),
+      inclusionReceipts: [presentedReceipt, otherReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+      issuerTrust: { publicKeyPem: k.publicKeyPem },
     });
     assert.equal(report.ok, false);
     assert.equal(

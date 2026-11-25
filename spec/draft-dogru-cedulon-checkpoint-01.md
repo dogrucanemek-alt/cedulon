@@ -89,7 +89,11 @@ A log holds statements from everyone who uses it. A statement held by
 a pinned log MUST additionally answer to the issuer root before it
 counts as something that issuer published (`MUST-T11-16`); otherwise
 another user's epoch, sitting in a shared log, reads as this issuer
-publishing two checkpoints for one epoch.
+publishing two checkpoints for one epoch. Without a usable issuer
+pin there is no issuer root to answer to: a verifying body whose
+carried key matches a key on the presented chain MUST NOT produce a
+withholding or equivocation verdict; it is reported as
+`witness-entry-unattributable` and makes the guarantee conditional.
 
 Anchoring and withholding are different claims and need different
 evidence. Establishing that a checkpoint was logged needs only the
@@ -333,12 +337,16 @@ that ran a consumer against an unchecked producer would not produce
 the same set of findings, so those orders are not among the
 permitted ones.
 
-These steps consume two products of {{CEDULON-CORE}} (Verification
-algorithm): the working set that the issuer-pin step decides, and
-the `ref` index that step 7 of {{CEDULON-CORE}} builds. The chain walk that
-defines issuer order is step 6 of {{CEDULON-CORE}}. A fail-severity
-finding these steps produce is a finding step 11 of {{CEDULON-CORE}}
-treats as failing the audit (`MUST-T10-4`).
+These steps consume products of {{CEDULON-CORE}} (Verification
+algorithm and Terminology): the coverage set and the diagnostic set
+that the issuer-pin step decides, and the `ref` index that step 7 of
+{{CEDULON-CORE}} builds. Totals, count, and head checks compare a
+checkpoint only against receipts of the same set; continuity checks
+(genesis, epoch, window) consume the diagnostic set; settlement
+coverage consumes the coverage set. The chain walk that defines
+issuer order is step 6 of {{CEDULON-CORE}}. A fail-severity finding
+these steps produce is a finding step 11 of {{CEDULON-CORE}} treats as
+failing the audit (`MUST-T10-4`).
 
 When a step names an identifier in backticks, that identifier
 SHOULD be used for the condition in diagnostic output. The
@@ -350,9 +358,12 @@ identifiers are not an interoperability surface.
    `kid` that does not match the key obtained for the checkpoint
    issuer, on the same terms as a receipt (`MUST-T4-8`). Require
    `receiptCount`, `chainHeadHash`, and `totals` to match the
-   receipts of the working set in `[startMs, endMs)` as defined above
-   (`MUST-T11-2`); a receipt step 4 of {{CEDULON-CORE}} rejected is not among them,
-   or a forged receipt could satisfy a checkpoint count. The identifier `checkpoint-total-mismatch`
+   receipts of the same set (coverage or diagnostic) in
+   `[startMs, endMs)` as defined above (`MUST-T11-2`); a receipt
+   step 4 of {{CEDULON-CORE}} rejected is not among them, or a forged
+   receipt could satisfy a checkpoint count. An empty coverage set
+   MUST NOT make those checks report a mismatch against diagnostic
+   checkpoints. The identifier `checkpoint-total-mismatch`
    SHOULD be used for a failed signature, a wrong `receiptCount`,
    or totals that disagree, and `checkpoint-head-mismatch` for a
    `chainHeadHash` that is not the last link, in issuer order
@@ -373,9 +384,10 @@ identifiers are not an interoperability surface.
     coverage failure (`MUST-T11-7`, `MUST-T11-8`). The identifier
     `window-coverage` SHOULD be used for this condition. The check
     runs against the windows of the working set of {{CEDULON-CORE}}
-    and it is fail-closed: a receipt that falls under none of them
-    is this failure - including every receipt when no checkpoint of
-    the working set was presented, and receipts after the last closed
+    (the diagnostic set of its Terminology) and it is fail-closed: a
+    receipt that falls under none of them is this failure - including
+    every receipt when no checkpoint of the working set was presented,
+    and receipts after the last closed
     checkpoint's `endMs`. The text names that last state an **open
     epoch**, and it is auditable only when the checkpoint that closes
     it is issued; the name explains why the finding fired, it does not
@@ -414,7 +426,11 @@ identifiers are not an interoperability surface.
     receipt whose statement body verifies against the issuer root is
     a statement that issuer published; one that does not is another
     party's, and is not this issuer equivocating (`MUST-T11-16`).
-    The survivors are the recorded statement hashes used in step 6. Where a receipt also carries
+    Where no usable issuer pin was supplied, no body answers to an
+    issuer root: such a body MUST NOT enter the equivocation pool or
+    produce a withheld-checkpoint finding, and is reported as
+    `witness-entry-unattributable` instead. The survivors are the
+    recorded statement hashes used in step 6. Where a receipt also carries
     the statement body, discard that body unless its statement hash
     equals the one the receipt binds and it verifies as a
     checkpoint; the surviving bodies are what step 4 compares.
@@ -464,7 +480,7 @@ appear in operator-facing output (`MUST-T10-14`).
 | equivocation | audit fails | Two distinct hashes for one epoch |
 | window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows; also an anchor that does not meet the checkpoint with the lowest epoch in the working set, identified by `anchor` ({{genesis}}) |
 | unauthenticated-witness | conditional | No verifier-supplied witness key; inclusion receipts were left out of the comparison |
-| witness-entry-unattributable | conditional | The witness holds a statement this chain does not present and that cannot be attributed to it: it carries no body, a body that is not the statement the receipt signed, a body that does not verify, or a body whose issuer cannot be tied to the presented chain |
+| witness-entry-unattributable | conditional | The witness holds a statement this chain does not present and that cannot be attributed to it: it carries no body, a body that is not the statement the receipt signed, a body that does not verify, a body whose issuer cannot be tied to a usable issuer root, or any body when no usable issuer pin was supplied |
 | checkpoint-withheld | audit fails | A verified witness receipt binds a checkpoint the presented chain does not contain |
 | checkpoint-not-anchored | guarantee conditional | A witness was supplied and holds no verified receipt for this checkpoint |
 | checkpoint-totals-redacted | guarantee conditional | The checkpoint was signed with `totals` null, so the totals comparison could not be made |
@@ -509,7 +525,7 @@ The remaining T11 identities are defined here.
 | MUST-T11-13 | A redaction asserted outside the signed payload MUST NOT be honoured, and structural claims MUST NOT be redacted. A checkpoint that fails verification MUST NOT be treated as redacted. |
 | MUST-T11-14 | An epoch checkpoint MUST be registrable as a Signed Statement carrying the checkpoint COSE object with content type `application/cedulon-checkpoint+cbor`. |
 | MUST-T11-15 | A verifier MUST obtain the transparency service public key out of band and MUST verify inclusion receipts against it. Receipts that cannot be checked that way MUST NOT be used as evidence in either direction, and the verifier SHOULD report that they were left out. |
-| MUST-T11-16 | A statement held by a pinned log MUST additionally verify against the issuer root before it counts as something that issuer published, so that another user's epoch in a shared log is not read as equivocation by this issuer. |
+| MUST-T11-16 | A statement held by a pinned log MUST additionally verify against the issuer root before it counts as something that issuer published, so that another user's epoch in a shared log is not read as equivocation by this issuer. Without a usable issuer pin, a witness body MUST NOT produce a withholding or equivocation verdict and MUST be reported as unattributable instead. |
 | MUST-T11-17 | An inclusion receipt carrying no statement body MUST NOT be used to report a withheld checkpoint, because it cannot say whose statement it binds. It MUST NOT be discarded silently either: a real withholding must not be buried by removing the body. |
 | MUST-T11-18 | Where candidate Signed Statement bytes and an inclusion proof are both supplied, a verifier MUST verify log membership by the Merkle Tree Hash and inclusion-proof verification of RFC 9162 Sections 2.1.1 and 2.1.3, as consumed by RFC 9942 Section 5.2.1, and MUST accept only when the candidate's statement hash, the proof's leaf index, and the reproduced root exactly match the statement hash, entry index, and tree head of a witness receipt that verifies under the pinned witness key, with the walk's leaf equal to HASH(0x00 || candidate). Root reproduction alone is not acceptance. A pair that fails, or a candidate supplied without a proof, MUST be reported as a failing finding. |
 | MUST-T11-19 | Where witness receipts are supplied and the tier-2 pair is not, the report MUST state that log membership was not exercised rather than passing the tier silently. |

@@ -356,7 +356,11 @@ type AuditDetailed = {
   deferredRows: DeferredRow[];
   /** Refs of rows this window paired by name with one of its own receipts. */
   matched: string[];
-  /** The highest-epoch checkpoint the issuer root attests; what the next window anchors on. */
+  /**
+   * The highest-epoch checkpoint in the coverage set (issuer-root attested, or
+   * the pinless working set when no issuer key was stated). What the next
+   * window anchors on; undefined when a stated pin attested nothing.
+   */
   lastAttestedCheckpoint?: SignedCheckpoint;
 };
 type DeferredRow = { ref: string; edges: CarryEdge[] };
@@ -1326,10 +1330,10 @@ function statementHashIfReadable(signed: SignedCheckpoint): string | null {
 }
 
 /**
- * `attestsIssuer` is the second question: the witness pin says which log spoke,
- * and this says whether the statement that log holds was signed by the issuer
- * under audit. Without it a pinned log can carry a body anyone minted into the
- * epoch pool.
+ * The witness pin says which log spoke; the issuer root says whether the
+ * statement that log holds is something this issuer published (MUST-T11-16).
+ * Without a usable issuer pin a body must not enter the epoch pool: carried-key
+ * equality is not the issuer root.
  */
 function verifiedWitnessCheckpoints(
   receipts: InclusionReceipt[],
@@ -1338,11 +1342,14 @@ function verifiedWitnessCheckpoints(
   verify: (cp: SignedCheckpoint) => boolean = (cp) => verifyCheckpoint(cp),
 ): SignedCheckpoint[] {
   const out: SignedCheckpoint[] = [];
+  if (!attestsCheckpoint) {
+    return out;
+  }
   for (const rec of receipts) {
     if (!inclusionFromPinnedLog(rec, witnessKeyPem) || !rec.checkpoint) {
       continue;
     }
-    if (attestsCheckpoint && !attestsCheckpoint(rec.checkpoint)) {
+    if (!attestsCheckpoint(rec.checkpoint)) {
       continue;
     }
     const bodyHash = statementHashIfReadable(rec.checkpoint);
@@ -1380,37 +1387,23 @@ function findTransparencyWitness(
   // The unsigned body must also be the statement the receipt signed: a body from
   // another statement cannot say whose logged hash this is.
   //
-  // When the verifier pinned an issuer key, that pin decides attribution. When
-  // it did not, a body still has to verify, and its key has to match a key on
-  // the presented chain; otherwise the entry names some other issuer (or none)
-  // and is not an accusation against this chain. An empty presented chain has
-  // no key to match, so it cannot accuse.
+  // MUST-T11-16: attribution is the issuer root alone. Without a usable issuer
+  // pin, a verifying body whose carried key matches the presented chain is not
+  // an accusation - report it as unattributable instead of withholding.
   const presentedHashes = new Set(
     checkpoints
       .map(statementHashIfReadable)
       .filter((hash): hash is string => hash !== null),
   );
-  const presentedVerified = checkpoints.filter(
-    (cp) => verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex).ok,
-  );
   const accusing = anchoring.filter((r) => {
-    if (!r.checkpoint) {
+    if (!attestsCheckpoint || !r.checkpoint) {
       return false;
     }
     const bodyHash = statementHashIfReadable(r.checkpoint);
     if (bodyHash === null || bodyHash !== r.statementHash) {
       return false;
     }
-    if (attestsCheckpoint) {
-      return attestsCheckpoint(r.checkpoint);
-    }
-    if (checkpoints.length === 0) {
-      return false;
-    }
-    if (!verifiesOrRefusal(() => verifyCheckpoint(r.checkpoint!), r.checkpoint.coseHex).ok) {
-      return false;
-    }
-    return presentedVerified.some((cp) => sameSpkiKey(r.checkpoint!.publicKeyPem, cp.publicKeyPem));
+    return attestsCheckpoint(r.checkpoint);
   });
 
   for (const cp of checkpoints) {
@@ -1611,8 +1604,9 @@ export type AuditInput = {
   /** Preceding rail window; closes or hardens opening-edge deferred receipts. */
   previousExtract?: PresentedExtract;
   /**
-   * The issuer-signed checkpoint immediately before the first presented one.
-   * Binds the chain that began before this window; its own window is not audited.
+   * The issuer-signed checkpoint immediately before the working set's
+   * lowest-epoch checkpoint. Binds the chain that began before this window;
+   * its own window is not audited.
    */
   anchorCheckpoint?: SignedCheckpoint;
   /**
@@ -2234,17 +2228,25 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
       }
     }
   }
-  // The checkpoint working set follows issuerPinUsable, not whether an
-  // attestation callback was built. A stated pin that cannot be read attests
-  // nothing, but it still takes the pinless arm: presented less Appendix B
-  // refusals for coverage, and every presented checkpoint for naming. Naming
-  // refusals is not attestation - under an unreadable pin no checkpoint is
-  // attested, yet a refused one keeps its name and the survivors still raise
-  // genesis / epoch / window findings.
-  const attestedCheckpoints = issuerPinUsable
+  // Two sets ({{CEDULON-CORE}} Terminology). Coverage is settlement/attested
+  // counting: empty when a pin was stated but none of it could be read.
+  // Diagnostic is refusal naming plus genesis/epoch/window continuity: the
+  // pinless arm when no usable pin is present. A diagnostic member is not
+  // attested; totals/count/head compare only within one set.
+  const pinlessCheckpoints = input.checkpoints.filter(
+    (cp) => coseDecodeRefusalHex(cp.coseHex) === null,
+  );
+  const coverageCheckpoints = issuerPinUsable
     ? input.checkpoints.filter((cp) => attestsCheckpoint!(cp))
-    : input.checkpoints.filter((cp) => coseDecodeRefusalHex(cp.coseHex) === null);
-  const namedCheckpoints = issuerPinUsable ? attestedCheckpoints : input.checkpoints;
+    : input.issuerTrust
+      ? []
+      : pinlessCheckpoints;
+  const workingCheckpoints = issuerPinUsable ? coverageCheckpoints : pinlessCheckpoints;
+  const namedCheckpoints = issuerPinUsable ? coverageCheckpoints : input.checkpoints;
+  const diagnosticReceipts =
+    issuerPinUsable || !input.issuerTrust
+      ? attested
+      : unpinnedWorkingSet.filter((r) => inProfileEncoding(r, pop));
   // Without an anchor the chain must be presented from its genesis; with one,
   // window N stands on its own and window N-1 is the previous audit's business.
   let expectedRootPrev: string | null = null;
@@ -2291,14 +2293,14 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
             detail: `anchor checkpoint verifies under a pinned ${w.issuer} key but the carried publicKeyPem is not that key`,
           });
         }
-        if (attestedCheckpoints.length === 0) {
+        if (coverageCheckpoints.length === 0) {
           findings.push({
             code: "window-coverage",
             id: "anchor",
             detail: "an anchor needs an attested checkpoint to precede",
           });
         } else {
-          const first = attestedCheckpoints.reduce((a, b) =>
+          const first = coverageCheckpoints.reduce((a, b) =>
             a.claims.epoch <= b.claims.epoch ? a : b,
           );
           let adjacent = true;
@@ -2660,9 +2662,13 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   const pinVerify = issuerPinUsable
     ? (cp: SignedCheckpoint) => checkpointAttestedByPins(cp, issuerPins)
     : (cp: SignedCheckpoint) => verifyCheckpoint(cp);
+  // Totals/count/head run against diagnostic receipts of the same set as the
+  // checkpoints under inspection. Under an unreadable pin that is the pinless
+  // arm, not the empty coverage set - otherwise an honest chain would raise
+  // false count/head mismatches while settlement correctly stays uncovered.
   findings.push(
     ...findCheckpointTotalMismatches(
-      attested,
+      diagnosticReceipts,
       namedCheckpoints,
       (recs) => profile.checkpointTotals(recs),
       pop,
@@ -2672,7 +2678,7 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
       pinVerify,
     ),
   );
-  findings.push(...findWindowCoverage(attested, attestedCheckpoints, pop, w, expectedRootPrev));
+  findings.push(...findWindowCoverage(diagnosticReceipts, workingCheckpoints, pop, w, expectedRootPrev));
 
   // A witness only adds evidence once the verifier has named the log. Until then
   // its inclusion receipts are a log anyone could have invented, and letting them
@@ -2691,24 +2697,27 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
         (pem) => toSpkiDer(pem) !== null,
       )
     : undefined;
-  const witnessCheckpoints = witnessConfigured
-    ? verifiedWitnessCheckpoints(
-        input.inclusionReceipts!,
-        witnessPem,
-        attestsCheckpoint,
-        pinVerify,
-      )
-    : [];
-  const equiv = findEquivocationFinding([...attestedCheckpoints, ...witnessCheckpoints], pinVerify);
+  // MUST-T11-16: a witness body enters the epoch pool only under a usable
+  // issuer root. Carried-key equality without that root is not attribution.
+  const witnessCheckpoints =
+    witnessConfigured && issuerPinUsable && attestsCheckpoint
+      ? verifiedWitnessCheckpoints(
+          input.inclusionReceipts!,
+          witnessPem,
+          attestsCheckpoint,
+          pinVerify,
+        )
+      : [];
+  const equiv = findEquivocationFinding([...coverageCheckpoints, ...witnessCheckpoints], pinVerify);
   if (equiv) findings.push(equiv);
 
   if (input.inclusionReceipts) {
     if (witnessConfigured) {
       const witness = findTransparencyWitness(
-        attestedCheckpoints,
+        workingCheckpoints,
         input.inclusionReceipts,
         witnessPem,
-        attestsCheckpoint,
+        issuerPinUsable ? attestsCheckpoint : null,
       );
       findings.push(...witness.findings);
       warnings.push(...witness.warnings);
@@ -2857,8 +2866,10 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
 
   // A signed redaction is honest but unverifiable: say so, and drop the claim to
   // conditional. Only a checkpoint that verifies gets to make this claim — an
-  // unverifiable one has already been reported above.
-  for (const cp of attestedCheckpoints) {
+  // unverifiable one has already been reported above. Walk the working
+  // (diagnostic) set so an unreadable pin still names a redaction without
+  // treating it as coverage.
+  for (const cp of workingCheckpoints) {
     if (cp.claims.totals === null && verifiesOrRefusal(() => pinVerify(cp), cp.coseHex).ok) {
       warnings.push({
         code: "checkpoint-totals-redacted",
@@ -2895,7 +2906,7 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
     carried,
     deferredRows,
     matched,
-    lastAttestedCheckpoint: attestedCheckpoints.reduce<SignedCheckpoint | undefined>(
+    lastAttestedCheckpoint: coverageCheckpoints.reduce<SignedCheckpoint | undefined>(
       (last, cp) => (last === undefined || cp.claims.epoch > last.claims.epoch ? cp : last),
       undefined,
     ),
