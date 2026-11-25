@@ -15,6 +15,7 @@ import {
   forbiddenHits,
   implStatusVeraxFailures,
   livingCoreDraftPath,
+  postedRevisionFailures,
   urlsOf,
 } from "../scripts/impl-status-verax.ts";
 
@@ -104,6 +105,46 @@ describe("Verax Implementation Status entries stay aligned", () => {
       failures.some((f) => /no Verax implementation entry/.test(f)),
       failures.join(" | "),
     );
+  });
+
+  it("both entries say the packages are not claimed to implement a posted revision", () => {
+    assert.deepEqual(postedRevisionFailures("the draft", extractDraftVerax(draft)!), []);
+    assert.deepEqual(postedRevisionFailures("the STATUS", extractStatusVerax(status)!), []);
+  });
+
+  it("RED: the draft entry saying the packages implement the posted draft-09 is caught", () => {
+    const claimed = draft.replace(
+      /Those packages are\s+not claimed to implement a posted revision:[\s\S]*?and no posted revision describes the result\./,
+      "Those published packages implement the posted draft-dogru-cedulon-09 profile and, from 0.13.0, the posted draft-dogru-cedulon-decision-profile-03.",
+    );
+    assert.notEqual(claimed, draft);
+    const failures = implStatusVeraxFailures(claimed, status);
+    assert.ok(failures.some((f) => f.startsWith("the draft Verax entry claims a posted revision is implemented")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes('"not claimed to implement a posted revision"')), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes('"no posted revision describes the result"')), failures.join(" | "));
+  });
+
+  it("RED: the STATUS entry saying the packages implement the posted draft-09 is caught", () => {
+    const claimed = status.replace(
+      /Those packages are not claimed to implement a posted revision:[\s\S]*?no posted revision describes the result\./,
+      "Those published packages implement the posted draft-dogru-cedulon-09\nprofile and, from 0.13.0, the posted\ndraft-dogru-cedulon-decision-profile-03.",
+    );
+    assert.notEqual(claimed, status);
+    const failures = implStatusVeraxFailures(draft, claimed);
+    assert.ok(failures.some((f) => f.startsWith("the STATUS Verax entry claims a posted revision is implemented")), failures.join(" | "));
+  });
+
+  it("RED: dropping either half of the disclaimer is caught", () => {
+    const noResult = status.replace(/,\s+and\s+no posted revision describes the result\./, ".");
+    assert.notEqual(noResult, status);
+    assert.deepEqual(postedRevisionFailures("the STATUS", extractStatusVerax(noResult)!), [
+      'the STATUS Verax entry does not say "no posted revision describes the result"',
+    ]);
+    const noClaim = draft.replace(/not claimed to\s+implement a posted revision/, "described below");
+    assert.notEqual(noClaim, draft);
+    assert.deepEqual(postedRevisionFailures("the draft", extractDraftVerax(noClaim)!), [
+      'the draft Verax entry does not say "not claimed to implement a posted revision"',
+    ]);
   });
 
   it("RED: first / only / independent in the Verax entry is refused", () => {

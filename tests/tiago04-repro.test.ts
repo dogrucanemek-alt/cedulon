@@ -980,6 +980,49 @@ describe("Tiago core-04 #5: a one-window audit with an anchor checkpoint", () =>
     assert.equal(report.ok, false);
   });
 
+  it("a foreign checkpoint with a lower epoch than the attested set does not unseat a valid anchor (MUST-T11-20)", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    // Lower than every attested checkpoint, and not adjacent to the anchor:
+    // were it the anchor's target, all three adjacency conditions would fail.
+    const foreign = signCheckpoint(buildCheckpointClaims(1, [], P_START, N_START, null), stranger.privateKeyPem, stranger.publicKeyPem);
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [foreign, s.cpN],
+      anchorCheckpoint: s.cpPrev,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.deepEqual(report.findings.filter((f) => f.id === "anchor"), []);
+    // The anchor was used: the first receipt chains to its head.
+    assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), false);
+    // The foreign checkpoint is named, not silently dropped.
+    assert.deepEqual(report.findings.map((f) => f.code), ["issuer-key-mismatch"]);
+    assert.equal(report.ok, false);
+  });
+
+  it("a foreign checkpoint with a lower epoch than the attested set cannot make a non-adjacent anchor valid (MUST-T11-20)", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    // The attested checkpoint skips an epoch after the anchor.
+    const realN = signCheckpoint(buildCheckpointClaims(3, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    // A stranger's lower-epoch checkpoint meeting all three conditions against the anchor.
+    const decoy = signCheckpoint(buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)), stranger.privateKeyPem, stranger.publicKeyPem);
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [decoy, realN],
+      anchorCheckpoint: s.cpPrev,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    const anchorFindings = report.findings.filter((f) => f.id === "anchor");
+    assert.deepEqual(anchorFindings.map((f) => f.code), ["window-coverage"]);
+    assert.match(anchorFindings[0]!.detail ?? "", /first checkpoint epoch 3\b/);
+    assert.equal(report.ok, false);
+  });
+
   it("with an issuer pin stated but unreadable, the anchor is not checked against its own carried key and anchors nothing", () => {
     // Nothing is attested under an unreadable pin, so the chain walk has no
     // receipts and cannot show whether the anchor was used. A non-adjacent
