@@ -3,13 +3,22 @@
 // core.autocrlf=true has already bitten the fence parser; this guard
 // checks the object store, not the working tree.
 //
-// spec/ is read and must be clean. This script never writes.
+// spec/ is read and must be clean. This script never writes to the tree;
+// git's request list goes to a private temporary directory.
 
-import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { runBounded } from "./bounded-run.ts";
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+const GIT_TIMEOUT_MS = 60_000;
+const LIST_OUTPUT_BYTES = 16 * 1024 * 1024;
+/** Every tracked blob arrives in this one stream. */
+const BLOB_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 export type BinaryException = {
   file: string;
@@ -51,23 +60,42 @@ export function looksBinary(bytes: Buffer): boolean {
   return bytes.includes(0);
 }
 
-export function trackedFiles(base = root): string[] {
-  const raw = execFileSync("git", ["ls-files", "-z"], { cwd: base });
-  return raw
+export async function trackedFiles(base = root): Promise<string[]> {
+  const { stdout } = await runBounded({
+    label: "git ls-files",
+    command: "git",
+    args: ["ls-files", "-z"],
+    cwd: base,
+    timeoutMs: GIT_TIMEOUT_MS,
+    maxOutputBytes: LIST_OUTPUT_BYTES,
+  });
+  return stdout
     .toString("utf8")
     .split("\0")
     .filter(Boolean)
     .map((f) => f.replace(/\\/g, "/"));
 }
 
-export function blobsOf(files: string[], base = root): Map<string, Buffer> {
+export async function blobsOf(files: string[], base = root): Promise<Map<string, Buffer>> {
   if (files.length === 0) return new Map();
-  const input = files.map((f) => `:${f}`).join("\n") + "\n";
-  const raw = execFileSync("git", ["cat-file", "--batch"], {
-    cwd: base,
-    input,
-    maxBuffer: 32 * 1024 * 1024,
-  });
+  let scratch: string | undefined;
+  let raw: Buffer;
+  try {
+    scratch = mkdtempSync(join(tmpdir(), "cedulon-blobs-"));
+    const requests = join(scratch, "requests");
+    writeFileSync(requests, files.map((f) => `:${f}`).join("\n") + "\n");
+    ({ stdout: raw } = await runBounded({
+      label: "git cat-file --batch",
+      command: "git",
+      args: ["cat-file", "--batch"],
+      cwd: base,
+      timeoutMs: GIT_TIMEOUT_MS,
+      stdinPath: requests,
+      maxOutputBytes: BLOB_OUTPUT_BYTES,
+    }));
+  } finally {
+    if (scratch !== undefined) rmSync(scratch, { recursive: true, force: true });
+  }
   const out = new Map<string, Buffer>();
   let offset = 0;
   for (const file of files) {
@@ -86,13 +114,13 @@ export function blobsOf(files: string[], base = root): Map<string, Buffer> {
   return out;
 }
 
-export function findCarriageReturns(
+export async function findCarriageReturns(
   base = root,
   extra: Array<{ file: string; bytes: Buffer }> = [],
-): CrHit[] {
+): Promise<CrHit[]> {
   const hits: CrHit[] = [];
-  const files = trackedFiles(base);
-  const blobs = blobsOf(files, base);
+  const files = await trackedFiles(base);
+  const blobs = await blobsOf(files, base);
   for (const file of files) {
     if (isBinaryPath(file)) continue;
     const bytes = blobs.get(file);
@@ -117,7 +145,7 @@ export function findCarriageReturns(
 const invoked =
   Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invoked) {
-  const hits = findCarriageReturns();
+  const hits = await findCarriageReturns();
   if (hits.length > 0) {
     for (const hit of hits) {
       console.error(`crlf-guard: ${hit.file} has ${hit.count} CR byte(s)`);
