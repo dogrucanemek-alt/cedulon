@@ -78,4 +78,76 @@ describe("run-as-verifier doc", () => {
       assert.equal(stdout.trim().replace(/\r\n/g, "\n"), expected);
     });
   }
+
+  it("site/verify.html shows the same unpinned audit counts as the documented demo", () => {
+    const audit = runs.find((r) => r.command === "npm run audit");
+    assert.ok(audit, "expected a documented npm run audit block");
+    const countsLine = audit.expected
+      .split("\n")
+      .find((l) => l.startsWith("counts\treceipts\t"));
+    assert.ok(countsLine, "documented audit output has no receipts counts line");
+    assert.match(countsLine, /attested=0/);
+    assert.match(countsLine, /covering=2/);
+    const page = readFileSync(join(root, "site", "verify.html"), "utf8");
+    assert.ok(
+      page.includes(countsLine),
+      "site/verify.html must embed the documented formatAudit receipts counts line",
+    );
+    assert.equal(
+      page.includes("submitted=2 attested=2 in-scope=2"),
+      false,
+      "site/verify.html still shows the pre-covering attested=2 pinless example",
+    );
+  });
+
+  it("the pin paragraph scopes exclusions to coverage and keeps the chain-walk exception with the matrix", () => {
+    // The matrix (names a pin / invalid → receipt-chain-break; dropped from
+    // coverage, walked for the name) is the decided behaviour. A paragraph
+    // that said every signer-dependent inference including the receipt chain
+    // dropped the object contradicted that cell.
+    const failures = pinParagraphFailures(doc);
+    assert.deepEqual(failures, []);
+  });
+
+  it("RED: a pin paragraph that excluded the receipt chain wholesale is caught", () => {
+    const oldDoc = readFileSync(
+      join(root, "tests", "fixtures", "wording-red", "verifier-pin-excludes-receipt-chain.md"),
+      "utf8",
+    );
+    const failures = pinParagraphFailures(oldDoc);
+    assert.ok(
+      failures.some((f) => /receipt chain|wholesale|coverage-dependent/i.test(f)),
+      failures.join(" | "),
+    );
+  });
 });
+
+/** Keep the prose about pins rejecting objects aligned with the issuer pin matrix. */
+export function pinParagraphFailures(text: string): string[] {
+  const failures: string[] = [];
+  // Old wording: pins reject → left out of every inference … receipt chain …
+  if (
+    /Everything the pins reject is then left out of every inference[\s\S]{0,120}?receipt chain/i.test(
+      text,
+    )
+  ) {
+    failures.push(
+      "pin paragraph still excludes the receipt chain wholesale; scope it to coverage-dependent checks",
+    );
+  }
+  if (!/coverage-dependent/i.test(text)) {
+    failures.push("pin paragraph omits coverage-dependent (must match the matrix)");
+  }
+  if (!/receipt-chain-break/i.test(text) || !/walked/i.test(text)) {
+    failures.push(
+      "pin paragraph must name the receipt-chain-break walk exception the matrix states",
+    );
+  }
+  if (
+    !/dropped from coverage,\s*walked for the name/i.test(text) &&
+    !/dropped from coverage[\s\S]{0,80}?walked for the name/i.test(text)
+  ) {
+    failures.push("issuer pin matrix must keep the walked-for-the-name cell");
+  }
+  return failures;
+}

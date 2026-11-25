@@ -7,13 +7,14 @@ import {
   decodeCbor,
   decodeCoseSign1,
   encodeCbor,
+  hexToBytes,
   mapGet,
   signCoseSign1,
   verifyCoseSign1,
   type Signer,
 } from "@cedulon/cose";
 import { canonical } from "./canonical.ts";
-import { hashClaimRefusal } from "./types.ts";
+import { hashClaimRefusal, isUintClaim } from "./types.ts";
 
 /**
  * CWT private-use labels for a Decision Record.
@@ -152,7 +153,7 @@ function assertDecisionRecordClaims(claims: DecisionRecordClaims): void {
   if (effect) throw new Error(effect);
   const prev = hashClaimRefusal("prevRecordHash", claims.prevRecordHash, true);
   if (prev) throw new Error(prev);
-  if (!Number.isSafeInteger(claims.timestampMs) || claims.timestampMs < 0) {
+  if (!isUintClaim(claims.timestampMs)) {
     // The label table says uint. A CBOR decoder hands back any number.
     throw new Error("decision-record-timestamp");
   }
@@ -207,11 +208,11 @@ export function verifyDecisionRecord(
   signed: SignedDecisionRecord,
   expectedDeciderKeyPem?: string,
 ): boolean {
-  const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, expectedDeciderKeyPem ?? signed.publicKeyPem, CTY_DECISION_RECORD)) {
-    return false;
-  }
   try {
+    const bytes = hexToBytes(signed.coseHex);
+    if (!verifyCoseSign1(bytes, expectedDeciderKeyPem ?? signed.publicKeyPem, CTY_DECISION_RECORD)) {
+      return false;
+    }
     const msg = decodeCoseSign1(bytes);
     const decoded = decisionRecordFromCbor(msg.payload);
     // The decider is the party under audit. Its signer applying the claim
@@ -232,7 +233,7 @@ export function verifyDecisionRecord(
  * separately canonicalised CBOR claims map.
  */
 export function decisionRecordHash(signed: SignedDecisionRecord): string {
-  return sha256Hex(Buffer.from(signed.coseHex, "hex"));
+  return sha256Hex(Buffer.from(hexToBytes(signed.coseHex)));
 }
 
 export type DecisionRecordChainBreak = { index: number; reason: string };

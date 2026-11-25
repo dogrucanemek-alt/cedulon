@@ -290,9 +290,16 @@ Spend Receipt:
 Receipt Issuer:
 : The party that signs Spend Receipts.
 
-Anchor:
+Transparency Service:
 : An optional SCITT Transparency Service {{RFC9943}} that registers a
-  signed statement and returns a COSE receipt {{RFC9942}}.
+  signed statement and returns a COSE receipt {{RFC9942}}. See
+  {{transparency-service}}.
+
+Anchor checkpoint:
+: The issuer-signed epoch checkpoint immediately preceding the
+  checkpoints an audit presents, which the audit MAY present so that a
+  window need not be audited from its stream's genesis. It is a
+  checkpoint, not a Transparency Service. See {{verification}}.
 
 Dispute Evidence Bundle:
 : A package of the Trade Manifest, the Spend Receipt, and a delivery
@@ -316,11 +323,38 @@ Pinned key:
 : A public key the verifier obtained out of band, as opposed to a key an
   object carries beside its signature. See {{trust-roots}}.
 
+Attested:
+: A receipt or checkpoint that verifies under a usable pinned issuer
+  key. Without a usable pin - none stated, or a stated pin that cannot
+  be read - nothing is attested. See {{issuer-root}}.
+
+Coverage set:
+: The receipts and checkpoints that count as settlement coverage. Under
+  a usable pinned issuer key it is the attested set - the receipts and
+  checkpoints that verify under a usable pinned issuer key. When no
+  issuer key is pinned, the same members as the diagnostic set
+  (presented-unattested); those members are not attested. When a pin is
+  stated but no key in it can be read, empty: nothing is attested and
+  no settlement is covered. See {{issuer-root}}.
+
+Diagnostic set:
+: The receipts and checkpoints consumed for refusal naming and for
+  genesis, epoch, and window continuity. Under a usable pinned issuer
+  key, the same members as the coverage set. When no usable issuer key
+  is pinned - including a stated pin that cannot be read - every
+  presented one that no refusal of Appendix B ({{finding-code-table}})
+  has refused. A member of the diagnostic set is not thereby attested
+  or valid. Totals, `receiptCount`, and `chainHeadHash` checks compare
+  a checkpoint only against receipts of the same set; an empty
+  coverage set MUST NOT make those checks report a mismatch against
+  diagnostic checkpoints. See {{verification}}.
+
 Working set:
-: The receipts and checkpoints the verification steps consume: those
-  that verify under a usable pinned issuer key (the attested set), or,
-  when no usable issuer key is pinned, every presented one. See
-  {{verification}}.
+: Where a step does not need the coverage/diagnostic split, the set
+  it consumes: the coverage set for settlement counting, the attested
+  set for attested counting, and the diagnostic set for refusal naming
+  and continuity. Coverage and diagnostic coincide except when a stated
+  issuer pin cannot be read. See {{verification}}.
 
 Presented-unattested:
 : The state of a receipt or checkpoint the verifier holds no pinned
@@ -350,7 +384,7 @@ optional transparency service:
                    Spend Receipt ---> Verifier <---+
                          |               |
                          v               v
-             Anchor / SCITT (optional)  Report
+    Transparency Service (optional)  Report
 ~~~~
 
 The payer agent never talks to the rail except through an adapter that
@@ -376,10 +410,10 @@ the adapter that performs settlement.
 After the adapter attempts settlement (success or a recorded deny that
 still needs an audit trail for an allowed-then-aborted path), the
 Receipt Issuer signs a Spend Receipt over the deterministic CBOR
-encoding of its claims (`MUST-T4-1`). Verifiers reject bad signatures and byte mismatch
-(`MUST-T4-2`).
+encoding of its claims (`MUST-T4-1`). Verifiers reject bad signatures and a decoded
+claim map that does not match the presented claims (`MUST-T4-2`).
 
-## Anchor / SCITT
+## Transparency Service (SCITT) {#transparency-service}
 
 Parties MAY register the signed receipt (or a privacy-preserving hash
 encoding) as a SCITT Signed Statement {{RFC9943}} and attach the COSE
@@ -773,14 +807,19 @@ fixed here. A presented object is a JSON object, encoded as in
 A member this table does not name carries no meaning a verifier may
 act on.
 
-The decoder bounds of `MUST-T4-19` are fixed as a floor so that every
-conforming verifier accepts the same objects: a verifier MUST accept
-an audit input within 65536 octets of encoded CBOR, 16 levels of
-nesting below the outermost item, 4096 elements in an array or pairs
-in a map, and 16384 octets in a single string, and MAY refuse one
-beyond any of them. The reference implementation accepts up to these
-numbers and refuses beyond them, by the names `cbor-too-large` and
-`cbor-too-deep`.
+The decoder bounds of `MUST-T4-19` are fixed as a floor so that no
+two conforming verifiers differ over an object on size alone: an
+otherwise conforming input within 65536 octets of encoded CBOR, 16
+levels of nesting below the outermost item, 4096 elements in an array
+or pairs in a map, and 16384 octets in a single string MUST NOT be
+refused solely because of resource bounds, and a verifier MAY refuse
+one beyond any of them. The floor does not make an input conforming:
+one within it that another rule of this document refuses (Appendix B)
+is refused all the same. The reference implementation decodes up to
+these numbers and refuses beyond them, by the names `cbor-too-large`
+and `cbor-too-deep`. How many objects one audit may present is a
+separate, audit-wide bound, stated with `audit-too-large` in the
+Finding codes section.
 
 # Canonical JSON encoding {#canonical-json}
 
@@ -1328,17 +1367,20 @@ The first is the index of refs: step 7 builds it, and steps 8 and 9
 reconcile it.
 
 The second is the issuer pin. The step that resolves it decides the
-**working set**: the attested set - the receipts and checkpoints that
-verify under a usable pinned issuer key - or, when no usable key is
-pinned, the whole presented set, whose members are
-presented-unattested. Every later step that walks receipts consumes
-the working set: the indexing and reconciliation in steps 7 through 9
-and the `MUST-T8-9` comparison. The chain walk in step 6 consumes the
-working set plus one addition named in {{issuer-root}}: a receipt that
-claims the pin and fails to verify under it is walked so the break can
-be named, and is attested nowhere. A receipt that neither claims the
-pin nor verifies under it is reported once (issuer-key-mismatch) and
-then excluded, which is what keeps the settlement it names visible as
+**coverage set** and the **diagnostic set** defined in Terminology.
+Settlement indexing and reconciliation (steps 7 through 9 and the
+`MUST-T8-9` comparison) consume the coverage set. Refusal naming and
+genesis, epoch, and window continuity consume the diagnostic set;
+checkpoint totals, `receiptCount`, and `chainHeadHash` compare each
+checkpoint only against receipts of that same set. A refused object
+counts for nothing whether or not a key is pinned ({{finding-code-table}}):
+the pin decides who signed, and a refusal is decided before that
+question is asked. The chain walk in step 6 consumes the coverage set
+plus one addition named in {{issuer-root}}: a receipt that claims the
+pin and fails to verify under it is walked so the break can be named,
+and is attested nowhere. A receipt that neither claims the pin nor
+verifies under it is reported once (issuer-key-mismatch) and then
+excluded, which is what keeps the settlement it names visible as
 uncovered (`MUST-T4-10`); an
 implementation that let it back into any of those steps would let a
 forged receipt cover a settlement, satisfy a checkpoint count, or
@@ -1350,43 +1392,59 @@ per-receipt defect checks that ask what a receipt says about itself.
 Checkpoint and witness verification consumes that working set
 and is specified in {{CEDULON-CHECKPOINT}} (Verification algorithm),
 which an implementation of this audit also implements: a receipt that
-falls in no presented checkpoint window, including every receipt when
-no checkpoint is presented, fails that document's window-coverage
-check. An audit that presents receipts therefore presents the
-checkpoints that cover them; receipt and extract verification without
-checkpoints does not produce a passing audit. An audit given no
-receipts and no checkpoints rests on the extract alone
-({{issuer-root}}).
+falls in no window of a checkpoint in the working set, including every
+receipt when the working set holds no checkpoint, fails that document's
+window-coverage check (`MUST-T11-7`, `MUST-T11-8`). Epoch numbers of
+the working set MUST be consecutive integers, and adjacent windows of
+that set MUST meet at `endMs = next.startMs` (`MUST-T11-8`). An audit
+that presents receipts therefore presents the checkpoints that cover
+them; receipt and extract verification without checkpoints does not
+produce a passing audit. An audit given no receipts and no checkpoints
+rests on the extract alone ({{issuer-root}}).
 
 A stream of receipts usually begins before the window under audit,
-and its chain has to be anchored somewhere. Without an anchor it is
-anchored at its genesis: the first presented checkpoint is the
-genesis checkpoint of {{CEDULON-CHECKPOINT}}, the first receipt's
-`prevReceiptHash` is null (step 6), and auditing window N means
-presenting every receipt and checkpoint from the stream's first. An
-audit MAY instead present an anchor (`MUST-T11-20` of
-{{CEDULON-CHECKPOINT}}): the issuer-signed epoch
-checkpoint immediately preceding the first presented checkpoint. The
-anchor is resolved against the issuer root like any checkpoint; one
-that fails is `issuer-key-mismatch`, identified by `anchor`, and
-anchors nothing. A stated issuer pin that cannot be read leaves the
-anchor unused; the key the anchor carries is not a fallback for it
-(`MUST-T4-11`). With a usable pin, "the first presented checkpoint"
-means the first one in the attested set: a checkpoint that does not
-answer to the pin cannot make an anchor adjacent. The anchor is valid
-when, in addition, its `epoch` is one less than the first
-checkpoint's, its `endMs` equals that
-checkpoint's `startMs`, and that checkpoint's `prevCheckpointHash`
-equals the anchor's checkpoint hash; a failure of any of these is
-reported as `window-coverage`, identified by `anchor`, and the anchor
-anchors nothing. With a valid anchor, the first presented checkpoint
-is not a genesis checkpoint and its `prevCheckpointHash` is checked
-against the anchor rather than against null, and the first receipt's
-`prevReceiptHash` is checked against the anchor's `chainHeadHash`
-(step 6). The anchor's own window is not audited: its totals, count
-and head are not compared, and it covers no presented receipt. What
-happened before the anchor is the business of the audit of that
-earlier window.
+and its chain has to be anchored somewhere. Without an anchor
+checkpoint it is anchored at its genesis: the checkpoint with the
+lowest epoch in the working set, which under a usable pinned issuer
+key is the attested set, is the genesis checkpoint of
+{{CEDULON-CHECKPOINT}} and its `prevCheckpointHash` is null, and a
+presented checkpoint outside the working set does not change which
+checkpoint that is, whatever its epoch. The first receipt's
+`prevReceiptHash` is then null (step 6), and auditing window N means
+presenting every receipt and checkpoint from the stream's first. An audit MAY instead present an anchor
+checkpoint (`MUST-T11-20` of {{CEDULON-CHECKPOINT}}): the
+issuer-signed epoch checkpoint immediately preceding the checkpoint
+with the lowest epoch in the working set. An anchor
+checkpoint is a checkpoint of this issuer's own chain; it is not the
+Transparency Service of {{transparency-service}}, and registering a
+statement with one anchors no chain here. `MUST-T11-20` makes an
+anchor checkpoint valid only when it answers to the issuer root, so it
+is resolved against a usable pinned issuer key and against nothing
+else. With no issuer key pinned there is no root for it to answer to:
+the key it carries verifies any checkpoint its holder minted and is
+not a fallback (`MUST-T4-11`), so the anchor checkpoint anchors
+nothing, the chain is walked from its genesis, and the condition is
+reported as `unauthenticated-issuer`, identified by `anchor`. A
+stated issuer pin that cannot be read likewise leaves it unused.
+Under a usable pin, one that does not verify is `issuer-key-mismatch`,
+identified by `anchor`, and anchors nothing; and because the lowest
+epoch is taken in the working set, which under that pin is the
+attested set, a checkpoint that does not answer
+to the pin cannot make an anchor checkpoint adjacent. The anchor
+checkpoint is valid when, in addition, its `epoch` is one less than
+that checkpoint's, its `endMs` equals that checkpoint's `startMs`, and
+that checkpoint's `prevCheckpointHash` equals the anchor checkpoint's
+hash; a failure of any of these is reported as `window-coverage`,
+identified by `anchor`, and the anchor checkpoint anchors nothing.
+With a valid anchor checkpoint, the checkpoint with the lowest epoch
+in the working set is not a genesis checkpoint and its
+`prevCheckpointHash` is checked against the anchor checkpoint rather
+than against null, and the first receipt's `prevReceiptHash` is
+checked against the anchor checkpoint's `chainHeadHash` (step 6). The
+anchor checkpoint's own window is not audited: its totals, count and
+head are not compared, and it covers no presented receipt. What
+happened before it is the business of the audit of that earlier
+window.
 
 When a step names an identifier in backticks, that identifier
 SHOULD be used for the condition in diagnostic output. The
@@ -1421,7 +1479,13 @@ identifiers are not an interoperability surface.
    refused are not reconciled against the receipts, and no settlement
    finding is read out of that document (`MUST-T10-20`); the
    identifier `settlement-comparison-skipped` SHOULD be used to say
-   that the comparison did not run. A finding that puts the
+   that the comparison did not run. The same holds, with or without a
+   pin, for an extract body a refusal of Appendix B refused: the
+   refused object is not counted, so its rows are not reconciled and
+   `settlement-comparison-skipped` names the refusal. An unpinned
+   extract whose signature merely fails against the key it carries is
+   not refused and is still reconciled, under a conditional
+   guarantee. A finding that puts the
    extract itself in doubt MUST prevent an unconditional guarantee.
 3. Check scope. The verifier MUST report each settlement record
    whose `timestampMs` falls outside the declared window, identified
@@ -1531,8 +1595,8 @@ identifiers are not an interoperability surface.
    rebuilds the chain from the links, and the order in which
    receipts were presented carries no weight. `timestampMs` is
    issuer-asserted and is not an ordering source. The first
-   `prevReceiptHash` MUST be null, or, where a valid anchor is
-   presented, MUST equal the anchor's `chainHeadHash` (null when no
+   `prevReceiptHash` MUST be null, or, where a valid anchor checkpoint
+   is presented, MUST equal its `chainHeadHash` (null when no
    receipt preceded it). Each later `prevReceiptHash` MUST
    equal `receiptHash` of the previous receipt. A miss, and a
    receipt the links cannot place, MUST be reported as a break in
@@ -1637,7 +1701,17 @@ leaves uncovered is reported by the steps that would have counted it.
 An audit input or a verifier configuration that the verifier cannot
 read at all is not a refusal of one object: the audit is not carried
 out, and the report fails with `presented-object-malformed` as its
-only finding.
+only finding, with one exception, which returns no report at all:
+`audit-too-large`. It is raised, before any object is read, for an
+audit (each window, in a run of consecutive windows) that presents
+more than 4096 Spend Receipts, more than 4096 settlement records in
+any one extract or caller-supplied settlement list, more than 256
+checkpoints, or more than 4096 witness receipts. These bounds are the
+reference implementation's and are coarser than the per-object floor
+of {{presented-form}}; an implementation MAY choose others, and MUST
+document the ones it applies. `audit-too-large` is not a finding, is
+not one of the refusals of Appendix B, and carries no verdict on the
+presented objects: the caller splits the window and audits again.
 A content type that is not the expected one, and a decoded claim map
 that does not match the presented claims, are not refusals: the
 object does not verify, and the row of the table in {{issuer-root}}
@@ -1684,7 +1758,11 @@ construction and says nothing about what it left out (`MUST-T11-9`).
 A verifier that consulted a witness and found every presented
 checkpoint recorded, with nothing recorded that was not presented,
 has discharged T11 for the period those receipts cover, and for no
-longer.
+longer. A list of witness receipts presented empty is a supplied list,
+not an absent one: a witness was consulted and recorded nothing, so
+tier 2 of {{CEDULON-CHECKPOINT}} was not exercised either, and
+`witness-inclusion-not-exercised` is reported for it exactly as for a
+list that is not empty (`MUST-T11-19`).
 
 # Policy Semantics {#policy-semantics}
 
@@ -1726,8 +1804,8 @@ payer and payee identifiers and MUST support amount redaction or
 bucket encoding (`MUST-T9-1`). Implementations MUST NOT write
 government-ID numbers, the Primary Account Number (PAN) of a payment
 instrument, or street address
-into a public statement (`MUST-T9-2`). Default public anchors
-SHOULD publish `policyHash`, `manifestHash`, `receiptHash`, and
+into a public statement (`MUST-T9-2`). Default statements registered
+with a public Transparency Service SHOULD publish `policyHash`, `manifestHash`, `receiptHash`, and
 `timestampMs` rather than full claims (`SHOULD-T9-3`). A private
 auditor MAY receive an unredacted receipt out of band
 (`MAY-T9-4`).
@@ -1813,7 +1891,7 @@ Narrative: {{CEDULON-THREATS}}.
 | ID | Requirement |
 |---|---|
 | MUST-T4-1 | A Spend Receipt MUST be signed by the Receipt Issuer over the deterministic CBOR encoding of its claims, as profiled in {{cose-profile}}. The phrase "canonical encoding" is reserved for JSON documents ({{canonical-json}}). |
-| MUST-T4-2 | Verifiers MUST reject a receipt whose signature does not validate or whose canonical bytes do not match the signed payload. |
+| MUST-T4-2 | Verifiers MUST reject a receipt whose signature does not validate or whose decoded claim map does not match the presented claims. |
 | MUST-T4-3 | A Spend Receipt MUST include `payer`, `payee`, `amount`, `currency`, `policyHash`, `timestampMs`, and `nonce`. |
 | MUST-T4-4 | A Spend Receipt MUST include `manifestHash` or an explicit `noManifest` flag, never an ambiguous empty hash. Empty optional values are CBOR null; labels are never absent. |
 | SHOULD-T4-5 | Receipts SHOULD form a hash chain (`prevReceiptHash`) so omission is detectable within one issuer stream. |
@@ -1830,7 +1908,7 @@ Narrative: {{CEDULON-THREATS}}.
 | MUST-T4-16 | A policy decision point presented with a Trade Manifest it cannot verify against a key supplied out of band MUST refuse the payment. |
 | MUST-T4-17 | A verifier presented with a Trade Manifest MUST compare the manifest hash against the `manifestHash` of the receipts presented to the audit, including aborted ones, before any extract window is applied and before any issuer key is applied, and MUST report a presented manifest that no presented receipt references. An audit presented with no Trade Manifest is not made conditional by this requirement. |
 | MUST-T4-18 | A decoder MUST refuse a CBOR map that carries a duplicate encoded key. |
-| MUST-T4-19 | A decoder MUST impose a bound on encoded size, nesting depth, and the number of elements it will decode from an audit input, and MUST refuse an input that exceeds a bound with a named refusal rather than by exhausting memory or the stack. It SHOULD document the bounds it applies. It MUST accept every input within the floor fixed in {{presented-form}} (65536 encoded octets, 16 levels of nesting, 4096 elements, 16384 octets in a string), so that two conforming verifiers do not accept and refuse the same input. |
+| MUST-T4-19 | A decoder MUST impose a bound on encoded size, nesting depth, and the number of elements it will decode from an audit input, and MUST refuse an input that exceeds a bound with a named refusal rather than by exhausting memory or the stack. It SHOULD document the bounds it applies. An otherwise conforming input within the floor fixed in {{presented-form}} (65536 encoded octets, 16 levels of nesting, 4096 elements, 16384 octets in a string) MUST NOT be refused solely because of resource bounds, so that two conforming verifiers do not differ over the same input on size alone. |
 | MUST-T4-20 | A verifier that receives a JSON document as text MUST refuse a text in which any object repeats a member name, by name (`json-duplicate-key`), before parsing it. A verifier handed an object rather than text cannot apply this rule and MUST NOT report that it did. |
 | MUST-T4-21 | A decoder MUST refuse a COSE_Sign1 message whose unprotected header is not an empty map, by name (`cose-sign1-unprotected`), rather than verifying the signature and ignoring the header. |
 
@@ -1926,7 +2004,7 @@ See also {{privacy}}. Narrative: {{CEDULON-THREATS}}.
 |---|---|
 | MUST-T9-1 | A transparency encoding MUST support omitting or hashing payer/payee identifiers and MUST support amount redaction or range/bucket encoding. |
 | MUST-T9-2 | Implementations MUST NOT write raw government-ID, payment-instrument PAN, or street address fields into a public transparency statement. |
-| SHOULD-T9-3 | Default public anchors SHOULD publish `policyHash`, `manifestHash`, `receiptHash`, and timestamp rather than full claim sets. |
+| SHOULD-T9-3 | Default statements registered with a public Transparency Service SHOULD publish `policyHash`, `manifestHash`, `receiptHash`, and timestamp rather than full claim sets. |
 | MAY-T9-4 | A private auditor MAY receive an unredacted receipt out of band. |
 | MUST-T9-5 | A checkpoint discloses a per-currency window total, which the receipt-field rules above do not cover. Withholding it is governed by MUST-T11-12 and MUST-T11-13: null in the signed payload, and no other form of redaction honoured. |
 
@@ -2266,7 +2344,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 927 of 927,
+  this revision describes, all three assert every case, 1086 of 1086,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.
@@ -2291,9 +2369,12 @@ receipt, and refusing it is a change in behaviour that a version number
 ought to announce.
 
 Note on distribution: everything the posted series {{CEDULON-DT}} added is in the
-published packages at version 0.9.0, and the workspace publishes
-0.13.1 as this revision is written. A reader can check a claim against
-an installed package rather than against a working tree.
+published packages at version 0.9.0, and the nine workspace packages
+are published at 0.18.0 as this revision is written. A reader can
+check a claim against an installed package rather than against a
+working tree, with one limit: the refusals this revision adds to
+Appendix B, the anchor checkpoint rule and the empty witness list are
+in the working tree and in no published version yet.
 
 A second implementation is named here. Same author as this document;
 not an independent implementation.
@@ -2375,11 +2456,13 @@ Coverage:
   rail, and the body does not move money.
 
 Version compatibility:
-: Verax 0.8.2 depends on `@cedulon/*` 0.13.1. Those published
-  packages implement the posted draft-dogru-cedulon-09 profile and,
-  from 0.13.0, the posted draft-dogru-cedulon-decision-profile-03.
-  0.13.1 changes no behaviour from 0.13.0. This document is the
-  split form of that numbered series.
+: Verax 0.9.0 depends on `@cedulon/*` 0.16.0. Those packages are
+  not claimed to implement a posted revision: 0.14.0, 0.15.0 and
+  0.16.0 each changed verifier behaviour after draft-dogru-cedulon-09
+  was posted, as the upgrade notes of the Cedulon repository record,
+  and no posted revision describes the result. This document is the
+  split form of that numbered series, and states behaviour that is
+  newer than the packages Verax depends on.
 
 Licensing:
 : Apache-2.0.
@@ -2395,7 +2478,7 @@ Contact:
 
 URL:
 : <https://github.com/verax-ai/verax>. The packages `@verax-ai/body`,
-  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.8.2
+  `@verax-ai/proxy` and `@verax-ai/inventory` are on npm at 0.9.0
   (<https://www.npmjs.com/package/@verax-ai/body>,
   <https://www.npmjs.com/package/@verax-ai/proxy>,
   <https://www.npmjs.com/package/@verax-ai/inventory>). The MCP
@@ -2590,12 +2673,12 @@ ae447dc74ccb0f13383f0f43f0f67f288d61a6395e95e2038e320d
 | receipt-chain-break | audit fails | Signature or `prevReceiptHash` failed, or the links cannot place a receipt (issuer order, step 6) |
 | unauthenticated-extract | guarantee conditional | No verifier-supplied rail key, whatever the extract carries: a signature that verifies establishes internal consistency and not that the named rail produced the extract, and one that fails or is refused is not a key verdict either. The same code is reported when a rail key is pinned and no extract was presented at all, because there is nothing to check the pin against. A presented extract that does not verify under a pinned key is `extract-key-mismatch` instead |
 | extract-key-mismatch | audit fails | Extract is signed by a key other than the pinned rail key, or does not verify against it |
-| settlement-comparison-skipped | guarantee conditional | The pinned rail key refused the presented extract, so its rows were not reconciled against the receipts (`MUST-T10-20`). The code says what did not run; the refusal itself is reported as `extract-key-mismatch` |
+| settlement-comparison-skipped | guarantee conditional | The pinned rail key refused the presented extract, or, with or without a pin, a refusal of the table below refused its body, so its rows were not reconciled against the receipts (`MUST-T10-20`). The code says what did not run; a key refusal itself is reported as `extract-key-mismatch`, and a refusal of the body is named in this code's detail |
 | trust-key-unreadable | audit fails | A pinned key - rail, issuer, or manifest publisher - could not be decoded; the verifier's configuration is at fault, and nothing falls back to the keys the objects carry |
 | issuer-key-mismatch | audit fails | An object is signed by a key other than the pinned issuer key, or does not verify under it at all, so it is not coverage for anything it names. A checkpoint reaches this code by either route: unlike a receipt, which is named in the chain walk as `receipt-chain-break` when it claims the pin and fails, a checkpoint that claims the pin and fails is reported here and leaves its window uncovered |
 | countersign-key-mismatch | conditional | A countersignature verifies under a key other than the one pinned for that payee; unattributable, discarded as approval evidence, and the receipt it rode beside is unaffected ({{countersign}}) |
 | countersign-missing | conditional | A payee key is pinned and a settled receipt for that payee carries no attributable countersignature; a discarded garbage or foreign-key object leaves this open |
-| unauthenticated-issuer | conditional | No verifier-supplied issuer key and at least one receipt or checkpoint presented; their signatures are checked against the keys the objects carry ({{presentation}}), which establishes that each object is internally consistent and not that the named issuer produced it |
+| unauthenticated-issuer | conditional | No verifier-supplied issuer key and at least one receipt or checkpoint presented; their signatures are checked against the keys the objects carry ({{presentation}}), which establishes that each object is internally consistent and not that the named issuer produced it. Identified by `anchor`, it is also reported for an anchor checkpoint presented with no issuer key pinned: there is no issuer root for it to answer to, so it anchors nothing (`MUST-T11-20`) |
 | unauthenticated-countersigner | conditional | No verifier-supplied payee key; a countersignature is present but proves no approval |
 | unauthenticated-manifest | conditional | No verifier-supplied manifest key and a Trade Manifest was presented; its signature is not checked at all, because the check that exists under a pin (`manifest-key-mismatch`) has no key to run against and the key the manifest carries is not a fallback for one. An audit presented with no Trade Manifest is not this condition |
 | manifest-key-mismatch | audit fails | A presented Trade Manifest is signed by a key other than the pinned publisher key, or does not verify against it |
@@ -2628,11 +2711,21 @@ report. The reference implementation uses these:
 | cbor-duplicate-key | A CBOR map repeats an encoded key (`MUST-T4-18`) |
 | cbor-non-deterministic | An item is not in the deterministic encoding of {{cose-profile}} (`MUST-T4-1`) |
 | cbor-invalid-text | A text string is not valid UTF-8 |
+| cbor-unsupported | An item is a tag, a floating-point number or a simple value other than false, true and null: outside the item types of {{cose-profile}} |
+| cbor-indefinite | An item uses an indefinite length or a reserved additional-information value |
+| cbor-not-array | The outermost item is not an array, so it is not a COSE_Sign1 structure |
+| cbor-not-map | The payload of a COSE_Sign1 structure is not a CBOR map, so it carries no claim map |
+| cose-sign1-length | The COSE_Sign1 array does not have four elements |
+| cose-sign1-types | The protected header, payload or signature of the COSE_Sign1 array is not a byte string |
 | cose-protected-header | The protected header is not the map {{cose-profile}} requires |
 | cose-sign1-unprotected | The unprotected header is not an empty map (`MUST-T4-21`) |
+| hex-odd, hex-not-lowercase, hex-not-hex | The hex text an object travels as has an odd number of digits, an uppercase digit, or a character that is not a hex digit: each would otherwise be read as a second spelling of the same octets |
 | json-duplicate-key | A JSON text repeats a member name at any depth (`MUST-T4-20`) |
 | receipt-not-cose | A Spend Receipt is presented in an encoding other than COSE (`MUST-T4-1`) |
 | lone-surrogate | A JSON text carries a lone surrogate ({{canonical-json}}) |
+| non-finite-number | A JSON value to be canonicalized is a number that is not finite (NaN or an infinity), which {{canonical-json}} cannot encode |
+| unencodable | A JSON value to be canonicalized is not a JSON value at all (undefined, a function or a symbol) |
+| missing-extract-body | The Rail Extract body is absent or is not a JSON object ({{rail-extract}}) |
 | missing-extract-accountId, -railId, -windowStartMs, -windowEndMs, -settlements | A required member of the Rail Extract body is absent or not of its type ({{rail-extract}}) |
 | malformed-extract-windowStartMs, malformed-extract-windowEndMs | A window bound is not a safe integer |
 | malformed-extract-window | `windowEndMs` is not after `windowStartMs`: the window declares no population |

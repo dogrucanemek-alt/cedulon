@@ -1,0 +1,9 @@
+// Prior shape of a wording RED test: it read an old revision through git.
+import { execFileSync } from "node:child_process";
+
+function gitShow(revPath: string): string {
+  return execFileSync("git", ["show", revPath], { encoding: "utf8" });
+}
+
+const oldCore = gitShow("7f9412c:spec/draft-dogru-cedulon-core-05.md");
+void oldCore;

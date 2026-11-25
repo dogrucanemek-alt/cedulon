@@ -101,9 +101,10 @@ function emptyExtract() {
   );
 }
 
-function hasSignatureFailed(findings: ReadonlyArray<{ code: string; detail: string }>): boolean {
+/** Dirty hex is a named refusal of the presented object (Appendix B), not a signature verdict. */
+function hasHexRefusal(findings: ReadonlyArray<{ code: string; detail: string }>): boolean {
   return findings.some(
-    (f) => f.code === "checkpoint-total-mismatch" && /signature failed/.test(f.detail),
+    (f) => f.code === "checkpoint-total-mismatch" && /refused: hex-not-hex -/.test(f.detail),
   );
 }
 
@@ -242,7 +243,7 @@ describe("export does not throw when a stored checkpoint has dirty coseHex", () 
       });
       assert.equal(exported.checkpoints.length, 1);
       assert.equal(exported.checkpoints[0].hash, null);
-      assert.equal(hasSignatureFailed(exported.findings), true, JSON.stringify(exported.findings));
+      assert.equal(hasHexRefusal(exported.findings), true, JSON.stringify(exported.findings));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -269,7 +270,7 @@ describe("audit does not throw when checkpointHash would refuse dirty coseHex", 
       });
     });
     assert.equal(report.ok, false);
-    assert.equal(hasSignatureFailed(report.findings), true, JSON.stringify(report.findings));
+    assert.equal(hasHexRefusal(report.findings), true, JSON.stringify(report.findings));
   });
 
   it("a dirty presented checkpoint under a matching issuer pin is issuer-key-mismatch and does not throw", () => {
@@ -297,7 +298,7 @@ describe("audit does not throw when checkpointHash would refuse dirty coseHex", 
       true,
       JSON.stringify(report.findings),
     );
-    assert.equal(hasSignatureFailed(report.findings), false, JSON.stringify(report.findings));
+    assert.equal(hasHexRefusal(report.findings), false, JSON.stringify(report.findings));
   });
 
   it("a dirty witness body with a valid presented checkpoint does not throw and yields no signature finding", () => {
@@ -348,7 +349,7 @@ describe("audit does not throw when checkpointHash would refuse dirty coseHex", 
     });
     assert.equal(report.ok, false);
     const windowFindings = report.windows.flatMap((w) => w.findings);
-    assert.equal(hasSignatureFailed(windowFindings), true, JSON.stringify(windowFindings));
+    assert.equal(hasHexRefusal(windowFindings), true, JSON.stringify(windowFindings));
   });
 
   it("auditWindows with a dirty witness body and a valid presented checkpoint does not throw and yields no signature finding", () => {

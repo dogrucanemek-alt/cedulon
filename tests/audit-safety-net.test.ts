@@ -27,6 +27,7 @@ const EMPTY_COUNTS = {
   receipts: {
     submitted: 0,
     attested: 0,
+    covering: 0,
     inScope: 0,
     aborted: 0,
     settled: 0,
@@ -126,6 +127,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 1,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -178,6 +180,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 1,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -230,6 +233,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 1,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -264,6 +268,13 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
         severity: "warn",
       },
       {
+        code: "settlement-comparison-skipped",
+        id: "extract",
+        detail:
+          "the presented extract body was refused: missing-extract-accountId - not a signature verdict, so its rows were not reconciled against the receipts; no settlement finding in this report was read out of that document",
+        severity: "warn",
+      },
+      {
         code: "counterparty-unbound",
         id: "counterparty",
         severity: "warn",
@@ -275,6 +286,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 0,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -310,6 +322,13 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
         severity: "warn",
       },
       {
+        code: "settlement-comparison-skipped",
+        id: "extract",
+        detail:
+          "the presented extract body was refused: malformed-extract-windowStartMs - not a signature verdict, so its rows were not reconciled against the receipts; no settlement finding in this report was read out of that document",
+        severity: "warn",
+      },
+      {
         code: "counterparty-unbound",
         id: "counterparty",
         severity: "warn",
@@ -321,6 +340,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 0,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -378,6 +398,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 0,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -602,6 +623,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 1,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -1308,14 +1330,19 @@ describe("audit safety net", () => {
       base,
     );
     // An empty inclusionReceipts list is presented: with no witness key the
-    // walk says so, exactly as it does for a non-empty one.
+    // walk says so, exactly as it does for a non-empty one, and tier 2 was
+    // not exercised either.
     const emptyInclusions = snap(
       audit({ receipts: [], checkpoints: [], extract, inclusionReceipts: [] } as never),
     );
     assert.deepEqual(emptyInclusions.findings, base.findings);
     assert.deepEqual(
       emptyInclusions.warnings.map((w) => w.code).sort(),
-      [...base.warnings.map((w) => w.code), "unauthenticated-witness"].sort(),
+      [
+        ...base.warnings.map((w) => w.code),
+        "unauthenticated-witness",
+        "witness-inclusion-not-exercised",
+      ].sort(),
     );
   });
 

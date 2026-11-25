@@ -1,0 +1,492 @@
+import { TEST_HASH } from "./hash-fixtures.ts";
+import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { audit } from "@cedulon/audit";
+import { buildCheckpointClaims, checkpointHash, signCheckpoint } from "@cedulon/checkpoint";
+import { generateReceiptKeys, receiptHash, signReceipt } from "@cedulon/receipts";
+import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+const P_START = 1_700_000_000_000;
+const H = 3_600_000;
+const N_START = P_START + H;
+const N_END = N_START + H;
+
+function claims(ref: string, ts: number, nonce: string, prev: string | null) {
+  return {
+    payer: "payer",
+    payee: "payee-1",
+    amount: "1",
+    currency: "USD",
+    policyHash: TEST_HASH,
+    manifestHash: null,
+    noManifest: true,
+    x402PaymentRef: ref,
+    timestampMs: ts,
+    nonce: nonce.padEnd(16, "-"),
+    prevReceiptHash: prev,
+    outcome: "settled" as const,
+  };
+}
+
+function stream() {
+  const issuer = generateReceiptKeys();
+  const rail = generateExtractKeys();
+  const r0 = signReceipt(
+    claims("w-prev", P_START + 600_000, "a-prev", null),
+    issuer.privateKeyPem,
+    issuer.publicKeyPem,
+  );
+  const cpPrev = signCheckpoint(
+    buildCheckpointClaims(1, [r0], P_START, N_START, null),
+    issuer.privateKeyPem,
+    issuer.publicKeyPem,
+  );
+  const r1 = signReceipt(
+    claims("w-n", N_START + 600_000, "a-n", receiptHash(r0)),
+    issuer.privateKeyPem,
+    issuer.publicKeyPem,
+  );
+  const cpN = signCheckpoint(
+    buildCheckpointClaims(2, [r1], N_START, N_END, checkpointHash(cpPrev)),
+    issuer.privateKeyPem,
+    issuer.publicKeyPem,
+  );
+  const extract = signRailExtract(
+    {
+      accountId: "acct",
+      railId: "rail",
+      windowStartMs: N_START,
+      windowEndMs: N_END,
+      settlements: [{ ref: "w-n", amount: "1", currency: "USD", timestampMs: N_START + 600_000 }],
+    },
+    rail.privateKeyPem,
+    rail.publicKeyPem,
+  );
+  const trust = {
+    publicKeyPem: rail.publicKeyPem,
+    accountId: "acct",
+    railId: "rail",
+    windowStartMs: N_START,
+    windowEndMs: N_END,
+  };
+  return { issuer, r0, r1, cpPrev, cpN, extract, trust };
+}
+
+function mismatchIds(report: ReturnType<typeof audit>): string[] {
+  return report.findings
+    .filter((f) => f.code === "checkpoint-total-mismatch" || f.code === "checkpoint-head-mismatch")
+    .filter((f) => /-(count|head)$/.test(f.id) || /^epoch-\d+$/.test(f.id))
+    .map((f) => `${f.code}:${f.id}`);
+}
+
+/**
+ * Four pin states × (honest chain, refused checkpoint, epoch gap).
+ * Coverage set drives attested count and settlement; diagnostic set drives
+ * refusal naming and genesis/epoch/window continuity. Totals/count/head
+ * compare only within one set, so an empty coverage set must not invent
+ * mismatches against an honest diagnostic chain.
+ *
+ * One describe only: nested describes made Node's JUnit reporter emit a
+ * parent suite whose tests attribute named the child suites, and the
+ * impl-status gate that summed every suite attribute counted those cases
+ * twice. Flat names keep the matrix readable without that hazard.
+ */
+describe("coverage set vs diagnostic set (pin matrix)", () => {
+  it("usable pin / honest chain: attested covers settlement and raises no diagnostic noise", () => {
+    const s = stream();
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    assert.equal(report.counts.receipts.attested, 2);
+    assert.equal(report.counts.receipts.covering, 2);
+    assert.equal(report.ok, true);
+    assert.deepEqual(mismatchIds(report), []);
+  });
+
+  it("usable pin / refused checkpoint: named and outside the coverage set", () => {
+    const s = stream();
+    const refused = { ...s.cpPrev, coseHex: s.cpPrev.coseHex + "00" };
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    assert.ok(
+      report.findings.some((f) => f.id === "epoch-1" && /refused:/.test(f.detail ?? "")),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.ok, false);
+  });
+
+  it("usable pin / epoch gap: window-coverage on the attested set", () => {
+    const s = stream();
+    const gap = signCheckpoint(
+      buildCheckpointClaims(3, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, gap],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    assert.ok(
+      report.findings.some(
+        (f) => f.code === "window-coverage" && f.id === "epoch-3" && /consecutive/.test(f.detail ?? ""),
+      ),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.ok, false);
+  });
+
+  it("no pin / honest chain: presented-unattested covers conditionally and invents no mismatch", () => {
+    const s = stream();
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+    });
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.covering, 2);
+    assert.equal(report.ok, true);
+    assert.equal(report.guarantee, "conditional");
+    assert.deepEqual(mismatchIds(report), []);
+  });
+
+  it("no pin / refused checkpoint: named and excluded from the working set", () => {
+    const s = stream();
+    const refused = { ...s.cpPrev, coseHex: s.cpPrev.coseHex + "00" };
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+    });
+    assert.ok(
+      report.findings.some((f) => f.id === "epoch-1" && /refused:/.test(f.detail ?? "")),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.ok, false);
+  });
+
+  it("no pin / epoch gap: window-coverage on the pinless working set", () => {
+    const s = stream();
+    const gap = signCheckpoint(
+      buildCheckpointClaims(3, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, gap],
+      extract: s.extract,
+      trust: s.trust,
+    });
+    assert.ok(
+      report.findings.some(
+        (f) => f.code === "window-coverage" && f.id === "epoch-3" && /consecutive/.test(f.detail ?? ""),
+      ),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.ok, false);
+  });
+
+  it("fully unreadable pin / RED then GREEN: honest chain keeps coverage empty without inventing total/count/head mismatches", () => {
+    const s = stream();
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.covering, 0);
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.ok(
+      report.findings.some((f) => f.code === "settlement-without-receipt"),
+      JSON.stringify(report.findings),
+    );
+    assert.deepEqual(
+      mismatchIds(report),
+      [],
+      `empty coverage must not invent mismatches against the diagnostic chain: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(report.ok, false);
+  });
+
+  it("fully unreadable pin / refused checkpoint stays named; honest diagnostic survivors invent no coverage mismatch", () => {
+    const s = stream();
+    const refused = { ...s.cpPrev, coseHex: s.cpPrev.coseHex + "00" };
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.ok(
+      report.findings.some((f) => f.id === "epoch-1" && /refused: cbor-trailing/.test(f.detail ?? "")),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.covering, 0);
+    assert.equal(
+      report.findings.some(
+        (f) =>
+          (f.code === "checkpoint-total-mismatch" || f.code === "checkpoint-head-mismatch") &&
+          /^epoch-2/.test(f.id),
+      ),
+      false,
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.ok, false);
+  });
+
+  it("fully unreadable pin / epoch gap stays visible on the diagnostic set without coverage-set total noise", () => {
+    const s = stream();
+    const gap = signCheckpoint(
+      buildCheckpointClaims(3, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, gap],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.ok(
+      report.findings.some(
+        (f) => f.code === "window-coverage" && f.id === "epoch-3" && /consecutive/.test(f.detail ?? ""),
+      ),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.covering, 0);
+    assert.deepEqual(mismatchIds(report), [], JSON.stringify(report.findings));
+    assert.equal(report.ok, false);
+  });
+
+  it("partially readable pin / honest chain under a mixed pin: readable keys still attest; unreadable sibling fails the audit", () => {
+    const s = stream();
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: [s.issuer.publicKeyPem, "not a key"] },
+    });
+    assert.equal(report.counts.receipts.attested, 2);
+    assert.equal(report.counts.receipts.covering, 2);
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.deepEqual(mismatchIds(report), []);
+    assert.equal(report.ok, false);
+  });
+
+  it("partially readable pin / refused checkpoint under a mixed pin is still named", () => {
+    const s = stream();
+    const refused = { ...s.cpPrev, coseHex: s.cpPrev.coseHex + "00" };
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: [s.issuer.publicKeyPem, "not a key"] },
+    });
+    assert.ok(
+      report.findings.some((f) => f.id === "epoch-1" && /refused:/.test(f.detail ?? "")),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.ok, false);
+  });
+
+  it("partially readable pin / epoch gap under a mixed pin is still window-coverage", () => {
+    const s = stream();
+    const gap = signCheckpoint(
+      buildCheckpointClaims(3, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, gap],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: [s.issuer.publicKeyPem, "not a key"] },
+    });
+    assert.ok(
+      report.findings.some(
+        (f) => f.code === "window-coverage" && f.id === "epoch-3" && /consecutive/.test(f.detail ?? ""),
+      ),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.ok, false);
+  });
+});
+
+/**
+ * Each needle is a caller-visible 0.19.0 change. The GREEN test below binds
+ * every needle to a live finding code, field, refusal, or warning the suite
+ * already measures (see the assert block that follows the needle check).
+ */
+function upgrading019Failures(section: string): string[] {
+  const failures: string[] = [];
+  for (const needle of [
+    "counts.receipts.attested",
+    "counts.receipts.covering",
+    "checkpoint-withheld",
+    "equivocation",
+    "witness-entry-unattributable",
+    "verdict change",
+    "trust-key-unreadable",
+    "audit-too-large",
+    "issuer-key-mismatch",
+    "settlement-comparison-skipped",
+    "unauthenticated-issuer",
+    "witness-inclusion-not-exercised",
+    "malformed-timestampMs",
+    "malformed-expiresAtMs",
+    "malformed-expiryMs",
+    "hex-not-hex",
+    "non-finite-number",
+    "What breaks",
+    "Under a usable issuer root",
+  ]) {
+    if (!section.includes(needle)) failures.push(`0.19.0 section omits ${needle}`);
+  }
+  if (
+    /`auditWindows` anchors window i>0 on the last\s+coverage-set checkpoint of window i-1/.test(section) &&
+    !/Under a usable issuer root,\s*`auditWindows` anchors window i>0/.test(section)
+  ) {
+    failures.push("0.19.0 section still lets auditWindows anchor without a usable issuer root");
+  }
+  return failures;
+}
+
+describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes", () => {
+  function section019(md = readFileSync(join(root, "docs", "UPGRADING.md"), "utf8")): string {
+    const m = /## 0\.19\.0 \(prepared, not published\)\n([\s\S]*?)(?=\n## )/.exec(md);
+    assert.ok(m, "docs/UPGRADING.md has no ## 0.19.0 (prepared, not published) section");
+    return m[1]!;
+  }
+
+  it("the section stays bound to every caller-visible 0.19.0 change the code makes", () => {
+    assert.deepEqual(upgrading019Failures(section019()), []);
+
+    const s = stream();
+    const pinless = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+    });
+    assert.equal(pinless.counts.receipts.attested, 0);
+    assert.equal(pinless.counts.receipts.covering, 2);
+
+    const unreadable = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    });
+    assert.equal(unreadable.counts.receipts.attested, 0);
+    assert.equal(unreadable.counts.receipts.covering, 0);
+    assert.ok(unreadable.findings.some((f) => f.code === "trust-key-unreadable"));
+
+    const foreign = generateReceiptKeys();
+    const refused = signCheckpoint(
+      buildCheckpointClaims(1, [s.r0], P_START, N_START, null),
+      foreign.privateKeyPem,
+      foreign.publicKeyPem,
+    );
+    const rejected = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    assert.ok(rejected.findings.some((f) => f.code === "issuer-key-mismatch" && f.id === "epoch-1"));
+    assert.equal(
+      rejected.counts.receipts.covering,
+      rejected.counts.receipts.attested,
+      "under a usable pin covering tracks attested; a rejected checkpoint is outside both",
+    );
+
+    // settlement-comparison-skipped ← tests/refusal-names.test.ts (named extract body)
+    const dirtyExtract = {
+      body: { ...s.extract.body, settlements: s.extract.body.settlements, extra: Infinity },
+      signature: "x",
+      publicKeyPem: "y",
+    };
+    const skipped = audit({ receipts: [], checkpoints: [], extract: dirtyExtract as never });
+    assert.ok(skipped.warnings.some((w) => w.code === "settlement-comparison-skipped"));
+
+    // unauthenticated-issuer on anchor ← tests/audit-transparency.test.ts
+    const noRoot = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      anchorCheckpoint: s.cpPrev,
+    });
+    assert.ok(
+      noRoot.warnings.some((w) => w.code === "unauthenticated-issuer" && w.id === "anchor"),
+    );
+
+    // witness-inclusion-not-exercised ← tests/audit-transparency.test.ts
+    const emptyList = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+      witnessTrust: { publicKeyPem: s.issuer.publicKeyPem },
+      inclusionReceipts: [],
+    });
+    assert.ok(emptyList.warnings.some((w) => w.code === "witness-inclusion-not-exercised"));
+  });
+
+  it("RED: a 0.19.0 section that omitted the later caller-visible changes is caught", () => {
+    const oldMd = readFileSync(
+      join(root, "tests", "fixtures", "wording-red", "upgrading-019-incomplete-later.md"),
+      "utf8",
+    );
+    const failures = upgrading019Failures(section019(oldMd));
+    assert.ok(failures.some((f) => f.includes("settlement-comparison-skipped")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("witness-inclusion-not-exercised")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("malformed-timestampMs")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("hex-not-hex")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("non-finite-number")), failures.join(" | "));
+  });
+
+  it("RED: a 0.19.0 section that omitted the pinless witness verdict is caught", () => {
+    const oldMd = readFileSync(
+      join(root, "tests", "fixtures", "wording-red", "upgrading-019-before-witness-verdict.md"),
+      "utf8",
+    );
+    const failures = upgrading019Failures(section019(oldMd));
+    assert.ok(failures.some((f) => f.includes("witness-entry-unattributable")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("verdict change")), failures.join(" | "));
+  });
+});

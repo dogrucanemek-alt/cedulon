@@ -6,12 +6,13 @@ import {
   decodeCbor,
   decodeCoseSign1,
   encodeCbor,
+  hexToBytes,
   mapGet,
   sameSpkiKey,
   signCoseSign1,
   verifyCoseSign1,
 } from "@cedulon/cose";
-import { canonical, hashClaimRefusal, isValidAmountText } from "@cedulon/core";
+import { canonical, hashClaimRefusal, isUintClaim, isValidAmountText } from "@cedulon/core";
 
 /** CWT private-use labels for Trade Manifest claims. */
 export const MANIFEST_CLAIM = {
@@ -88,6 +89,7 @@ export function manifestFromCbor(bytes: Uint8Array): TradeManifestBody {
   };
   const exp = mapGet(map, MANIFEST_CLAIM.expiresAtMs);
   if (typeof exp !== "number") throw new Error("manifest-exp");
+  if (!isUintClaim(exp)) throw new Error("malformed-expiresAtMs");
   const ap2 = textOrNull(MANIFEST_CLAIM.ap2MandateHash);
   const payeeVal = mapGet(map, MANIFEST_CLAIM.payee);
   if (payeeVal !== undefined && typeof payeeVal !== "string") {
@@ -122,6 +124,7 @@ export function signManifest(
   if (acceptance) throw new Error(acceptance);
   const ap2 = hashClaimRefusal("ap2MandateHash", body.ap2MandateHash ?? null, true);
   if (ap2) throw new Error(ap2);
+  if (!isUintClaim(body.expiresAtMs)) throw new Error("malformed-expiresAtMs");
   const cose = signCoseSign1(manifestToCbor(body), privateKeyPem, CTY_MANIFEST);
   const msg = decodeCoseSign1(cose);
   return {
@@ -145,11 +148,11 @@ export function verifyManifest(signed: SignedManifest, expectedIssuerKeyPem?: st
   if (!signed.coseHex) {
     return false;
   }
-  const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_MANIFEST)) {
-    return false;
-  }
   try {
+    const bytes = hexToBytes(signed.coseHex);
+    if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_MANIFEST)) {
+      return false;
+    }
     const msg = decodeCoseSign1(bytes);
     const decoded = manifestFromCbor(msg.payload);
     return canonical(decoded) === canonical(signed.body);
@@ -159,7 +162,7 @@ export function verifyManifest(signed: SignedManifest, expectedIssuerKeyPem?: st
 }
 
 export function manifestHash(signed: SignedManifest): string {
-  return sha256Hex(Buffer.from(signed.coseHex, "hex"));
+  return sha256Hex(Buffer.from(hexToBytes(signed.coseHex)));
 }
 
 export function isManifestExpired(signed: SignedManifest, nowMs: number): boolean {

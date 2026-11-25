@@ -143,8 +143,8 @@ export function runWindows(input: WindowsInput, deps: WindowsDeps): WindowsRepor
       nextExtract: input.windows[i + 1]?.extract,
       trust: trustForWindow(input.trust, extract, tilingOk),
     };
-    // Window i > 0 anchors on the last checkpoint the issuer root attested in
-    // window i-1, never on one it refused.
+    // Window i > 0 anchors on the last coverage-set checkpoint of window i-1,
+    // never on a refused or merely diagnostic one.
     const anchor = i === 0 ? input.anchorCheckpoint : details[i - 1]!.lastAttestedCheckpoint;
     if (anchor) {
       windowInput.anchorCheckpoint = anchor;

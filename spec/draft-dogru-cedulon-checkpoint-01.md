@@ -54,8 +54,10 @@ This document specifies epoch checkpoints, the transparency witness
 and the anchoring of checkpoints as SCITT Signed Statements for the
 Cedulon audit layer. The spend receipt, rail-extract reconciliation
 and trust-root rules live in the companion Cedulon Core document.
-A verifier that pins a witness key can detect a withheld or rolled-back
-checkpoint; without that pin the suppression guarantee is conditional.
+A verifier that pins a witness key and holds a usable issuer root can
+detect a withheld or rolled-back checkpoint from a body that answers to
+that root (`MUST-T11-16`); without those pins the suppression guarantee
+is conditional.
 
 --- middle
 
@@ -89,7 +91,13 @@ A log holds statements from everyone who uses it. A statement held by
 a pinned log MUST additionally answer to the issuer root before it
 counts as something that issuer published (`MUST-T11-16`); otherwise
 another user's epoch, sitting in a shared log, reads as this issuer
-publishing two checkpoints for one epoch.
+publishing two checkpoints for one epoch. Without a usable issuer
+pin there is no issuer root to answer to: a witness body MUST NOT
+produce a withholding or equivocation verdict. A body that binds a
+statement this chain does not present is reported as
+`witness-entry-unattributable` and makes the guarantee conditional; a
+body that binds a presented checkpoint is not an accusation and raises
+no separate finding.
 
 Anchoring and withholding are different claims and need different
 evidence. Establishing that a checkpoint was logged needs only the
@@ -138,29 +146,42 @@ treat it as a failed checkpoint rather than as a redacted one.
 
 ## Genesis and continuity {#genesis}
 
-Without an anchor, the first checkpoint in a presented chain is the
-genesis checkpoint of that chain, and its `prevCheckpointHash` MUST
-be null. A window under audit usually does not begin a stream, so an
-audit MAY instead present an anchor, as the audit procedure of
-{{CEDULON-CORE}} describes: the issuer-signed checkpoint immediately
-preceding the presented checkpoint with the lowest epoch. The anchor is resolved
+Without an anchor, the checkpoint with the lowest epoch in the working
+set of {{CEDULON-CORE}} (Verification algorithm), which under a usable
+pinned issuer key is the attested set, is the genesis checkpoint of
+the chain and its `prevCheckpointHash` MUST be null, and a presented
+checkpoint outside the working set does not change which checkpoint
+that is, whatever its epoch. The attested set is the presented
+checkpoints that verify under a usable pinned issuer key, as
+{{CEDULON-CORE}} (The issuer root) defines that set. A window under
+audit usually does not begin a stream, so an audit MAY instead
+present an anchor, as the audit procedure of {{CEDULON-CORE}}
+describes: the issuer-signed checkpoint immediately preceding the
+checkpoint with the lowest epoch in the working set. An anchor is
+used only under a usable pinned issuer key, so that working set is
+the attested set. A presented checkpoint outside the working set is
+not the checkpoint the anchor precedes, whatever its epoch: it cannot
+make an anchor adjacent, and it cannot make a valid anchor
+non-adjacent. The anchor is resolved
 against the issuer root like any checkpoint, and it is valid only
 when, in addition, its `epoch` is one less than that checkpoint's,
 its `endMs` equals that checkpoint's `startMs`, and
 that checkpoint's `prevCheckpointHash` equals the SHA-256 of the
-anchor's COSE bytes. With a valid anchor the presented checkpoint with
-the lowest epoch is not a genesis checkpoint: its `prevCheckpointHash` is
-checked against the anchor rather than against null. An anchor that
-is not valid anchors nothing. One that answers to the issuer root and
-still does not meet the presented checkpoint with the lowest epoch is reported as
+anchor's COSE bytes. With a valid anchor the checkpoint with the
+lowest epoch in the working set is not a genesis checkpoint: its
+`prevCheckpointHash` is checked against the anchor rather than against
+null. An anchor that is not valid anchors nothing. One that answers to
+the issuer root and still does not meet the checkpoint with the lowest
+epoch in the working set is reported as
 `window-coverage`, identified by `anchor` (`MUST-T11-20`); what is
 reported for an anchor that does not answer to the issuer root is
 stated in {{CEDULON-CORE}}. The anchor's own window is not audited;
 what happened before it is the business of the audit of that earlier
 window.
 
-Epoch numbers MUST be consecutive integers. Adjacent windows MUST
-satisfy `next.startMs = prev.endMs` (`MUST-T11-8`).
+Epoch numbers of the working set of {{CEDULON-CORE}} MUST be
+consecutive integers. Adjacent windows of that set MUST satisfy
+`next.startMs = prev.endMs` (`MUST-T11-8`).
 
 A later checkpoint that omits a prefix of earlier epochs (prefix
 deletion) is detectable only if an external witness (transparency
@@ -320,12 +341,16 @@ that ran a consumer against an unchecked producer would not produce
 the same set of findings, so those orders are not among the
 permitted ones.
 
-These steps consume two products of {{CEDULON-CORE}} (Verification
-algorithm): the working set that the issuer-pin step decides, and
-the `ref` index that step 7 of {{CEDULON-CORE}} builds. The chain walk that
-defines issuer order is step 6 of {{CEDULON-CORE}}. A fail-severity
-finding these steps produce is a finding step 11 of {{CEDULON-CORE}}
-treats as failing the audit (`MUST-T10-4`).
+These steps consume products of {{CEDULON-CORE}} (Verification
+algorithm and Terminology): the coverage set and the diagnostic set
+that the issuer-pin step decides, and the `ref` index that step 7 of
+{{CEDULON-CORE}} builds. Totals, count, and head checks compare a
+checkpoint only against receipts of the same set; continuity checks
+(genesis, epoch, window) consume the diagnostic set; settlement
+coverage consumes the coverage set. The chain walk that defines
+issuer order is step 6 of {{CEDULON-CORE}}. A fail-severity finding
+these steps produce is a finding step 11 of {{CEDULON-CORE}} treats as
+failing the audit (`MUST-T10-4`).
 
 When a step names an identifier in backticks, that identifier
 SHOULD be used for the condition in diagnostic output. The
@@ -337,9 +362,12 @@ identifiers are not an interoperability surface.
    `kid` that does not match the key obtained for the checkpoint
    issuer, on the same terms as a receipt (`MUST-T4-8`). Require
    `receiptCount`, `chainHeadHash`, and `totals` to match the
-   receipts of the working set in `[startMs, endMs)` as defined above
-   (`MUST-T11-2`); a receipt step 4 of {{CEDULON-CORE}} rejected is not among them,
-   or a forged receipt could satisfy a checkpoint count. The identifier `checkpoint-total-mismatch`
+   receipts of the same set (coverage or diagnostic) in
+   `[startMs, endMs)` as defined above (`MUST-T11-2`); a receipt
+   step 4 of {{CEDULON-CORE}} rejected is not among them, or a forged
+   receipt could satisfy a checkpoint count. An empty coverage set
+   MUST NOT make those checks report a mismatch against diagnostic
+   checkpoints. The identifier `checkpoint-total-mismatch`
    SHOULD be used for a failed signature, a wrong `receiptCount`,
    or totals that disagree, and `checkpoint-head-mismatch` for a
    `chainHeadHash` that is not the last link, in issuer order
@@ -359,33 +387,40 @@ identifiers are not an interoperability surface.
     window. A gap or double count MUST be reported as a window
     coverage failure (`MUST-T11-7`, `MUST-T11-8`). The identifier
     `window-coverage` SHOULD be used for this condition. The check
-    runs against the presented checkpoint windows and it is
-    fail-closed: a receipt that falls under none of them is this
-    failure - including every receipt when no checkpoint was
-    presented, and receipts after the last closed checkpoint's
-    `endMs`. The text names that last state an **open epoch**, and
-    it is auditable only when the checkpoint that closes it is
-    issued; the name explains why the finding fired, it does not
+    runs against the windows of the working set of {{CEDULON-CORE}}
+    (the diagnostic set of its Terminology) and it is fail-closed: a
+    receipt that falls under none of them is this failure - including
+    every receipt when no checkpoint of the working set was presented,
+    and receipts after the last closed
+    checkpoint's `endMs`. The text names that last state an **open
+    epoch**, and it is auditable only when the checkpoint that closes
+    it is issued; the name explains why the finding fired, it does not
     soften it. Nothing about an absent checkpoint is silent:
     uncovered evidence surfaces as a finding rather than as a gap
     in the report.
-3. Walk checkpoints in epoch order. `prevCheckpointHash` MUST
-    equal the SHA-256 of the previous checkpoint COSE bytes. For the
-    presented checkpoint with the lowest epoch it MUST equal the anchor's checkpoint
-    hash where a valid anchor is presented, and MUST be null
-    otherwise ({{genesis}}, `MUST-T11-4`, `MUST-T11-20`). The identifier
+3. Walk the checkpoints of the working set in epoch order.
+    `prevCheckpointHash` MUST equal the SHA-256 of the previous
+    checkpoint COSE bytes. For the
+    checkpoint with the lowest epoch in the working set of
+    {{CEDULON-CORE}} it MUST equal the anchor's checkpoint hash where a
+    valid anchor is presented; a presented checkpoint outside that set
+    does not change which checkpoint that is. Without a valid anchor the
+    checkpoint with the lowest epoch in the working set is a genesis
+    checkpoint and its `prevCheckpointHash` MUST be null ({{genesis}},
+    `MUST-T11-4`, `MUST-T11-20`). The identifier
     `checkpoint-total-mismatch` SHOULD be used for a broken chain,
     which is the fourth condition its table row names.
 4. If two successfully verified checkpoints share an epoch number
     and have different hashes, the verifier MUST report
     equivocation (`MUST-T11-3`). The identifier `equivocation`
     SHOULD be used for this condition. The checkpoints compared
-    here are those presented **together with** any carried by
-    verified witness receipts (step 5). A presented chain
-    that satisfies `MUST-T11-8` (step 2) cannot raise this finding on
-    its own, because its epochs are consecutive and no two of its
-    members share an epoch. A copy recorded by a witness
-    is where the second one is found.
+    here are those of the working set of {{CEDULON-CORE}} **together
+    with** any whose statement body verifies under a usable issuer
+    root (`MUST-T11-16`) on a verified witness receipt (step 5). A
+    working set that satisfies `MUST-T11-8` (step 2) cannot raise
+    this finding on its own, because its epochs are consecutive and
+    no two of its members share an epoch. A copy recorded by a
+    witness is where the second one is found.
 5. If witness receipts were supplied, verify them against the
     out-of-band witness key ({{witness-root}}); receipts that
     cannot be checked that way are not evidence in either direction
@@ -396,7 +431,13 @@ identifiers are not an interoperability surface.
     receipt whose statement body verifies against the issuer root is
     a statement that issuer published; one that does not is another
     party's, and is not this issuer equivocating (`MUST-T11-16`).
-    The survivors are the recorded statement hashes used in step 6. Where a receipt also carries
+    Where no usable issuer pin was supplied, no body answers to an
+    issuer root: such a body MUST NOT enter the equivocation pool or
+    produce a withheld-checkpoint finding. A body that binds a
+    statement this chain does not present is reported as
+    `witness-entry-unattributable` instead; a body that binds a
+    presented checkpoint raises no separate finding. The survivors are the
+    recorded statement hashes used in step 6. Where a receipt also carries
     the statement body, discard that body unless its statement hash
     equals the one the receipt binds and it verifies as a
     checkpoint; the surviving bodies are what step 4 compares.
@@ -418,17 +459,20 @@ identifiers are not an interoperability surface.
     warning: a witness may have been configured after the
     checkpoint was issued, and an operator's own gap is not
     evidence of concealment. For each surviving record whose
-    statement is absent from the presented chain, report that a
-    recorded checkpoint was withheld; the identifier
-    `checkpoint-withheld` SHOULD be used. This is a finding and the
-    audit MUST fail. A record that carries no statement body cannot
-    say whose statement it binds, so it MUST NOT produce this
-    finding; it is reported as an entry that could not be attributed
-    and makes the guarantee conditional, because a real withholding
-    must not be buried by removing the body (`MUST-T11-17`). Such a
-    record still establishes anchoring in the first half of this
-    step: proving that a checkpoint was logged needs only its hash. The verifier MUST NOT report a withheld
-    checkpoint as a window coverage failure (`MUST-T11-11`).
+    statement body verifies under a usable issuer root
+    (`MUST-T11-16`) and whose statement is absent from the
+    presented chain, report that a recorded checkpoint was
+    withheld; the identifier `checkpoint-withheld` SHOULD be used.
+    This is a finding and the audit MUST fail. A record that
+    carries no statement body cannot say whose statement it binds,
+    so it MUST NOT produce this finding; it is reported as an entry
+    that could not be attributed and makes the guarantee
+    conditional, because a real withholding must not be buried by
+    removing the body (`MUST-T11-17`). Such a record still
+    establishes anchoring in the first half of this step: proving
+    that a checkpoint was logged needs only its hash. The verifier
+    MUST NOT report a withheld checkpoint as a window coverage
+    failure (`MUST-T11-11`).
 
 ## Finding codes
 
@@ -444,10 +488,10 @@ appear in operator-facing output (`MUST-T10-14`).
 | checkpoint-total-mismatch | audit fails | Totals, count, signature, or checkpoint chain failed. The signature branch is reached where no issuer pin has already excluded the checkpoint: under a pin a checkpoint that does not verify is `issuer-key-mismatch` and never reaches the totals comparison |
 | checkpoint-head-mismatch | audit fails | `chainHeadHash` is not the last link, in issuer order, of the chain inside the window, or the expected head could not be computed at all because the last receipt on the chain refused canonical encoding; the refusal is named and is not a signature verdict |
 | equivocation | audit fails | Two distinct hashes for one epoch |
-| window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows; also an anchor that does not meet the presented checkpoint with the lowest epoch, identified by `anchor` ({{genesis}}) |
+| window-coverage | audit fails | Gap, overlap, or non-adjacent / non-consecutive windows; also an anchor that does not meet the checkpoint with the lowest epoch in the working set, identified by `anchor` ({{genesis}}) |
 | unauthenticated-witness | conditional | No verifier-supplied witness key; inclusion receipts were left out of the comparison |
-| witness-entry-unattributable | conditional | The witness holds a statement this chain does not present and that cannot be attributed to it: it carries no body, a body that is not the statement the receipt signed, a body that does not verify, or a body whose issuer cannot be tied to the presented chain |
-| checkpoint-withheld | audit fails | A verified witness receipt binds a checkpoint the presented chain does not contain |
+| witness-entry-unattributable | conditional | The witness holds a statement this chain does not present and that cannot be attributed to it: it carries no body, a body that is not the statement the receipt signed, a body that does not verify, a body whose issuer cannot be tied to a usable issuer root, or, when no usable issuer pin was supplied, a body binding a statement this chain does not present |
+| checkpoint-withheld | audit fails | A witness receipt whose body verifies under a usable issuer root (`MUST-T11-16`) binds a checkpoint the presented chain does not contain |
 | checkpoint-not-anchored | guarantee conditional | A witness was supplied and holds no verified receipt for this checkpoint |
 | checkpoint-totals-redacted | guarantee conditional | The checkpoint was signed with `totals` null, so the totals comparison could not be made |
 | witness-inclusion-invalid | audit fails | The tier-2 candidate bytes and inclusion proof do not reproduce a witness-signed tree head, or a candidate was supplied without a proof (`MUST-T11-18`) |
@@ -479,23 +523,23 @@ The remaining T11 identities are defined here.
 | ID | Requirement |
 |---|---|
 | MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the hash of the last in-window receipt in issuer order (the `prevReceiptHash` chain). Where the signed totals are null, MUST-T11-12 governs instead: there is no total to disagree with, the comparison is reported as skipped, and the count and chain-head checks still apply. |
-| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those presented together with those carried by verified witness receipts; a presented chain that satisfies MUST-T11-8 cannot raise it on its own, because its epochs are consecutive. |
+| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those of the working set of {{CEDULON-CORE}} together with those whose statement body verifies under a usable issuer root (`MUST-T11-16`) on a verified witness receipt; a working set that satisfies MUST-T11-8 cannot raise it on its own, because its epochs are consecutive. |
 | MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
 | SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
 | MAY-T11-6 | A test deployment MAY use an in-process append-only log as the witness. |
 | MUST-T11-7 | Checkpoint windows MUST be half-open `[startMs, endMs)`. Every chained receipt MUST fall in exactly one window. |
-| MUST-T11-8 | Presented checkpoint epochs MUST be consecutive and adjacent windows MUST meet at `endMs = next.startMs`. |
+| MUST-T11-8 | Checkpoint epochs of the working set of {{CEDULON-CORE}} MUST be consecutive and adjacent windows of that set MUST meet at `endMs = next.startMs`. |
 | MUST-T11-9 | Prefix-deletion and suppression claims that go beyond the presented chain are conditional on an external transparency witness. A report MUST NOT present a completeness guarantee as settling suppression when no witness was consulted. |
 | MUST-T11-10 | Witness receipts are an optional, separate input. A verifier given none MUST behave as it did without this input. A receipt MUST have its signature verified before it counts for anything. Where a receipt also carries the statement body, that body MUST NOT be relied on unless its statement hash equals the one the receipt binds and it verifies as a checkpoint; a discarded body does not discard its receipt. |
-| MUST-T11-11 | A verified receipt binding a checkpoint absent from the presented chain MUST be reported as a withheld checkpoint, and MUST NOT be reported as a window coverage failure. A presented checkpoint with no verified receipt, where a witness was supplied, MUST be reported and makes the guarantee conditional. |
+| MUST-T11-11 | A receipt whose statement body verifies under a usable issuer root (`MUST-T11-16`) and that binds a checkpoint absent from the presented chain MUST be reported as a withheld checkpoint, and MUST NOT be reported as a window coverage failure. A presented checkpoint with no verified receipt, where a witness was supplied, MUST be reported and makes the guarantee conditional. |
 | MUST-T11-13 | A redaction asserted outside the signed payload MUST NOT be honoured, and structural claims MUST NOT be redacted. A checkpoint that fails verification MUST NOT be treated as redacted. |
 | MUST-T11-14 | An epoch checkpoint MUST be registrable as a Signed Statement carrying the checkpoint COSE object with content type `application/cedulon-checkpoint+cbor`. |
 | MUST-T11-15 | A verifier MUST obtain the transparency service public key out of band and MUST verify inclusion receipts against it. Receipts that cannot be checked that way MUST NOT be used as evidence in either direction, and the verifier SHOULD report that they were left out. |
-| MUST-T11-16 | A statement held by a pinned log MUST additionally verify against the issuer root before it counts as something that issuer published, so that another user's epoch in a shared log is not read as equivocation by this issuer. |
+| MUST-T11-16 | A statement held by a pinned log MUST additionally verify against the issuer root before it counts as something that issuer published, so that another user's epoch in a shared log is not read as equivocation by this issuer. Without a usable issuer pin, a witness body MUST NOT produce a withholding or equivocation verdict. A body that binds a statement this chain does not present MUST be reported as unattributable; a body that binds a presented checkpoint is not an accusation and MUST NOT raise a separate finding. |
 | MUST-T11-17 | An inclusion receipt carrying no statement body MUST NOT be used to report a withheld checkpoint, because it cannot say whose statement it binds. It MUST NOT be discarded silently either: a real withholding must not be buried by removing the body. |
 | MUST-T11-18 | Where candidate Signed Statement bytes and an inclusion proof are both supplied, a verifier MUST verify log membership by the Merkle Tree Hash and inclusion-proof verification of RFC 9162 Sections 2.1.1 and 2.1.3, as consumed by RFC 9942 Section 5.2.1, and MUST accept only when the candidate's statement hash, the proof's leaf index, and the reproduced root exactly match the statement hash, entry index, and tree head of a witness receipt that verifies under the pinned witness key, with the walk's leaf equal to HASH(0x00 || candidate). Root reproduction alone is not acceptance. A pair that fails, or a candidate supplied without a proof, MUST be reported as a failing finding. |
 | MUST-T11-19 | Where witness receipts are supplied and the tier-2 pair is not, the report MUST state that log membership was not exercised rather than passing the tier silently. |
-| MUST-T11-20 | Where an audit presents an anchor, the presented checkpoint with the lowest epoch MUST be chained to the anchor's checkpoint hash rather than to null only when the anchor is valid: it answers to the issuer root of {{CEDULON-CORE}}, its `epoch` is one less than that checkpoint's, its `endMs` equals that checkpoint's `startMs`, and that checkpoint's `prevCheckpointHash` equals the anchor's checkpoint hash. An anchor that is not valid MUST anchor nothing. One that answers to the issuer root and fails any of the other three conditions MUST be reported as `window-coverage`, identified by `anchor`. |
+| MUST-T11-20 | Where an audit presents an anchor, the checkpoint with the lowest epoch in the working set of {{CEDULON-CORE}} MUST be chained to the anchor's checkpoint hash rather than to null only when the anchor is valid: it answers to the issuer root of {{CEDULON-CORE}}, its `epoch` is one less than that checkpoint's, its `endMs` equals that checkpoint's `startMs`, and that checkpoint's `prevCheckpointHash` equals the anchor's checkpoint hash. An anchor is used only under a usable pinned issuer key, where the working set is the attested set. A presented checkpoint outside the working set, whatever its epoch, does not change which checkpoint that is. An anchor that is not valid MUST anchor nothing. One that answers to the issuer root and fails any of the other three conditions MUST be reported as `window-coverage`, identified by `anchor`. |
 
 Issuer self-attestation:
 : A Receipt Issuer that also produces the only copy of the extract

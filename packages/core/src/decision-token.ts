@@ -6,6 +6,7 @@ import {
   decodeCbor,
   decodeCoseSign1,
   encodeCbor,
+  hexToBytes,
   mapGet,
   sameSpkiKey,
   signCoseSign1,
@@ -13,7 +14,7 @@ import {
 } from "@cedulon/cose";
 import { canonical } from "./canonical.ts";
 import { policyDocument, requestHashOf } from "./policy.ts";
-import { hashClaimRefusal, type Policy, type SpendRequest } from "./types.ts";
+import { hashClaimRefusal, isUintClaim, type Policy, type SpendRequest } from "./types.ts";
 
 /** CWT private-use labels for the Decision Token. */
 export const DECISION_CLAIM = {
@@ -60,6 +61,7 @@ export function decisionTokenFromCbor(bytes: Uint8Array): DecisionTokenClaims {
   };
   const exp = mapGet(map, DECISION_CLAIM.expiryMs);
   if (typeof exp !== "number") throw new Error("decision-exp");
+  if (!isUintClaim(exp)) throw new Error("malformed-expiryMs");
   return {
     requestHash: text(DECISION_CLAIM.requestHash),
     policyHash: text(DECISION_CLAIM.policyHash),
@@ -78,6 +80,7 @@ export function signDecisionToken(
   if (request) throw new Error(request);
   const policy = hashClaimRefusal("policyHash", claims.policyHash);
   if (policy) throw new Error(policy);
+  if (!isUintClaim(claims.expiryMs)) throw new Error("malformed-expiryMs");
   const cose = signCoseSign1(decisionTokenToCbor(claims), privateKeyPem, CTY_DECISION);
   return {
     claims,
@@ -99,11 +102,11 @@ export function verifyDecisionToken(
   if (expectedIssuerKeyPem !== undefined && !sameSpkiKey(signed.publicKeyPem, expectedIssuerKeyPem)) {
     return false;
   }
-  const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_DECISION)) {
-    return false;
-  }
   try {
+    const bytes = hexToBytes(signed.coseHex);
+    if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_DECISION)) {
+      return false;
+    }
     const msg = decodeCoseSign1(bytes);
     const decoded = decisionTokenFromCbor(msg.payload);
     if (canonical(decoded) !== canonical(signed.claims)) {

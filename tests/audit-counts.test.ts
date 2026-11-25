@@ -1,6 +1,9 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { audit, formatAudit, toFindingObject, type AuditCounts, type AuditReport } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint, type SignedCheckpoint } from "@cedulon/checkpoint";
@@ -18,6 +21,7 @@ import {
   type SignedRailExtract,
 } from "@cedulon/x402-adapter";
 
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NOW = 1_700_000_000_000;
 const WINDOW_END = NOW + 3_600_000;
 const OPENING = NOW + 1_000;
@@ -113,15 +117,99 @@ function assertConserved(counts: AuditCounts): void {
     "every settlement row lands in exactly one class",
   );
   assert.equal(r.matched, s.matched, "a match is one receipt against one row");
-  assert.ok(r.attested <= r.submitted);
-  assert.ok(r.inScope <= r.attested);
+  assert.ok(r.attested <= r.covering);
+  assert.ok(r.covering <= r.submitted);
+  assert.ok(r.inScope <= r.covering);
 }
+
+const FINDING_OBJECT_DOC = readFileSync(join(root, "docs", "FINDING_OBJECT.md"), "utf8");
+const FINDING_OBJECT_SCHEMA = JSON.parse(
+  readFileSync(join(root, "docs", "finding-object.schema.json"), "utf8"),
+) as {
+  $defs?: {
+    counts?: {
+      properties?: {
+        receipts?: { required?: string[] };
+        settlements?: { required?: string[] };
+      };
+    };
+  };
+};
+
+/** Counter names the FINDING_OBJECT prose must keep aligned with schema + AuditCounts. */
+const RECEIPT_COUNT_NAMES = [
+  "submitted",
+  "attested",
+  "covering",
+  "inScope",
+  "aborted",
+  "settled",
+  "matched",
+  "deferred",
+  "carried",
+  "unmatched",
+  "repeated",
+  "unreconciled",
+] as const;
+const SETTLEMENT_COUNT_NAMES = [
+  "rows",
+  "matched",
+  "deferred",
+  "unmatched",
+  "repeated",
+  "unreconciled",
+] as const;
 
 function counted(report: AuditReport): AuditCounts {
   assert.ok(report.counts, "the report carries counts");
   assertConserved(report.counts!);
   return report.counts!;
 }
+
+function findingObjectCounterDocFailures(doc: string): string[] {
+  const prose = doc.replace(/\s+/g, " ");
+  const failures: string[] = [];
+  for (const name of RECEIPT_COUNT_NAMES) {
+    const needle = name === "inScope" ? "in scope" : name;
+    if (!prose.includes(needle)) failures.push(`docs/FINDING_OBJECT.md omits receipt counter ${name}`);
+  }
+  for (const name of SETTLEMENT_COUNT_NAMES) {
+    if (!prose.includes(name)) failures.push(`docs/FINDING_OBJECT.md omits settlement counter ${name}`);
+  }
+  return failures;
+}
+
+describe("FINDING_OBJECT.md counter names match the schema and AuditCounts", () => {
+  it("receipt and settlement counter names agree across doc, schema, and a live report", () => {
+    const schemaReceipts = FINDING_OBJECT_SCHEMA.$defs?.counts?.properties?.receipts?.required ?? [];
+    const schemaSettlements = FINDING_OBJECT_SCHEMA.$defs?.counts?.properties?.settlements?.required ?? [];
+    assert.deepEqual(schemaReceipts, [...RECEIPT_COUNT_NAMES]);
+    assert.deepEqual(schemaSettlements, [...SETTLEMENT_COUNT_NAMES]);
+
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const receipts = chain(honest, [{ ref: "ref-a", at: MIDDLE, nonce: "n-a" }]);
+    const live = counted(
+      audit({
+        receipts,
+        checkpoints: [checkpointOver(honest, receipts)],
+        extract: extract(rail, [row("ref-a", MIDDLE)]),
+        issuerTrust: { publicKeyPem: honest.publicKeyPem },
+        trust: trustFor(rail),
+      }),
+    );
+    assert.deepEqual(Object.keys(live.receipts).sort(), [...RECEIPT_COUNT_NAMES].sort());
+    assert.deepEqual(Object.keys(live.settlements).sort(), [...SETTLEMENT_COUNT_NAMES].sort());
+    assert.deepEqual(findingObjectCounterDocFailures(FINDING_OBJECT_DOC), []);
+  });
+
+  it("RED: dropping covering from the FINDING_OBJECT prose is caught", () => {
+    const drifted = FINDING_OBJECT_DOC.replace(/\bcovering\b/g, "covered");
+    assert.notEqual(drifted, FINDING_OBJECT_DOC);
+    const failures = findingObjectCounterDocFailures(drifted);
+    assert.ok(failures.some((f) => f.includes("covering")), failures.join(" | "));
+  });
+});
 
 describe("Round 5: the report publishes the class counts it already computes", () => {
   it("1 RED then GREEN: a closing-edge receipt the next window names is counted as carried, not dropped", () => {
@@ -201,6 +289,7 @@ describe("Round 5: the report publishes the class counts it already computes", (
     assert.deepEqual(c.receipts, {
       submitted: 5,
       attested: 5,
+      covering: 5,
       inScope: 5,
       aborted: 0,
       settled: 5,
@@ -242,6 +331,7 @@ describe("Round 5: the report publishes the class counts it already computes", (
     const c = counted(report);
     assert.equal(c.receipts.submitted, 3);
     assert.equal(c.receipts.attested, 2);
+    assert.equal(c.receipts.covering, 2);
     assert.equal(c.receipts.inScope, 1);
     assert.equal(c.receipts.matched, 1);
   });
@@ -309,7 +399,7 @@ describe("Round 5: the report publishes the class counts it already computes", (
     const printed = formatAudit(report, 2);
     assert.match(
       printed,
-      /^counts\treceipts\tsubmitted=2 attested=2 in-scope=2 aborted=1 settled=1 matched=1 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0$/m,
+      /^counts\treceipts\tsubmitted=2 attested=2 covering=2 in-scope=2 aborted=1 settled=1 matched=1 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0$/m,
     );
     assert.match(
       printed,

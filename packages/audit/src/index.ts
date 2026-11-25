@@ -267,29 +267,38 @@ export type AuditScope = {
  * of these on its way to the findings; publishing them is what lets a reader
  * tell a window that excluded one row from a window that held none, which the
  * findings alone cannot say for a row that was rightly excluded without one
- * (docs/EXTERNAL_REVIEW.md, Round 5). Three identities hold on every report:
+ * (docs/EXTERNAL_REVIEW.md, Round 5). Identities that hold on every report:
  *
+ *   receipts.attested ≤ receipts.covering ≤ receipts.submitted
+ *   receipts.inScope ≤ receipts.covering
  *   receipts.inScope = receipts.aborted + receipts.settled
  *   receipts.settled = matched + deferred + carried + unmatched + repeated + unreconciled
  *   settlements.rows = matched + deferred + unmatched + repeated + unreconciled
  *
  * and `receipts.matched` equals `settlements.matched`, a match being one
- * receipt against one row.
+ * receipt against one row. Under a usable issuer pin, `attested` equals
+ * `covering`; without one, or when a stated pin cannot be read, `attested` is 0.
  */
 export type AuditCounts = {
   receipts: {
     /** Every receipt presented. */
     submitted: number;
     /**
-     * Receipts the issuer pin attests; with no issuer key stated, every
-     * submitted receipt in the profile's encoding (MUST-T4-1). A stated pin
-     * that cannot be read attests nothing.
+     * Receipts that verify under a usable pinned issuer key. Zero when no
+     * issuer key is stated, and zero when a stated pin cannot be read.
      */
     attested: number;
     /**
-     * Attested receipts the population admits: ref on the extract, or timestamp
-     * inside its window; every attested receipt when no extract was presented,
-     * and every attested receipt when the presented one was refused, because a
+     * Receipts in the coverage set: under a usable pin, the attested set;
+     * with no pin stated, every submitted receipt in the profile's encoding
+     * (MUST-T4-1) that no named refusal refused (presented-unattested, not
+     * attested); empty when a stated pin cannot be read.
+     */
+    covering: number;
+    /**
+     * Covering receipts the population admits: ref on the extract, or timestamp
+     * inside its window; every covering receipt when no extract was presented,
+     * and every covering receipt when the presented one was refused, because a
      * refused document's window is not evidence either.
      */
     inScope: number;
@@ -356,7 +365,11 @@ type AuditDetailed = {
   deferredRows: DeferredRow[];
   /** Refs of rows this window paired by name with one of its own receipts. */
   matched: string[];
-  /** The highest-epoch checkpoint the issuer root attests; what the next window anchors on. */
+  /**
+   * The highest-epoch checkpoint in the coverage set (issuer-root attested, or
+   * the pinless working set when no issuer key was stated). What the next
+   * window anchors on; undefined when a stated pin attested nothing.
+   */
   lastAttestedCheckpoint?: SignedCheckpoint;
 };
 type DeferredRow = { ref: string; edges: CarryEdge[] };
@@ -484,6 +497,26 @@ function verifiesOrRefusal(
 }
 
 /**
+ * The refusal that keeps a presented record out of every count, or null.
+ * A refused object is attested nowhere, covers no settlement and adds to no
+ * total, whether or not an issuer key is pinned; only the chain walk still
+ * sees it, so it can name it.
+ */
+function recordRefusal(r: PresentedRecord, pop: Population): string | null {
+  const decode = coseDecodeRefusalHex(r.coseHex);
+  if (decode !== null) return decode;
+  return isDecisionRecord(r, pop) ? null : receiptEncodeRefusal(r);
+}
+
+function manifestHashIfReadable(m: SignedManifest): string | null {
+  try {
+    return manifestHash(m);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Issuer order is the prevReceiptHash chain, not the order the receipts
  * were presented. Presentation is a bag; the chain is rebuilt from the
  * links, then walked.
@@ -574,7 +607,7 @@ export function findReceiptChainBreak(
         id: ordered[i].claims.nonce,
         detail:
           v.refusal !== null
-            ? `receipt ${i} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`
+            ? `receipt ${i} refused: ${v.refusal} - a named refusal of the presented object, not a signature verdict`
             : `receipt ${i} refused: ${jcs} - not a signature verdict`,
       };
     }
@@ -728,7 +761,7 @@ export function findSettlementMatches(
 
 /** The classes the reconciliation itself assigns; the population above them is the caller's to count. */
 type MatchCounts = {
-  receipts: Omit<AuditCounts["receipts"], "submitted" | "attested" | "inScope">;
+  receipts: Omit<AuditCounts["receipts"], "submitted" | "attested" | "covering" | "inScope">;
   settlements: AuditCounts["settlements"];
 };
 
@@ -1169,7 +1202,7 @@ export function findCheckpointTotalMismatches(
         id: `epoch-${cp.claims.epoch}`,
         detail:
           v.refusal !== null
-            ? `checkpoint epoch ${cp.claims.epoch} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`
+            ? `checkpoint epoch ${cp.claims.epoch} refused: ${v.refusal} - a named refusal of the presented object, not a signature verdict`
             : `checkpoint epoch ${cp.claims.epoch} signature failed`,
       });
       continue;
@@ -1237,8 +1270,11 @@ export function findCheckpointTotalMismatches(
     }
   }
   // Spec walk is epoch order; remap the break index to the presented array.
+  // The walk is over the working set: a refused checkpoint, named above,
+  // counts for nothing, so it is neither the genesis checkpoint nor a link.
   const byEpoch = checkpoints
     .map((cp, presentedIndex) => ({ cp, presentedIndex }))
+    .filter((row) => coseDecodeRefusalHex(row.cp.coseHex) === null)
     .sort((a, b) => a.cp.claims.epoch - b.cp.claims.epoch);
   const chain = findCheckpointChainBreak(
     byEpoch.map((row) => row.cp),
@@ -1303,10 +1339,10 @@ function statementHashIfReadable(signed: SignedCheckpoint): string | null {
 }
 
 /**
- * `attestsIssuer` is the second question: the witness pin says which log spoke,
- * and this says whether the statement that log holds was signed by the issuer
- * under audit. Without it a pinned log can carry a body anyone minted into the
- * epoch pool.
+ * The witness pin says which log spoke; the issuer root says whether the
+ * statement that log holds is something this issuer published (MUST-T11-16).
+ * Without a usable issuer pin a body must not enter the epoch pool: carried-key
+ * equality is not the issuer root.
  */
 function verifiedWitnessCheckpoints(
   receipts: InclusionReceipt[],
@@ -1315,11 +1351,14 @@ function verifiedWitnessCheckpoints(
   verify: (cp: SignedCheckpoint) => boolean = (cp) => verifyCheckpoint(cp),
 ): SignedCheckpoint[] {
   const out: SignedCheckpoint[] = [];
+  if (!attestsCheckpoint) {
+    return out;
+  }
   for (const rec of receipts) {
     if (!inclusionFromPinnedLog(rec, witnessKeyPem) || !rec.checkpoint) {
       continue;
     }
-    if (attestsCheckpoint && !attestsCheckpoint(rec.checkpoint)) {
+    if (!attestsCheckpoint(rec.checkpoint)) {
       continue;
     }
     const bodyHash = statementHashIfReadable(rec.checkpoint);
@@ -1357,37 +1396,23 @@ function findTransparencyWitness(
   // The unsigned body must also be the statement the receipt signed: a body from
   // another statement cannot say whose logged hash this is.
   //
-  // When the verifier pinned an issuer key, that pin decides attribution. When
-  // it did not, a body still has to verify, and its key has to match a key on
-  // the presented chain; otherwise the entry names some other issuer (or none)
-  // and is not an accusation against this chain. An empty presented chain has
-  // no key to match, so it cannot accuse.
+  // MUST-T11-16: attribution is the issuer root alone. Without a usable issuer
+  // pin, a verifying body whose carried key matches the presented chain is not
+  // an accusation - report it as unattributable instead of withholding.
   const presentedHashes = new Set(
     checkpoints
       .map(statementHashIfReadable)
       .filter((hash): hash is string => hash !== null),
   );
-  const presentedVerified = checkpoints.filter(
-    (cp) => verifiesOrRefusal(() => verifyCheckpoint(cp), cp.coseHex).ok,
-  );
   const accusing = anchoring.filter((r) => {
-    if (!r.checkpoint) {
+    if (!attestsCheckpoint || !r.checkpoint) {
       return false;
     }
     const bodyHash = statementHashIfReadable(r.checkpoint);
     if (bodyHash === null || bodyHash !== r.statementHash) {
       return false;
     }
-    if (attestsCheckpoint) {
-      return attestsCheckpoint(r.checkpoint);
-    }
-    if (checkpoints.length === 0) {
-      return false;
-    }
-    if (!verifiesOrRefusal(() => verifyCheckpoint(r.checkpoint!), r.checkpoint.coseHex).ok) {
-      return false;
-    }
-    return presentedVerified.some((cp) => sameSpkiKey(r.checkpoint!.publicKeyPem, cp.publicKeyPem));
+    return attestsCheckpoint(r.checkpoint);
   });
 
   for (const cp of checkpoints) {
@@ -1466,7 +1491,7 @@ function findCountersignFindings(input: {
         severity: "warn",
         detail:
           v.refusal !== null
-            ? `payee countersignature on nonce=${r.claims.nonce} refused: ${v.refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict; unattributable, discarded`
+            ? `payee countersignature on nonce=${r.claims.nonce} refused: ${v.refusal} - a named refusal of the presented object, not a signature verdict; unattributable, discarded`
             : `payee countersignature on nonce=${r.claims.nonce} failed verify; unattributable, discarded`,
       });
       continue;
@@ -1588,8 +1613,9 @@ export type AuditInput = {
   /** Preceding rail window; closes or hardens opening-edge deferred receipts. */
   previousExtract?: PresentedExtract;
   /**
-   * The issuer-signed checkpoint immediately before the first presented one.
-   * Binds the chain that began before this window; its own window is not audited.
+   * The issuer-signed checkpoint immediately before the working set's
+   * lowest-epoch checkpoint. Binds the chain that began before this window;
+   * its own window is not audited.
    */
   anchorCheckpoint?: SignedCheckpoint;
   /**
@@ -1633,6 +1659,7 @@ function emptyAuditCounts(): AuditCounts {
     receipts: {
       submitted: 0,
       attested: 0,
+      covering: 0,
       inScope: 0,
       aborted: 0,
       settled: 0,
@@ -1832,10 +1859,12 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   // rows it actually carries, never a separate array the caller hands over.
   const reconciled = input.extract ? extractRows(input.extract, pop) : (input.settlements ?? []);
 
-  // Set where a stated rail pin refuses the presented extract; read where the
-  // extract's rows would otherwise be compared. A pin that cannot be read is
-  // not a refusal - the same distinction the manifest branch draws.
+  // Set where a stated rail pin refuses the presented extract, or where its
+  // body is refused by name with or without a pin; read where the extract's
+  // rows would otherwise be compared. A pin that cannot be read is not a
+  // refusal - the same distinction the manifest branch draws.
   let extractRejected = false;
+  let extractRefusal: string | null = null;
   if (input.extract) {
     if (input.settlements && !sameSettlements(input.settlements, extractRows(input.extract, pop), profile)) {
       findings.push({
@@ -1873,6 +1902,10 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
       : isEffectExtract(input.extract, pop)
         ? effectExtractEncodeRefusal(input.extract)
         : railExtractEncodeRefusal(input.extract);
+    if (encodeRefusal !== null) {
+      extractRejected = true;
+      extractRefusal = encodeRefusal;
+    }
 
     if (!input.trust) {
       warnings.push({
@@ -2005,11 +2038,17 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   let manifestRejected = false;
   if (input.manifest) {
     if (!input.manifestTrust) {
+      // No key to check the signature against, but a refusal comes before any
+      // verdict: a manifest the decoder will not read states no terms.
+      const refusal = coseDecodeRefusalHex(input.manifest.coseHex);
+      if (refusal !== null) manifestRejected = true;
       warnings.push({
         code: "unauthenticated-manifest",
         id: "manifest",
         detail:
-          "no verifier-supplied manifest key; the manifest signature is not checked at all here, so nothing in this report says the named party published the terms, and the completeness guarantee is conditional",
+          refusal !== null
+            ? `the presented Trade Manifest was refused: ${refusal} - not a key verdict, so it states no terms here; no verifier-supplied manifest key was pinned, and the completeness guarantee is conditional`
+            : "no verifier-supplied manifest key; the manifest signature is not checked at all here, so nothing in this report says the named party published the terms, and the completeness guarantee is conditional",
         severity: "warn",
       });
     } else {
@@ -2045,7 +2084,7 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
             id: "manifest",
             detail:
               refusal !== null
-                ? `the presented Trade Manifest was refused: ${refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a key verdict`
+                ? `the presented Trade Manifest was refused: ${refusal} - a named refusal of the presented object, not a key verdict`
                 : "the presented Trade Manifest is signed by a key other than the pinned manifest key, or does not verify against it",
           });
         }
@@ -2057,8 +2096,9 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
     // manifest whose hash appears on no presented receipt describes some
     // other window; presenting it beside a set of noManifest receipts would
     // otherwise leave a report that reads as terms-backed and is not.
-    const presentedHash = manifestHash(input.manifest);
-    const covered = input.receipts.some(
+    // Hex that is not hex has no hash, so no receipt can name it.
+    const presentedHash = manifestHashIfReadable(input.manifest);
+    const covered = presentedHash !== null && input.receipts.some(
       (r) => !isDecisionRecord(r, pop) && r.claims.manifestHash === presentedHash,
     );
     if (!covered) {
@@ -2081,9 +2121,11 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   // was entitled to issue receipts for them, and a receipt verified against the
   // key it carries only proves it is internally consistent. So the receipts that
   // count as coverage are the ones answering to a second root, stated out of band.
-  // Without a pin every submitted receipt in the profile's encoding is weighed;
-  // one outside it is walked below only so the chain walk can name it.
-  let attested = input.receipts.filter((r) => inProfileEncoding(r, pop));
+  // Without a pin every submitted receipt in the profile's encoding is weighed,
+  // except one refused by name; those are walked below only so the chain walk
+  // can name them.
+  const unpinnedWorkingSet = input.receipts.filter((r) => recordRefusal(r, pop) === null);
+  let attested = unpinnedWorkingSet.filter((r) => inProfileEncoding(r, pop));
   // Null while no issuer key was stated: there is no attested/unattested split
   // to make, and every check falls back to the whole submitted list.
   let attestsCheckpoint: ((cp: SignedCheckpoint) => boolean) | null = null;
@@ -2145,19 +2187,27 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
         });
       } else {
         for (const r of foreign) {
+          const refusal = recordRefusal(r, pop);
           findings.push({
             code: "issuer-key-mismatch",
             id: r.claims.nonce,
-            detail: `${w.record} nonce=${r.claims.nonce} is signed by a key other than the pinned ${w.issuer} key, so it is not coverage for ${profile.recordRef(r) ?? `any ${w.row}`}`,
+            detail:
+              refusal !== null
+                ? `${w.record} nonce=${r.claims.nonce} refused: ${refusal} - not a key verdict, so it is not coverage for ${profile.recordRef(r) ?? `any ${w.row}`}`
+                : `${w.record} nonce=${r.claims.nonce} is signed by a key other than the pinned ${w.issuer} key, so it is not coverage for ${profile.recordRef(r) ?? `any ${w.row}`}`,
           });
         }
       }
       for (const cp of namesMismatches ? input.checkpoints : []) {
         if (!attestsCheckpoint(cp)) {
+          const refusal = coseDecodeRefusalHex(cp.coseHex);
           findings.push({
             code: "issuer-key-mismatch",
             id: `epoch-${cp.claims.epoch}`,
-            detail: `checkpoint epoch ${cp.claims.epoch} is signed by a key other than the pinned ${w.issuer} key`,
+            detail:
+              refusal !== null
+                ? `checkpoint epoch ${cp.claims.epoch} refused: ${refusal} - not a key verdict, so it covers no window`
+                : `checkpoint epoch ${cp.claims.epoch} is signed by a key other than the pinned ${w.issuer} key`,
           });
         }
       }
@@ -2188,16 +2238,43 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
       }
     }
   }
-  const attestedCheckpoints = attestsCheckpoint
+  // Two sets ({{CEDULON-CORE}} Terminology). Coverage is settlement/attested
+  // counting: empty when a pin was stated but none of it could be read.
+  // Diagnostic is refusal naming plus genesis/epoch/window continuity: the
+  // pinless arm when no usable pin is present. A diagnostic member is not
+  // attested; totals/count/head compare only within one set.
+  const pinlessCheckpoints = input.checkpoints.filter(
+    (cp) => coseDecodeRefusalHex(cp.coseHex) === null,
+  );
+  const coverageCheckpoints = issuerPinUsable
     ? input.checkpoints.filter((cp) => attestsCheckpoint!(cp))
-    : input.checkpoints;
+    : input.issuerTrust
+      ? []
+      : pinlessCheckpoints;
+  const workingCheckpoints = issuerPinUsable ? coverageCheckpoints : pinlessCheckpoints;
+  const namedCheckpoints = issuerPinUsable ? coverageCheckpoints : input.checkpoints;
+  const diagnosticReceipts =
+    issuerPinUsable || !input.issuerTrust
+      ? attested
+      : unpinnedWorkingSet.filter((r) => inProfileEncoding(r, pop));
   // Without an anchor the chain must be presented from its genesis; with one,
   // window N stands on its own and window N-1 is the previous audit's business.
   let expectedRootPrev: string | null = null;
   let expectedFirstPrevCheckpoint: string | null = null;
   if (input.anchorCheckpoint) {
-    // a stated pin that cannot be read is not a licence to fall back to the key the anchor carries
-    if (input.issuerTrust === undefined || issuerPinUsable) {
+    // A valid anchor answers to the issuer root (MUST-T11-20). With no pin
+    // there is no root to answer to: the key the anchor carries verifies any
+    // anchor its holder minted, so it is not a fallback, and neither is it
+    // for a stated pin that cannot be read.
+    if (input.issuerTrust === undefined) {
+      warnings.push({
+        code: "unauthenticated-issuer",
+        id: "anchor",
+        severity: "warn",
+        detail: `an anchor checkpoint was presented and no ${w.issuer} key was pinned for it to answer to, so it anchors nothing; the chain is walked from its genesis`,
+      });
+    }
+    if (issuerPinUsable && attestsCheckpoint) {
       const anchor = input.anchorCheckpoint;
       let signatureOk = false;
       const refusal = coseDecodeRefusalHex(anchor.coseHex);
@@ -2205,50 +2282,35 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
         findings.push({
           code: "checkpoint-total-mismatch",
           id: "anchor",
-          detail: `anchor refused: ${refusal} - a decoder bound or duplicate key (MUST-T4-18, MUST-T4-19), not a signature verdict`,
+          detail: `anchor refused: ${refusal} - a named refusal of the presented object, not a signature verdict`,
         });
-      } else if (issuerPinUsable && attestsCheckpoint) {
-        if (!attestsCheckpoint(anchor)) {
-          findings.push({
-            code: "issuer-key-mismatch",
-            id: "anchor",
-            detail: `anchor checkpoint is signed by a key other than the pinned ${w.issuer} key`,
-          });
-        } else {
-          signatureOk = true;
-        }
+      } else if (!attestsCheckpoint(anchor)) {
+        findings.push({
+          code: "issuer-key-mismatch",
+          id: "anchor",
+          detail: `anchor checkpoint is signed by a key other than the pinned ${w.issuer} key`,
+        });
       } else {
-        const v = verifiesOrRefusal(() => verifyCheckpoint(anchor), anchor.coseHex);
-        if (!v.ok) {
-          findings.push({
-            code: "checkpoint-total-mismatch",
-            id: "anchor",
-            detail: "anchor signature failed",
-          });
-        } else {
-          signatureOk = true;
-        }
+        signatureOk = true;
       }
       if (signatureOk) {
-        if (issuerPinUsable) {
-          const verifying = issuerPins.filter((pem) => verifyCheckpointUnderPin(anchor, pem));
-          if (verifying.length > 0 && !verifying.some((pem) => sameSpkiKey(anchor.publicKeyPem, pem))) {
-            warnings.push({
-              code: "carried-key-mismatch",
-              id: "anchor",
-              severity: "warn",
-              detail: `anchor checkpoint verifies under a pinned ${w.issuer} key but the carried publicKeyPem is not that key`,
-            });
-          }
+        const verifying = issuerPins.filter((pem) => verifyCheckpointUnderPin(anchor, pem));
+        if (verifying.length > 0 && !verifying.some((pem) => sameSpkiKey(anchor.publicKeyPem, pem))) {
+          warnings.push({
+            code: "carried-key-mismatch",
+            id: "anchor",
+            severity: "warn",
+            detail: `anchor checkpoint verifies under a pinned ${w.issuer} key but the carried publicKeyPem is not that key`,
+          });
         }
-        if (attestedCheckpoints.length === 0) {
+        if (coverageCheckpoints.length === 0) {
           findings.push({
             code: "window-coverage",
             id: "anchor",
             detail: "an anchor needs an attested checkpoint to precede",
           });
         } else {
-          const first = attestedCheckpoints.reduce((a, b) =>
+          const first = coverageCheckpoints.reduce((a, b) =>
             a.claims.epoch <= b.claims.epoch ? a : b,
           );
           let adjacent = true;
@@ -2309,10 +2371,11 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   // charge out of its body writes a finding against an honest receipt from a
   // document this audit rejected two hundred lines above. The refusal is
   // already reported as `manifest-key-mismatch`; the body stops here.
-  if (input.manifest && !manifestRejected) {
-    const presentedHash = manifestHash(input.manifest);
+  const presentedManifestHash = input.manifest ? manifestHashIfReadable(input.manifest) : null;
+  if (input.manifest && !manifestRejected && presentedManifestHash !== null) {
+    const presentedHash = presentedManifestHash;
     const terms = input.manifest.body;
-    for (const r of issuerPinUsable ? attested : input.receipts) {
+    for (const r of issuerPinUsable ? attested : unpinnedWorkingSet) {
       if (isDecisionRecord(r, pop) || r.claims.manifestHash !== presentedHash) continue;
       const broken = profile.terms(r, terms);
       if (broken.length > 0) {
@@ -2368,7 +2431,7 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   // other, so the same clash cannot be pinned on anyone - said out loud, but not
   // as a verdict against a set the verifier cannot vouch for.
   for (const clash of findReceiptRefClashes(
-    (issuerPinUsable ? attested : input.receipts).filter((r): r is SignedReceipt => !isDecisionRecord(r, pop)),
+    (issuerPinUsable ? attested : unpinnedWorkingSet).filter((r): r is SignedReceipt => !isDecisionRecord(r, pop)),
   )) {
     if (issuerPinUsable) {
       findings.push(clash);
@@ -2525,7 +2588,9 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
       id: "extract",
       severity: "warn",
       detail:
-        `the presented extract was refused by the pinned ${w.extractKey}, so its rows were not reconciled against the ${pluralWord(w.record)}; no ${w.row} finding in this report was read out of that document`,
+        extractRefusal !== null
+          ? `the presented extract body was refused: ${extractRefusal} - not a signature verdict, so its rows were not reconciled against the ${pluralWord(w.record)}; no ${w.row} finding in this report was read out of that document`
+          : `the presented extract was refused by the pinned ${w.extractKey}, so its rows were not reconciled against the ${pluralWord(w.record)}; no ${w.row} finding in this report was read out of that document`,
     });
     matchCounts = unreconciledCounts(inScope, reconciled, profile);
   } else {
@@ -2539,7 +2604,9 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   const counts: AuditCounts = {
     receipts: {
       submitted: input.receipts.length,
-      attested: attested.length,
+      // Attested is only under a usable issuer root; covering is the coverage set.
+      attested: issuerPinUsable ? attested.length : 0,
+      covering: attested.length,
       inScope: inScope.length,
       ...matchCounts.receipts,
     },
@@ -2560,7 +2627,7 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   // rejected writes "the checkpoint lied" and "the chain is broken" against an
   // honest issuer - noise that argues for switching the pin off.
   const countersign = findCountersignFindings({
-    receipts: (issuerPinUsable ? attested : input.receipts.filter((r) => inProfileEncoding(r, pop))).filter(
+    receipts: (issuerPinUsable ? attested : unpinnedWorkingSet.filter((r) => inProfileEncoding(r, pop))).filter(
       (r): r is SignedReceipt => !isDecisionRecord(r, pop),
     ),
     payeeTrust: input.payeeTrust,
@@ -2607,10 +2674,14 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   const pinVerify = issuerPinUsable
     ? (cp: SignedCheckpoint) => checkpointAttestedByPins(cp, issuerPins)
     : (cp: SignedCheckpoint) => verifyCheckpoint(cp);
+  // Totals/count/head run against diagnostic receipts of the same set as the
+  // checkpoints under inspection. Under an unreadable pin that is the pinless
+  // arm, not the empty coverage set - otherwise an honest chain would raise
+  // false count/head mismatches while settlement correctly stays uncovered.
   findings.push(
     ...findCheckpointTotalMismatches(
-      attested,
-      attestedCheckpoints,
+      diagnosticReceipts,
+      namedCheckpoints,
       (recs) => profile.checkpointTotals(recs),
       pop,
       w,
@@ -2619,7 +2690,7 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
       pinVerify,
     ),
   );
-  findings.push(...findWindowCoverage(attested, attestedCheckpoints, pop, w, expectedRootPrev));
+  findings.push(...findWindowCoverage(diagnosticReceipts, workingCheckpoints, pop, w, expectedRootPrev));
 
   // A witness only adds evidence once the verifier has named the log. Until then
   // its inclusion receipts are a log anyone could have invented, and letting them
@@ -2638,24 +2709,27 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
         (pem) => toSpkiDer(pem) !== null,
       )
     : undefined;
-  const witnessCheckpoints = witnessConfigured
-    ? verifiedWitnessCheckpoints(
-        input.inclusionReceipts!,
-        witnessPem,
-        attestsCheckpoint,
-        pinVerify,
-      )
-    : [];
-  const equiv = findEquivocationFinding([...attestedCheckpoints, ...witnessCheckpoints], pinVerify);
+  // MUST-T11-16: a witness body enters the epoch pool only under a usable
+  // issuer root. Carried-key equality without that root is not attribution.
+  const witnessCheckpoints =
+    witnessConfigured && issuerPinUsable && attestsCheckpoint
+      ? verifiedWitnessCheckpoints(
+          input.inclusionReceipts!,
+          witnessPem,
+          attestsCheckpoint,
+          pinVerify,
+        )
+      : [];
+  const equiv = findEquivocationFinding([...coverageCheckpoints, ...witnessCheckpoints], pinVerify);
   if (equiv) findings.push(equiv);
 
   if (input.inclusionReceipts) {
     if (witnessConfigured) {
       const witness = findTransparencyWitness(
-        attestedCheckpoints,
+        workingCheckpoints,
         input.inclusionReceipts,
         witnessPem,
-        attestsCheckpoint,
+        issuerPinUsable ? attestsCheckpoint : null,
       );
       findings.push(...witness.findings);
       warnings.push(...witness.warnings);
@@ -2790,7 +2864,9 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
         });
       }
     }
-  } else if (input.inclusionReceipts && input.inclusionReceipts.length > 0) {
+  } else if (input.inclusionReceipts) {
+    // An empty list is a supplied list: a witness is configured and recorded
+    // nothing, so tier 2 was not exercised either (MUST-T11-10, MUST-T11-19).
     warnings.push({
       code: "witness-inclusion-not-exercised",
       id: "witness-layer2",
@@ -2802,8 +2878,10 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
 
   // A signed redaction is honest but unverifiable: say so, and drop the claim to
   // conditional. Only a checkpoint that verifies gets to make this claim — an
-  // unverifiable one has already been reported above.
-  for (const cp of attestedCheckpoints) {
+  // unverifiable one has already been reported above. Walk the working
+  // (diagnostic) set so an unreadable pin still names a redaction without
+  // treating it as coverage.
+  for (const cp of workingCheckpoints) {
     if (cp.claims.totals === null && verifiesOrRefusal(() => pinVerify(cp), cp.coseHex).ok) {
       warnings.push({
         code: "checkpoint-totals-redacted",
@@ -2840,7 +2918,7 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
     carried,
     deferredRows,
     matched,
-    lastAttestedCheckpoint: attestedCheckpoints.reduce<SignedCheckpoint | undefined>(
+    lastAttestedCheckpoint: coverageCheckpoints.reduce<SignedCheckpoint | undefined>(
       (last, cp) => (last === undefined || cp.claims.epoch > last.claims.epoch ? cp : last),
       undefined,
     ),
@@ -2918,7 +2996,7 @@ function formatCounts(counts: AuditCounts, slots: SlotSink): string[] {
   const s = counts.settlements;
   const n = (value: unknown) => slots.nonNeg(value);
   return [
-    `counts\treceipts\tsubmitted=${n(r.submitted)} attested=${n(r.attested)} in-scope=${n(r.inScope)} aborted=${n(r.aborted)} settled=${n(r.settled)} matched=${n(r.matched)} deferred=${n(r.deferred)} carried=${n(r.carried)} unmatched=${n(r.unmatched)} repeated=${n(r.repeated)} unreconciled=${n(r.unreconciled)}`,
+    `counts\treceipts\tsubmitted=${n(r.submitted)} attested=${n(r.attested)} covering=${n(r.covering)} in-scope=${n(r.inScope)} aborted=${n(r.aborted)} settled=${n(r.settled)} matched=${n(r.matched)} deferred=${n(r.deferred)} carried=${n(r.carried)} unmatched=${n(r.unmatched)} repeated=${n(r.repeated)} unreconciled=${n(r.unreconciled)}`,
     `counts\tsettlements\trows=${n(s.rows)} matched=${n(s.matched)} deferred=${n(s.deferred)} unmatched=${n(s.unmatched)} repeated=${n(s.repeated)} unreconciled=${n(s.unreconciled)}`,
   ];
 }
@@ -3094,6 +3172,7 @@ type PlainCounts = {
   receipts: {
     submitted: unknown;
     attested: unknown;
+    covering: unknown;
     inScope: unknown;
     aborted: unknown;
     settled: unknown;
@@ -3297,6 +3376,7 @@ function snapshotCounts(raw: unknown): { counts: PlainCounts | null; inconsisten
   const receiptKeys = [
     "submitted",
     "attested",
+    "covering",
     "inScope",
     "aborted",
     "settled",
@@ -3318,6 +3398,7 @@ function snapshotCounts(raw: unknown): { counts: PlainCounts | null; inconsisten
   const receipts: PlainCounts["receipts"] = {
     submitted: undefined,
     attested: undefined,
+    covering: undefined,
     inScope: undefined,
     aborted: undefined,
     settled: undefined,
@@ -3486,7 +3567,7 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
     } else {
       // Keep two count lines so line tags stay stable when counts could not be read.
       body.push(
-        `counts\treceipts\tsubmitted=${slots.nonNeg(undefined)} attested=${slots.nonNeg(undefined)} in-scope=${slots.nonNeg(undefined)} aborted=${slots.nonNeg(undefined)} settled=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} carried=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
+        `counts\treceipts\tsubmitted=${slots.nonNeg(undefined)} attested=${slots.nonNeg(undefined)} covering=${slots.nonNeg(undefined)} in-scope=${slots.nonNeg(undefined)} aborted=${slots.nonNeg(undefined)} settled=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} carried=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
         `counts\tsettlements\trows=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
       );
     }

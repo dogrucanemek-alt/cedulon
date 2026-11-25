@@ -91,7 +91,7 @@ Expected stdout:
 summary	audit: balanced
 result	balanced findings=0
 guarantee	conditional
-counts	receipts	submitted=2 attested=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
+counts	receipts	submitted=2 attested=0 covering=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
 counts	settlements	rows=2 matched=2 deferred=0 unmatched=0 repeated=0 unreconciled=0
 warning	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
 warning	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional
@@ -207,7 +207,7 @@ finding	settlement-without-receipt	0xcae972c2b2b0eda38f0a7fd20bf57b538f46674cf58
 finding	settlement-without-receipt	0x98fb67a557c77506a9adda85e23f5c22785ade5e1abd068310a2a8ec78092001:12	settlement 0x98fb67a557c77506a9adda85e23f5c22785ade5e1abd068310a2a8ec78092001:12 1000 USDC has no spend receipt
 finding	settlement-without-receipt	0x6189c31e4333051d747a7ca4f8c50a12b637ea96841b9b539c4cb3257fd08498:9	settlement 0x6189c31e4333051d747a7ca4f8c50a12b637ea96841b9b539c4cb3257fd08498:9 1000 USDC has no spend receipt
 guarantee	conditional
-counts	receipts	submitted=0 attested=0 in-scope=0 aborted=0 settled=0 matched=0 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
+counts	receipts	submitted=0 attested=0 covering=0 in-scope=0 aborted=0 settled=0 matched=0 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
 counts	settlements	rows=3 matched=0 deferred=0 unmatched=3 repeated=0 unreconciled=0
 warning	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
 ```
@@ -275,9 +275,15 @@ in use. A list nothing can be read from attests nothing at all, so every
 settlement comes back uncovered - a broken setting withholds trust rather than
 falling back to accepting whatever the objects carry.
 
-Everything the pins reject is then left out of every inference that depends on
-who signed: totals, checkpoint head, receipt chain, window coverage, the
-countersignature questions, and redaction notices all read the attested set.
+Everything the pins reject is then left out of the coverage-dependent
+inferences that depend on who signed: totals, checkpoint head, window
+coverage, the countersignature questions, and redaction notices all read the
+attested (coverage) set. One deliberate exception is the receipt-chain walk:
+a receipt whose carried key names a pin but whose signature does not verify
+under that pin is dropped from coverage, yet still walked so the report can
+name `receipt-chain-break` (signature failed) — see the issuer pin matrix
+below. Dropping it from the walk entirely would leave only checkpoint totals
+to notice the break.
 What the receipts say about themselves splits into two questions with two
 different subjects. A defect keyed by the offending receipt - a settled receipt
 naming no rail ref - accuses nobody else, so it is reported whoever signed it,

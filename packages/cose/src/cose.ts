@@ -90,7 +90,11 @@ export function encodeProtectedHeader(header: ProtectedHeader): Uint8Array {
 }
 
 export function decodeProtectedHeader(bytes: Uint8Array): ProtectedHeader {
-  const map = asMap(decodeCbor(bytes));
+  const map = decodeCbor(bytes);
+  // Not a map at all is the same refusal as a map missing a label.
+  if (!isCborMap(map)) {
+    throw new Error("cose-protected-header");
+  }
   // Label 2 is crit. RFC 9052 requires rejecting a critical parameter this
   // profile does not understand, and the only labels it understands are
   // alg, content type, and kid.
@@ -232,9 +236,9 @@ export function coseDecodeRefusal(bytes: Uint8Array): string | null {
   try {
     const msg = decodeCoseSign1(bytes);
     decodeProtectedHeader(msg.protectedHeader);
-    // The payload is CBOR in every object this profile defines; a bound hit
-    // while reading it is the same class of refusal as one hit above it.
-    decodeCbor(msg.payload);
+    // The payload is a CBOR map in every object this profile defines; a bound
+    // hit while reading it is the same class of refusal as one hit above it.
+    asMap(decodeCbor(msg.payload));
     return null;
   } catch (err) {
     return namedDecodeRefusal(err);
@@ -248,9 +252,9 @@ export function coseDecodeRefusalHex(coseHex: string | undefined | null): string
   }
   try {
     return coseDecodeRefusal(hexToBytes(coseHex));
-  } catch {
-    // Not even hex. Whatever it is, it is not a bound this profile names.
-    return null;
+  } catch (err) {
+    // Hex that is not this profile's spelling is refused by name too.
+    return namedDecodeRefusal(err);
   }
 }
 

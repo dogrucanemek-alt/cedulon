@@ -172,6 +172,32 @@ describe("auditWindows: consecutive windows audited as one run", () => {
     assert.equal(report.ok, true);
   });
 
+  it("without a usable issuer root, window i > 0 is not anchored on the prior window", () => {
+    assert.equal(typeof auditWindows, "function");
+    const r0 = receipt("cw-pinless-a", "ref-pa", S0 + H / 2, null);
+    const r1 = receipt("cw-pinless-b", "ref-pb", S1 + H / 2, r0);
+    const cp0 = checkpoint(1, [r0], S0, S1, null);
+    const cp1 = checkpoint(2, [r1], S1, S2, cp0);
+    const railTrust = {
+      trust: { publicKeyPem: rail.publicKeyPem, accountId: "acct", railId: "rail", windowStartMs: S0, windowEndMs: S2 },
+    };
+    const w1 = { receipts: [r1], checkpoints: [cp1], extract: extract(S1, S2, [{ ref: "ref-pb", timestampMs: S1 + H / 2 }]) };
+    const report = auditWindows!({
+      ...railTrust,
+      windows: [
+        { receipts: [r0], checkpoints: [cp0], extract: extract(S0, S1, [{ ref: "ref-pa", timestampMs: S0 + H / 2 }]) },
+        w1,
+      ],
+    });
+    // Pinless: the prior coverage checkpoint is handed across but does not bind —
+    // the same genesis walk as a lone window without issuerTrust.
+    assert.ok(
+      report.windows[1]!.findings.some((f) => f.code === "receipt-chain-break"),
+      JSON.stringify(report.windows[1]!.findings),
+    );
+    assert.equal(report.ok, false);
+  });
+
   it("one settlement row cannot cover a receipt in its own window and be carried for one in the previous window", () => {
     assert.equal(typeof auditWindows, "function");
     const x = "ref-dup";

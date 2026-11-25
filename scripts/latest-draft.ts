@@ -1,5 +1,6 @@
-import { readdirSync } from "node:fs";
-import { basename, join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, join, relative } from "node:path";
 
 /**
  * The draft a living check should read: the newest revision in the tree.
@@ -174,4 +175,112 @@ export function latestPostedCompanionRevision(specDir: string, name: string): st
     throw new Error(`no draft-dogru-cedulon-${name}-NN.txt under spec/`);
   }
   return revisions[revisions.length - 1]!;
+}
+
+/**
+ * Living drafts that will go to the datatracker but have not been posted
+ * yet: the newest of each publication-bound name that still has no archive
+ * `.txt` beside it. Posted datatracker copies (and their frozen `.txt`)
+ * stay out of this list so their on-disk bytes are not rewritten by a
+ * living-source line-ending check.
+ */
+export function livingUnpublishedDraftPaths(root: string): string[] {
+  const paths = [
+    latestDraftPath(root),
+    ...core00FamilyPaths(root),
+    ...companionDraftPaths(root),
+    ...sideDraftPaths(root),
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const path of paths) {
+    const key = path.replace(/\\/g, "/");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (existsSync(path.replace(/\.md$/i, ".txt"))) continue;
+    out.push(path);
+  }
+  return out.sort((a, b) => basename(a).localeCompare(basename(b)));
+}
+
+export type LivingDraftCrHit = {
+  file: string;
+  count: number;
+};
+
+function withoutCrBeforeLf(bytes: Buffer): Buffer {
+  const out: number[] = [];
+  for (let i = 0; i < bytes.length; i += 1) {
+    if (bytes[i] === 0x0d && bytes[i + 1] === 0x0a) continue;
+    out.push(bytes[i]!);
+  }
+  return Buffer.from(out);
+}
+
+/**
+ * The bytes `git add` would store for a file under `spec/`: the working
+ * copy passed through git's own input conversion (core.autocrlf, eol
+ * attributes). A checkout that turned LF into CRLF on disk - a Windows
+ * runner with core.autocrlf=true - reads as the LF the repository holds,
+ * while a CR that would be committed as written is still seen. When git
+ * stores neither the bytes on disk nor their CRLF-to-LF form, the check
+ * cannot say what would be committed and refuses rather than guess.
+ * `bytes` stands in for the working copy; `gitConfig` pins the conversion
+ * (`["-c", "core.autocrlf=true"]`) so both checkouts can be exercised.
+ */
+export function storedDraftBytes(
+  root: string,
+  path: string,
+  options: { bytes?: Buffer; gitConfig?: string[] } = {},
+): Buffer {
+  const raw = options.bytes ?? readFileSync(path);
+  const rel = relative(root, path).replace(/\\/g, "/");
+  const hash = (args: string[], input: Buffer): string =>
+    execFileSync("git", [...(options.gitConfig ?? []), "hash-object", ...args, "--stdin"], {
+      cwd: root,
+      input,
+      encoding: "utf8",
+    }).trim();
+  const stored = hash([`--path=${rel}`], raw);
+  if (hash(["--no-filters"], raw) === stored) return raw;
+  const lf = withoutCrBeforeLf(raw);
+  if (hash(["--no-filters"], lf) === stored) return lf;
+  throw new Error(
+    `${rel}: git would store neither the bytes on disk nor their LF form; the conversion is not one this check can read`,
+  );
+}
+
+/**
+ * CR bytes that would be committed in living unpublished drafts. The
+ * object-store crlf-guard does not see an uncommitted CR, so this check
+ * reads the files a living edit actually writes - through git's input
+ * conversion (`storedDraftBytes`), so the platform's checkout line endings
+ * are not mistaken for the draft's. Optional `extra` entries stand in for
+ * a temporary CR-injected copy without touching the tree.
+ */
+export function livingDraftCarriageReturns(
+  root: string,
+  extra: Array<{ file: string; bytes: Buffer }> = [],
+): LivingDraftCrHit[] {
+  const hits: LivingDraftCrHit[] = [];
+  for (const path of livingUnpublishedDraftPaths(root)) {
+    const bytes = storedDraftBytes(root, path);
+    let count = 0;
+    for (const b of bytes) {
+      if (b === 0x0d) count += 1;
+    }
+    if (count > 0) {
+      hits.push({ file: path.replace(/\\/g, "/").split("/").pop()!, count });
+    }
+  }
+  for (const item of extra) {
+    let count = 0;
+    for (const b of item.bytes) {
+      if (b === 0x0d) count += 1;
+    }
+    if (count > 0) {
+      hits.push({ file: item.file.replace(/\\/g, "/"), count });
+    }
+  }
+  return hits;
 }

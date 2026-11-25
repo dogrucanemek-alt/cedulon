@@ -50,9 +50,9 @@ describe("canonical() against RFC 8785", () => {
   });
 
   it("NaN and Infinity throw — RFC 8785 §3.2.2.3, not an extension", () => {
-    assert.throws(() => canonical(NaN), /non-finite number/);
-    assert.throws(() => canonical(Infinity), /non-finite number/);
-    assert.throws(() => canonical(-Infinity), /non-finite number/);
+    assert.throws(() => canonical(NaN), /^Error: non-finite-number$/);
+    assert.throws(() => canonical(Infinity), /^Error: non-finite-number$/);
+    assert.throws(() => canonical(-Infinity), /^Error: non-finite-number$/);
   });
 
   it("extension: bigint is a JSON string of its decimal", () => {

@@ -12,6 +12,11 @@ import {
   isBinaryPath,
   trackedFiles,
 } from "../scripts/crlf-guard.ts";
+import {
+  livingDraftCarriageReturns,
+  livingUnpublishedDraftPaths,
+  storedDraftBytes,
+} from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -92,5 +97,67 @@ describe("crlf-guard", () => {
       if (!trimmed || trimmed.startsWith("#")) continue;
       assert.equal(trimmed.startsWith("spec/") || trimmed.startsWith("/spec/"), false, trimmed);
     }
+  });
+
+  it("living unpublished drafts have no CR; a CR-injected copy is refused", () => {
+    const living = livingUnpublishedDraftPaths(root);
+    assert.ok(living.length > 0, "expected at least one living unpublished draft");
+    const names = living.map((p) => p.replace(/\\/g, "/").split("/").pop()!);
+    for (const expected of [
+      "draft-dogru-cedulon-core-05.md",
+      "draft-dogru-cedulon-checkpoint-01.md",
+      "draft-dogru-cedulon-resolution-00.md",
+    ]) {
+      assert.ok(names.includes(expected), `expected living unpublished draft ${expected}, got ${names.join(", ")}`);
+    }
+    assert.ok(
+      !names.includes("draft-dogru-cedulon-decision-profile-04.md"),
+      "posted decision-profile-04 must stay out of the living-unpublished set",
+    );
+    assert.ok(
+      !living.some((p) => p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-decision-profile-04.md")),
+      "posted decision-profile-04 must stay out of the living-unpublished set",
+    );
+    assert.deepEqual(livingDraftCarriageReturns(root), []);
+    const sample = living.find((p) =>
+      p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md"),
+    )!;
+    const clean = storedDraftBytes(root, sample);
+    assert.equal(countCarriageReturns(clean), 0);
+    const withCr = Buffer.from(clean.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
+    assert.ok(countCarriageReturns(withCr) > 0);
+    const red = livingDraftCarriageReturns(root, [
+      { file: "spec/draft-dogru-cedulon-resolution-00.md.cr-probe", bytes: withCr },
+    ]);
+    assert.ok(
+      red.some((h) => h.file.endsWith("resolution-00.md.cr-probe") && h.count > 0),
+      `expected a CR hit on the probe, got ${JSON.stringify(red)}`,
+    );
+  });
+
+  it("RED then GREEN: the living-draft check reads what git stores, not the checkout's line endings", () => {
+    const sample = livingUnpublishedDraftPaths(root).find((p) =>
+      p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md"),
+    )!;
+    const lf = storedDraftBytes(root, sample);
+    assert.equal(countCarriageReturns(lf), 0);
+    const crlf = Buffer.from(lf.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
+    // A Windows checkout with core.autocrlf=true writes these CRLF bytes to
+    // disk for an LF blob. Read raw, they look like a CR edit; that read is
+    // what failed on the hosted Windows runner.
+    assert.ok(countCarriageReturns(crlf) > 0);
+    const viaAutocrlf = storedDraftBytes(root, sample, {
+      bytes: crlf,
+      gitConfig: ["-c", "core.autocrlf=true"],
+    });
+    assert.equal(countCarriageReturns(viaAutocrlf), 0, "autocrlf checkout must read as the LF git stores");
+    assert.deepEqual(viaAutocrlf, lf);
+    // Without that conversion the same bytes would be committed with CR:
+    // the edit this check exists to refuse.
+    const asWritten = storedDraftBytes(root, sample, {
+      bytes: crlf,
+      gitConfig: ["-c", "core.autocrlf=false"],
+    });
+    assert.ok(countCarriageReturns(asWritten) > 0, "a CR that would be committed must still be seen");
   });
 });

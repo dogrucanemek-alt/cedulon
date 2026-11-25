@@ -980,6 +980,130 @@ describe("Tiago core-04 #5: a one-window audit with an anchor checkpoint", () =>
     assert.equal(report.ok, false);
   });
 
+  it("a foreign checkpoint with a lower epoch than the attested set does not unseat a valid anchor (MUST-T11-20)", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    // Lower than every attested checkpoint, and not adjacent to the anchor:
+    // were it the anchor's target, all three adjacency conditions would fail.
+    const foreign = signCheckpoint(buildCheckpointClaims(1, [], P_START, N_START, null), stranger.privateKeyPem, stranger.publicKeyPem);
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [foreign, s.cpN],
+      anchorCheckpoint: s.cpPrev,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    assert.deepEqual(report.findings.filter((f) => f.id === "anchor"), []);
+    // The anchor was used: the first receipt chains to its head.
+    assert.equal(report.findings.some((f) => f.code === "receipt-chain-break"), false);
+    // The foreign checkpoint is named, not silently dropped.
+    assert.deepEqual(report.findings.map((f) => f.code), ["issuer-key-mismatch"]);
+    assert.equal(report.ok, false);
+  });
+
+  it("a foreign checkpoint with a lower epoch than the attested set cannot make a non-adjacent anchor valid (MUST-T11-20)", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    // The attested checkpoint skips an epoch after the anchor.
+    const realN = signCheckpoint(buildCheckpointClaims(3, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    // A stranger's lower-epoch checkpoint meeting all three conditions against the anchor.
+    const decoy = signCheckpoint(buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)), stranger.privateKeyPem, stranger.publicKeyPem);
+    const report = audit({
+      receipts: [s.r1],
+      checkpoints: [decoy, realN],
+      anchorCheckpoint: s.cpPrev,
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    } as Parameters<typeof audit>[0]);
+    const anchorFindings = report.findings.filter((f) => f.id === "anchor");
+    assert.deepEqual(anchorFindings.map((f) => f.code), ["window-coverage"]);
+    assert.match(anchorFindings[0]!.detail ?? "", /first checkpoint epoch 3\b/);
+    assert.equal(report.ok, false);
+  });
+
+  // Without an anchor the genesis checkpoint is the lowest epoch of the
+  // working set: the attested set under a usable pin, otherwise the presented
+  // checkpoints less those Appendix B refuses.
+  const chainFindings = (r: ReturnType<typeof audit>) =>
+    r.findings.filter((f) => f.id.startsWith("checkpoint-chain-"));
+
+  it("without an anchor, a foreign checkpoint with a lower epoch than the attested set is not the genesis checkpoint", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    const foreign = signCheckpoint(buildCheckpointClaims(0, [], P_START - H, P_START, null), stranger.privateKeyPem, stranger.publicKeyPem);
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [foreign, s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    assert.deepEqual(
+      report.findings.map((f) => [f.code, f.id]),
+      [["issuer-key-mismatch", "epoch-0"]],
+      JSON.stringify(report.findings),
+    );
+  });
+
+  it("without an anchor, a foreign lower-epoch checkpoint cannot stand in for the genesis the attested set lacks", () => {
+    const s = stream();
+    const stranger = generateReceiptKeys();
+    const foreign = signCheckpoint(buildCheckpointClaims(0, [], P_START - H, P_START, null), stranger.privateKeyPem, stranger.publicKeyPem);
+    const cpPrev = signCheckpoint(buildCheckpointClaims(1, [s.r0], P_START, N_START, checkpointHash(foreign)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const cpN = signCheckpoint(buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(cpPrev)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [foreign, cpPrev, cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    const chain = chainFindings(report);
+    assert.equal(chain.length, 1, JSON.stringify(report.findings));
+    assert.match(chain[0]!.detail ?? "", /broken-link/);
+    assert.equal(report.ok, false);
+  });
+
+  it("without an anchor or a pin, a refused checkpoint with a lower epoch is not the genesis checkpoint", () => {
+    const s = stream();
+    const lower = signCheckpoint(buildCheckpointClaims(0, [], P_START - H, P_START, null), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const refused = { ...lower, coseHex: lower.coseHex + "00" };
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+    });
+    assert.ok(
+      report.findings.some((f) => f.id === "epoch-0" && /refused: cbor-trailing/.test(f.detail ?? "")),
+      JSON.stringify(report.findings),
+    );
+    assert.deepEqual(chainFindings(report), [], JSON.stringify(report.findings));
+    assert.equal(report.ok, false);
+  });
+
+  it("without an anchor or a pin, a refused lower-epoch checkpoint does not hide a genesis checkpoint that is not null-linked", () => {
+    const s = stream();
+    const lower = signCheckpoint(buildCheckpointClaims(0, [], P_START - H, P_START, null), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const refused = { ...lower, coseHex: lower.coseHex + "00" };
+    const cpPrev = signCheckpoint(buildCheckpointClaims(1, [s.r0], P_START, N_START, checkpointHash(lower)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const cpN = signCheckpoint(buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(cpPrev)), s.issuer.privateKeyPem, s.issuer.publicKeyPem);
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, cpPrev, cpN],
+      extract: s.extract,
+      trust: s.trust,
+    });
+    assert.deepEqual(
+      chainFindings(report).map((f) => [f.id, f.detail]),
+      [["checkpoint-chain-1", "checkpoint chain broken-link at 1"]],
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.ok, false);
+  });
+
   it("with an issuer pin stated but unreadable, the anchor is not checked against its own carried key and anchors nothing", () => {
     // Nothing is attested under an unreadable pin, so the chain walk has no
     // receipts and cannot show whether the anchor was used. A non-adjacent
@@ -997,6 +1121,85 @@ describe("Tiago core-04 #5: a one-window audit with an anchor checkpoint", () =>
     } as Parameters<typeof audit>[0]);
     assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
     assert.equal(report.findings.some((f) => f.id === "anchor"), false);
+    assert.equal(report.ok, false);
+  });
+
+  // An unreadable pin attests nothing, but the checkpoint working set is still
+  // the pinless one (presented less Appendix B refusals): refusals keep their
+  // names, and genesis / epoch / window findings are not silenced.
+  it("RED then GREEN: with an unreadable issuer pin, a refused checkpoint is still reported by its refusal's name", () => {
+    const s = stream();
+    const refused = { ...s.cpPrev, coseHex: s.cpPrev.coseHex + "00" };
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.ok(
+      report.findings.some((f) => f.id === "epoch-1" && /refused: cbor-trailing/.test(f.detail ?? "")),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.ok(report.findings.some((f) => f.code === "settlement-without-receipt"));
+    assert.equal(report.ok, false);
+  });
+
+  it("RED then GREEN: with an unreadable issuer pin, a non-null genesis prevCheckpointHash is still reported", () => {
+    const s = stream();
+    const cpPrev = signCheckpoint(
+      buildCheckpointClaims(1, [s.r0], P_START, N_START, "aa".repeat(32)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const cpN = signCheckpoint(
+      buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(cpPrev)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [cpPrev, cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.deepEqual(
+      chainFindings(report).map((f) => [f.id, f.detail]),
+      [["checkpoint-chain-0", "checkpoint chain broken-link at 0"]],
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.ok(report.findings.some((f) => f.code === "settlement-without-receipt"));
+    assert.equal(report.ok, false);
+  });
+
+  it("RED then GREEN: with an unreadable issuer pin, an epoch gap in the pinless working set is still reported", () => {
+    const s = stream();
+    const cpN = signCheckpoint(
+      buildCheckpointClaims(3, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.ok(
+      report.findings.some(
+        (f) => f.code === "window-coverage" && f.id === "epoch-3" && /consecutive/.test(f.detail ?? ""),
+      ),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.ok(report.findings.some((f) => f.code === "settlement-without-receipt"));
     assert.equal(report.ok, false);
   });
 

@@ -1,11 +1,15 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { audit } from "@cedulon/audit";
 import {
   MemoryTransparencyService,
   anchorCheckpoint,
   buildCheckpointClaims,
+  checkpointHash,
   redactCheckpointTotals,
   signCheckpoint,
   statementHashOfCheckpoint,
@@ -127,6 +131,7 @@ describe("A — transparency witness on the audit path", () => {
       settlements: settlementsOf(receipts),
       inclusionReceipts: [presentedReceipt, withheldReceipt],
       witnessTrust: { publicKeyPem: ts.publicKeyPem },
+      issuerTrust: { publicKeyPem: k.publicKeyPem },
     });
     assert.equal(report.ok, false);
     assert.equal(
@@ -305,7 +310,32 @@ describe("A — transparency witness on the audit path", () => {
     );
   });
 
-  it("without an issuer pin a same-key withheld body still accuses", () => {
+  it("without an issuer pin a witness that only binds the presented checkpoint raises no unattributable finding (MUST-T11-16)", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const presented = oneCheckpoint(k, receipts, 1);
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      false,
+      `present-only unpinned witness must stay quiet: ${JSON.stringify(report.warnings)}`,
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      JSON.stringify(report.findings),
+    );
+  });
+
+  it("without an issuer pin a same-key withheld body is unattributable, not withheld (MUST-T11-16 requires the issuer root)", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
     const presented = oneCheckpoint(k, receipts, 1);
@@ -326,8 +356,13 @@ describe("A — transparency witness on the audit path", () => {
     });
     assert.equal(
       report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      `without an issuer root carried-key equality must not accuse: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
       true,
-      `same-key withheld must accuse: ${JSON.stringify(report.findings)}`,
+      "same-key body without an issuer pin is unattributable",
     );
   });
 
@@ -488,7 +523,24 @@ describe("A — transparency witness on the audit path", () => {
 });
 
 describe("B — equivocation via the witness", () => {
-  it("RED: same epoch, one checkpoint presented, a different verified copy in the witness", () => {
+  it("RED: the pre-c9 MUST-T11-16 blanket 'any body is unattributable' wording is gone", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const text = readFileSync(join(root, "spec", "draft-dogru-cedulon-checkpoint-01.md"), "utf8");
+    assert.equal(
+      text.includes(
+        "Without a usable issuer pin, a witness body MUST NOT produce a withholding or equivocation verdict and MUST be reported as unattributable instead.",
+      ),
+      false,
+    );
+    assert.equal(text.includes("or any body when no usable issuer pin was supplied"), false);
+    assert.ok(
+      text.includes(
+        "a body that binds a presented checkpoint is not an accusation and MUST NOT raise a separate finding",
+      ),
+    );
+  });
+
+  it("RED then GREEN: without an issuer pin a witness twin is unattributable, not equivocation (MUST-T11-16)", () => {
     const k = generateReceiptKeys();
     const a = chainReceipts(k, ["1"]);
     const b = chainReceipts(k, ["2"]);
@@ -511,6 +563,43 @@ describe("B — equivocation via the witness", () => {
       settlements: settlementsOf(a),
       inclusionReceipts: [presentedReceipt, otherReceipt],
       witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.findings.some((f) => f.code === "equivocation" && f.id === "epoch-7"),
+      false,
+      `without an issuer root a witness twin must not equivocate: ${JSON.stringify(report.findings)}`,
+    );
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      true,
+      "witness twin without an issuer pin is unattributable",
+    );
+  });
+
+  it("with a usable issuer pin, same epoch presented vs witness twin is equivocation", () => {
+    const k = generateReceiptKeys();
+    const a = chainReceipts(k, ["1"]);
+    const b = chainReceipts(k, ["2"]);
+    const presented = signCheckpoint(
+      buildCheckpointClaims(7, a, 1_700_000_000_000, 1_700_000_000_010, null),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const other = signCheckpoint(
+      buildCheckpointClaims(7, b, 1_700_000_000_000, 1_700_000_000_010, null),
+      k.privateKeyPem,
+      k.publicKeyPem,
+    );
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const otherReceipt = anchorCheckpoint(ts, other);
+    const report = audit({
+      receipts: a,
+      checkpoints: [presented],
+      settlements: settlementsOf(a),
+      inclusionReceipts: [presentedReceipt, otherReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+      issuerTrust: { publicKeyPem: k.publicKeyPem },
     });
     assert.equal(report.ok, false);
     assert.equal(
@@ -647,6 +736,74 @@ describe("C — checkpoint totals redaction", () => {
       asDressed.warnings.some((f) => f.code === "checkpoint-totals-redacted"),
       false,
       "an unverifiable checkpoint does not get to claim a redaction",
+    );
+  });
+});
+
+describe("an empty witness list is a supplied witness list", () => {
+  it("RED then GREEN: inclusionReceipts: [] reports witness-inclusion-not-exercised, and absence does not", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const cp = oneCheckpoint(k, receipts);
+    const issuerTrust = { publicKeyPem: k.publicKeyPem };
+    const witnessTrust = { publicKeyPem: fixtureEd25519Pems().publicKeyPem };
+    const empty = trustedExtract(receipts, [cp], { inclusionReceipts: [], issuerTrust, witnessTrust });
+    assert.ok(
+      empty.warnings.some((f) => f.code === "witness-inclusion-not-exercised"),
+      `an empty witness list passed tier 2 in silence: ${JSON.stringify(empty.warnings)}`,
+    );
+    assert.equal(empty.ok, true);
+    assert.equal(empty.guarantee, "conditional");
+    const none = trustedExtract(receipts, [cp], { issuerTrust });
+    assert.equal(none.warnings.some((f) => f.code === "witness-inclusion-not-exercised"), false);
+  });
+});
+
+describe("an anchor answers to a usable issuer root or anchors nothing (MUST-T11-20)", () => {
+  const T = 1_700_000_000_000;
+  function stream(keys: { privateKeyPem: string; publicKeyPem: string }) {
+    const claims = (i: number, prev: string | null) => ({
+      payer: "p",
+      payee: "q",
+      amount: "1",
+      currency: "USD",
+      policyHash: TEST_HASH,
+      manifestHash: null,
+      noManifest: true,
+      x402PaymentRef: `x402-a${i}`,
+      timestampMs: T + 1 + 10 * i,
+      nonce: `a${i}`.padEnd(16, "-"),
+      prevReceiptHash: prev,
+      outcome: "settled" as const,
+    });
+    const r0 = signReceipt(claims(0, null), keys.privateKeyPem, keys.publicKeyPem);
+    const r1 = signReceipt(claims(1, receiptHash(r0)), keys.privateKeyPem, keys.publicKeyPem);
+    const anchor = signCheckpoint(buildCheckpointClaims(1, [r0], T, T + 10, null), keys.privateKeyPem, keys.publicKeyPem);
+    const cp2 = signCheckpoint(
+      buildCheckpointClaims(2, [r1], T + 10, T + 20, checkpointHash(anchor)),
+      keys.privateKeyPem,
+      keys.publicKeyPem,
+    );
+    return { receipts: [r1], checkpoints: [cp2], settlements: settlementsOf([r1]), anchorCheckpoint: anchor };
+  }
+
+  it("under a usable issuer pin the anchor binds the window", () => {
+    const k = generateReceiptKeys();
+    const report = audit({ ...stream(k), issuerTrust: { publicKeyPem: k.publicKeyPem } });
+    assert.deepEqual(report.findings, []);
+    assert.equal(report.ok, true);
+  });
+
+  it("RED then GREEN: with no issuer pin, an anchor checked only against the key it carries anchors nothing", () => {
+    // Any key verifies an anchor it signed itself. Without a pin there is no
+    // issuer root for the anchor to answer to, so it cannot start the chain.
+    const minted = generateReceiptKeys();
+    const report = audit(stream(minted));
+    assert.equal(report.ok, false, `an unpinned anchor bound the chain: ${JSON.stringify(report.findings)}`);
+    assert.ok(report.findings.some((f) => f.code === "receipt-chain-break"));
+    assert.ok(
+      report.warnings.some((f) => f.code === "unauthenticated-issuer" && f.id === "anchor"),
+      `the unused anchor is not said: ${JSON.stringify(report.warnings)}`,
     );
   });
 });

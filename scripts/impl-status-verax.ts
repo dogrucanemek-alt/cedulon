@@ -31,10 +31,10 @@ export const REQUIRED_URLS = [
   "https://doi.org/10.5281/zenodo.22811593",
 ] as const;
 
-export const VERAX_VERSION = "0.8.2";
+export const VERAX_VERSION = "0.9.0";
 /** The newest Verax version archived on Zenodo; it trails npm when a release is not deposited. */
-export const VERAX_ARCHIVED_VERSION = "0.8.2";
-export const CEDULON_VERSION = "0.13.1";
+export const VERAX_ARCHIVED_VERSION = "0.9.0";
+export const CEDULON_VERSION = "0.16.0";
 
 /** The Verax packages the entry names on npm at VERAX_VERSION. */
 export const VERAX_PACKAGES = ["@verax-ai/body", "@verax-ai/proxy", "@verax-ai/inventory"] as const;
@@ -86,6 +86,32 @@ export function urlsOf(text: string): string[] {
 
 export function flatten(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The packages Verax depends on changed verifier behaviour after the last
+ * posted revision, so neither entry may say they implement one. Both say
+ * so in two clauses: the packages are not claimed to implement a posted
+ * revision, and no posted revision describes the result.
+ */
+export const POSTED_REVISION_DISCLAIMERS = [
+  /\bnot claimed to implement a posted revision\b/,
+  /\bno posted revision describes the result\b/,
+] as const;
+const POSTED_REVISION_CLAIM = /\bimplements?\b[^.]*?\bposted\b/;
+
+export function postedRevisionFailures(label: string, block: string): string[] {
+  const failures: string[] = [];
+  const flat = flatten(block);
+  for (const disclaimer of POSTED_REVISION_DISCLAIMERS) {
+    if (!disclaimer.test(flat)) failures.push(`${label} Verax entry does not say "${disclaimer.source.replaceAll("\\b", "")}"`);
+  }
+  for (const sentence of flat.split(/(?<=\.)\s+(?=[A-Z`])/)) {
+    if (POSTED_REVISION_CLAIM.test(sentence) && !/\bnot claimed to implement\b/.test(sentence)) {
+      failures.push(`${label} Verax entry claims a posted revision is implemented: "${sentence}"`);
+    }
+  }
+  return failures;
 }
 
 export function forbiddenHits(block: string): string[] {
@@ -157,6 +183,9 @@ export function implStatusVeraxFailures(draft: string, status: string): string[]
       if (!block.includes(`\`${pkg}\``)) failures.push(`${label} Verax entry omits ${pkg}`);
     }
   }
+
+  failures.push(...postedRevisionFailures("the draft", draftBlock));
+  failures.push(...postedRevisionFailures("the STATUS", statusBlock));
 
   for (const hit of forbiddenHits(draftBlock)) {
     failures.push(`the draft Verax entry contains "${hit}"`);

@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync, verify } from "node:crypto";
-import { AMOUNT_RE, canonical, hashClaimRefusal, isValidHashText, jcsEncodeRefusal } from "@cedulon/core";
+import { AMOUNT_RE, canonical, hashClaimRefusal, isUintClaim, isValidHashText, jcsEncodeRefusal } from "@cedulon/core";
 import {
   CTY_COUNTERSIGN,
   CTY_RECEIPT,
@@ -9,6 +9,7 @@ import {
   decodeCbor,
   decodeCoseSign1,
   encodeCbor,
+  hexToBytes,
   mapGet,
   sameSpkiKey,
   signCoseSign1,
@@ -135,6 +136,9 @@ export function claimsFromCbor(bytes: Uint8Array): SpendReceiptClaims {
   if (typeof ts !== "number" || typeof noMan !== "boolean") {
     throw new Error("claim-types");
   }
+  if (!isUintClaim(ts)) {
+    throw new Error("malformed-timestampMs");
+  }
   if (outcome !== "settled" && outcome !== "aborted") {
     throw new Error("claim-outcome");
   }
@@ -246,6 +250,10 @@ export function signReceiptCose(
 ): SignedReceipt {
   const signer = asSigner(key, publicKeyPem);
   assertClaimConsistency(claims);
+  // Label -70009 is a CBOR uint; the deprecated JSON encoding has no such type.
+  if (!isUintClaim(claims.timestampMs)) {
+    throw new Error("malformed-timestampMs");
+  }
   const payload = claimsToCbor(claims);
   const cose = signCoseSign1(payload, signer, CTY_RECEIPT);
   const msg = decodeCoseSign1(cose);
@@ -268,11 +276,11 @@ export function verifyReceiptCose(signed: SignedReceipt, expectedIssuerKeyPem?: 
   if (signed.claims.noManifest !== (signed.claims.manifestHash === null)) {
     return false;
   }
-  const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_RECEIPT)) {
-    return false;
-  }
   try {
+    const bytes = hexToBytes(signed.coseHex);
+    if (!verifyCoseSign1(bytes, signed.publicKeyPem, CTY_RECEIPT)) {
+      return false;
+    }
     const msg = decodeCoseSign1(bytes);
     const decoded = claimsFromCbor(msg.payload);
     return canonical(decoded) === canonical(signed.claims);
@@ -370,11 +378,11 @@ export function verifyReceiptUnderPin(signed: SignedReceipt, pinPem: string): bo
   if (!signed.coseHex) {
     return false;
   }
-  const bytes = Buffer.from(signed.coseHex, "hex");
-  if (!verifyCoseSign1(bytes, pinPem, CTY_RECEIPT)) {
-    return false;
-  }
   try {
+    const bytes = hexToBytes(signed.coseHex);
+    if (!verifyCoseSign1(bytes, pinPem, CTY_RECEIPT)) {
+      return false;
+    }
     const msg = decodeCoseSign1(bytes);
     const decoded = claimsFromCbor(msg.payload);
     return canonical(decoded) === canonical(signed.claims);
@@ -387,7 +395,7 @@ function issuerCoseBytes(signed: SignedReceipt): Uint8Array {
   if (!signed.coseHex) {
     throw new Error("countersign-requires-cose");
   }
-  return new Uint8Array(Buffer.from(signed.coseHex, "hex"));
+  return hexToBytes(signed.coseHex);
 }
 
 /**
@@ -436,7 +444,7 @@ export function countersignDeliveredHashHex(signed: SignedReceipt): string | nul
     return null;
   }
   try {
-    const msg = decodeCoseSign1(Buffer.from(signed.counterCoseHex, "hex"));
+    const msg = decodeCoseSign1(hexToBytes(signed.counterCoseHex));
     const map = asMap(decodeCbor(msg.payload));
     const raw = mapGet(map, COUNTERSIGN_CLAIM.deliveredHash);
     if (!(raw instanceof Uint8Array)) {
@@ -460,7 +468,7 @@ export function verifyCounterSignature(signed: SignedReceipt, payeePublicKeyPem?
     return false;
   }
   try {
-    const bytes = Buffer.from(signed.counterCoseHex, "hex");
+    const bytes = hexToBytes(signed.counterCoseHex);
     if (!verifyCoseSign1(bytes, key, CTY_COUNTERSIGN)) {
       return false;
     }
@@ -493,7 +501,7 @@ export function verifyCounterSignature(signed: SignedReceipt, payeePublicKeyPem?
  */
 export function receiptHash(signed: SignedReceipt): string {
   if (signed.encoding === "cose" && signed.coseHex) {
-    return sha256Hex(Buffer.from(signed.coseHex, "hex"));
+    return sha256Hex(Buffer.from(hexToBytes(signed.coseHex)));
   }
   return sha256Hex(canonical({ claims: signed.claims, signature: signed.signature }));
 }

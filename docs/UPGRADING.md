@@ -4,6 +4,94 @@
 against 0.2.4, and the changes are the kind that have to break: a verifier that
 kept the old behaviour would keep reporting a clean audit over a forged receipt.
 
+## 0.19.0 (prepared, not published)
+
+`counts.receipts.attested` is only the receipts that verify under a usable
+pinned issuer key. With no issuer pin stated, or a stated pin that cannot be
+read, it is 0. The coverage-set size is reported beside it as
+`counts.receipts.covering` (JSON and the `formatAudit` receipts line). Under a
+usable pin the two are equal; without one, presented-unattested receipts can
+still cover settlements while `attested` stays 0. Callers that treated the old
+unpinned `attested` count as coverage must read `covering` instead.
+
+Without an issuer pin, or with a stated pin that cannot be read, a witness
+body no longer produces `checkpoint-withheld` or `equivocation`. That body is
+reported as the conditional warning `witness-entry-unattributable` instead
+(MUST-T11-16). This is a verdict change: an unpinned audit that failed in
+0.18.0 for a same-key withheld or twin body can now return conditional with
+no failing finding from that body alone. Under a usable issuer pin the same
+bodies still fail as `checkpoint-withheld` / `equivocation`.
+
+Coverage and diagnostic sets are separated. A checkpoint the usable pin
+rejects leaves the coverage set and the coverage chain walk; it is named as
+`issuer-key-mismatch` (or a decoder refusal) and does not cover a window. A
+stated pin that cannot be read reports `trust-key-unreadable`, keeps
+`attested` and `covering` at 0, and still names decoder refusals on the
+diagnostic set rather than falling back to carried keys. Bound checks still
+throw `audit-too-large` before the safety net turns other surprises into
+`presented-object-malformed`. Under a usable issuer root, `auditWindows`
+anchors window i>0 on the last coverage-set checkpoint of window i-1,
+never on a refused or merely diagnostic one. Without a usable issuer
+root the prior window does not become an anchor: as with an
+`anchorCheckpoint` presented with no `issuerTrust`, the chain is walked
+from genesis.
+
+A presented object refused by name (decoder / shape / hex) is not coverage:
+it leaves `covering` (and under a usable pin, `attested`), covers no
+settlement and covers no window, and the finding or warning names the
+refusal (`refused: <name> - ...`, not a bare signature failure). The same
+rule applies to a rail extract whose body is refused by name with or without
+a rail pin: its rows are not reconciled, and the report carries
+`settlement-comparison-skipped` so a reader can tell a skipped comparison
+from one that found nothing. 0.18.0 already skipped comparison when a
+stated rail pin refused the extract; 0.19.0 also skips it for a named body
+refusal when no pin is stated.
+
+An `anchorCheckpoint` answers only to a usable issuer root. With no
+`issuerTrust`, the audit reports `unauthenticated-issuer` on
+`id: "anchor"` and the anchor anchors nothing — the chain is walked from
+genesis. A stated pin that cannot be read likewise anchors nothing (no
+fallback to the key the anchor carries).
+
+`inclusionReceipts: []` is a supplied list. Tier 2 was not exercised, so the
+audit reports the conditional warning `witness-inclusion-not-exercised`
+(MUST-T11-10, MUST-T11-19). 0.18.0 emitted that warning only for a non-empty
+list presented without a tier-2 pair; an empty list was silent. Absence of
+the field (`undefined` / `null`) is still silence.
+
+Uint-typed claims refuse a negative at sign and at verify:
+`malformed-timestampMs` on a Spend Receipt (and the same gate on a Decision
+Record via `decision-record-timestamp`), `malformed-expiresAtMs` on a Trade
+Manifest, `malformed-expiryMs` on a Decision Token. A well-signed object
+that carries a negative in any of those fields does not verify. `isUintClaim`
+is exported from `@cedulon/core` for callers that share the gate.
+
+COSE hex on receipt, manifest, decision-token, decision-record and
+countersignature verify / hash paths is read only through `hexToBytes`
+(whole lowercase hex): a trailing non-hex suffix, odd length, or uppercase
+no longer verifies, and the hash helpers throw `hex-odd` /
+`hex-not-lowercase` / `hex-not-hex`. Checkpoint paths already used
+`strictHexBytes` in 0.18.0; this release closes the same hole on the other
+signed objects. `NAMED_DECODE_REFUSALS` also names `cbor-eof`,
+`cbor-trailing`, `cbor-unsupported`, `cbor-indefinite`, `cbor-not-array`,
+`cbor-not-map`, `cose-sign1-length`, `cose-sign1-types`,
+`cose-protected-header`, and the three hex refusals, so an audit reports
+them as decoder refusals rather than as signature failures.
+
+`canonical` refuses a non-finite number as `non-finite-number` (was
+`non-finite number`). Callers that matched the old message by equality must
+take the new name; `railExtractEncodeRefusal` and the audit's named-refusal
+path already surface it that way.
+
+What breaks: any consumer that assumed `attested` counted the pinless coverage
+set, that parsed the receipts counts line without a `covering=` field, that
+treated an unpinned witness body as a failing `checkpoint-withheld` /
+`equivocation` verdict, that reconciled rows out of an extract refused by
+name, that treated a carried-key anchor without `issuerTrust` as binding, that
+expected silence from `inclusionReceipts: []`, that accepted a negative uint
+claim or a second hex spelling of a receipt / manifest / token, or that
+matched the canonical error string `non-finite number`.
+
 ## 0.18.0: an audit that reports instead of throwing, tagged report lines, and an RFC 9162 log
 
 These changes came out of a line-by-line review of the audit and checkpoint

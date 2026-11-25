@@ -338,6 +338,10 @@ export function hexToBytes(hex: string): Uint8Array {
 export const NAMED_DECODE_REFUSALS: ReadonlySet<string> = new Set([
   "cbor-too-large",
   "cbor-too-deep",
+  // An item shorter than its declared length, and octets after the one
+  // item, are shape refusals, not signature verdicts.
+  "cbor-eof",
+  "cbor-trailing",
   "cbor-duplicate-key",
   // Two writings of one value are two identities. receiptHash is SHA-256 of
   // the transport octets, so a second spelling mints a second hash.
@@ -350,6 +354,23 @@ export const NAMED_DECODE_REFUSALS: ReadonlySet<string> = new Set([
   // public name path returned null, which is the "kept the bound, lost the
   // name" failure the path exists to prevent.
   "cose-sign1-unprotected",
+  // The protected header is not the map the profile requires.
+  "cose-protected-header",
+  // A tag, a float or a simple value: outside the item types the profile
+  // decodes, refused before its payload is read.
+  "cbor-unsupported",
+  // An indefinite length, or a reserved additional-information value.
+  "cbor-indefinite",
+  // Not the array of four a COSE_Sign1 is, or a payload that is not a map.
+  "cbor-not-array",
+  "cbor-not-map",
+  "cose-sign1-length",
+  "cose-sign1-types",
+  // The hex the object travels as. Buffer.from(..., "hex") would read each
+  // of these as the bytes of a second spelling of the same object.
+  "hex-odd",
+  "hex-not-lowercase",
+  "hex-not-hex",
 ]);
 
 export function namedDecodeRefusal(err: unknown): string | null {

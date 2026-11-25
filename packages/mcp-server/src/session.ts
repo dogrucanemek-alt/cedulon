@@ -28,7 +28,7 @@ import {
 } from "@cedulon/core";
 import type { SignedManifest } from "@cedulon/manifest";
 import { claimsFromCbor, generateReceiptKeys, isValidNonce, receiptHash, signReceipt, verifyCounterSignature, verifyReceipt, type SignedReceipt } from "@cedulon/receipts";
-import { decodeCoseSign1, namedDecodeRefusal, pemSigner, type Signer } from "@cedulon/cose";
+import { decodeCoseSign1, hexToBytes, namedDecodeRefusal, pemSigner, type Signer } from "@cedulon/cose";
 import {
   RailLedger,
   gatedSettleWithLedger,
@@ -1497,7 +1497,7 @@ export function receiptFromArgs(args: VerifyArgs): SignedReceipt {
   if (!coseHex || !publicKeyPem) {
     throw new Error("verify-receipt-args");
   }
-  const msg = decodeCoseSign1(Buffer.from(coseHex, "hex"));
+  const msg = decodeCoseSign1(hexToBytes(coseHex));
   return {
     claims: claimsFromCbor(msg.payload),
     signature: Buffer.from(msg.signature).toString("base64"),
