@@ -15,7 +15,15 @@
 // remaining risk is that the group empties and the whole PID space wraps
 // around before the signal is sent. Only ESRCH, an empty group, is
 // expected; any other failure to signal the group refuses the call by
-// name, and a refusal the call already had keeps its kind.
+// name, and a refusal the call already had keeps its kind. One exception:
+// XNU returns EPERM for a group whose remaining members are all zombies
+// (Apple Developer Forums thread 815194; an Apple bug, unresolved). So on
+// Darwin, once the child that leads the group has been reaped, EPERM is
+// read as ESRCH, taken to mean that only zombies are left. A live member
+// this process may not signal, such as a setuid descendant, would answer
+// the same way; that case is accepted as out of reach, since this helper
+// runs the repository's git calls and test processes. Before the child is
+// reaped, and on every other platform, EPERM refuses the call.
 // On Windows `taskkill /T /F` ends the tree while its root is alive.
 //
 // Out of reach: on POSIX a descendant that has left the group, on Windows
@@ -51,9 +59,21 @@ export type BoundedRunOptions = {
   env?: NodeJS.ProcessEnv;
   /** For tests only: stands in for process.kill on the POSIX group path. */
   signal?: GroupKill;
+  /**
+   * For tests only: the platform whose rule judges a failed group signal.
+   * How the child is started and ended still follows the host.
+   */
+  platform?: NodeJS.Platform;
 };
 
 export type GroupKill = (pid: number, signal: NodeJS.Signals) => void;
+
+/** What a failed group signal is judged against. */
+export type GroupSignalState = {
+  /** The child, which leads the group, has been reaped. */
+  leaderReaped: boolean;
+  platform: NodeJS.Platform;
+};
 
 export type BoundedRunResult = { stdout: Buffer; stderr: Buffer };
 
@@ -78,14 +98,31 @@ function reason(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Signals the group `pid` leads. ESRCH, an empty group, passes; any other failure's code is returned. */
-export function signalGroup(pid: number, signal: NodeJS.Signals, kill: GroupKill): string | undefined {
+/**
+ * Signals the group `pid` leads. ESRCH, an empty group, passes; so does
+ * EPERM on Darwin once the leader has been reaped, read as a group of
+ * zombies (a live member this process may not signal is not told apart). Any
+ * other failure's code is returned.
+ */
+export function signalGroup(
+  pid: number,
+  signal: NodeJS.Signals,
+  kill: GroupKill,
+  state: GroupSignalState,
+): string | undefined {
   try {
     kill(-pid, signal);
     return undefined;
   } catch (err) {
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ESRCH") return undefined;
+    // XNU returns EPERM for a group whose remaining members are all zombies
+    // (Apple Developer Forums thread 815194, an Apple bug with no fix yet).
+    // With the leader reaped, the EPERM is read as that case; a live member
+    // this process may not signal would answer the same and is accepted as
+    // out of reach. While the leader is unreaped the EPERM is not that case
+    // and refuses the call.
+    if (code === "EPERM" && state.platform === "darwin" && state.leaderReaped) return undefined;
     return typeof code === "string" ? code : reason(err);
   }
 }
@@ -102,6 +139,7 @@ function taskkillTree(pid: number): ChildProcess {
 export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult> {
   const { label, timeoutMs, maxOutputBytes } = options;
   const kill: GroupKill = options.signal ?? ((pid, signal) => void process.kill(pid, signal));
+  const platform = options.platform ?? process.platform;
   return new Promise((resolve, reject) => {
     let stdin: number | "ignore" = "ignore";
     let child: ChildProcess;
@@ -132,10 +170,12 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
     let grace: NodeJS.Timeout | undefined;
     let unsignalled: string | undefined;
 
-    // POSIX only. The first failure other than ESRCH is kept for settle().
+    // POSIX only. The first failure signalGroup does not pass is kept for
+    // settle(). Whether the child has been reaped is read at each signal.
     const signalOwnGroup = (signal: NodeJS.Signals): void => {
       if (pid === undefined) return;
-      const code = signalGroup(pid, signal, kill);
+      const leaderReaped = child.exitCode !== null || child.signalCode !== null;
+      const code = signalGroup(pid, signal, kill, { leaderReaped, platform });
       if (unsignalled === undefined) unsignalled = code;
     };
 
@@ -205,7 +245,8 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
       // The child has been reaped, so this signal goes by number. A group ID
       // is not reused while the group has a member: it reaches what is left
       // of this group, or no one (ESRCH). It could reach another group only
-      // if this one emptied and the whole PID space wrapped in between.
+      // if this one emptied and the whole PID space wrapped in between. On
+      // Darwin a group left with only zombies answers EPERM instead.
       if (pid !== undefined && !isWindows) signalOwnGroup("SIGKILL");
       if (ending) {
         const failure = ending;

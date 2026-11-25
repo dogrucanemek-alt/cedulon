@@ -44,6 +44,16 @@ function failingKill(code: string, calls: KillCall[]): (pid: number, signal: Nod
   };
 }
 
+/** Like failingKill, but SIGTERM is sent for real, so a child that does not ignore it dies and is reaped. */
+function failingAfterTerm(code: string, calls: KillCall[]): (pid: number, signal: NodeJS.Signals) => void {
+  const fail = failingKill(code, []);
+  return (pid, signal) => {
+    calls.push([pid, signal]);
+    if (signal === "SIGTERM") process.kill(pid, signal);
+    else fail(pid, signal);
+  };
+}
+
 async function refusal(run: Promise<unknown>): Promise<BoundedRunError> {
   try {
     await run;
@@ -375,9 +385,10 @@ describe("crlf-guard", () => {
     // No process is started and nothing here depends on the platform, so
     // this is the part of the rule that is measured on Windows as well.
     const calls: KillCall[] = [];
-    assert.equal(signalGroup(41, "SIGKILL", failingKill("ESRCH", calls)), undefined);
-    assert.equal(signalGroup(41, "SIGKILL", failingKill("EPERM", calls)), "EPERM");
-    assert.equal(signalGroup(41, "SIGTERM", (pid, signal) => void calls.push([pid, signal])), undefined);
+    const state = { leaderReaped: true, platform: "linux" } as const;
+    assert.equal(signalGroup(41, "SIGKILL", failingKill("ESRCH", calls), state), undefined);
+    assert.equal(signalGroup(41, "SIGKILL", failingKill("EPERM", calls), state), "EPERM");
+    assert.equal(signalGroup(41, "SIGTERM", (pid, signal) => void calls.push([pid, signal]), state), undefined);
     assert.deepEqual(calls, [
       [-41, "SIGKILL"],
       [-41, "SIGKILL"],
@@ -385,11 +396,38 @@ describe("crlf-guard", () => {
     ]);
   });
 
+  it("RED then GREEN: on Darwin, EPERM after the leader was reaped passes like ESRCH; before that, and on any other platform, it is returned", () => {
+    // XNU returns EPERM for a group whose remaining members are all zombies.
+    // No process is started, so this case measures the whole rule on every
+    // platform, Windows included, where the tree kill sends no group signal.
+    const platforms: NodeJS.Platform[] = ["darwin", "linux", "freebsd", "win32"];
+    for (const platform of platforms) {
+      for (const leaderReaped of [false, true]) {
+        const state = { leaderReaped, platform };
+        const where = `${platform}, leader ${leaderReaped ? "reaped" : "not reaped"}`;
+        const calls: KillCall[] = [];
+        const eperm = platform === "darwin" && leaderReaped ? undefined : "EPERM";
+        assert.equal(signalGroup(41, "SIGKILL", failingKill("ESRCH", calls), state), undefined, `ESRCH, ${where}`);
+        assert.equal(signalGroup(41, "SIGKILL", failingKill("EPERM", calls), state), eperm, `EPERM, ${where}`);
+        assert.equal(signalGroup(41, "SIGKILL", failingKill("EINVAL", calls), state), "EINVAL", `EINVAL, ${where}`);
+        assert.equal(signalGroup(41, "SIGTERM", (pid, signal) => void calls.push([pid, signal]), state), undefined, `success, ${where}`);
+        assert.deepEqual(calls, [
+          [-41, "SIGKILL"],
+          [-41, "SIGKILL"],
+          [-41, "SIGKILL"],
+          [-41, "SIGTERM"],
+        ]);
+      }
+    }
+  });
+
   it("RED then GREEN: a call that succeeds is refused by name when its process group cannot be signalled", { timeout: HELPER_WATCHDOG_MS }, async () => {
     // On POSIX the group is sent SIGKILL when the child closes, and the fake
     // fails that signal. On Windows the tree is ended with taskkill and no
     // group signal is sent, so there this case shows only that the fake is
     // never called and the result stands; the refusal is measured on POSIX.
+    // Linux's rule is named so a macOS runner measures the same thing; the
+    // Darwin rule for this call is the next case.
     const label = "child whose group cannot be signalled";
     const run = (signal: (pid: number, signal: NodeJS.Signals) => void) =>
       runBounded({
@@ -400,6 +438,7 @@ describe("crlf-guard", () => {
         timeoutMs: 10_000,
         maxOutputBytes: 1024,
         signal,
+        platform: "linux",
       });
     const eperm: KillCall[] = [];
     if (isWindows) {
@@ -417,15 +456,51 @@ describe("crlf-guard", () => {
     assert.equal(esrch.length, isWindows ? 0 : 1);
   });
 
+  it("RED then GREEN: on Darwin a call that succeeds is not refused for an injected post-reap EPERM from its group", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    // The group is signalled once the child has closed, so its leader has
+    // been reaped; on Darwin an EPERM there is read as only zombies being
+    // left. The EPERM is injected; no real all-zombie group is built. On
+    // POSIX this case runs the real close path under Darwin's rule. On
+    // Windows no group signal is sent, so it shows only that the fake is
+    // never called; the rule itself is measured there by the signalGroup
+    // case above.
+    for (const code of ["EPERM", "ESRCH"]) {
+      const calls: KillCall[] = [];
+      const done = await runBounded({
+        label: "child whose group holds only zombies",
+        command: process.execPath,
+        args: ["-e", `process.stdout.write("done")`],
+        cwd: root,
+        timeoutMs: 10_000,
+        maxOutputBytes: 1024,
+        signal: failingKill(code, calls),
+        platform: "darwin",
+      });
+      assert.equal(done.stdout.toString("utf8"), "done", code);
+      if (isWindows) {
+        assert.deepEqual(calls, [], code);
+      } else {
+        assert.equal(calls.length, 1, code);
+        assert.ok(calls[0]![0] < 0, `${code}: the signal went to pid ${calls[0]![0]}, not a group`);
+        assert.equal(calls[0]![1], "SIGKILL", code);
+      }
+    }
+  });
+
   it("RED then GREEN: a call refused at its bound keeps that refusal and adds the code of a group signal that failed", { timeout: HELPER_WATCHDOG_MS }, async () => {
     // With the fake in place nothing signals the child on POSIX; the call
     // still settles at the end of the grace period and the case ends the
     // child itself. On Windows taskkill ends the child and the fake is never
-    // called, so the refusal there is the plain timeout.
+    // called, so the refusal there is the plain timeout. Darwin is measured
+    // as well: the child is alive at both signals, so its leader has not
+    // been reaped and an EPERM still refuses the call.
     const label = "child at its bound";
     const timeoutMs = 1000;
     const pids: number[] = [];
-    const run = async (signal: (pid: number, signal: NodeJS.Signals) => void): Promise<BoundedRunError> => {
+    const run = async (
+      signal: (pid: number, signal: NodeJS.Signals) => void,
+      platform: NodeJS.Platform,
+    ): Promise<BoundedRunError> => {
       const err = await refusal(
         runBounded({
           label,
@@ -435,6 +510,7 @@ describe("crlf-guard", () => {
           timeoutMs,
           maxOutputBytes: 1024,
           signal,
+          platform,
         }),
       );
       assert.ok(err.pid !== undefined, "the refusal does not name the child");
@@ -444,21 +520,101 @@ describe("crlf-guard", () => {
     };
     try {
       const timedOut = `${label} timed out after ${timeoutMs} ms`;
-      const eperm: KillCall[] = [];
-      const refused = await run(failingKill("EPERM", eperm));
-      if (isWindows) {
-        assert.equal(refused.message, timedOut);
-        assert.deepEqual(eperm, []);
-      } else {
-        assert.equal(refused.message, `${timedOut}; ${label} could not signal its process group ${refused.pid}: EPERM`);
-        assert.deepEqual(eperm, [
-          [-refused.pid!, "SIGTERM"],
-          [-refused.pid!, "SIGKILL"],
-        ]);
+      for (const platform of ["linux", "darwin"] as const) {
+        const eperm: KillCall[] = [];
+        const refused = await run(failingKill("EPERM", eperm), platform);
+        if (isWindows) {
+          assert.equal(refused.message, timedOut, platform);
+          assert.deepEqual(eperm, [], platform);
+        } else {
+          assert.equal(refused.message, `${timedOut}; ${label} could not signal its process group ${refused.pid}: EPERM`, platform);
+          assert.deepEqual(
+            eperm,
+            [
+              [-refused.pid!, "SIGTERM"],
+              [-refused.pid!, "SIGKILL"],
+            ],
+            platform,
+          );
+        }
+        const esrch: KillCall[] = [];
+        assert.equal((await run(failingKill("ESRCH", esrch), platform)).message, timedOut, platform);
+        assert.equal(esrch.length, isWindows ? 0 : 2, platform);
       }
-      const esrch: KillCall[] = [];
-      assert.equal((await run(failingKill("ESRCH", esrch))).message, timedOut);
-      assert.equal(esrch.length, isWindows ? 0 : 2);
+    } finally {
+      for (const pid of pids) endQuietly(pid);
+    }
+    for (const pid of pids) await assertEnded(pid, "child");
+  });
+
+  it("RED then GREEN: on Darwin an injected post-reap EPERM from the group leaves a refusal's message as it was; on Linux it is still named", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    // The fake sends the SIGTERM for real, so the child dies of it and is
+    // reaped, and fails the SIGKILL that follows the close. That injected
+    // EPERM stands in for the all-zombie group a timing or output case
+    // comparing the whole message could meet on macOS, and on Darwin it
+    // must add nothing. On Windows
+    // taskkill ends the child, the fake is never called and every message
+    // is the plain one; the rule is measured there by the signalGroup case.
+    const chatty = `const b = Buffer.alloc(64 * 1024, 120); setInterval(() => process.stdout.write(b), 10); ${SELF_EXIT}`;
+    const refusals = [
+      {
+        kind: "timeout",
+        label: "child reaped at its bound",
+        args: ["-e", `setInterval(() => {}, 1000); ${SELF_EXIT}`],
+        timeoutMs: 1000,
+        maxOutputBytes: 1024,
+        message: "child reaped at its bound timed out after 1000 ms",
+      },
+      {
+        kind: "output",
+        label: "chatty child reaped",
+        args: ["-e", chatty],
+        timeoutMs: 10_000,
+        maxOutputBytes: 100_000,
+        message: "chatty child reaped exceeded 100000 bytes of output",
+      },
+    ] as const;
+    const pids: number[] = [];
+    try {
+      for (const r of refusals) {
+        for (const platform of ["darwin", "linux"] as const) {
+          for (const code of ["EPERM", "ESRCH"]) {
+            const where = `${r.kind}, ${platform}, ${code}`;
+            const calls: KillCall[] = [];
+            const err = await refusal(
+              runBounded({
+                label: r.label,
+                command: process.execPath,
+                args: [...r.args],
+                cwd: root,
+                timeoutMs: r.timeoutMs,
+                maxOutputBytes: r.maxOutputBytes,
+                signal: failingAfterTerm(code, calls),
+                platform,
+              }),
+            );
+            assert.ok(err.pid !== undefined, `${where}: the refusal does not name the child`);
+            pids.push(err.pid);
+            assert.equal(err.kind, r.kind, where);
+            const named = !isWindows && platform === "linux" && code === "EPERM";
+            assert.equal(
+              err.message,
+              named ? `${r.message}; ${r.label} could not signal its process group ${err.pid}: EPERM` : r.message,
+              where,
+            );
+            assert.deepEqual(
+              calls,
+              isWindows
+                ? []
+                : [
+                    [-err.pid, "SIGTERM"],
+                    [-err.pid, "SIGKILL"],
+                  ],
+              where,
+            );
+          }
+        }
+      }
     } finally {
       for (const pid of pids) endQuietly(pid);
     }
