@@ -1,0 +1,1232 @@
+
+
+
+
+Network Working Group                                        E. C. Dogru
+Internet-Draft                           VERAX TEKNOLOJI LIMITED SIRKETI
+Intended status: Informational                          25 November 2026
+Expires: 29 May 2027
+
+
+         Cedulon Checkpoints: Epoch Witnesses and Transparency
+                   draft-dogru-cedulon-checkpoint-01
+
+Abstract
+
+   This document specifies epoch checkpoints, the transparency witness
+   and the anchoring of checkpoints as SCITT Signed Statements for the
+   Cedulon audit layer.  The spend receipt, rail-extract reconciliation
+   and trust-root rules live in the companion Cedulon Core document.  A
+   verifier that pins a witness key and holds a usable issuer root can
+   detect a withheld or rolled-back checkpoint from a body that answers
+   to that root (MUST-T11-16); without those pins the suppression
+   guarantee is conditional.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 29 May 2027.
+
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+
+
+
+
+
+
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 1]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.  Code Components
+   extracted from this document must include Revised BSD License text as
+   described in Section 4.e of the Trust Legal Provisions and are
+   provided without warranty as described in the Revised BSD License.
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2
+   2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   2
+     2.1.  The witness root  . . . . . . . . . . . . . . . . . . . .   3
+     2.2.  Checkpoint claims . . . . . . . . . . . . . . . . . . . .   3
+     2.3.  Genesis and continuity  . . . . . . . . . . . . . . . . .   4
+     2.4.  The transparency witness  . . . . . . . . . . . . . . . .   5
+     2.5.  Verification algorithm  . . . . . . . . . . . . . . . . .   8
+     2.6.  Finding codes . . . . . . . . . . . . . . . . . . . . . .  11
+   3.  SCITT Anchoring . . . . . . . . . . . . . . . . . . . . . . .  14
+     3.1.  T11: Checkpoint suppression or rollback . . . . . . . . .  14
+   4.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  19
+     4.1.  application/cedulon-checkpoint+cbor . . . . . . . . . . .  19
+     4.2.  application/cedulon-inclusion+cbor  . . . . . . . . . . .  20
+   5.  References  . . . . . . . . . . . . . . . . . . . . . . . . .  21
+     5.1.  Normative References  . . . . . . . . . . . . . . . . . .  21
+     5.2.  Informative References  . . . . . . . . . . . . . . . . .  22
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  22
+
+1.  Introduction
+
+   The core document [CEDULON-CORE] defines the spend receipt and the
+   reconciliation of those receipts against an authenticated rail
+   extract.  That result says nothing about whether the issuer published
+   a complete checkpoint chain for the same window.  This document
+   states that chain, the witness that makes suppression visible, and
+   the two media types those objects carry.
+
+2.  Terminology
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+
+
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 2]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+2.1.  The witness root
+
+   Section 2.4 describes what a transparency witness adds.  An inclusion
+   receipt checked against the key it carries says that some log is
+   internally consistent, and a log is cheap to invent.
+
+   A verifier MUST obtain the transparency service's public key out of
+   band and MUST verify inclusion receipts against it (MUST-T11-15).
+   Inclusion receipts that cannot be checked that way MUST NOT be used
+   as evidence, in either direction: they cannot establish that a
+   checkpoint was anchored, and they cannot establish that one was
+   withheld.  A verifier SHOULD report that it left them out.
+
+   A log holds statements from everyone who uses it.  A statement held
+   by a pinned log MUST additionally answer to the issuer root before it
+   counts as something that issuer published (MUST-T11-16); otherwise
+   another user's epoch, sitting in a shared log, reads as this issuer
+   publishing two checkpoints for one epoch.  Without a usable issuer
+   pin there is no issuer root to answer to: a witness body MUST NOT
+   produce a withholding or equivocation verdict.  A body that binds a
+   statement this chain does not present is reported as witness-entry-
+   unattributable and makes the guarantee conditional; a body that binds
+   a presented checkpoint is not an accusation and raises no separate
+   finding.
+
+   Anchoring and withholding are different claims and need different
+   evidence.  Establishing that a checkpoint was logged needs only the
+   statement hash.  Establishing that an issuer withheld one needs to
+   know whose statement it is, which an inclusion receipt carrying no
+   statement body cannot say.  Such a receipt MUST NOT be used to report
+   a withheld checkpoint, and MUST NOT be silently discarded either: a
+   real withholding must not be buried by removing the body (MUST-
+   T11-17).
+
+2.2.  Checkpoint claims
+
+   An epoch checkpoint MUST be COSE_Sign1-signed with the header profile
+   in [CEDULON-CORE] (COSE Profile) and MUST bind all of the following
+   (MUST-T11-1):
+
+   epoch, startMs, endMs, receiptCount, chainHeadHash, totals, and
+   prevCheckpointHash.
+
+   The checkpoint window is half-open [startMs, endMs) (MUST-T11-7).
+   receiptCount MUST equal the number of receipts (settled and aborted)
+   whose timestampMs falls in that window. chainHeadHash MUST equal
+   receiptHash of the last receipt in that window - the last link, in
+   issuer order (the prevReceiptHash chain, as step 6 of [CEDULON-CORE]
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 3]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   defines it), of the chain inside the window, not the last one
+   presented or the latest timestampMs - or null if the window is empty
+   (MUST-T11-2).  Where totals is present it MUST sum only receipts with
+   outcome = settled; the one permitted absence is the signed redaction
+   below.
+
+   An issuer that publishes a checkpoint without its totals MUST encode
+   totals as null in the signed payload (MUST-T11-12).  An empty map is
+   an honest zero for an empty window and is not a redaction.  Because
+   the redaction is inside the signature, it cannot be added to, or
+   removed from, a checkpoint after signing.
+
+   A verifier MUST NOT accept a redaction asserted anywhere but the
+   signed payload (MUST-T11-13).  A presentation-layer flag alongside a
+   checkpoint is chosen by whoever presents it, which is the party under
+   audit; honouring such a flag would let that party switch off the
+   totals comparison for a checkpoint whose signed totals are wrong.
+   The structural claims (epoch, startMs, endMs, receiptCount,
+   chainHeadHash, prevCheckpointHash) MUST NOT be redacted: a checkpoint
+   missing any of them does not decode, and a verifier MUST treat it as
+   a failed checkpoint rather than as a redacted one.
+
+2.3.  Genesis and continuity
+
+   Without an anchor, the checkpoint with the lowest epoch in the
+   working set of [CEDULON-CORE] (Verification algorithm), which under a
+   usable pinned issuer key is the attested set, is the genesis
+   checkpoint of the chain and its prevCheckpointHash MUST be null, and
+   a presented checkpoint outside the working set does not change which
+   checkpoint that is, whatever its epoch.  The attested set is the
+   presented checkpoints that verify under a usable pinned issuer key,
+   as [CEDULON-CORE] (The issuer root) defines that set.  A window under
+   audit usually does not begin a stream, so an audit MAY instead
+   present an anchor, as the audit procedure of [CEDULON-CORE]
+   describes: the issuer-signed checkpoint immediately preceding the
+   checkpoint with the lowest epoch in the working set.  An anchor is
+   used only under a usable pinned issuer key, so that working set is
+   the attested set.  A presented checkpoint outside the working set is
+   not the checkpoint the anchor precedes, whatever its epoch: it cannot
+   make an anchor adjacent, and it cannot make a valid anchor non-
+   adjacent.  The anchor is resolved against the issuer root like any
+   checkpoint, and it is valid only when, in addition, its epoch is one
+   less than that checkpoint's, its endMs equals that checkpoint's
+   startMs, and that checkpoint's prevCheckpointHash equals the SHA-256
+   of the anchor's COSE bytes.  With a valid anchor the checkpoint with
+   the lowest epoch in the working set is not a genesis checkpoint: its
+   prevCheckpointHash is checked against the anchor rather than against
+   null.  An anchor that is not valid anchors nothing.  One that answers
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 4]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   to the issuer root and still does not meet the checkpoint with the
+   lowest epoch in the working set is reported as window-coverage,
+   identified by anchor (MUST-T11-20); what is reported for an anchor
+   that does not answer to the issuer root is stated in [CEDULON-CORE].
+   The anchor's own window is not audited; what happened before it is
+   the business of the audit of that earlier window.
+
+   Epoch numbers of the working set of [CEDULON-CORE] MUST be
+   consecutive integers.  Adjacent windows of that set MUST satisfy
+   next.startMs = prev.endMs (MUST-T11-8).
+
+   A later checkpoint that omits a prefix of earlier epochs (prefix
+   deletion) is detectable only if an external witness (transparency
+   log) has recorded the missing prefix (MUST-T11-9).  Without that
+   witness, T11 guarantees about suppression are *conditional*.
+
+   A verifier that holds witness receipts for the period under audit
+   compares what the witness recorded against what the chain presented,
+   and reports the difference under its own name (Section 2.4).  A
+   witness that holds a checkpoint the presented chain omits is not the
+   same condition as a chain that leaves a gap in its own coverage, and
+   the two MUST NOT be reported under one identifier (MUST-T11-11).  The
+   first says evidence is being withheld; the second says the evidence
+   shown is incomplete.  An operator who cannot tell them apart cannot
+   tell an incomplete record from a concealed one.
+
+2.4.  The transparency witness
+
+   A checkpoint registered with a Transparency Service [RFC9943] is a
+   Signed Statement whose payload is the checkpoint COSE object and
+   whose content type is application/cedulon-checkpoint+cbor
+   (Section 3).  What comes back, and what it proves, is stated as two
+   named tiers.
+
+   *Tier 1 - the witness receipt.* The witness returns a co-signature
+   over the statement hash of what it recorded: a COSE_Sign1 whose
+   payload binds the statement hash, the entry index, the witness's tree
+   head, the tree size, and the algorithm name.  Verifying it
+   establishes that the witness signed those fields, and nothing more;
+   in particular it does not establish membership in an append-only log.
+   The receipt is a signature over a statement rather than a proof of
+   log membership.  The [RFC9942] citation applies in tier 2, where its
+   mechanics are actually performed.
+
+   On the wire the witness receipt is a COSE_Sign1 under [CEDULON-CORE]
+   (COSE Profile), signed by the witness key, with content type
+   application/cedulon-inclusion+cbor (Section 4.2).  Its payload is a
+   deterministic CBOR map carrying five entries and is not a CWT claim
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 5]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   set: label 1 is the statement hash, label 2 the entry index, label 3
+   the tree head, label 4 the tree size (the number of leaves at
+   issuance, an unsigned integer), label 5 the algorithm name (text,
+   rfc9162-sha256).  The two hashes are text strings holding the
+   lowercase hexadecimal of a 32-octet SHA-256, the statement hash taken
+   over the octets of the statement the witness recorded; the entry
+   index is an unsigned integer.  The hash strings are compared as
+   issued and are not passed through the hash-claim grammar the claim
+   sets use; the revision that moves them to byte strings will close
+   that difference.  A payload with another entry count, or with an
+   unknown label among those entries, does not verify.  The map carries
+   no statement body: a receipt that travels with the body carries it
+   beside the COSE object, not inside it (Section 2.1, MUST-T11-17).  A
+   receipt whose content type is another value, or whose payload lacks
+   one of the five entries or carries one of another type, does not
+   verify: the content type is the check [CEDULON-CORE] (COSE Profile)
+   makes on every object of this profile, and the payload map is the one
+   this paragraph states.
+
+   When the witness issues under [RFC9162], the receipt also carries
+   leafHash (HASH(0x00 || statement octets) per [RFC9162] Section 2.1.1)
+   beside the COSE object; that field is not an entry of the signed
+   payload map above.  Unsigned copies of alg and treeSize beside the
+   COSE must equal the signed labels 5 and 4.  Verification is against
+   the signed tree head at the signed tree size.  The -00 revision of
+   this document described a different tree and a three-entry signed
+   payload: leaves and interior nodes carried no prefix, and a level
+   with an odd count paired its last node with itself.  This revision
+   does not define verification of those -00 receipts.  A receipt that
+   names an unknown alg does not verify.
+
+   A verifier MAY be given witness receipts for the period under audit.
+   It is a distinct input from the presented checkpoint chain, and
+   supplying it is optional: a verifier given none performs the same
+   steps, and reports the same findings, that it would if this input did
+   not exist (MUST-T11-10).  Supplying an empty set is not the same as
+   supplying none.  An empty set says a witness is configured and
+   recorded nothing, which is itself reportable; absence says no witness
+   was consulted.
+
+   A receipt binds a statement hash, not a statement.  The body is not
+   carried by the receipt and a verifier will often not hold it.  Two
+   levels of checking follow from that, and they are not the same (MUST-
+   T11-10).
+
+
+
+
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 6]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   Every receipt MUST have its signature verified before it counts for
+   anything.  That is what establishes the hash as one the service
+   signed for, and it is all that comparing recorded hashes against
+   presented ones requires: the verifier computes the statement hash of
+   each presented checkpoint itself.
+
+   A receipt accompanied by the statement body carries more, and MUST be
+   checked further before that body is relied on.  The body's statement
+   hash MUST equal the hash the receipt binds, and the body MUST itself
+   verify as a checkpoint.  A body that fails either check proves
+   nothing and MUST be ignored rather than counted, while the receipt it
+   came with remains usable for the hash comparison.  Equivocation is
+   the case that needs a body, because it compares claims rather than
+   hashes.
+
+   *Tier 2 - log membership.* A verifier MAY additionally be given, for
+   one recorded statement, the registered Signed Statement bytes (the
+   candidate entry) and an inclusion proof.  When both are present, the
+   verifier MUST verify log membership under the Merkle Tree Hash and
+   inclusion-proof verification of [RFC9162] Sections 2.1.1 and 2.1.3,
+   as consumed by the receipt verification of [RFC9942] Section 5.2.1:
+   the leaf of the walk is HASH(0x00 || candidate), each interior node
+   is HASH(0x01 || left || right), and the proof carries the tree size
+   at issuance.  Accept only when the candidate's statement hash
+   (SHA-256 of the candidate octets), the proof's leaf index, and the
+   reproduced root are all equal to the statement hash, entry index, and
+   tree head of one witness receipt that verifies under the pinned
+   witness key (MUST-T11-18).  The RFC 9162 leaf hash is distinct from
+   the statement hash; matching the signed statement hash is a separate
+   check from reproducing the root from the 0x00-prefixed leaf.
+   Reproducing a root is deliberately not sufficient on its own: the
+   exact match against a witness-signed receipt is required.  A pair
+   that fails this check, or a candidate entry presented without a
+   proof, MUST be reported as a failing finding; the identifier witness-
+   inclusion-invalid names it.
+
+   The inclusion proof is an audit path: the leaf index, the tree size,
+   and the sibling hashes from the leaf up to the root, as [RFC9162]
+   Section 2.1.3 defines.  The tree separates leaves from interior nodes
+   by the 0x00 and 0x01 prefixes of Section 2.1.1, so a single leftover
+   leaf is not paired with itself.
+
+   Where witness receipts are supplied and this pair is not, tier 2 was
+   not exercised, and the report MUST say so rather than letting the
+   tier pass silently (MUST-T11-19); the identifier witness-inclusion-
+   not-exercised names it, as a warning - the witness attested the
+   statement hash, and log membership was not proven.  A pair that
+   verifies is silent, like every other passing check in the algorithm.
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 7]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   What tier 1 establishes, and what it does not, is worth stating
+   plainly.  It establishes that the service signed for that statement.
+   Whether the statement is a member of an append-only log is tier 2's
+   question, answered only where tier 2's inputs were supplied and
+   verified; whether the log has ever equivocated remains a property of
+   the service and its own proofs.  A verifier that treats a tier-1
+   receipt alone as proof of log membership is claiming more than the
+   receipt carries.
+
+2.5.  Verification algorithm
+
+   A verifier MUST perform all of these steps and MUST report every
+   finding they produce (MUST-T11-2).  They are numbered for reference,
+   not to require an evaluation order: no step short-circuits another,
+   and an implementation may evaluate them in any order that produces
+   the same set of findings.
+
+   The data dependencies are named, because "any order" read naively
+   would break them.  Step 5 decides which witness receipts, and which
+   statement bodies, survive checking; steps 4 and 6 consume what
+   survives.  Step 1 decides which checkpoints verified, and step 4
+   compares only those together with what step 5 admitted.  An
+   implementation that ran a consumer against an unchecked producer
+   would not produce the same set of findings, so those orders are not
+   among the permitted ones.
+
+   These steps consume products of [CEDULON-CORE] (Verification
+   algorithm and Terminology): the coverage set and the diagnostic set
+   that the issuer-pin step decides, and the ref index that step 7 of
+   [CEDULON-CORE] builds.  Totals, count, and head checks compare a
+   checkpoint only against receipts of the same set; continuity checks
+   (genesis, epoch, window) consume the diagnostic set; settlement
+   coverage consumes the coverage set.  The chain walk that defines
+   issuer order is step 6 of [CEDULON-CORE].  A fail-severity finding
+   these steps produce is a finding step 11 of [CEDULON-CORE] treats as
+   failing the audit (MUST-T10-4).
+
+   When a step names an identifier in backticks, that identifier SHOULD
+   be used for the condition in diagnostic output.  The normative
+   requirement is the behaviour: report the condition, identified by the
+   ref or other handle given in the step.  The identifiers are not an
+   interoperability surface.
+
+   1.  Decode each checkpoint.  Reject a failed signature, and reject a
+       kid that does not match the key obtained for the checkpoint
+       issuer, on the same terms as a receipt (MUST-T4-8).  Require
+       receiptCount, chainHeadHash, and totals to match the receipts of
+       the same set (coverage or diagnostic) in [startMs, endMs) as
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 8]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+       defined above (MUST-T11-2); a receipt step 4 of [CEDULON-CORE]
+       rejected is not among them, or a forged receipt could satisfy a
+       checkpoint count.  An empty coverage set MUST NOT make those
+       checks report a mismatch against diagnostic checkpoints.  The
+       identifier checkpoint-total-mismatch SHOULD be used for a failed
+       signature, a wrong receiptCount, or totals that disagree, and
+       checkpoint-head-mismatch for a chainHeadHash that is not the last
+       link, in issuer order (step 6 of [CEDULON-CORE]), of the chain
+       inside [startMs, endMs) - "last receipt" binds to the chain, not
+       to presentation or to timestampMs.  If the signed totals is null,
+       the verifier cannot perform the totals comparison for that
+       checkpoint.  It MUST report that the comparison was skipped and
+       MUST treat the completeness guarantee as conditional; the absence
+       of a comparison is not a passed comparison (MUST-T11-12).  The
+       identifier checkpoint-totals-redacted SHOULD be used for this
+       condition. receiptCount and chainHeadHash MUST still be checked.
+       A checkpoint that fails verification MUST NOT be treated as
+       redacted, whatever it claims about its own totals.
+
+   2.  Every chained receipt MUST fall in exactly one checkpoint window.
+       A gap or double count MUST be reported as a window coverage
+       failure (MUST-T11-7, MUST-T11-8).  The identifier window-coverage
+       SHOULD be used for this condition.  The check runs against the
+       windows of the working set of [CEDULON-CORE] (the diagnostic set
+       of its Terminology) and it is fail-closed: a receipt that falls
+       under none of them is this failure - including every receipt when
+       no checkpoint of the working set was presented, and receipts
+       after the last closed checkpoint's endMs.  The text names that
+       last state an *open epoch*, and it is auditable only when the
+       checkpoint that closes it is issued; the name explains why the
+       finding fired, it does not soften it.  Nothing about an absent
+       checkpoint is silent: uncovered evidence surfaces as a finding
+       rather than as a gap in the report.
+
+   3.  Walk the checkpoints of the working set in epoch order.
+       prevCheckpointHash MUST equal the SHA-256 of the previous
+       checkpoint COSE bytes.  For the checkpoint with the lowest epoch
+       in the working set of [CEDULON-CORE] it MUST equal the anchor's
+       checkpoint hash where a valid anchor is presented; a presented
+       checkpoint outside that set does not change which checkpoint that
+       is.  Without a valid anchor the checkpoint with the lowest epoch
+       in the working set is a genesis checkpoint and its
+       prevCheckpointHash MUST be null (Section 2.3, MUST-T11-4, MUST-
+       T11-20).  The identifier checkpoint-total-mismatch SHOULD be used
+       for a broken chain, which is the fourth condition its table row
+       names.
+
+
+
+
+
+Dogru                      Expires 29 May 2027                  [Page 9]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   4.  If two successfully verified checkpoints share an epoch number
+       and have different hashes, the verifier MUST report equivocation
+       (MUST-T11-3).  The identifier equivocation SHOULD be used for
+       this condition.  The checkpoints compared here are those of the
+       working set of [CEDULON-CORE] *together with* any whose statement
+       body verifies under a usable issuer root (MUST-T11-16) on a
+       verified witness receipt (step 5).  A working set that satisfies
+       MUST-T11-8 (step 2) cannot raise this finding on its own, because
+       its epochs are consecutive and no two of its members share an
+       epoch.  A copy recorded by a witness is where the second one is
+       found.
+
+   5.  If witness receipts were supplied, verify them against the out-
+       of-band witness key (Section 2.1); receipts that cannot be
+       checked that way are not evidence in either direction and the
+       verifier reports that it left them out (MUST-T11-15); the
+       identifier unauthenticated-witness SHOULD be used for this
+       condition.  Discard any whose signature fails (MUST-T11-10).  A
+       surviving receipt whose statement body verifies against the
+       issuer root is a statement that issuer published; one that does
+       not is another party's, and is not this issuer equivocating
+       (MUST-T11-16).  Where no usable issuer pin was supplied, no body
+       answers to an issuer root: such a body MUST NOT enter the
+       equivocation pool or produce a withheld-checkpoint finding.  A
+       body that binds a statement this chain does not present is
+       reported as witness-entry-unattributable instead; a body that
+       binds a presented checkpoint raises no separate finding.  The
+       survivors are the recorded statement hashes used in step 6.
+       Where a receipt also carries the statement body, discard that
+       body unless its statement hash equals the one the receipt binds
+       and it verifies as a checkpoint; the surviving bodies are what
+       step 4 compares.  Discarding a body does not discard its receipt.
+       This is tier 1 of Section 2.4.  Where the tier-2 pair - the
+       registered Signed Statement bytes and an inclusion proof - was
+       also supplied, verify it as Section 2.4 states: apply the proof
+       to the candidate entry's hash and accept only on an exact match
+       with a witness-signed receipt (MUST-T11-18); a pair that fails,
+       or a candidate without a proof, is witness-inclusion-invalid and
+       the audit MUST fail.  Where witness receipts were supplied and no
+       tier-2 pair was, report witness-inclusion-not-exercised as a
+       warning (MUST-T11-19): the witness attested the statement hash,
+       and log membership was not proven.
+
+   6.  Compare the surviving witness records against the presented chain
+       (MUST-T11-11).  For each presented checkpoint with no surviving
+       record, report that it is not anchored; the identifier
+       checkpoint-not-anchored SHOULD be used.  This is a warning: a
+       witness may have been configured after the checkpoint was issued,
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 10]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+       and an operator's own gap is not evidence of concealment.  For
+       each surviving record whose statement body verifies under a
+       usable issuer root (MUST-T11-16) and whose statement is absent
+       from the presented chain, report that a recorded checkpoint was
+       withheld; the identifier checkpoint-withheld SHOULD be used.
+       This is a finding and the audit MUST fail.  A record that carries
+       no statement body cannot say whose statement it binds, so it MUST
+       NOT produce this finding; it is reported as an entry that could
+       not be attributed and makes the guarantee conditional, because a
+       real withholding must not be buried by removing the body (MUST-
+       T11-17).  Such a record still establishes anchoring in the first
+       half of this step: proving that a checkpoint was logged needs
+       only its hash.  The verifier MUST NOT report a withheld
+       checkpoint as a window coverage failure (MUST-T11-11).
+
+2.6.  Finding codes
+
+   The identifiers below are for diagnostic output.  They are not an
+   interoperability surface.  The codes the core algorithm can produce
+   are listed in [CEDULON-CORE] (Finding codes).  A condition that makes
+   the audit fail is a finding.  A condition that only makes the
+   completeness guarantee conditional is a warning.  Warnings MUST still
+   appear in operator-facing output (MUST-T10-14).
+
+   +===============================+===========+=======================+
+   |Code                           |Effect     |Meaning                |
+   +===============================+===========+=======================+
+   |checkpoint-total-mismatch      |audit fails|Totals, count,         |
+   |                               |           |signature, or          |
+   |                               |           |checkpoint chain       |
+   |                               |           |failed.  The signature |
+   |                               |           |branch is reached where|
+   |                               |           |no issuer pin has      |
+   |                               |           |already excluded the   |
+   |                               |           |checkpoint: under a pin|
+   |                               |           |a checkpoint that does |
+   |                               |           |not verify is issuer-  |
+   |                               |           |key-mismatch and never |
+   |                               |           |reaches the totals     |
+   |                               |           |comparison             |
+   +-------------------------------+-----------+-----------------------+
+   |checkpoint-head-mismatch       |audit fails|chainHeadHash is not   |
+   |                               |           |the last link, in      |
+   |                               |           |issuer order, of the   |
+   |                               |           |chain inside the       |
+   |                               |           |window, or the expected|
+   |                               |           |head could not be      |
+   |                               |           |computed at all because|
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 11]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   |                               |           |the last receipt on the|
+   |                               |           |chain refused canonical|
+   |                               |           |encoding; the refusal  |
+   |                               |           |is named and is not a  |
+   |                               |           |signature verdict      |
+   +-------------------------------+-----------+-----------------------+
+   |equivocation                   |audit fails|Two distinct hashes for|
+   |                               |           |one epoch              |
+   +-------------------------------+-----------+-----------------------+
+   |window-coverage                |audit fails|Gap, overlap, or non-  |
+   |                               |           |adjacent / non-        |
+   |                               |           |consecutive windows;   |
+   |                               |           |also an anchor that    |
+   |                               |           |does not meet the      |
+   |                               |           |checkpoint with the    |
+   |                               |           |lowest epoch in the    |
+   |                               |           |working set, identified|
+   |                               |           |by anchor (Section 2.3)|
+   +-------------------------------+-----------+-----------------------+
+   |unauthenticated-witness        |conditional|No verifier-supplied   |
+   |                               |           |witness key; inclusion |
+   |                               |           |receipts were left out |
+   |                               |           |of the comparison      |
+   +-------------------------------+-----------+-----------------------+
+   |witness-entry-unattributable   |conditional|The witness holds a    |
+   |                               |           |statement this chain   |
+   |                               |           |does not present and   |
+   |                               |           |that cannot be         |
+   |                               |           |attributed to it: it   |
+   |                               |           |carries no body, a body|
+   |                               |           |that is not the        |
+   |                               |           |statement the receipt  |
+   |                               |           |signed, a body that    |
+   |                               |           |does not verify, a body|
+   |                               |           |whose issuer cannot be |
+   |                               |           |tied to a usable issuer|
+   |                               |           |root, or, when no      |
+   |                               |           |usable issuer pin was  |
+   |                               |           |supplied, a body       |
+   |                               |           |binding a statement    |
+   |                               |           |this chain does not    |
+   |                               |           |present                |
+   +-------------------------------+-----------+-----------------------+
+   |checkpoint-withheld            |audit fails|A witness receipt whose|
+   |                               |           |body verifies under a  |
+   |                               |           |usable issuer root     |
+   |                               |           |(MUST-T11-16) binds a  |
+   |                               |           |checkpoint the         |
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 12]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   |                               |           |presented chain does   |
+   |                               |           |not contain            |
+   +-------------------------------+-----------+-----------------------+
+   |checkpoint-not-anchored        |guarantee  |A witness was supplied |
+   |                               |conditional|and holds no verified  |
+   |                               |           |receipt for this       |
+   |                               |           |checkpoint             |
+   +-------------------------------+-----------+-----------------------+
+   |checkpoint-totals-redacted     |guarantee  |The checkpoint was     |
+   |                               |conditional|signed with totals     |
+   |                               |           |null, so the totals    |
+   |                               |           |comparison could not be|
+   |                               |           |made                   |
+   +-------------------------------+-----------+-----------------------+
+   |witness-inclusion-invalid      |audit fails|The tier-2 candidate   |
+   |                               |           |bytes and inclusion    |
+   |                               |           |proof do not reproduce |
+   |                               |           |a witness-signed tree  |
+   |                               |           |head, or a candidate   |
+   |                               |           |was supplied without a |
+   |                               |           |proof (MUST-T11-18)    |
+   +-------------------------------+-----------+-----------------------+
+   |witness-inclusion-not-exercised|conditional|Witness receipts were  |
+   |                               |           |supplied and no tier-2 |
+   |                               |           |pair was, so log       |
+   |                               |           |membership was not     |
+   |                               |           |proven (MUST-T11-19).  |
+   |                               |           |The code says nothing  |
+   |                               |           |about whether any of   |
+   |                               |           |those receipts         |
+   |                               |           |verified: it is        |
+   |                               |           |reported on            |
+   |                               |           |presentation, and an   |
+   |                               |           |unpinned or            |
+   |                               |           |unverifiable inclusion |
+   |                               |           |receipt reaches it     |
+   |                               |           |alongside              |
+   |                               |           |unauthenticated-witness|
+   +-------------------------------+-----------+-----------------------+
+
+                                  Table 1
+
+
+
+
+
+
+
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 13]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+3.  SCITT Anchoring
+
+   A Receipt Issuer or relying party MAY construct a SCITT Signed
+   Statement whose payload is either the Spend Receipt COSE object or a
+   privacy profile ([CEDULON-CORE] (Privacy Considerations)) and
+   register it with a Transparency Service [RFC9943].  The service
+   returns a COSE receipt [RFC9942].  Embedding that receipt yields a
+   Transparent Statement.  Cedulon does not define a new transparency
+   algorithm.
+
+   An epoch checkpoint MUST be registrable on the same terms (MUST-
+   T11-14), as SHOULD-T11-5 asks.  Its Signed Statement carries the
+   checkpoint COSE_Sign1 object as the payload and application/cedulon-
+   checkpoint+cbor as the content type, which is among the media types
+   Section 4 asks to have registered and which, until then, is a
+   placeholder like the rest.  Nothing else about registration differs
+   from a receipt.
+
+3.1.  T11: Checkpoint suppression or rollback
+
+   MUST-T11-1 (the checkpoint label set) and MUST-T11-12 (totals
+   conditionality) are defined in the core document [CEDULON-CORE].  The
+   remaining T11 identities are defined here.
+
+   +==============+=================================+==+==============+
+   | ID           | Requirement                     |  |              |
+   +==============+=================================+==+==============+
+   | MUST-T11-2   | Verifiers MUST reject a         |  |              |
+   |              | checkpoint whose signature      |  |              |
+   |              | fails, whose totals do not      |  |              |
+   |              | match settled receipts in the   |  |              |
+   |              | declared window, whose          |  |              |
+   |              | receiptCount is wrong, or whose |  |              |
+   |              | chainHeadHash is not the hash   |  |              |
+   |              | of the last in-window receipt   |  |              |
+   |              | in issuer order (the            |  |              |
+   |              | prevReceiptHash chain).  Where  |  |              |
+   |              | the signed totals are null,     |  |              |
+   |              | MUST-T11-12 governs instead:    |  |              |
+   |              | there is no total to disagree   |  |              |
+   |              | with, the comparison is         |  |              |
+   |              | reported as skipped, and the    |  |              |
+   |              | count and chain-head checks     |  |              |
+   |              | still apply.                    |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-3   | Two verified checkpoints for    |  |              |
+   |              | the same epoch with different   |  |              |
+   |              | hashes MUST be reported as      |  |              |
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 14]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   |              | equivocation.  The checkpoints  |  |              |
+   |              | compared are those of the       |  |              |
+   |              | working set of [CEDULON-CORE]   |  |              |
+   |              | together with those whose       |  |              |
+   |              | statement body verifies under a |  |              |
+   |              | usable issuer root (MUST-       |  |              |
+   |              | T11-16) on a verified witness   |  |              |
+   |              | receipt; a working set that     |  |              |
+   |              | satisfies MUST-T11-8 cannot     |  |              |
+   |              | raise it on its own, because    |  |              |
+   |              | its epochs are consecutive.     |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-4   | A broken checkpoint hash chain  |  |              |
+   |              | MUST fail verification.         |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | SHOULD-T11-5 | Checkpoints SHOULD be           |  |              |
+   |              | registered with a Transparency  |  |              |
+   |              | Service when one is configured. |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MAY-T11-6    | A test deployment MAY use an    |  |              |
+   |              | in-process append-only log as   |  |              |
+   |              | the witness.                    |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-7   | Checkpoint windows MUST be      |  |              |
+   |              | half-open [startMs, endMs).     |  |              |
+   |              | Every chained receipt MUST fall |  |              |
+   |              | in exactly one window.          |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-8   | Checkpoint epochs of the        |  |              |
+   |              | working set of [CEDULON-CORE]   |  |              |
+   |              | MUST be consecutive and         |  |              |
+   |              | adjacent windows of that set    |  |              |
+   |              | MUST meet at endMs =            |  |              |
+   |              | next.startMs.                   |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-9   | Prefix-deletion and suppression |  |              |
+   |              | claims that go beyond the       |  |              |
+   |              | presented chain are conditional |  |              |
+   |              | on an external transparency     |  |              |
+   |              | witness.  A report MUST NOT     |  |              |
+   |              | present a completeness          |  |              |
+   |              | guarantee as settling           |  |              |
+   |              | suppression when no witness was |  |              |
+   |              | consulted.                      |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-10  | Witness receipts are an         |  |              |
+   |              | optional, separate input.  A    |  |              |
+   |              | verifier given none MUST behave |  |              |
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 15]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   |              | as it did without this input.   |  |              |
+   |              | A receipt MUST have its         |  |              |
+   |              | signature verified before it    |  |              |
+   |              | counts for anything.  Where a   |  |              |
+   |              | receipt also carries the        |  |              |
+   |              | statement body, that body MUST  |  |              |
+   |              | NOT be relied on unless its     |  |              |
+   |              | statement hash equals the one   |  |              |
+   |              | the receipt binds and it        |  |              |
+   |              | verifies as a checkpoint; a     |  |              |
+   |              | discarded body does not discard |  |              |
+   |              | its receipt.                    |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-11  | A receipt whose statement body  |  |              |
+   |              | verifies under a usable issuer  |  |              |
+   |              | root (MUST-T11-16) and that     |  |              |
+   |              | binds a checkpoint absent from  |  |              |
+   |              | the presented chain MUST be     |  |              |
+   |              | reported as a withheld          |  |              |
+   |              | checkpoint, and MUST NOT be     |  |              |
+   |              | reported as a window coverage   |  |              |
+   |              | failure.  A presented           |  |              |
+   |              | checkpoint with no verified     |  |              |
+   |              | receipt, where a witness was    |  |              |
+   |              | supplied, MUST be reported and  |  |              |
+   |              | makes the guarantee             |  |              |
+   |              | conditional.                    |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-13  | A redaction asserted outside    |  |              |
+   |              | the signed payload MUST NOT be  |  |              |
+   |              | honoured, and structural claims |  |              |
+   |              | MUST NOT be redacted.  A        |  |              |
+   |              | checkpoint that fails           |  |              |
+   |              | verification MUST NOT be        |  |              |
+   |              | treated as redacted.            |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-14  | An epoch checkpoint MUST be     |  |              |
+   |              | registrable as a Signed         |  |              |
+   |              | Statement carrying the          |  |              |
+   |              | checkpoint COSE object with     |  |              |
+   |              | content type application/       |  |              |
+   |              | cedulon-checkpoint+cbor.        |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-15  | A verifier MUST obtain the      |  |              |
+   |              | transparency service public key |  |              |
+   |              | out of band and MUST verify     |  |              |
+   |              | inclusion receipts against it.  |  |              |
+   |              | Receipts that cannot be checked |  |              |
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 16]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   |              | that way MUST NOT be used as    |  |              |
+   |              | evidence in either direction,   |  |              |
+   |              | and the verifier SHOULD report  |  |              |
+   |              | that they were left out.        |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-16  | A statement held by a pinned    |  |              |
+   |              | log MUST additionally verify    |  |              |
+   |              | against the issuer root before  |  |              |
+   |              | it counts as something that     |  |              |
+   |              | issuer published, so that       |  |              |
+   |              | another user's epoch in a       |  |              |
+   |              | shared log is not read as       |  |              |
+   |              | equivocation by this issuer.    |  |              |
+   |              | Without a usable issuer pin, a  |  |              |
+   |              | witness body MUST NOT produce a |  |              |
+   |              | withholding or equivocation     |  |              |
+   |              | verdict.  A body that binds a   |  |              |
+   |              | statement this chain does not   |  |              |
+   |              | present MUST be reported as     |  |              |
+   |              | unattributable; a body that     |  |              |
+   |              | binds a presented checkpoint is |  |              |
+   |              | not an accusation and MUST NOT  |  |              |
+   |              | raise a separate finding.       |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-17  | An inclusion receipt carrying   |  |              |
+   |              | no statement body MUST NOT be   |  |              |
+   |              | used to report a withheld       |  |              |
+   |              | checkpoint, because it cannot   |  |              |
+   |              | say whose statement it binds.   |  |              |
+   |              | It MUST NOT be discarded        |  |              |
+   |              | silently either: a real         |  |              |
+   |              | withholding must not be buried  |  |              |
+   |              | by removing the body.           |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-18  | Where candidate Signed          |  | candidate).  |
+   |              | Statement bytes and an          |  | Root         |
+   |              | inclusion proof are both        |  | reproduction |
+   |              | supplied, a verifier MUST       |  | alone is not |
+   |              | verify log membership by the    |  | acceptance.  |
+   |              | Merkle Tree Hash and inclusion- |  | A pair that  |
+   |              | proof verification of RFC 9162  |  | fails, or a  |
+   |              | Sections 2.1.1 and 2.1.3, as    |  | candidate    |
+   |              | consumed by RFC 9942            |  | supplied     |
+   |              | Section 5.2.1, and MUST accept  |  | without a    |
+   |              | only when the candidate's       |  | proof, MUST  |
+   |              | statement hash, the proof's     |  | be reported  |
+   |              | leaf index, and the reproduced  |  | as a failing |
+   |              | root exactly match the          |  | finding.     |
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 17]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   |              | statement hash, entry index,    |  |              |
+   |              | and tree head of a witness      |  |              |
+   |              | receipt that verifies under the |  |              |
+   |              | pinned witness key, with the    |  |              |
+   |              | walk's leaf equal to HASH(0x00  |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-19  | Where witness receipts are      |  |              |
+   |              | supplied and the tier-2 pair is |  |              |
+   |              | not, the report MUST state that |  |              |
+   |              | log membership was not          |  |              |
+   |              | exercised rather than passing   |  |              |
+   |              | the tier silently.              |  |              |
+   +--------------+---------------------------------+--+--------------+
+   | MUST-T11-20  | Where an audit presents an      |  |              |
+   |              | anchor, the checkpoint with the |  |              |
+   |              | lowest epoch in the working set |  |              |
+   |              | of [CEDULON-CORE] MUST be       |  |              |
+   |              | chained to the anchor's         |  |              |
+   |              | checkpoint hash rather than to  |  |              |
+   |              | null only when the anchor is    |  |              |
+   |              | valid: it answers to the issuer |  |              |
+   |              | root of [CEDULON-CORE], its     |  |              |
+   |              | epoch is one less than that     |  |              |
+   |              | checkpoint's, its endMs equals  |  |              |
+   |              | that checkpoint's startMs, and  |  |              |
+   |              | that checkpoint's               |  |              |
+   |              | prevCheckpointHash equals the   |  |              |
+   |              | anchor's checkpoint hash.  An   |  |              |
+   |              | anchor is used only under a     |  |              |
+   |              | usable pinned issuer key, where |  |              |
+   |              | the working set is the attested |  |              |
+   |              | set.  A presented checkpoint    |  |              |
+   |              | outside the working set,        |  |              |
+   |              | whatever its epoch, does not    |  |              |
+   |              | change which checkpoint that    |  |              |
+   |              | is.  An anchor that is not      |  |              |
+   |              | valid MUST anchor nothing.  One |  |              |
+   |              | that answers to the issuer root |  |              |
+   |              | and fails any of the other      |  |              |
+   |              | three conditions MUST be        |  |              |
+   |              | reported as window-coverage,    |  |              |
+   |              | identified by anchor.           |  |              |
+   +--------------+---------------------------------+--+--------------+
+
+                                 Table 2
+
+   Issuer self-attestation:  A Receipt Issuer that also produces the
+
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 18]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+      only copy of the extract can omit settlements.  Completeness holds
+      only against an extract the verifier obtained from the rail or
+      from a rail signature.
+
+   Key rotation and revocation:  kid identifies the verification key.
+      This -01 does not specify a revocation list.  Verifiers MUST pin
+      the issuer keys they accept and MUST stop accepting a kid after an
+      authenticated revocation signal.
+
+   Timestamp trust:  timestampMs is issuer-asserted.  Window assignment
+      uses that field.  A lying issuer can slide a receipt between
+      windows.  External timestamping of receipts is out of scope for
+      this revision; the checkpoint witness covers checkpoints, not
+      receipt timestamps.
+
+   Collusion:  If the rail operator and the issuer collude, they can
+      publish a matching extract and receipt set that hides a real-world
+      settlement.  Cedulon does not detect extract-external agreement.
+
+   Reversal, refund, and partial settlement:  State machines for
+      reversal, refund, and partial settlement are out of scope for this
+      revision.
+
+4.  IANA Considerations
+
+   This document requests the registration of two media types in the
+   "Media Types" registry [RFC6838], in the standards tree.
+   Registration in the standards tree requires IETF approval; the
+   provisional registration procedure of [RFC6838] Section 5.2.1 is
+   available to an Internet-Draft in the meantime.  The names are the
+   same names the core document [CEDULON-CORE] uses for these objects.
+
+4.1.  application/cedulon-checkpoint+cbor
+
+   Type name:  application
+
+   Subtype name:  cedulon-checkpoint+cbor
+
+   Encoding considerations:  binary.  A COSE_Sign1 structure [RFC9052]
+      in deterministic CBOR [RFC8949], untagged, as profiled in
+      Section 2.2 and [CEDULON-CORE] (COSE Profile); the same object is
+      the payload of the Signed Statement Section 3 registers.
+
+   Security considerations:  See Section 3.1 of this document.  A
+
+
+
+
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 19]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+      checkpoint carries the suppression guarantee for its window
+      (Section 2.4).  Its evidentiary weight depends on a pinned issuer
+      key ([CEDULON-CORE] (The issuer root)) and never on the key it
+      carries; where no such key is held the signature is still checked
+      against the carried key, which establishes internal consistency
+      only.
+
+   Interoperability considerations:  As for application/cedulon-
+      receipt+cbor; the labels are those of the checkpoint table in
+      [CEDULON-CORE] (Claim labels), and totals signed as null is a
+      redaction, not a malformed claim.
+
+   Published specification:  This document, Section 2.2.
+
+   Applications that use this media type:  As for application/cedulon-
+      receipt+cbor, and transparency witnesses that co-sign or register
+      checkpoints.
+
+   Required parameters, optional parameters, fragment identifier
+   considerations, additional information, contact, intended usage,
+   restrictions on usage, author, change controller:  As for
+      application/cedulon-receipt+cbor.
+
+4.2.  application/cedulon-inclusion+cbor
+
+   Type name:  application
+
+   Subtype name:  cedulon-inclusion+cbor
+
+   Encoding considerations:  binary.  A COSE_Sign1 structure in
+      deterministic CBOR, untagged, as profiled in [CEDULON-CORE] (COSE
+      Profile), whose payload is the five-entry map Section 2.4 states:
+      statement hash, entry index, tree head, tree size, algorithm name.
+
+   Security considerations:  See Section 3.1 of this document.  A
+      witness receipt verified under the key it carries establishes that
+      some log is internally consistent and nothing about which log; it
+      carries evidentiary weight only under a witness key held out of
+      band (Section 2.1, MUST-T11-15).  It attests a statement hash, not
+      membership in an append-only log; membership is tier 2 of
+      Section 2.4 and needs the candidate statement and an inclusion
+      proof beside the receipt.
+
+   Interoperability considerations:  As for application/cedulon-
+      receipt+cbor, except that the payload is not a CWT claim set: its
+      five labels are local to the map and are stated, with their types,
+      in Section 2.4.
+
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 20]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   Published specification:  This document, Section 2.4.
+
+   Applications that use this media type:  Transparency witnesses that
+      co-sign the statements they record, and verifiers that hold
+      witness receipts for a period under audit.
+
+   Required parameters, optional parameters, fragment identifier
+   considerations, additional information, contact, intended usage,
+   restrictions on usage, author, change controller:  As for
+      application/cedulon-receipt+cbor.
+
+5.  References
+
+5.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+   [RFC6838]  Freed, N., Klensin, J., and T. Hansen, "Media Type
+              Specifications and Registration Procedures", BCP 13,
+              RFC 6838, DOI 10.17487/RFC6838, January 2013,
+              <https://www.rfc-editor.org/rfc/rfc6838>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+   [RFC8949]  Bormann, C. and P. Hoffman, "Concise Binary Object
+              Representation (CBOR)", STD 94, RFC 8949,
+              DOI 10.17487/RFC8949, December 2020,
+              <https://www.rfc-editor.org/rfc/rfc8949>.
+
+   [RFC9052]  Schaad, J., "CBOR Object Signing and Encryption (COSE):
+              Structures and Process", STD 96, RFC 9052,
+              DOI 10.17487/RFC9052, August 2022,
+              <https://www.rfc-editor.org/rfc/rfc9052>.
+
+   [RFC9162]  Laurie, B., Messeri, E., and R. Stradling, "Certificate
+              Transparency Version 2.0", RFC 9162, DOI 10.17487/RFC9162,
+              December 2021, <https://www.rfc-editor.org/rfc/rfc9162>.
+
+   [RFC9942]  Steele, O., Birkholz, H., Delignat-Lavaud, A., and C.
+              Fournet, "CBOR Object Signing and Encryption (COSE)
+              Receipts", RFC 9942, DOI 10.17487/RFC9942, June 2026,
+              <https://www.rfc-editor.org/rfc/rfc9942>.
+
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 21]
+
+Internet-Draft             Cedulon Checkpoints             November 2026
+
+
+   [RFC9943]  Birkholz, H., Delignat-Lavaud, A., Fournet, C., Deshpande,
+              Y., and S. Lasker, "An Architecture for Trustworthy and
+              Transparent Digital Supply Chains", RFC 9943,
+              DOI 10.17487/RFC9943, June 2026,
+              <https://www.rfc-editor.org/rfc/rfc9943>.
+
+5.2.  Informative References
+
+   [CEDULON-CORE]
+              Dogru, E. C., "Spend Receipts and Payment Rail
+              Reconciliation for AI Agents", Work in Progress, Internet-
+              Draft, draft-dogru-cedulon-core-05, 2026,
+              <https://datatracker.ietf.org/doc/draft-dogru-cedulon-
+              core/>.
+
+Author's Address
+
+   Emek Can Dogru
+   VERAX TEKNOLOJI LIMITED SIRKETI
+   Email: e.dogru@cedulon.com
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Dogru                      Expires 29 May 2027                 [Page 22]

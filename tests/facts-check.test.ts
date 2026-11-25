@@ -1,16 +1,27 @@
 import { strict as assert } from "node:assert";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
+  archiveUrl,
+  collectArchiveStatuses,
   collectSources,
+  compareArchive,
   compareFacts,
   declaredFacts,
   fetchWithNetworkRetry,
   isNpmOrGithubUrl,
   probeTarget,
+  unpostedDraftNames,
   type FactSources,
   type FetchLike,
 } from "../scripts/facts-check.ts";
+import { livingUnpublishedDraftPaths } from "../scripts/latest-draft.ts";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Every source agreeing with the declaration. */
 function agreeing(): Required<FactSources> {
@@ -104,6 +115,91 @@ describe("facts-check compares the declaration to a third party", () => {
       problems.some((line) => line.includes("9.9.9")),
       problems.join(" | "),
     );
+  });
+});
+
+describe("facts-check holds the unposted drafts in spec/ to the IETF archive", () => {
+  const draft = "draft-dogru-cedulon-threats-00";
+
+  it("RED: a draft the archive has posted but spec/ does not carry is caught", () => {
+    const { posted, unread } = compareArchive([draft], { [draft]: 200 });
+    assert.deepEqual(posted, [`posted at the IETF archive but not carried in spec/: ${draft}.txt`]);
+    assert.deepEqual(unread, []);
+  });
+
+  it("GREEN: a draft the archive answers 404 for is not posted", () => {
+    assert.deepEqual(compareArchive([draft], { [draft]: 404 }), { posted: [], unread: [] });
+  });
+
+  it("an answer other than 200 or 404 is a read problem, not a pass", () => {
+    const { posted, unread } = compareArchive([draft], { [draft]: 500 });
+    assert.deepEqual(posted, []);
+    assert.deepEqual(unread, [`${archiveUrl(draft)} → 500`]);
+  });
+
+  it("a draft with no answer, or a failed read, is a read problem, not a pass", () => {
+    assert.deepEqual(compareArchive([draft], {}), {
+      posted: [],
+      unread: [`${archiveUrl(draft)} → missing`],
+    });
+    assert.deepEqual(compareArchive([draft], { [draft]: "fetch failed" }), {
+      posted: [],
+      unread: [`${archiveUrl(draft)} → fetch failed`],
+    });
+  });
+
+  it("asks about every draft source in spec/ that has no archive text beside it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-archive-"));
+    try {
+      writeFileSync(join(dir, "draft-dogru-cedulon-core-05.md"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-core-05.txt"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-core-06.md"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-09.md"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-09.xml"), "");
+      writeFileSync(join(dir, "draft-dogru-cedulon-10.md"), "");
+      writeFileSync(join(dir, "idnits-09.txt"), "");
+      writeFileSync(join(dir, "notes.md"), "");
+      assert.deepEqual(unpostedDraftNames(dir), [
+        "draft-dogru-cedulon-09",
+        "draft-dogru-cedulon-10",
+        "draft-dogru-cedulon-core-06",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("every living unpublished draft is one the archive is asked about", () => {
+    const asked = unpostedDraftNames(join(root, "spec"));
+    for (const path of livingUnpublishedDraftPaths(root)) {
+      const name = basename(path).replace(/\.md$/, "");
+      assert.ok(asked.includes(name), `${name} is classed living but the archive is not asked about it`);
+    }
+  });
+
+  it("collectArchiveStatuses reads the archive URL, and a persistent network failure is a read problem", async () => {
+    const asked: string[] = [];
+    const answering: FetchLike = async (input) => {
+      asked.push(String(input));
+      return new Response(null, { status: 404 });
+    };
+    assert.deepEqual(
+      await collectArchiveStatuses([draft], { fetch: answering, attempts: 3, delayMs: 0 }),
+      { [draft]: 404 },
+    );
+    assert.deepEqual(asked, [archiveUrl(draft)]);
+
+    let calls = 0;
+    const failing: FetchLike = async () => {
+      calls += 1;
+      throw new TypeError("fetch failed");
+    };
+    const statuses = await collectArchiveStatuses([draft], { fetch: failing, attempts: 3, delayMs: 0 });
+    assert.equal(calls, 3);
+    assert.deepEqual(compareArchive([draft], statuses), {
+      posted: [],
+      unread: [`${archiveUrl(draft)} → fetch failed`],
+    });
   });
 });
 

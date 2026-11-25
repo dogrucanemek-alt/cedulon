@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -103,25 +103,38 @@ describe("crlf-guard", () => {
     const living = livingUnpublishedDraftPaths(root);
     assert.ok(living.length > 0, "expected at least one living unpublished draft");
     const names = living.map((p) => p.replace(/\\/g, "/").split("/").pop()!);
+    const short = (name: string) => name.replace(/^draft-dogru-cedulon-/, "").replace(/\.md$/, "");
+    for (const path of living) {
+      assert.ok(
+        !existsSync(path.replace(/\.md$/, ".txt")),
+        `${short(basename(path))} carries an archive text, so it is posted and must not be in the living-unpublished set`,
+      );
+    }
     for (const expected of [
       "draft-dogru-cedulon-core-06.md",
-      "draft-dogru-cedulon-checkpoint-01.md",
       "draft-dogru-cedulon-resolution-00.md",
+      "draft-dogru-cedulon-10.md",
     ]) {
-      assert.ok(names.includes(expected), `expected living unpublished draft ${expected}, got ${names.join(", ")}`);
+      assert.ok(
+        names.includes(expected),
+        `${short(expected)} has no archive text beside it and must be in the living-unpublished set, got ${names.join(", ")}`,
+      );
     }
-    assert.ok(
-      !names.includes("draft-dogru-cedulon-decision-profile-04.md"),
-      "posted decision-profile-04 must stay out of the living-unpublished set",
-    );
-    assert.ok(
-      !names.includes("draft-dogru-cedulon-core-05.md"),
-      "posted core-05 must stay out of the living-unpublished set",
-    );
-    assert.ok(
-      !living.some((p) => p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-decision-profile-04.md")),
-      "posted decision-profile-04 must stay out of the living-unpublished set",
-    );
+    for (const posted of [
+      "draft-dogru-cedulon-checkpoint-01.md",
+      "draft-dogru-cedulon-threats-00.md",
+      "draft-dogru-cedulon-core-05.md",
+      "draft-dogru-cedulon-decision-profile-04.md",
+    ]) {
+      assert.ok(
+        existsSync(join(root, "spec", posted.replace(/\.md$/, ".txt"))),
+        `posted ${short(posted)} must carry its archive text in spec/`,
+      );
+      assert.ok(
+        !names.includes(posted),
+        `posted ${short(posted)} carries its archive text and must stay out of the living-unpublished set`,
+      );
+    }
     assert.deepEqual(livingDraftCarriageReturns(root), []);
     const sample = living.find((p) =>
       p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md"),
