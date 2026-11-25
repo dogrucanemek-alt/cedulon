@@ -380,6 +380,20 @@ function upgrading019Failures(section: string): string[] {
   ) {
     failures.push("0.19.0 section still lets auditWindows anchor without a usable issuer root");
   }
+  const prose = section.replace(/\s+/g, " ");
+  if (/with or without an issuer pin/.test(prose)) {
+    failures.push("0.19.0 section reports the null-ref finding with or without an issuer pin");
+  }
+  if (!prose.includes("with a usable issuer pin or with none")) {
+    failures.push("0.19.0 section does not scope the null-ref finding to a usable issuer pin or none");
+  }
+  if (
+    !/Under an issuer pin that cannot be read, the coverage set is empty[^.]*`trust-key-unreadable` and `settled-without-ref` and no `receipt-without-settlement`/.test(
+      prose,
+    )
+  ) {
+    failures.push("0.19.0 section omits the null-ref receipt under an issuer pin that cannot be read");
+  }
   return failures;
 }
 
@@ -484,6 +498,27 @@ describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes"
         `${code}: ${JSON.stringify(noRef.findings)}`,
       );
     }
+
+    // the same receipt under an unreadable issuer pin ← tests/audit-counts.test.ts (step 8)
+    const unreadableNoRef = audit({
+      receipts: [nullRef],
+      checkpoints: [],
+      issuerTrust: { publicKeyPem: "not a key" },
+    });
+    for (const code of ["trust-key-unreadable", "settled-without-ref"]) {
+      assert.ok(
+        unreadableNoRef.findings.some((f) => f.code === code),
+        `${code}: ${JSON.stringify(unreadableNoRef.findings)}`,
+      );
+    }
+    assert.equal(
+      unreadableNoRef.findings.some((f) => f.code === "receipt-without-settlement"),
+      false,
+      JSON.stringify(unreadableNoRef.findings),
+    );
+    assert.equal(unreadableNoRef.counts!.receipts.submitted, 1);
+    assert.equal(unreadableNoRef.counts!.receipts.unmatched, 0);
+    assert.equal(unreadableNoRef.ok, false);
   });
 
   it("RED: a 0.19.0 section that omitted the later caller-visible changes is caught", () => {
@@ -498,6 +533,18 @@ describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes"
     assert.ok(failures.some((f) => f.includes("hex-not-hex")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("non-finite-number")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("receipt-without-settlement")), failures.join(" | "));
+  });
+
+  it("RED: a 0.19.0 section that states the null-ref finding with or without an issuer pin is caught", () => {
+    const md = readFileSync(join(root, "docs", "UPGRADING.md"), "utf8");
+    const scoped = /with a usable issuer pin or with\s+none\./.exec(md);
+    const unreadable = /Under an issuer pin that cannot be read,[\s\S]*?fails\.\n/.exec(md);
+    assert.ok(scoped && unreadable, "docs/UPGRADING.md no longer carries the scoped null-ref sentences");
+    const oldMd = md.replace(scoped[0], "with or without an issuer pin.").replace(unreadable[0], "\n");
+    const failures = upgrading019Failures(section019(oldMd));
+    assert.ok(failures.some((f) => f.includes("with or without an issuer pin")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("usable issuer pin or none")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("cannot be read")), failures.join(" | "));
   });
 
   it("RED: a 0.19.0 section that omitted the pinless witness verdict is caught", () => {

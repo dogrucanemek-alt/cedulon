@@ -2023,7 +2023,9 @@ receipt was withheld, and a receipt whose settlement never happened,
 cost a `boundary-deferred` warning in a single-window audit rather
 than a failure: an honest payment that straddles the edge looks the
 same from one window, and failing it would accuse two honest parties.
-The gap is bounded by the allowance, it keeps the guarantee
+A settled receipt with a null rail ref is outside the gap: no row of
+any extract can name it, so it is the completeness finding at either
+edge (step 5). The gap is bounded by the allowance, it keeps the guarantee
 conditional, and a deployment that wants it closed audits consecutive
 windows: the receipt side hardens when the adjacent window's extract
 is presented, and the record side when the adjacent window's receipts
@@ -2347,7 +2349,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 1093 of 1093,
+  this revision describes, all three assert every case, 1100 of 1100,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.
@@ -2376,8 +2378,9 @@ published packages at version 0.9.0, and the nine workspace packages
 are published at 0.18.0 as this revision is written. A reader can
 check a claim against an installed package rather than against a
 working tree, with one limit: the refusals this revision adds to
-Appendix B, the anchor checkpoint rule and the empty witness list are
-in the working tree and in no published version yet.
+Appendix B, the anchor checkpoint rule, the empty witness list, and
+the `receipt-without-settlement` finding for a settled receipt with a
+null rail ref are in the working tree and in no published version yet.
 
 A second implementation is named here. Same author as this document;
 not an independent implementation.
@@ -2694,7 +2697,7 @@ ae447dc74ccb0f13383f0f43f0f67f288d61a6395e95e2038e320d
 | unstated-audit-scope | guarantee conditional | A supplied rail pin states no account or no rail, so the extract defined the settlement path it reported on. The same "no pin at all" case is `unauthenticated-extract` |
 | countersign-bad | conditional | Present payee countersignature failed verify (signature, content type, or payload binding); unattributable, discarded as approval evidence. One verifiable under another key is `countersign-key-mismatch` |
 | carried-key-mismatch | conditional | An object verifies under a pinned issuer key but the key carried beside its signature is a different one; the unsigned surface was rewritten, the object stays attested ({{issuer-root}}) |
-| boundary-deferred | conditional | An unmatched receipt or settlement record sits within the declared `clockSkewMs` of either window edge (less than `clockSkewMs` from the nearest instant inside the window); deferred rather than reported as a completeness failure. A receipt resolves or hardens against the adjacent window's extract on its side; a record resolves against a receipt in the presented bag (step 5) |
+| boundary-deferred | conditional | An unmatched receipt or settlement record sits within the declared `clockSkewMs` of either window edge (less than `clockSkewMs` from the nearest instant inside the window); deferred rather than reported as a completeness failure. A settled receipt with a null rail ref is not deferred, because no row can name it. A receipt resolves or hardens against the adjacent window's extract on its side; a record resolves against a receipt in the presented bag (step 5) |
 | beneficiary-mismatch | audit fails | A settlement record declares a `beneficiary` and the matched receipt's `payee` differs |
 | counterparty-unbound | scope record; verdict and guarantee unchanged | Neither the manifest names a `payee` nor any settlement record declares a `beneficiary`: ref, amount and currency closed against the payer's account extract, and the counterparty's identity was not bound |
 | delivery-mismatch | audit fails | An attributable countersignature carries `deliveredHash`, its receipt names a Trade Manifest the audit did not refuse, and the digest differs from that manifest's acceptance-criteria hash; both ends are signed (`MAY-T8-11`). A receipt that names no manifest, or another one, is not compared. Where a stated publisher pin refuses the manifest, its acceptance hash founds nothing and this comparison is not made (`MUST-T8-9`) |

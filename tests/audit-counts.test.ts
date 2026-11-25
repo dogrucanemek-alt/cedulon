@@ -631,4 +631,47 @@ describe("step 8: a settled receipt with a null rail ref has no extract row (MUS
     assert.equal(c.receipts.unmatched, 1);
     assert.equal(c.receipts.deferred, 0);
   });
+
+  const unreadableExtracts = [
+    { label: "an extract with no rows", rows: [] as RailSettlement[] },
+    { label: "an extract whose only row names another ref", rows: [row("ref-other", MIDDLE)] },
+    { label: "no extract", rows: null },
+  ];
+  for (const { label, rows } of unreadableExtracts) {
+    for (const at of [MIDDLE, CLOSING]) {
+      it(`an issuer pin that cannot be read, ${label}, ${at === MIDDLE ? "mid-window" : "inside the closing allowance"}: settled-without-ref only, the coverage set is empty`, () => {
+        const honest = generateReceiptKeys();
+        const rail = generateExtractKeys();
+        const bad = nullRefReceipt(honest, at);
+        const report = audit({
+          receipts: [bad],
+          checkpoints: [checkpointOver(honest, [bad])],
+          ...(rows === null ? {} : { extract: extract(rail, rows), trust: trustFor(rail) }),
+          issuerTrust: { publicKeyPem: "not-a-key" },
+        });
+        const nonce = bad.claims.nonce;
+        const expected = ["trust-key-unreadable:issuer", `settled-without-ref:${nonce}`];
+        if (rows !== null && rows.length > 0) expected.push("settlement-without-receipt:ref-other");
+        assert.deepEqual(
+          report.findings.map((f) => `${f.code}:${f.id}`).sort(),
+          expected.sort(),
+          JSON.stringify(report.findings),
+        );
+        assert.equal(
+          [...report.findings, ...report.warnings].some(
+            (f) => f.code === "receipt-without-settlement" || f.code === "boundary-deferred",
+          ),
+          false,
+        );
+        assert.equal(report.ok, false);
+        const c = counted(report);
+        assert.equal(c.receipts.submitted, 1);
+        assert.equal(c.receipts.covering, 0);
+        assert.equal(c.receipts.inScope, 0);
+        assert.equal(c.receipts.settled, 0);
+        assert.equal(c.receipts.unmatched, 0);
+        assert.equal(c.receipts.deferred, 0);
+      });
+    }
+  }
 });
