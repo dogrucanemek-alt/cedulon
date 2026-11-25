@@ -129,15 +129,40 @@ describe("the Implementation Status count answers to a run", () => {
 
   it("RED: a Node summary that disagrees with the JUnit <testcase> count is refused", () => {
     const fromCases = countersFromJUnit(nestedJUnit);
+    // fail and skipped match the <testcase> walk; only the tests total drifts.
     const nodeSummary = countersFromNodeSummary(
-      "ℹ tests 11\nℹ suites 5\nℹ pass 9\nℹ fail 1\nℹ skipped 1\n",
+      "ℹ tests 11\nℹ suites 5\nℹ pass 9\nℹ fail 2\nℹ skipped 1\n",
     );
-    assert.deepEqual(nodeSummary, { tests: 11, failures: 1, skipped: 1 });
+    assert.deepEqual(nodeSummary, { tests: 11, failures: 2, skipped: 1 });
     const failures = countConsistencyFailures(fromCases, { nodeSummary });
     assert.equal(failures.length, 1, failures.join(" | "));
     assert.match(
       failures[0]!,
       /JUnit <testcase> count is 12 but the Node summary reports tests 11/,
+    );
+  });
+
+  it("RED: tests match but fail counts disagree", () => {
+    const failures = countConsistencyFailures(
+      { tests: 12, failures: 2, skipped: 1 },
+      { nodeSummary: { tests: 12, failures: 0, skipped: 1 } },
+    );
+    assert.equal(failures.length, 1, failures.join(" | "));
+    assert.match(
+      failures[0]!,
+      /JUnit <testcase> failures are 2 but the Node summary reports fail 0/,
+    );
+  });
+
+  it("RED: tests match but skipped counts disagree", () => {
+    const failures = countConsistencyFailures(
+      { tests: 12, failures: 2, skipped: 1 },
+      { nodeSummary: { tests: 12, failures: 2, skipped: 0 } },
+    );
+    assert.equal(failures.length, 1, failures.join(" | "));
+    assert.match(
+      failures[0]!,
+      /JUnit <testcase> skipped are 1 but the Node summary reports skipped 0/,
     );
   });
 

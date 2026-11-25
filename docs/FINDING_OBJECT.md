@@ -35,12 +35,19 @@ was not doubted. Those two fields are the ones a consumer can act on
 without understanding every code.
 
 `counts` is the population the findings were drawn from: on the
-receipt side how many were submitted, attested, in scope, aborted and
-settled, and of the settled ones how many were matched, deferred,
-carried by an adjacent window, unmatched, repeated or left unreconciled;
-on the settlement side the rows and the same classes less `carried`.
-Every settled receipt and every row lands in exactly one class, so the
-totals add up on both sides, and `matched` is the same number on each.
+receipt side how many were submitted, attested, covering, in scope,
+aborted and settled, and of the settled ones how many were matched,
+deferred, carried by an adjacent window, unmatched, repeated or left
+unreconciled; on the settlement side the rows and the same classes less
+`carried`. `attested` is only receipts that verify under a usable pinned
+issuer key (zero with no pin, or when a stated pin cannot be read).
+`covering` is the coverage set: under a usable pin, the attested set;
+with no pin stated, every submitted receipt the profile admits; empty
+when a stated pin cannot be read. The identity
+`attested ≤ covering ≤ submitted` holds on every report (measured in
+`tests/audit-counts.test.ts`). Every settled receipt and every row lands
+in exactly one class, so the totals add up on both sides, and `matched`
+is the same number on each.
 A row the audit rightly excluded without a finding, a receipt the next
 window names or a spend that was aborted, is on the record here and
 nowhere else (`EXTERNAL_REVIEW.md`, Round 5). `counts` is optional in

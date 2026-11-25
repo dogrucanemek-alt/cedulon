@@ -78,4 +78,25 @@ describe("run-as-verifier doc", () => {
       assert.equal(stdout.trim().replace(/\r\n/g, "\n"), expected);
     });
   }
+
+  it("site/verify.html shows the same unpinned audit counts as the documented demo", () => {
+    const audit = runs.find((r) => r.command === "npm run audit");
+    assert.ok(audit, "expected a documented npm run audit block");
+    const countsLine = audit.expected
+      .split("\n")
+      .find((l) => l.startsWith("counts\treceipts\t"));
+    assert.ok(countsLine, "documented audit output has no receipts counts line");
+    assert.match(countsLine, /attested=0/);
+    assert.match(countsLine, /covering=2/);
+    const page = readFileSync(join(root, "site", "verify.html"), "utf8");
+    assert.ok(
+      page.includes(countsLine),
+      "site/verify.html must embed the documented formatAudit receipts counts line",
+    );
+    assert.equal(
+      page.includes("submitted=2 attested=2 in-scope=2"),
+      false,
+      "site/verify.html still shows the pre-covering attested=2 pinless example",
+    );
+  });
 });

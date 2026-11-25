@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 /**
@@ -174,4 +174,68 @@ export function latestPostedCompanionRevision(specDir: string, name: string): st
     throw new Error(`no draft-dogru-cedulon-${name}-NN.txt under spec/`);
   }
   return revisions[revisions.length - 1]!;
+}
+
+/**
+ * Living drafts that will go to the datatracker but have not been posted
+ * yet: the newest of each publication-bound name that still has no archive
+ * `.txt` beside it. Posted datatracker copies (and their frozen `.txt`)
+ * stay out of this list so their on-disk bytes are not rewritten by a
+ * living-source line-ending check.
+ */
+export function livingUnpublishedDraftPaths(root: string): string[] {
+  const paths = [
+    latestDraftPath(root),
+    ...core00FamilyPaths(root),
+    ...companionDraftPaths(root),
+    ...sideDraftPaths(root),
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const path of paths) {
+    const key = path.replace(/\\/g, "/");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (existsSync(path.replace(/\.md$/i, ".txt"))) continue;
+    out.push(path);
+  }
+  return out.sort((a, b) => basename(a).localeCompare(basename(b)));
+}
+
+export type LivingDraftCrHit = {
+  file: string;
+  count: number;
+};
+
+/**
+ * Working-tree CR bytes in living unpublished drafts. The object-store
+ * crlf-guard does not see an uncommitted CR; this check reads the files
+ * a living edit actually writes. Optional `extra` entries stand in for a
+ * temporary CR-injected copy without touching the tree.
+ */
+export function livingDraftCarriageReturns(
+  root: string,
+  extra: Array<{ file: string; bytes: Buffer }> = [],
+): LivingDraftCrHit[] {
+  const hits: LivingDraftCrHit[] = [];
+  for (const path of livingUnpublishedDraftPaths(root)) {
+    const bytes = readFileSync(path);
+    let count = 0;
+    for (const b of bytes) {
+      if (b === 0x0d) count += 1;
+    }
+    if (count > 0) {
+      hits.push({ file: path.replace(/\\/g, "/").split("/").pop()!, count });
+    }
+  }
+  for (const item of extra) {
+    let count = 0;
+    for (const b of item.bytes) {
+      if (b === 0x0d) count += 1;
+    }
+    if (count > 0) {
+      hits.push({ file: item.file.replace(/\\/g, "/"), count });
+    }
+  }
+  return hits;
 }

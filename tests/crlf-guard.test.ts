@@ -12,6 +12,10 @@ import {
   isBinaryPath,
   trackedFiles,
 } from "../scripts/crlf-guard.ts";
+import {
+  livingDraftCarriageReturns,
+  livingUnpublishedDraftPaths,
+} from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -92,5 +96,33 @@ describe("crlf-guard", () => {
       if (!trimmed || trimmed.startsWith("#")) continue;
       assert.equal(trimmed.startsWith("spec/") || trimmed.startsWith("/spec/"), false, trimmed);
     }
+  });
+
+  it("living unpublished drafts have no CR; a CR-injected copy is refused", () => {
+    const living = livingUnpublishedDraftPaths(root);
+    assert.ok(living.length > 0, "expected at least one living unpublished draft");
+    assert.ok(
+      living.some((p) => p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md")),
+      "resolution-00 is living and unpublished",
+    );
+    assert.ok(
+      !living.some((p) => p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-decision-profile-04.md")),
+      "posted decision-profile-04 must stay out of the living-unpublished set",
+    );
+    assert.deepEqual(livingDraftCarriageReturns(root), []);
+    const sample = living.find((p) =>
+      p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md"),
+    )!;
+    const clean = readFileSync(sample);
+    assert.equal(countCarriageReturns(clean), 0);
+    const withCr = Buffer.from(clean.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
+    assert.ok(countCarriageReturns(withCr) > 0);
+    const red = livingDraftCarriageReturns(root, [
+      { file: "spec/draft-dogru-cedulon-resolution-00.md.cr-probe", bytes: withCr },
+    ]);
+    assert.ok(
+      red.some((h) => h.file.endsWith("resolution-00.md.cr-probe") && h.count > 0),
+      `expected a CR hit on the probe, got ${JSON.stringify(red)}`,
+    );
   });
 });

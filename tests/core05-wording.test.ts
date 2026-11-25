@@ -17,6 +17,7 @@ import {
   strayAnchorTargets,
   strayGenesisTargets,
   windowCoverageScopeFailures,
+  withholdingScopeFailures,
   workspacePackages,
 } from "../scripts/core05-wording.ts";
 import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
@@ -151,6 +152,30 @@ describe("MUST-T11-8 and window-coverage run on the working set", () => {
     );
     const failures = windowCoverageScopeFailures(core, drifted);
     assert.ok(failures.some((f) => f.includes("step 2")), failures.join(" | "));
+  });
+});
+
+describe("MUST-T11-11 withholding answers to a usable issuer root", () => {
+  it("MUST-T11-11, checkpoint-withheld and MUST-T11-16 stay consistent", () => {
+    assert.deepEqual(withholdingScopeFailures(checkpoint), []);
+  });
+
+  it("RED: the ba2b3f1 rows that withheld on any verified witness receipt are caught", () => {
+    const old = gitShow("ba2b3f1:spec/draft-dogru-cedulon-checkpoint-01.md");
+    const failures = withholdingScopeFailures(old);
+    assert.ok(failures.some((f) => f.includes("MUST-T11-11")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("checkpoint-withheld")), failures.join(" | "));
+  });
+
+  it("RED: dropping the usable-issuer-root bound from MUST-T11-11 is caught", () => {
+    const drifted = swap(
+      checkpoint,
+      "A receipt whose statement body verifies under a usable issuer root (`MUST-T11-16`) and that binds a checkpoint absent from the presented chain MUST be reported as a withheld checkpoint, and MUST NOT be reported as a window coverage failure.",
+      "A verified receipt binding a checkpoint absent from the presented chain MUST be reported as a withheld checkpoint, and MUST NOT be reported as a window coverage failure.",
+    );
+    const failures = withholdingScopeFailures(drifted);
+    assert.ok(failures.some((f) => f.includes("MUST-T11-11") && f.includes("usable issuer root")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("still withholds on any verified receipt")), failures.join(" | "));
   });
 });
 

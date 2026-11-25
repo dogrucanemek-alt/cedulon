@@ -229,6 +229,54 @@ export function consecutiveEpochScopeFailures(core: string, checkpoint: string):
   return failures;
 }
 
+// --- MUST-T11-11 / checkpoint-withheld / MUST-T11-16: withholding needs an issuer root ---
+
+/**
+ * Withholding is only for a body that answers to a usable issuer root.
+ * MUST-T11-11 and the checkpoint-withheld row must say so and cite
+ * MUST-T11-16; MUST-T11-16 must keep the pinless body out of a
+ * withholding verdict. The three places are measured together so one
+ * cannot drift back to "any verified witness receipt".
+ */
+export function withholdingScopeFailures(checkpoint: string): string[] {
+  const failures: string[] = [];
+  const t11 = tableRow(checkpoint, "MUST-T11-11");
+  if (t11 === null) {
+    failures.push("checkpoint: no MUST-T11-11 row");
+  } else {
+    if (!/usable issuer root/.test(t11)) {
+      failures.push("checkpoint: the MUST-T11-11 row does not require a usable issuer root");
+    }
+    if (!(/`MUST-T11-16`/.test(t11) || /MUST-T11-16/.test(t11))) {
+      failures.push("checkpoint: the MUST-T11-11 row does not cite MUST-T11-16");
+    }
+    if (/A verified receipt binding a checkpoint absent/.test(t11)) {
+      failures.push("checkpoint: the MUST-T11-11 row still withholds on any verified receipt");
+    }
+  }
+  const withheld = tableRow(checkpoint, "checkpoint-withheld");
+  if (withheld === null) {
+    failures.push("checkpoint: no checkpoint-withheld row");
+  } else {
+    if (!/usable issuer root/.test(withheld)) {
+      failures.push("checkpoint: the checkpoint-withheld row does not require a usable issuer root");
+    }
+    if (!(/`MUST-T11-16`/.test(withheld) || /MUST-T11-16/.test(withheld))) {
+      failures.push("checkpoint: the checkpoint-withheld row does not cite MUST-T11-16");
+    }
+    if (/A verified witness receipt binds a checkpoint/.test(withheld)) {
+      failures.push("checkpoint: the checkpoint-withheld row still withholds on any verified witness receipt");
+    }
+  }
+  const t16 = tableRow(checkpoint, "MUST-T11-16");
+  if (t16 === null) {
+    failures.push("checkpoint: no MUST-T11-16 row");
+  } else if (!/Without a usable issuer pin, a witness body MUST NOT produce a withholding or equivocation verdict/.test(t16)) {
+    failures.push("checkpoint: the MUST-T11-16 row no longer keeps a pinless body out of withholding");
+  }
+  return failures;
+}
+
 // --- MUST-T4-19: the decoder floor ---
 
 const FLOOR_OPENING = "The decoder bounds of `MUST-T4-19` are fixed as a floor";

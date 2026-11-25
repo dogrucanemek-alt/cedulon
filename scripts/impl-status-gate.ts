@@ -124,10 +124,22 @@ export function countConsistencyFailures(
   }: { suiteAttrs?: SuiteCounters; nodeSummary?: SuiteCounters } = {},
 ): string[] {
   const failures: string[] = [];
-  if (nodeSummary && fromTestcases.tests !== nodeSummary.tests) {
-    failures.push(
-      `JUnit <testcase> count is ${fromTestcases.tests} but the Node summary reports tests ${nodeSummary.tests}`,
-    );
+  if (nodeSummary) {
+    if (fromTestcases.tests !== nodeSummary.tests) {
+      failures.push(
+        `JUnit <testcase> count is ${fromTestcases.tests} but the Node summary reports tests ${nodeSummary.tests}`,
+      );
+    }
+    if (fromTestcases.failures !== nodeSummary.failures) {
+      failures.push(
+        `JUnit <testcase> failures are ${fromTestcases.failures} but the Node summary reports fail ${nodeSummary.failures}`,
+      );
+    }
+    if (fromTestcases.skipped !== nodeSummary.skipped) {
+      failures.push(
+        `JUnit <testcase> skipped are ${fromTestcases.skipped} but the Node summary reports skipped ${nodeSummary.skipped}`,
+      );
+    }
   }
   if (suiteAttrs && fromTestcases.tests !== suiteAttrs.tests) {
     failures.push(
