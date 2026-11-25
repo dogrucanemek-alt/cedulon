@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
-import { BoundedRunError, KILL_GRACE_MS, runBounded } from "../scripts/bounded-run.ts";
+import { BoundedRunError, KILL_GRACE_MS, runBounded, signalGroup } from "../scripts/bounded-run.ts";
 import {
   BINARY_EXCEPTIONS,
   blobsOf,
@@ -32,6 +32,17 @@ const GIT_TIMEOUT_MS = 60_000;
 const BOUND_MS = 3000;
 /** Every descendant a case starts ends itself after this, even if a case fails. */
 const SELF_EXIT = "setTimeout(() => process.exit(0), 60000);";
+const isWindows = process.platform === "win32";
+
+type KillCall = [pid: number, signal: NodeJS.Signals];
+
+/** A stand-in for process.kill that records each call and fails it with `code`. */
+function failingKill(code: string, calls: KillCall[]): (pid: number, signal: NodeJS.Signals) => void {
+  return (pid, signal) => {
+    calls.push([pid, signal]);
+    throw Object.assign(new Error(`kill ${code}`), { code });
+  };
+}
 
 async function refusal(run: Promise<unknown>): Promise<BoundedRunError> {
   try {
@@ -326,7 +337,7 @@ describe("crlf-guard", () => {
     }
   });
 
-  it("RED then GREEN: a quiet grandchild left by a child that succeeds is ended before the call returns", { timeout: HELPER_WATCHDOG_MS }, async () => {
+  it("RED then GREEN: when a child that leaves a quiet grandchild succeeds, the group is sent SIGKILL when the call returns and the grandchild ends shortly after", { timeout: HELPER_WATCHDOG_MS }, async () => {
     // The parent exits 0 once the grandchild is running, and the call
     // succeeds. On Windows the grandchild ends with its parent because Node
     // puts the children it starts in a kill-on-close job object; a grandchild
@@ -358,6 +369,100 @@ describe("crlf-guard", () => {
       endQuietly(grandPid);
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("RED then GREEN: a group signal passes over ESRCH and returns the code of any other failure", () => {
+    // No process is started and nothing here depends on the platform, so
+    // this is the part of the rule that is measured on Windows as well.
+    const calls: KillCall[] = [];
+    assert.equal(signalGroup(41, "SIGKILL", failingKill("ESRCH", calls)), undefined);
+    assert.equal(signalGroup(41, "SIGKILL", failingKill("EPERM", calls)), "EPERM");
+    assert.equal(signalGroup(41, "SIGTERM", (pid, signal) => void calls.push([pid, signal])), undefined);
+    assert.deepEqual(calls, [
+      [-41, "SIGKILL"],
+      [-41, "SIGKILL"],
+      [-41, "SIGTERM"],
+    ]);
+  });
+
+  it("RED then GREEN: a call that succeeds is refused by name when its process group cannot be signalled", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    // On POSIX the group is sent SIGKILL when the child closes, and the fake
+    // fails that signal. On Windows the tree is ended with taskkill and no
+    // group signal is sent, so there this case shows only that the fake is
+    // never called and the result stands; the refusal is measured on POSIX.
+    const label = "child whose group cannot be signalled";
+    const run = (signal: (pid: number, signal: NodeJS.Signals) => void) =>
+      runBounded({
+        label,
+        command: process.execPath,
+        args: ["-e", `process.stdout.write("done")`],
+        cwd: root,
+        timeoutMs: 10_000,
+        maxOutputBytes: 1024,
+        signal,
+      });
+    const eperm: KillCall[] = [];
+    if (isWindows) {
+      assert.equal((await run(failingKill("EPERM", eperm))).stdout.toString("utf8"), "done");
+      assert.deepEqual(eperm, []);
+    } else {
+      const err = await refusal(run(failingKill("EPERM", eperm)));
+      assert.ok(err.pid !== undefined, "the refusal does not name the child");
+      assert.equal(err.kind, "kill");
+      assert.equal(err.message, `${label} could not signal its process group ${err.pid}: EPERM`);
+      assert.deepEqual(eperm, [[-err.pid, "SIGKILL"]]);
+    }
+    const esrch: KillCall[] = [];
+    assert.equal((await run(failingKill("ESRCH", esrch))).stdout.toString("utf8"), "done");
+    assert.equal(esrch.length, isWindows ? 0 : 1);
+  });
+
+  it("RED then GREEN: a call refused at its bound keeps that refusal and adds the code of a group signal that failed", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    // With the fake in place nothing signals the child on POSIX; the call
+    // still settles at the end of the grace period and the case ends the
+    // child itself. On Windows taskkill ends the child and the fake is never
+    // called, so the refusal there is the plain timeout.
+    const label = "child at its bound";
+    const timeoutMs = 1000;
+    const pids: number[] = [];
+    const run = async (signal: (pid: number, signal: NodeJS.Signals) => void): Promise<BoundedRunError> => {
+      const err = await refusal(
+        runBounded({
+          label,
+          command: process.execPath,
+          args: ["-e", `setInterval(() => {}, 1000); ${SELF_EXIT}`],
+          cwd: root,
+          timeoutMs,
+          maxOutputBytes: 1024,
+          signal,
+        }),
+      );
+      assert.ok(err.pid !== undefined, "the refusal does not name the child");
+      pids.push(err.pid);
+      assert.equal(err.kind, "timeout");
+      return err;
+    };
+    try {
+      const timedOut = `${label} timed out after ${timeoutMs} ms`;
+      const eperm: KillCall[] = [];
+      const refused = await run(failingKill("EPERM", eperm));
+      if (isWindows) {
+        assert.equal(refused.message, timedOut);
+        assert.deepEqual(eperm, []);
+      } else {
+        assert.equal(refused.message, `${timedOut}; ${label} could not signal its process group ${refused.pid}: EPERM`);
+        assert.deepEqual(eperm, [
+          [-refused.pid!, "SIGTERM"],
+          [-refused.pid!, "SIGKILL"],
+        ]);
+      }
+      const esrch: KillCall[] = [];
+      assert.equal((await run(failingKill("ESRCH", esrch))).message, timedOut);
+      assert.equal(esrch.length, isWindows ? 0 : 2);
+    } finally {
+      for (const pid of pids) endQuietly(pid);
+    }
+    for (const pid of pids) await assertEnded(pid, "child");
   });
 
   it("RED then GREEN: output past the limit is refused by name and the tree is ended", { timeout: HELPER_WATCHDOG_MS }, async () => {

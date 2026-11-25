@@ -9,6 +9,13 @@
 // SIGKILL; if the child closes first, the SIGKILL goes at once. When the
 // child closes on its own, success included, whatever is left of its
 // group gets SIGKILL: nothing would end it once the call has returned.
+// That SIGKILL goes after the child has been reaped, by number. POSIX does
+// not reuse a process group ID while the group has a member, so the
+// signal reaches the members of this group that are left, or no one. The
+// remaining risk is that the group empties and the whole PID space wraps
+// around before the signal is sent. Only ESRCH, an empty group, is
+// expected; any other failure to signal the group refuses the call by
+// name, and a refusal the call already had keeps its kind.
 // On Windows `taskkill /T /F` ends the tree while its root is alive.
 //
 // Out of reach: on POSIX a descendant that has left the group, on Windows
@@ -42,11 +49,15 @@ export type BoundedRunOptions = {
   /** Limit on stdout and stderr together. */
   maxOutputBytes: number;
   env?: NodeJS.ProcessEnv;
+  /** For tests only: stands in for process.kill on the POSIX group path. */
+  signal?: GroupKill;
 };
+
+export type GroupKill = (pid: number, signal: NodeJS.Signals) => void;
 
 export type BoundedRunResult = { stdout: Buffer; stderr: Buffer };
 
-export type BoundedRunFailure = "timeout" | "output" | "status" | "start";
+export type BoundedRunFailure = "timeout" | "output" | "status" | "start" | "kill";
 
 export class BoundedRunError extends Error {
   readonly kind: BoundedRunFailure;
@@ -67,11 +78,15 @@ function reason(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function signalGroup(pid: number, signal: NodeJS.Signals): void {
+/** Signals the group `pid` leads. ESRCH, an empty group, passes; any other failure's code is returned. */
+export function signalGroup(pid: number, signal: NodeJS.Signals, kill: GroupKill): string | undefined {
   try {
-    process.kill(-pid, signal);
-  } catch {
-    // The group has no members left.
+    kill(-pid, signal);
+    return undefined;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ESRCH") return undefined;
+    return typeof code === "string" ? code : reason(err);
   }
 }
 
@@ -86,6 +101,7 @@ function taskkillTree(pid: number): ChildProcess {
 
 export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult> {
   const { label, timeoutMs, maxOutputBytes } = options;
+  const kill: GroupKill = options.signal ?? ((pid, signal) => void process.kill(pid, signal));
   return new Promise((resolve, reject) => {
     let stdin: number | "ignore" = "ignore";
     let child: ChildProcess;
@@ -114,13 +130,28 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
     let ending: BoundedRunError | undefined;
     let killer: ChildProcess | undefined;
     let grace: NodeJS.Timeout | undefined;
+    let unsignalled: string | undefined;
+
+    // POSIX only. The first failure other than ESRCH is kept for settle().
+    const signalOwnGroup = (signal: NodeJS.Signals): void => {
+      if (pid === undefined) return;
+      const code = signalGroup(pid, signal, kill);
+      if (unsignalled === undefined) unsignalled = code;
+    };
 
     const settle = (failure: BoundedRunError | undefined): void => {
       if (settled) return;
       settled = true;
       clearTimeout(deadline);
       clearTimeout(grace);
-      if (failure) reject(failure);
+      let refused = failure;
+      if (unsignalled !== undefined) {
+        const message = `${label} could not signal its process group ${pid}: ${unsignalled}`;
+        refused = failure
+          ? new BoundedRunError(failure.kind, `${failure.message}; ${message}`, failure.pid)
+          : new BoundedRunError("kill", message, pid);
+      }
+      if (refused) reject(refused);
       else resolve({ stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) });
     };
 
@@ -130,10 +161,10 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
       clearTimeout(deadline);
       if (pid !== undefined) {
         if (isWindows) killer = taskkillTree(pid);
-        else signalGroup(pid, "SIGTERM");
+        else signalOwnGroup("SIGTERM");
       }
       grace = setTimeout(() => {
-        if (pid !== undefined && !isWindows) signalGroup(pid, "SIGKILL");
+        if (pid !== undefined && !isWindows) signalOwnGroup("SIGKILL");
         else child.kill("SIGKILL");
         killer?.kill();
         child.stdout?.destroy();
@@ -171,7 +202,11 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
 
     child.on("close", (code, signal) => {
       if (settled) return;
-      if (pid !== undefined && !isWindows) signalGroup(pid, "SIGKILL");
+      // The child has been reaped, so this signal goes by number. A group ID
+      // is not reused while the group has a member: it reaches what is left
+      // of this group, or no one (ESRCH). It could reach another group only
+      // if this one emptied and the whole PID space wrapped in between.
+      if (pid !== undefined && !isWindows) signalOwnGroup("SIGKILL");
       if (ending) {
         const failure = ending;
         // The tree is ended only once taskkill has walked it.
