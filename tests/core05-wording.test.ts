@@ -9,12 +9,14 @@ import { execFileSync } from "node:child_process";
 import {
   anchorParityFailures,
   anchorTermFailures,
+  consecutiveEpochScopeFailures,
   decoderFloorFailures,
   encodingTermFailures,
   genesisParityFailures,
   publishedPackagesFailures,
   strayAnchorTargets,
   strayGenesisTargets,
+  windowCoverageScopeFailures,
   workspacePackages,
 } from "../scripts/core05-wording.ts";
 import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
@@ -111,6 +113,44 @@ describe("without an anchor, genesis is the lowest epoch in the working set", ()
       ),
       [],
     );
+  });
+});
+
+describe("MUST-T11-8 and window-coverage run on the working set", () => {
+  it("both documents scope window-coverage and consecutive epochs to the working set", () => {
+    assert.deepEqual(windowCoverageScopeFailures(core, checkpoint), []);
+    assert.deepEqual(consecutiveEpochScopeFailures(core, checkpoint), []);
+  });
+
+  it("RED: the 8c80d09 drafts that scoped coverage to presented checkpoints are caught", () => {
+    const oldCore = gitShow(`8c80d09:${coreRel}`);
+    const oldCheckpoint = gitShow("8c80d09:spec/draft-dogru-cedulon-checkpoint-01.md");
+    const windowFailures = windowCoverageScopeFailures(oldCore, oldCheckpoint);
+    assert.ok(windowFailures.some((f) => f.startsWith("checkpoint:")), windowFailures.join(" | "));
+    assert.ok(windowFailures.some((f) => f.startsWith("core:")), windowFailures.join(" | "));
+    const epochFailures = consecutiveEpochScopeFailures(oldCore, oldCheckpoint);
+    assert.ok(epochFailures.some((f) => f.startsWith("checkpoint:")), epochFailures.join(" | "));
+    assert.ok(epochFailures.some((f) => f.startsWith("core:")), epochFailures.join(" | "));
+  });
+
+  it("RED: a MUST-T11-8 row that says Presented checkpoint epochs is caught", () => {
+    const drifted = swap(
+      checkpoint,
+      "Checkpoint epochs of the working set of {{CEDULON-CORE}} MUST be consecutive and adjacent windows of that set MUST meet at `endMs = next.startMs`.",
+      "Presented checkpoint epochs MUST be consecutive and adjacent windows MUST meet at `endMs = next.startMs`.",
+    );
+    const failures = consecutiveEpochScopeFailures(core, drifted);
+    assert.ok(failures.some((f) => f.includes("MUST-T11-8")), failures.join(" | "));
+  });
+
+  it("RED: a step 2 that runs against presented checkpoint windows is caught", () => {
+    const drifted = swap(
+      checkpoint,
+      "The check runs against the windows of the working set of {{CEDULON-CORE}}",
+      "The check runs against the presented checkpoint windows",
+    );
+    const failures = windowCoverageScopeFailures(core, drifted);
+    assert.ok(failures.some((f) => f.includes("step 2")), failures.join(" | "));
   });
 });
 

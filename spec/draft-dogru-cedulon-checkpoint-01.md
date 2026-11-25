@@ -171,8 +171,9 @@ stated in {{CEDULON-CORE}}. The anchor's own window is not audited;
 what happened before it is the business of the audit of that earlier
 window.
 
-Epoch numbers MUST be consecutive integers. Adjacent windows MUST
-satisfy `next.startMs = prev.endMs` (`MUST-T11-8`).
+Epoch numbers of the working set of {{CEDULON-CORE}} MUST be
+consecutive integers. Adjacent windows of that set MUST satisfy
+`next.startMs = prev.endMs` (`MUST-T11-8`).
 
 A later checkpoint that omits a prefix of earlier epochs (prefix
 deletion) is detectable only if an external witness (transparency
@@ -371,13 +372,13 @@ identifiers are not an interoperability surface.
     window. A gap or double count MUST be reported as a window
     coverage failure (`MUST-T11-7`, `MUST-T11-8`). The identifier
     `window-coverage` SHOULD be used for this condition. The check
-    runs against the presented checkpoint windows and it is
-    fail-closed: a receipt that falls under none of them is this
-    failure - including every receipt when no checkpoint was
-    presented, and receipts after the last closed checkpoint's
-    `endMs`. The text names that last state an **open epoch**, and
-    it is auditable only when the checkpoint that closes it is
-    issued; the name explains why the finding fired, it does not
+    runs against the windows of the working set of {{CEDULON-CORE}}
+    and it is fail-closed: a receipt that falls under none of them
+    is this failure - including every receipt when no checkpoint of
+    the working set was presented, and receipts after the last closed
+    checkpoint's `endMs`. The text names that last state an **open
+    epoch**, and it is auditable only when the checkpoint that closes
+    it is issued; the name explains why the finding fired, it does not
     soften it. Nothing about an absent checkpoint is silent:
     uncovered evidence surfaces as a finding rather than as a gap
     in the report.
@@ -397,12 +398,12 @@ identifiers are not an interoperability surface.
     and have different hashes, the verifier MUST report
     equivocation (`MUST-T11-3`). The identifier `equivocation`
     SHOULD be used for this condition. The checkpoints compared
-    here are those presented **together with** any carried by
-    verified witness receipts (step 5). A presented chain
-    that satisfies `MUST-T11-8` (step 2) cannot raise this finding on
-    its own, because its epochs are consecutive and no two of its
-    members share an epoch. A copy recorded by a witness
-    is where the second one is found.
+    here are those of the working set of {{CEDULON-CORE}} **together
+    with** any carried by verified witness receipts (step 5). A
+    working set that satisfies `MUST-T11-8` (step 2) cannot raise
+    this finding on its own, because its epochs are consecutive and
+    no two of its members share an epoch. A copy recorded by a
+    witness is where the second one is found.
 5. If witness receipts were supplied, verify them against the
     out-of-band witness key ({{witness-root}}); receipts that
     cannot be checked that way are not evidence in either direction
@@ -496,12 +497,12 @@ The remaining T11 identities are defined here.
 | ID | Requirement |
 |---|---|
 | MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the hash of the last in-window receipt in issuer order (the `prevReceiptHash` chain). Where the signed totals are null, MUST-T11-12 governs instead: there is no total to disagree with, the comparison is reported as skipped, and the count and chain-head checks still apply. |
-| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those presented together with those carried by verified witness receipts; a presented chain that satisfies MUST-T11-8 cannot raise it on its own, because its epochs are consecutive. |
+| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those of the working set of {{CEDULON-CORE}} together with those carried by verified witness receipts; a working set that satisfies MUST-T11-8 cannot raise it on its own, because its epochs are consecutive. |
 | MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
 | SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
 | MAY-T11-6 | A test deployment MAY use an in-process append-only log as the witness. |
 | MUST-T11-7 | Checkpoint windows MUST be half-open `[startMs, endMs)`. Every chained receipt MUST fall in exactly one window. |
-| MUST-T11-8 | Presented checkpoint epochs MUST be consecutive and adjacent windows MUST meet at `endMs = next.startMs`. |
+| MUST-T11-8 | Checkpoint epochs of the working set of {{CEDULON-CORE}} MUST be consecutive and adjacent windows of that set MUST meet at `endMs = next.startMs`. |
 | MUST-T11-9 | Prefix-deletion and suppression claims that go beyond the presented chain are conditional on an external transparency witness. A report MUST NOT present a completeness guarantee as settling suppression when no witness was consulted. |
 | MUST-T11-10 | Witness receipts are an optional, separate input. A verifier given none MUST behave as it did without this input. A receipt MUST have its signature verified before it counts for anything. Where a receipt also carries the statement body, that body MUST NOT be relied on unless its statement hash equals the one the receipt binds and it verifies as a checkpoint; a discarded body does not discard its receipt. |
 | MUST-T11-11 | A verified receipt binding a checkpoint absent from the presented chain MUST be reported as a withheld checkpoint, and MUST NOT be reported as a window coverage failure. A presented checkpoint with no verified receipt, where a witness was supplied, MUST be reported and makes the guarantee conditional. |

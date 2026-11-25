@@ -1124,6 +1124,85 @@ describe("Tiago core-04 #5: a one-window audit with an anchor checkpoint", () =>
     assert.equal(report.ok, false);
   });
 
+  // An unreadable pin attests nothing, but the checkpoint working set is still
+  // the pinless one (presented less Appendix B refusals): refusals keep their
+  // names, and genesis / epoch / window findings are not silenced.
+  it("RED then GREEN: with an unreadable issuer pin, a refused checkpoint is still reported by its refusal's name", () => {
+    const s = stream();
+    const refused = { ...s.cpPrev, coseHex: s.cpPrev.coseHex + "00" };
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.ok(
+      report.findings.some((f) => f.id === "epoch-1" && /refused: cbor-trailing/.test(f.detail ?? "")),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.ok(report.findings.some((f) => f.code === "settlement-without-receipt"));
+    assert.equal(report.ok, false);
+  });
+
+  it("RED then GREEN: with an unreadable issuer pin, a non-null genesis prevCheckpointHash is still reported", () => {
+    const s = stream();
+    const cpPrev = signCheckpoint(
+      buildCheckpointClaims(1, [s.r0], P_START, N_START, "aa".repeat(32)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const cpN = signCheckpoint(
+      buildCheckpointClaims(2, [s.r1], N_START, N_END, checkpointHash(cpPrev)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [cpPrev, cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.deepEqual(
+      chainFindings(report).map((f) => [f.id, f.detail]),
+      [["checkpoint-chain-0", "checkpoint chain broken-link at 0"]],
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.ok(report.findings.some((f) => f.code === "settlement-without-receipt"));
+    assert.equal(report.ok, false);
+  });
+
+  it("RED then GREEN: with an unreadable issuer pin, an epoch gap in the pinless working set is still reported", () => {
+    const s = stream();
+    const cpN = signCheckpoint(
+      buildCheckpointClaims(3, [s.r1], N_START, N_END, checkpointHash(s.cpPrev)),
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const report = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    } as Parameters<typeof audit>[0]);
+    assert.ok(
+      report.findings.some(
+        (f) => f.code === "window-coverage" && f.id === "epoch-3" && /consecutive/.test(f.detail ?? ""),
+      ),
+      JSON.stringify(report.findings),
+    );
+    assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.ok(report.findings.some((f) => f.code === "settlement-without-receipt"));
+    assert.equal(report.ok, false);
+  });
+
   it("an anchor whose presented chainHeadHash is outside the hash grammar is reported by name on id anchor", () => {
     const s = stream();
     const anchor = { ...s.cpPrev, claims: { ...s.cpPrev.claims, chainHeadHash: "x" } };

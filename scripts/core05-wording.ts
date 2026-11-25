@@ -169,6 +169,66 @@ export function genesisParityFailures(core: string, checkpoint: string): string[
   ];
 }
 
+// --- MUST-T11-8 / window-coverage: working set, not the whole presented bag ---
+
+/**
+ * Step 2 of the companion and the core's checkpoint-verification sentence
+ * both say the window-coverage check runs on the working set of
+ * {{CEDULON-CORE}}, not on every presented checkpoint window.
+ */
+export function windowCoverageScopeFailures(core: string, checkpoint: string): string[] {
+  const failures: string[] = [];
+  const cpFlat = flatten(checkpoint);
+  if (!/The check runs against the windows of the working set of \{\{CEDULON-CORE\}\}/.test(cpFlat)) {
+    failures.push("checkpoint: step 2 does not run window-coverage against the working set of {{CEDULON-CORE}}");
+  }
+  if (/runs against the presented checkpoint windows/.test(cpFlat)) {
+    failures.push("checkpoint: step 2 still names presented checkpoint windows as the coverage set");
+  }
+  const coreFlat = flatten(core);
+  if (
+    !/falls in no window of a checkpoint in the working set/.test(coreFlat) &&
+    !/window of a checkpoint in the working set/.test(coreFlat)
+  ) {
+    failures.push("core: window-coverage is not scoped to windows of the working set");
+  }
+  if (/falls in no presented checkpoint window/.test(coreFlat)) {
+    failures.push("core: window-coverage still names a presented checkpoint window");
+  }
+  return failures;
+}
+
+/**
+ * MUST-T11-8 consecutive epochs / adjacent windows are a property of the
+ * working set. Both documents state that; neither says "Presented checkpoint
+ * epochs" for the rule.
+ */
+export function consecutiveEpochScopeFailures(core: string, checkpoint: string): string[] {
+  const failures: string[] = [];
+  const row = tableRow(checkpoint, "MUST-T11-8");
+  if (row === null) {
+    failures.push("checkpoint: no MUST-T11-8 row");
+  } else if (!/working set of \{\{CEDULON-CORE\}\}/.test(row)) {
+    failures.push("checkpoint: the MUST-T11-8 row does not scope consecutive epochs to the working set of {{CEDULON-CORE}}");
+  } else if (/Presented checkpoint epochs/.test(row)) {
+    failures.push("checkpoint: the MUST-T11-8 row still says Presented checkpoint epochs");
+  }
+  const genesis = section(checkpoint, "## Genesis and continuity {#genesis}");
+  if (genesis === null) {
+    failures.push("checkpoint: the Genesis and continuity section is missing");
+  } else if (!/Epoch numbers of the working set of \{\{CEDULON-CORE\}\} MUST be consecutive/.test(genesis)) {
+    failures.push("checkpoint: Genesis and continuity does not require consecutive epochs of the working set");
+  }
+  const coreFlat = flatten(core);
+  if (
+    !/Epoch numbers of the working set MUST be consecutive/.test(coreFlat) ||
+    !/`MUST-T11-8`/.test(coreFlat)
+  ) {
+    failures.push("core: does not require consecutive working-set epochs under MUST-T11-8");
+  }
+  return failures;
+}
+
 // --- MUST-T4-19: the decoder floor ---
 
 const FLOOR_OPENING = "The decoder bounds of `MUST-T4-19` are fixed as a floor";

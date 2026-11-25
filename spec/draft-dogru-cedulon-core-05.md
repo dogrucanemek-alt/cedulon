@@ -1366,13 +1366,15 @@ per-receipt defect checks that ask what a receipt says about itself.
 Checkpoint and witness verification consumes that working set
 and is specified in {{CEDULON-CHECKPOINT}} (Verification algorithm),
 which an implementation of this audit also implements: a receipt that
-falls in no presented checkpoint window, including every receipt when
-no checkpoint is presented, fails that document's window-coverage
-check. An audit that presents receipts therefore presents the
-checkpoints that cover them; receipt and extract verification without
-checkpoints does not produce a passing audit. An audit given no
-receipts and no checkpoints rests on the extract alone
-({{issuer-root}}).
+falls in no window of a checkpoint in the working set, including every
+receipt when the working set holds no checkpoint, fails that document's
+window-coverage check (`MUST-T11-7`, `MUST-T11-8`). Epoch numbers of
+the working set MUST be consecutive integers, and adjacent windows of
+that set MUST meet at `endMs = next.startMs` (`MUST-T11-8`). An audit
+that presents receipts therefore presents the checkpoints that cover
+them; receipt and extract verification without checkpoints does not
+produce a passing audit. An audit given no receipts and no checkpoints
+rests on the extract alone ({{issuer-root}}).
 
 A stream of receipts usually begins before the window under audit,
 and its chain has to be anchored somewhere. Without an anchor
@@ -2316,7 +2318,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 1019 of 1019,
+  this revision describes, all three assert every case, 1030 of 1030,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.

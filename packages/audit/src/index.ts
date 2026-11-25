@@ -2234,13 +2234,17 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
       }
     }
   }
-  // Without a pin a refused checkpoint still reaches the totals walk, which
-  // names it, and covers no window, counts nothing, anchors nothing, and is
-  // no link of the checkpoint chain.
-  const attestedCheckpoints = attestsCheckpoint
+  // The checkpoint working set follows issuerPinUsable, not whether an
+  // attestation callback was built. A stated pin that cannot be read attests
+  // nothing, but it still takes the pinless arm: presented less Appendix B
+  // refusals for coverage, and every presented checkpoint for naming. Naming
+  // refusals is not attestation - under an unreadable pin no checkpoint is
+  // attested, yet a refused one keeps its name and the survivors still raise
+  // genesis / epoch / window findings.
+  const attestedCheckpoints = issuerPinUsable
     ? input.checkpoints.filter((cp) => attestsCheckpoint!(cp))
     : input.checkpoints.filter((cp) => coseDecodeRefusalHex(cp.coseHex) === null);
-  const namedCheckpoints = attestsCheckpoint ? attestedCheckpoints : input.checkpoints;
+  const namedCheckpoints = issuerPinUsable ? attestedCheckpoints : input.checkpoints;
   // Without an anchor the chain must be presented from its genesis; with one,
   // window N stands on its own and window N-1 is the previous audit's business.
   let expectedRootPrev: string | null = null;
