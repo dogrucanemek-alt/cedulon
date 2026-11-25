@@ -42,7 +42,7 @@ export function canonical(value: unknown): string {
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new Error("non-finite number");
+      throw new Error("non-finite-number");
     }
     return JSON.stringify(value);
   }

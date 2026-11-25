@@ -7,13 +7,31 @@ import { fileURLToPath } from "node:url";
 
 import { audit } from "@cedulon/audit";
 import { PolicyEngine } from "@cedulon/core";
-import { coseDecodeRefusalHex, hexToBytes, verifyCoseSign1 } from "@cedulon/cose";
+import {
+  CTY_DECISION,
+  CTY_MANIFEST,
+  bytesToHex,
+  coseDecodeRefusalHex,
+  hexToBytes,
+  signCoseSign1,
+  verifyCoseSign1,
+} from "@cedulon/cose";
 import { wrapToolsCall } from "@cedulon/mcp-guard";
 import { gatedSettle, verifyRailExtract } from "@cedulon/x402-adapter";
-import { generateReceiptKeys, signReceipt, signReceiptJson, verifyReceiptJson, type SpendReceiptClaims } from "@cedulon/receipts";
+import {
+  generateReceiptKeys,
+  receiptHash,
+  signReceipt,
+  signReceiptJson,
+  signReceiptUnchecked,
+  verifyReceipt,
+  verifyReceiptJson,
+  verifyReceiptUnderPin,
+  type SpendReceiptClaims,
+} from "@cedulon/receipts";
 import { findCheckpointChainBreak, findEquivocation, signCheckpoint, verifyCheckpoint } from "@cedulon/checkpoint";
-import { verifyDecisionToken } from "@cedulon/core";
-import { signManifest } from "@cedulon/manifest";
+import { decisionTokenToCbor, signDecisionToken, verifyDecisionToken } from "@cedulon/core";
+import { manifestHash, manifestToCbor, signManifest, verifyManifest } from "@cedulon/manifest";
 
 // The package entry starts a stdio server on import; the session is the unit
 // under test here.
@@ -349,7 +367,7 @@ describe("the JSON verifiers answer on input RFC 8785 cannot encode", () => {
     // a limit from a forgery - the same rule the COSE side keeps by asking
     // coseDecodeRefusal beside every false verdict.
     // A window field that is not a safe integer is now named at the shape
-    // gate. The JCS "non-finite number" name still appears when the same
+    // gate. The JCS "non-finite-number" name still appears when the same
     // value sits on an extra member the shape gate does not walk.
     const windowInf = {
       body: { accountId: "a", railId: "r", windowStartMs: INF, windowEndMs: 2, settlements: [] },
@@ -386,7 +404,7 @@ describe("the JSON verifiers answer on input RFC 8785 cannot encode", () => {
     const jcs = audit({ receipts: [], checkpoints: [], extract: extraInf as never });
     const jcsWarn = jcs.warnings.find((f) => f.code === "unauthenticated-extract");
     assert.ok(jcsWarn, "an extra non-finite member still reaches the encode refusal");
-    assert.match(jcsWarn.detail, /non-finite number/);
+    assert.match(jcsWarn.detail, /refused: non-finite-number -/);
   });
 
   it("RED then GREEN: a JSON receipt carrying a non-finite number is unverified, not thrown", () => {
@@ -439,6 +457,103 @@ describe("the JSON verifiers answer on input RFC 8785 cannot encode", () => {
         ),
       /non-finite/,
     );
+  });
+});
+
+const MANIFEST_BODY = {
+  description: "d",
+  amount: "1",
+  currency: "USD",
+  acceptanceCriteriaHash: TEST_HASH,
+  cancelCondition: "none",
+  expiresAtMs: 1_700_000_000_000,
+};
+const TOKEN_CLAIMS = { requestHash: TEST_HASH, policyHash: TEST_HASH, expiryMs: 1, nonce: "n", singleUseId: "u" };
+
+describe("the uint claims are non-negative at the signer and at the verifier", () => {
+  // The label tables type timestampMs, expiresAtMs and expiryMs as CBOR uint.
+  // -1 encodes as a negative integer (major type 1), which the decoder reads
+  // back as a number, so a typeof check alone let it through both ways.
+  const k = generateReceiptKeys();
+
+  it("RED then GREEN: the COSE signers refuse a negative uint claim by its name", () => {
+    assert.throws(() => signReceipt({ ...CLAIMS, timestampMs: -1 }, k.privateKeyPem, k.publicKeyPem), /malformed-timestampMs/);
+    assert.throws(() => signManifest({ ...MANIFEST_BODY, expiresAtMs: -1 }, k.privateKeyPem, k.publicKeyPem), /malformed-expiresAtMs/);
+    assert.throws(() => signDecisionToken({ ...TOKEN_CLAIMS, expiryMs: -1 }, k.privateKeyPem, k.publicKeyPem), /malformed-expiryMs/);
+    assert.doesNotThrow(() => signReceipt({ ...CLAIMS, timestampMs: 0 }, k.privateKeyPem, k.publicKeyPem));
+  });
+
+  it("RED then GREEN: a negative uint claim signed under a valid key does not verify", () => {
+    const receipt = signReceiptUnchecked({ ...CLAIMS, timestampMs: -1 }, k.privateKeyPem, k.publicKeyPem);
+    assert.equal(verifyReceipt(receipt), false, "a receipt timestamped -1 verified");
+
+    const negBody = { ...MANIFEST_BODY, expiresAtMs: -1 };
+    const manifest = {
+      body: negBody,
+      signature: "",
+      publicKeyPem: k.publicKeyPem,
+      encoding: "cose" as const,
+      coseHex: bytesToHex(signCoseSign1(manifestToCbor(negBody), k.privateKeyPem, CTY_MANIFEST)),
+    };
+    assert.equal(verifyManifest(manifest), false, "a manifest expiring at -1 verified");
+
+    const negToken = { ...TOKEN_CLAIMS, expiryMs: -1 };
+    const token = {
+      claims: negToken,
+      publicKeyPem: k.publicKeyPem,
+      encoding: "cose" as const,
+      coseHex: bytesToHex(signCoseSign1(decisionTokenToCbor(negToken), k.privateKeyPem, CTY_DECISION)),
+    };
+    assert.equal(verifyDecisionToken(token), false, "a token expiring at -1 verified");
+
+    assert.equal(verifyDecisionToken(signDecisionToken(TOKEN_CLAIMS, k.privateKeyPem, k.publicKeyPem)), true);
+  });
+});
+
+describe("COSE hex is read strictly on every verify and hash path", () => {
+  // Buffer.from(hex, "hex") accepts uppercase, drops an odd last digit, and
+  // stops at the first character that is not a hex digit, returning what it
+  // read so far. Each of these spellings verified as the honest object.
+  const k = generateReceiptKeys();
+  const dirty = (hex: string) => [hex + "zz", hex.toUpperCase(), hex + "0"];
+
+  it("RED then GREEN: a receipt in a second hex spelling does not verify and has no hash", () => {
+    const receipt = signReceipt(CLAIMS, k.privateKeyPem, k.publicKeyPem);
+    assert.equal(verifyReceipt(receipt), true);
+    for (const coseHex of dirty(receipt.coseHex!)) {
+      assert.equal(verifyReceipt({ ...receipt, coseHex }), false, coseHex.slice(-8));
+      assert.equal(verifyReceiptUnderPin({ ...receipt, coseHex }, k.publicKeyPem), false, coseHex.slice(-8));
+      assert.throws(() => receiptHash({ ...receipt, coseHex }), /hex-/);
+    }
+  });
+
+  it("RED then GREEN: a manifest or decision token in a second hex spelling does not verify", () => {
+    const manifest = signManifest(MANIFEST_BODY, k.privateKeyPem, k.publicKeyPem);
+    const token = signDecisionToken(TOKEN_CLAIMS, k.privateKeyPem, k.publicKeyPem);
+    for (const coseHex of dirty(manifest.coseHex)) {
+      assert.equal(verifyManifest({ ...manifest, coseHex }), false, coseHex.slice(-8));
+      assert.throws(() => manifestHash({ ...manifest, coseHex }), /hex-/);
+    }
+    for (const coseHex of dirty(token.coseHex)) {
+      assert.equal(verifyDecisionToken({ ...token, coseHex }), false, coseHex.slice(-8));
+    }
+  });
+
+  it("RED then GREEN: an audit names a manifest refused for its hex, and does not crash on it", () => {
+    const manifest = signManifest(MANIFEST_BODY, k.privateKeyPem, k.publicKeyPem);
+    const presented = { ...manifest, coseHex: manifest.coseHex + "zz" };
+    const pinned = audit({
+      receipts: [],
+      checkpoints: [],
+      manifest: presented,
+      manifestTrust: { publicKeyPem: k.publicKeyPem },
+    });
+    const mismatch = pinned.findings.find((f) => f.code === "manifest-key-mismatch");
+    assert.ok(mismatch, `the dirty manifest verified under its pin: ${JSON.stringify(pinned.findings)}`);
+    assert.match(mismatch.detail, /refused: hex-not-hex -/);
+    const unpinned = audit({ receipts: [], checkpoints: [], manifest: presented });
+    assert.equal(unpinned.findings.some((f) => f.code === "presented-object-malformed"), false);
+    assert.ok(unpinned.warnings.some((f) => f.code === "unauthenticated-manifest" && /refused: hex-not-hex -/.test(f.detail)));
   });
 });
 

@@ -955,10 +955,10 @@ customers. License: Apache-2.0. Contact: the author of
 draft-dogru-cedulon.
 
 Version compatibility: Verax 0.9.0 depends on `@cedulon/*` 0.16.0.
-Those published packages implement the posted draft-dogru-cedulon-09
-profile and, from 0.13.0, the posted
-draft-dogru-cedulon-decision-profile-03. 0.13.1 changes no behaviour
-from 0.13.0.
+Those packages are not claimed to implement a posted revision: 0.14.0,
+0.15.0 and 0.16.0 each changed verifier behaviour after
+draft-dogru-cedulon-09 was posted, as `docs/UPGRADING.md` records, and
+no posted revision describes the result.
 
 What Verax itself has not proven is recorded in that repository's
 `docs/STATUS.md`, not here.

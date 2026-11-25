@@ -12,9 +12,24 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { audit, auditWindows } from "@cedulon/audit";
+import {
+  AUDIT_MAX_CHECKPOINTS,
+  AUDIT_MAX_INCLUSIONS,
+  AUDIT_MAX_RECEIPTS,
+  AUDIT_MAX_SETTLEMENTS,
+  audit,
+  auditWindows,
+} from "@cedulon/audit";
+import { buildCheckpointClaims, signCheckpoint } from "@cedulon/checkpoint";
 import { parseIJson } from "@cedulon/core";
-import { NAMED_DECODE_REFUSALS } from "@cedulon/cose";
+import {
+  NAMED_DECODE_REFUSALS,
+  bytesToHex,
+  decodeCoseSign1,
+  encodeCbor,
+  encodeCoseSign1,
+  hexToBytes,
+} from "@cedulon/cose";
 import { generateReceiptKeys, signReceipt, signReceiptJson, type SpendReceiptClaims } from "@cedulon/receipts";
 import { EXTRACT_SCOPE_FIELDS, SETTLEMENT_CORE_FIELDS, railExtractTextRefusal } from "@cedulon/x402-adapter";
 
@@ -109,16 +124,7 @@ function implementationRefusals(): Set<string> {
  * a name that joins the table, or leaves the code, has to leave this list
  * in the same change.
  */
-const UNLISTED_IN_APPENDIX_B = new Set([
-  // A body that is not an object. null is the fixed unreadable-input
-  // report; 5, "x" and true reach the report under this name.
-  "missing-extract-body",
-  // canonical() on a value RFC 8785 cannot encode. JSON.parse("1e309")
-  // is Infinity, so presented text reaches it.
-  "non-finite number",
-  // canonical() on a value JSON text cannot produce.
-  "unencodable",
-]);
+const UNLISTED_IN_APPENDIX_B = new Set<string>([]);
 
 const CLAIMS: SpendReceiptClaims = {
   payer: "payer-1",
@@ -159,6 +165,12 @@ function extractBody(body: unknown): string[] {
   return reportTexts({ receipts: [], checkpoints: [], extract: { body, signature: "x", publicKeyPem: "y" } });
 }
 
+/** SIGNED with its payload replaced: header and signature stay well-formed. */
+function withPayload(payload: Uint8Array): string {
+  const msg = decodeCoseSign1(hexToBytes(SIGNED.coseHex!));
+  return bytesToHex(encodeCoseSign1({ ...msg, payload }));
+}
+
 function thrown(fn: () => unknown): string[] {
   try {
     fn();
@@ -188,6 +200,29 @@ const VECTORS: Record<string, Array<() => string[]>> = {
     () => receiptCose("844180a04040"),
   ],
   "cose-sign1-unprotected": [() => receiptCose("8440a101014040")],
+  // A tag (major 6) and a half-precision float (major 7).
+  "cbor-unsupported": [() => receiptCose("c0"), () => receiptCose("f93c00")],
+  // An indefinite-length array, and a reserved additional-information value.
+  "cbor-indefinite": [() => receiptCose("9f"), () => receiptCose("1c")],
+  // An empty map where the COSE_Sign1 array belongs.
+  "cbor-not-array": [() => receiptCose("a0")],
+  // A COSE_Sign1 whose payload is the array [1], not a claim map.
+  "cbor-not-map": [() => receiptCose(withPayload(encodeCbor([1])))],
+  "cose-sign1-length": [() => receiptCose("8340a040")],
+  // A map where the protected header octets belong.
+  "cose-sign1-types": [() => receiptCose("84a0a04040")],
+  "hex-odd": [() => receiptCose(SIGNED.coseHex!.slice(0, -1))],
+  "hex-not-lowercase": [() => receiptCose(SIGNED.coseHex!.toUpperCase())],
+  // Buffer.from(..., "hex") stops at "zz" and returns the receipt without it.
+  "hex-not-hex": [() => receiptCose(SIGNED.coseHex! + "zz")],
+  "missing-extract-body": [() => extractBody(5), () => extractBody("x"), () => extractBody(true)],
+  // JSON.parse("1e309") is Infinity, so presented text reaches it.
+  "non-finite-number": [
+    () => extractBody({ ...BODY, extra: Infinity }),
+    () => reportTexts({ receipts: [{ ...SIGNED, claims: { ...SIGNED.claims, timestampMs: Number.NaN } }], checkpoints: [] }),
+  ],
+  // A member JSON text cannot produce: the object was handed over, not parsed.
+  unencodable: [() => extractBody({ ...BODY, extra: undefined })],
   "json-duplicate-key": [
     () => [railExtractTextRefusal('{"body":{"accountId":"a","accountId":"b"}}') ?? ""],
     () => thrown(() => parseIJson('{"a":1,"a":2}')),
@@ -257,7 +292,8 @@ describe("Appendix B refusals are the names the reports carry", () => {
 describe("an input the verifier cannot read at all is not a refusal of one object", () => {
   const SENTENCE =
     "An audit input or a verifier configuration that the verifier cannot read at all is not a refusal of one object: " +
-    "the audit is not carried out, and the report fails with `presented-object-malformed` as its only finding.";
+    "the audit is not carried out, and the report fails with `presented-object-malformed` as its only finding, " +
+    "with one exception, which returns no report at all: `audit-too-large`.";
 
   it("the Finding codes section says so", () => {
     assert.ok(SPEC.replace(/\s+/g, " ").includes(SENTENCE), `${SPEC_PATH} no longer carries the sentence`);
@@ -290,5 +326,120 @@ describe("an input the verifier cannot read at all is not a refusal of one objec
     const texts = receiptCose("00".repeat(70_000));
     assert.ok(names(texts, "cbor-too-large"));
     assert.equal(texts.some((t) => t.startsWith("presented-object-malformed")), false);
+  });
+});
+
+describe("audit-too-large is the one refusal of a whole audit, and it returns no report", () => {
+  const flat = SPEC.replace(/\s+/g, " ");
+
+  it("RED then GREEN: the draft states each audit-wide bound the code applies", () => {
+    for (const [axis, bound] of [
+      ["Spend Receipts", AUDIT_MAX_RECEIPTS],
+      ["settlement records", AUDIT_MAX_SETTLEMENTS],
+      ["checkpoints", AUDIT_MAX_CHECKPOINTS],
+      ["witness receipts", AUDIT_MAX_INCLUSIONS],
+    ] as const) {
+      assert.ok(flat.includes(`more than ${bound} ${axis}`), `the draft does not bound ${axis} at ${bound}`);
+    }
+    assert.ok(
+      flat.includes("`audit-too-large` is not a finding, is not one of the refusals of Appendix B"),
+      "the draft does not say audit-too-large is outside the report",
+    );
+  });
+
+  it("each axis over its bound throws audit-too-large naming the axis, the count and the bound", () => {
+    const over = (n: number) => new Array(n + 1).fill(null);
+    const cases: Array<[string, Record<string, unknown>]> = [
+      [`receipts ${AUDIT_MAX_RECEIPTS + 1} > ${AUDIT_MAX_RECEIPTS}`, { receipts: over(AUDIT_MAX_RECEIPTS), checkpoints: [] }],
+      [`checkpoints ${AUDIT_MAX_CHECKPOINTS + 1} > ${AUDIT_MAX_CHECKPOINTS}`, { receipts: [], checkpoints: over(AUDIT_MAX_CHECKPOINTS) }],
+      [
+        `settlements ${AUDIT_MAX_SETTLEMENTS + 1} > ${AUDIT_MAX_SETTLEMENTS}`,
+        { receipts: [], checkpoints: [], settlements: over(AUDIT_MAX_SETTLEMENTS) },
+      ],
+      [
+        `inclusions ${AUDIT_MAX_INCLUSIONS + 1} > ${AUDIT_MAX_INCLUSIONS}`,
+        { receipts: [], checkpoints: [], inclusionReceipts: over(AUDIT_MAX_INCLUSIONS) },
+      ],
+    ];
+    for (const [named, input] of cases) {
+      assert.throws(
+        () => audit(input as never),
+        (err: Error & { code?: string }) => err.code === "audit-too-large" && err.message.includes(named),
+        named,
+      );
+    }
+  });
+});
+
+const SETTLED_CLAIMS: SpendReceiptClaims = {
+  ...CLAIMS,
+  x402PaymentRef: "ref-s",
+  outcome: "settled",
+  nonce: "s1".padEnd(16, "0"),
+};
+const SETTLED = signReceipt(SETTLED_CLAIMS, KEYS.privateKeyPem, KEYS.publicKeyPem);
+const SETTLED_ROW = { ref: "ref-s", amount: "1", currency: "USD", timestampMs: SETTLED_CLAIMS.timestampMs };
+const CP_START = SETTLED_CLAIMS.timestampMs;
+const CHECKPOINT = signCheckpoint(
+  buildCheckpointClaims(1, [SETTLED], CP_START, CP_START + 10, null),
+  KEYS.privateKeyPem,
+  KEYS.publicKeyPem,
+);
+
+describe("a refused object is not counted, whether or not a key is pinned", () => {
+  it("RED then GREEN: with no issuer pin, a refused receipt is not in the working set and covers no settlement", () => {
+    const honest = audit({ receipts: [SETTLED], checkpoints: [], settlements: [SETTLED_ROW] });
+    assert.equal(honest.counts.receipts.attested, 1);
+    assert.equal(honest.findings.some((f) => f.code === "settlement-without-receipt"), false);
+
+    const refused = { ...SETTLED, coseHex: SETTLED.coseHex! + "00" };
+    const report = audit({ receipts: [refused], checkpoints: [], settlements: [SETTLED_ROW] });
+    assert.equal(report.counts.receipts.attested, 0, "the refused receipt was counted as attested");
+    assert.equal(report.counts.receipts.inScope, 0, "the refused receipt was counted in scope");
+    assert.ok(
+      report.findings.some((f) => f.code === "settlement-without-receipt" && f.id === "ref-s"),
+      `the settlement the refused receipt names is not reported uncovered: ${JSON.stringify(report.findings)}`,
+    );
+    assert.ok(names(reportTexts({ receipts: [refused], checkpoints: [], settlements: [SETTLED_ROW] }), "cbor-trailing"));
+  });
+
+  it("RED then GREEN: with no rail pin, the rows of an extract refused by name are not reconciled", () => {
+    const extract = { body: { ...BODY, settlements: [ROW], extra: Infinity }, signature: "x", publicKeyPem: "y" };
+    const report = audit({ receipts: [], checkpoints: [], extract } as never);
+    assert.equal(
+      report.findings.some((f) => f.code === "settlement-without-receipt"),
+      false,
+      `a row of the refused extract convicted: ${JSON.stringify(report.findings)}`,
+    );
+    assert.ok(report.warnings.some((f) => f.code === "settlement-comparison-skipped"));
+    assert.equal(report.counts.settlements.rows, 1);
+    assert.equal(report.counts.settlements.unreconciled, 1);
+    assert.equal(report.guarantee, "conditional");
+  });
+
+  it("RED then GREEN: with no issuer pin, a refused checkpoint covers no window, and its refusal keeps its name", () => {
+    const covered = audit({ receipts: [SETTLED], checkpoints: [CHECKPOINT], settlements: [SETTLED_ROW] });
+    assert.equal(covered.findings.some((f) => f.code === "window-coverage"), false);
+
+    const refused = { ...CHECKPOINT, coseHex: CHECKPOINT.coseHex + "00" };
+    const report = audit({ receipts: [SETTLED], checkpoints: [refused], settlements: [SETTLED_ROW] });
+    assert.ok(
+      report.findings.some((f) => f.code === "window-coverage" && f.id === SETTLED_CLAIMS.nonce),
+      `the receipt is still covered by the refused checkpoint: ${JSON.stringify(report.findings)}`,
+    );
+    assert.ok(report.findings.some((f) => /refused: cbor-trailing -/.test(f.detail)));
+  });
+
+  it("RED then GREEN: under an issuer pin, a refused checkpoint is reported by its refusal's name", () => {
+    const refused = { ...CHECKPOINT, coseHex: CHECKPOINT.coseHex + "00" };
+    const report = audit({
+      receipts: [SETTLED],
+      checkpoints: [refused],
+      settlements: [SETTLED_ROW],
+      issuerTrust: { publicKeyPem: KEYS.publicKeyPem },
+    });
+    const finding = report.findings.find((f) => f.code === "issuer-key-mismatch" && f.id === "epoch-1");
+    assert.ok(finding, JSON.stringify(report.findings));
+    assert.match(finding.detail, /refused: cbor-trailing -/);
   });
 });

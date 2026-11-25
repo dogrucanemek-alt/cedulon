@@ -65,6 +65,14 @@ export function isValidAmountText(amount: unknown): amount is string {
 }
 
 /**
+ * A claim the label tables type as CBOR uint. -1 encodes as a negative
+ * integer and decodes back as a number, so `typeof` alone admits it.
+ */
+export function isUintClaim(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+/**
  * Table 3/5/7 hash-shaped claims: 64-character lowercase hex SHA-256.
  * The decoder keeps reading a tstr; this grammar is the validator.
  */

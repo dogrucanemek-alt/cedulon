@@ -1,6 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, verify } from "node:crypto";
 import { asSigner, type Signer } from "./signer.ts";
-import { asArray, cborMap, decodeCbor, encodeCbor, hexToBytes, isCborMap, mapGet, namedDecodeRefusal } from "./cbor.ts";
+import { asArray, asMap, cborMap, decodeCbor, encodeCbor, hexToBytes, isCborMap, mapGet, namedDecodeRefusal } from "./cbor.ts";
 
 /** RFC 9052 EdDSA. Deprecated for this profile; use Ed25519 (-19). */
 export const COSE_ALG_EDDSA = -8;
@@ -236,9 +236,9 @@ export function coseDecodeRefusal(bytes: Uint8Array): string | null {
   try {
     const msg = decodeCoseSign1(bytes);
     decodeProtectedHeader(msg.protectedHeader);
-    // The payload is CBOR in every object this profile defines; a bound hit
-    // while reading it is the same class of refusal as one hit above it.
-    decodeCbor(msg.payload);
+    // The payload is a CBOR map in every object this profile defines; a bound
+    // hit while reading it is the same class of refusal as one hit above it.
+    asMap(decodeCbor(msg.payload));
     return null;
   } catch (err) {
     return namedDecodeRefusal(err);
@@ -252,9 +252,9 @@ export function coseDecodeRefusalHex(coseHex: string | undefined | null): string
   }
   try {
     return coseDecodeRefusal(hexToBytes(coseHex));
-  } catch {
-    // Not even hex. Whatever it is, it is not a bound this profile names.
-    return null;
+  } catch (err) {
+    // Hex that is not this profile's spelling is refused by name too.
+    return namedDecodeRefusal(err);
   }
 }
 

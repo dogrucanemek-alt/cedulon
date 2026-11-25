@@ -200,6 +200,6 @@ describe("rail extract POSIX millisecond fields are safe integers", () => {
     assert.equal(railExtractShapeRefusal(extra), null);
     const keys = generateExtractKeys();
     const signed = signRailExtract(body, keys.privateKeyPem, keys.publicKeyPem);
-    assert.equal(railExtractEncodeRefusal({ ...signed, body: extra as RailExtractBody }), "non-finite number");
+    assert.equal(railExtractEncodeRefusal({ ...signed, body: extra as RailExtractBody }), "non-finite-number");
   });
 });

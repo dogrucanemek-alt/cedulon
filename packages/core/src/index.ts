@@ -39,6 +39,7 @@ export {
   HASH_CLAIM_FIELDS,
   HASH_HEX_RE,
   hashClaimRefusal,
+  isUintClaim,
   isValidAmountText,
   isValidHashText,
   malformedHashCode,
