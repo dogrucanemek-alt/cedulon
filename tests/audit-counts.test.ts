@@ -113,8 +113,9 @@ function assertConserved(counts: AuditCounts): void {
     "every settlement row lands in exactly one class",
   );
   assert.equal(r.matched, s.matched, "a match is one receipt against one row");
-  assert.ok(r.attested <= r.submitted);
-  assert.ok(r.inScope <= r.attested);
+  assert.ok(r.attested <= r.covering);
+  assert.ok(r.covering <= r.submitted);
+  assert.ok(r.inScope <= r.covering);
 }
 
 function counted(report: AuditReport): AuditCounts {
@@ -201,6 +202,7 @@ describe("Round 5: the report publishes the class counts it already computes", (
     assert.deepEqual(c.receipts, {
       submitted: 5,
       attested: 5,
+      covering: 5,
       inScope: 5,
       aborted: 0,
       settled: 5,
@@ -242,6 +244,7 @@ describe("Round 5: the report publishes the class counts it already computes", (
     const c = counted(report);
     assert.equal(c.receipts.submitted, 3);
     assert.equal(c.receipts.attested, 2);
+    assert.equal(c.receipts.covering, 2);
     assert.equal(c.receipts.inScope, 1);
     assert.equal(c.receipts.matched, 1);
   });
@@ -309,7 +312,7 @@ describe("Round 5: the report publishes the class counts it already computes", (
     const printed = formatAudit(report, 2);
     assert.match(
       printed,
-      /^counts\treceipts\tsubmitted=2 attested=2 in-scope=2 aborted=1 settled=1 matched=1 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0$/m,
+      /^counts\treceipts\tsubmitted=2 attested=2 covering=2 in-scope=2 aborted=1 settled=1 matched=1 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0$/m,
     );
     assert.match(
       printed,

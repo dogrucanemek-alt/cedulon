@@ -103,6 +103,7 @@ describe("coverage set vs diagnostic set (pin matrix)", () => {
       issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
     });
     assert.equal(report.counts.receipts.attested, 2);
+    assert.equal(report.counts.receipts.covering, 2);
     assert.equal(report.ok, true);
     assert.deepEqual(mismatchIds(report), []);
   });
@@ -155,7 +156,8 @@ describe("coverage set vs diagnostic set (pin matrix)", () => {
       extract: s.extract,
       trust: s.trust,
     });
-    assert.equal(report.counts.receipts.attested, 2);
+    assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.covering, 2);
     assert.equal(report.ok, true);
     assert.equal(report.guarantee, "conditional");
     assert.deepEqual(mismatchIds(report), []);
@@ -209,6 +211,7 @@ describe("coverage set vs diagnostic set (pin matrix)", () => {
       issuerTrust: { publicKeyPem: "not a key" },
     } as Parameters<typeof audit>[0]);
     assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.covering, 0);
     assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
     assert.ok(
       report.findings.some((f) => f.code === "settlement-without-receipt"),
@@ -237,6 +240,7 @@ describe("coverage set vs diagnostic set (pin matrix)", () => {
       JSON.stringify(report.findings),
     );
     assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.covering, 0);
     assert.equal(
       report.findings.some(
         (f) =>
@@ -270,6 +274,7 @@ describe("coverage set vs diagnostic set (pin matrix)", () => {
       JSON.stringify(report.findings),
     );
     assert.equal(report.counts.receipts.attested, 0);
+    assert.equal(report.counts.receipts.covering, 0);
     assert.deepEqual(mismatchIds(report), [], JSON.stringify(report.findings));
     assert.equal(report.ok, false);
   });
@@ -284,6 +289,7 @@ describe("coverage set vs diagnostic set (pin matrix)", () => {
       issuerTrust: { publicKeyPem: [s.issuer.publicKeyPem, "not a key"] },
     });
     assert.equal(report.counts.receipts.attested, 2);
+    assert.equal(report.counts.receipts.covering, 2);
     assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
     assert.deepEqual(mismatchIds(report), []);
     assert.equal(report.ok, false);

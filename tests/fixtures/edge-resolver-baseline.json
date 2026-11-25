@@ -29,7 +29,8 @@
         "carried": 0,
         "unmatched": 0,
         "repeated": 0,
-        "unreconciled": 0
+        "unreconciled": 0,
+        "covering": 1
       },
       "settlements": {
         "rows": 0,
@@ -70,7 +71,8 @@
         "carried": 0,
         "unmatched": 0,
         "repeated": 0,
-        "unreconciled": 0
+        "unreconciled": 0,
+        "covering": 1
       },
       "settlements": {
         "rows": 0,
@@ -111,7 +113,8 @@
         "carried": 0,
         "unmatched": 0,
         "repeated": 0,
-        "unreconciled": 0
+        "unreconciled": 0,
+        "covering": 0
       },
       "settlements": {
         "rows": 1,
@@ -152,7 +155,8 @@
         "carried": 0,
         "unmatched": 0,
         "repeated": 0,
-        "unreconciled": 0
+        "unreconciled": 0,
+        "covering": 0
       },
       "settlements": {
         "rows": 1,
@@ -193,7 +197,8 @@
         "carried": 0,
         "unmatched": 1,
         "repeated": 0,
-        "unreconciled": 0
+        "unreconciled": 0,
+        "covering": 1
       },
       "settlements": {
         "rows": 0,
@@ -234,7 +239,8 @@
         "carried": 0,
         "unmatched": 0,
         "repeated": 0,
-        "unreconciled": 0
+        "unreconciled": 0,
+        "covering": 1
       },
       "settlements": {
         "rows": 1,

@@ -2,11 +2,14 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
 import {
+  collectSources,
   compareFacts,
   declaredFacts,
+  fetchWithNetworkRetry,
   isNpmOrGithubUrl,
   probeTarget,
   type FactSources,
+  type FetchLike,
 } from "../scripts/facts-check.ts";
 
 /** Every source agreeing with the declaration. */
@@ -119,3 +122,86 @@ describe("probeTarget asks the registry, not the website", () => {
     );
   });
 });
+
+describe("facts-check retries only network failures", () => {
+  it("network failure then success is green with more than one attempt", async () => {
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      if (calls === 1) throw new TypeError("fetch failed");
+      return new Response("{}", { status: 200 });
+    };
+    const res = await fetchWithNetworkRetry("https://example.test/pkg", undefined, {
+      fetch: fetchImpl,
+      attempts: 3,
+      delayMs: 0,
+    });
+    assert.equal(res.status, 200);
+    assert.equal(calls, 2);
+  });
+
+  it("network failure on every attempt stays red", async () => {
+    let calls = 0;
+    const fetchImpl: FetchLike = async () => {
+      calls += 1;
+      throw new TypeError("fetch failed");
+    };
+    await assert.rejects(
+      () =>
+        fetchWithNetworkRetry("https://example.test/pkg", undefined, {
+          fetch: fetchImpl,
+          attempts: 3,
+          delayMs: 0,
+        }),
+      /fetch failed/,
+    );
+    assert.equal(calls, 3);
+  });
+
+  it("5xx then success retries; 404 does not", async () => {
+    let fiveCalls = 0;
+    const fiveThenOk: FetchLike = async () => {
+      fiveCalls += 1;
+      if (fiveCalls === 1) return new Response("no", { status: 503 });
+      return new Response("ok", { status: 200 });
+    };
+    const ok = await fetchWithNetworkRetry("https://example.test/pkg", undefined, {
+      fetch: fiveThenOk,
+      attempts: 3,
+      delayMs: 0,
+    });
+    assert.equal(ok.status, 200);
+    assert.equal(fiveCalls, 2);
+
+    let fourCalls = 0;
+    const four: FetchLike = async () => {
+      fourCalls += 1;
+      return new Response("missing", { status: 404 });
+    };
+    const missing = await fetchWithNetworkRetry("https://example.test/pkg", undefined, {
+      fetch: four,
+      attempts: 3,
+      delayMs: 0,
+    });
+    assert.equal(missing.status, 404);
+    assert.equal(fourCalls, 1);
+  });
+
+  it("collectSources: persistent network failure names the unreachable source", async () => {
+    const declared = declaredFacts();
+    const fetchImpl: FetchLike = async () => {
+      throw new TypeError("fetch failed");
+    };
+    const { fetchProblems } = await collectSources(declared, {
+      fetch: fetchImpl,
+      attempts: 3,
+      delayMs: 0,
+    });
+    assert.ok(fetchProblems.length > 0, "expected fetch problems");
+    assert.ok(
+      fetchProblems.some((p) => p.includes(declared.conceptDoi) && /fetch failed/.test(p)),
+      fetchProblems.join(" | "),
+    );
+  });
+});
+

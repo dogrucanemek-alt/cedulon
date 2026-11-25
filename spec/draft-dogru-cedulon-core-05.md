@@ -323,14 +323,19 @@ Pinned key:
 : A public key the verifier obtained out of band, as opposed to a key an
   object carries beside its signature. See {{trust-roots}}.
 
+Attested:
+: A receipt or checkpoint that verifies under a usable pinned issuer
+  key. Without a usable pin - none stated, or a stated pin that cannot
+  be read - nothing is attested. See {{issuer-root}}.
+
 Coverage set:
-: The receipts and checkpoints that count as settlement coverage and
-  as attested. Under a usable pinned issuer key it is the attested
-  set - the receipts and checkpoints that verify under a usable
-  pinned issuer key. When no issuer key is pinned, the same members
-  as the diagnostic set (presented-unattested). When a pin is stated
-  but no key in it can be read, empty: nothing is attested and no
-  settlement is covered. See {{issuer-root}}.
+: The receipts and checkpoints that count as settlement coverage. Under
+  a usable pinned issuer key it is the attested set - the receipts and
+  checkpoints that verify under a usable pinned issuer key. When no
+  issuer key is pinned, the same members as the diagnostic set
+  (presented-unattested); those members are not attested. When a pin is
+  stated but no key in it can be read, empty: nothing is attested and
+  no settlement is covered. See {{issuer-root}}.
 
 Diagnostic set:
 : The receipts and checkpoints consumed for refusal naming and for
@@ -346,10 +351,10 @@ Diagnostic set:
 
 Working set:
 : Where a step does not need the coverage/diagnostic split, the set
-  it consumes: the coverage set for settlement and attested counting,
-  and the diagnostic set for refusal naming and continuity. The two
-  coincide except when a stated issuer pin cannot be read. See
-  {{verification}}.
+  it consumes: the coverage set for settlement counting, the attested
+  set for attested counting, and the diagnostic set for refusal naming
+  and continuity. Coverage and diagnostic coincide except when a stated
+  issuer pin cannot be read. See {{verification}}.
 
 Presented-unattested:
 : The state of a receipt or checkpoint the verifier holds no pinned
@@ -2339,7 +2344,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 1051 of 1051,
+  this revision describes, all three assert every case, 1060 of 1060,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.

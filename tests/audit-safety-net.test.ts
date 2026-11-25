@@ -27,6 +27,7 @@ const EMPTY_COUNTS = {
   receipts: {
     submitted: 0,
     attested: 0,
+    covering: 0,
     inScope: 0,
     aborted: 0,
     settled: 0,
@@ -126,6 +127,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 1,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -178,6 +180,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 1,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -230,6 +233,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 1,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -282,6 +286,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 0,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -335,6 +340,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 0,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -392,6 +398,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 0,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,
@@ -616,6 +623,7 @@ const MASTER_EQUIV: Record<string, ReturnType<typeof snap>> = {
       receipts: {
         submitted: 1,
         attested: 0,
+        covering: 0,
         inScope: 0,
         aborted: 0,
         settled: 0,

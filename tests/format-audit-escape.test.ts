@@ -15,6 +15,7 @@ const EMPTY_COUNTS: AuditCounts = {
   receipts: {
     submitted: 1,
     attested: 1,
+    covering: 1,
     inScope: 1,
     aborted: 0,
     settled: 1,
@@ -42,7 +43,7 @@ const REAL_FINDING: Finding = {
 };
 
 const COUNTS_RECEIPTS =
-  "counts\treceipts\tsubmitted=1 attested=1 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0";
+  "counts\treceipts\tsubmitted=1 attested=1 covering=1 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0";
 const COUNTS_SETTLEMENTS =
   "counts\tsettlements\trows=0 matched=0 deferred=0 unmatched=0 repeated=0 unreconciled=0";
 /** Same unforgeable marker `formatAudit` prints for a wrong-typed slot. */
@@ -612,7 +613,7 @@ describe("formatAudit numeric slots never open a line", () => {
       const settlementLine = printed.split("\n").find((l) => l.startsWith("counts\tsettlements\t"))!;
       assert.equal(
         receiptLine,
-        `counts\treceipts\tsubmitted=${ABSENT} attested=1 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
+        `counts\treceipts\tsubmitted=${ABSENT} attested=1 covering=1 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
         printed,
       );
       assert.equal(
@@ -715,6 +716,7 @@ describe("formatAudit numeric slots never open a line", () => {
             ...EMPTY_COUNTS.receipts,
             submitted: "1 attested=2" as unknown as number,
             attested: 3,
+            covering: 3,
           },
         },
       }),
@@ -735,11 +737,11 @@ describe("formatAudit numeric slots never open a line", () => {
     const lineB = submittedAttestedSwapB.split("\n").find((l) => l.startsWith("counts\treceipts\t"))!;
     assert.equal(
       lineA,
-      `counts\treceipts\tsubmitted=${marker} attested=3 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
+      `counts\treceipts\tsubmitted=${marker} attested=3 covering=3 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
     );
     assert.equal(
       lineB,
-      `counts\treceipts\tsubmitted=1 attested=${marker} in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
+      `counts\treceipts\tsubmitted=1 attested=${marker} covering=1 in-scope=1 aborted=0 settled=1 matched=0 deferred=0 carried=0 unmatched=1 repeated=0 unreconciled=0`,
     );
     assert.notEqual(lineA, lineB);
 

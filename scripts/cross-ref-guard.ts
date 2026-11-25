@@ -12,6 +12,7 @@ import {
   companionDraftPaths,
   core00FamilyPaths,
   latestDraftPath,
+  sideDraftPaths,
 } from "./latest-draft.ts";
 
 export type CrossRefHit = {
@@ -26,6 +27,7 @@ export function publicationDraftPaths(root: string): string[] {
     latestDraftPath(root),
     ...core00FamilyPaths(root),
     ...companionDraftPaths(root),
+    ...sideDraftPaths(root),
   ];
   const seen = new Set<string>();
   const out: string[] = [];
@@ -64,10 +66,29 @@ export function resolvableIds(text: string): Set<string> {
   return ids;
 }
 
-export function collectCrossRefs(text: string): Array<{ ref: string; index: number }> {
-  const out: Array<{ ref: string; index: number }> = [];
-  for (const m of text.matchAll(/\{\{([A-Za-z0-9._-]+)\}\}/g)) {
-    out.push({ ref: m[1]!, index: m.index! });
+export type CollectedCrossRef = {
+  ref: string;
+  index: number;
+  /** True when the braces hold spaces or a non-id token. */
+  malformed: boolean;
+};
+
+/**
+ * Every `{{...}}` pair. A well-formed ref is exactly one id token; leading
+ * or trailing space, an empty body, or any other grammar failure is
+ * malformed and never resolves.
+ */
+export function collectCrossRefs(text: string): CollectedCrossRef[] {
+  const out: CollectedCrossRef[] = [];
+  for (const m of text.matchAll(/\{\{([^{}]*)\}\}/g)) {
+    const raw = m[1]!;
+    const trimmed = raw.trim();
+    const wellFormed = trimmed === raw && /^[A-Za-z0-9._-]+$/.test(trimmed);
+    out.push({
+      ref: wellFormed ? trimmed : trimmed.length > 0 ? trimmed : raw.length > 0 ? raw : "∅",
+      index: m.index!,
+      malformed: !wellFormed,
+    });
   }
   return out;
 }
@@ -80,8 +101,8 @@ export function crossRefFailures(text: string, fileLabel: string): CrossRefHit[]
   const ids = resolvableIds(text);
   const hits: CrossRefHit[] = [];
   const seen = new Set<string>();
-  for (const { ref, index } of collectCrossRefs(text)) {
-    if (ids.has(ref)) continue;
+  for (const { ref, index, malformed } of collectCrossRefs(text)) {
+    if (!malformed && ids.has(ref)) continue;
     const key = `${fileLabel}:${ref}`;
     if (seen.has(key)) continue;
     seen.add(key);

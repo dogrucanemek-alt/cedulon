@@ -142,10 +142,71 @@ type NpmAbbreviated = { "dist-tags"?: { latest?: unknown } };
 type NpmManifest = { dependencies?: Record<string, unknown> };
 type DataCiteDoc = { data?: { attributes?: { version?: unknown } } };
 
-async function npmLatest(name: string): Promise<string> {
-  const res = await fetch(`https://registry.npmjs.org/${name.replace("/", "%2f")}`, {
-    headers: { accept: "application/vnd.npm.install-v1+json" },
-  });
+export type FetchLike = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
+export type NetworkRetryOptions = {
+  fetch?: FetchLike;
+  /** Total attempts including the first. Default 3. */
+  attempts?: number;
+  /** Pause between attempts. Default 200ms; tests set 0. */
+  delayMs?: number;
+  sleep?: (ms: number) => Promise<void>;
+};
+
+/** Fetch rejection / timeout class failures that may clear on retry. */
+export function isNetworkFailure(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (!(error instanceof Error)) return false;
+  if (error.name === "AbortError") return true;
+  return /fetch failed|network|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket/i.test(
+    error.message,
+  );
+}
+
+export function isRetryableHttpStatus(status: number): boolean {
+  return status >= 500 && status < 600;
+}
+
+/**
+ * Retry only on network failure or 5xx. 4xx, value-shape problems, and other
+ * HTTP answers are returned or thrown on the first attempt.
+ */
+export async function fetchWithNetworkRetry(
+  input: string | URL,
+  init?: RequestInit,
+  opts: NetworkRetryOptions = {},
+): Promise<Response> {
+  const fetchImpl = opts.fetch ?? globalThis.fetch;
+  const attempts = opts.attempts ?? 3;
+  const delayMs = opts.delayMs ?? 200;
+  const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  let lastError: unknown;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const res = await fetchImpl(input, init);
+      if (isRetryableHttpStatus(res.status) && i < attempts) {
+        await sleep(delayMs);
+        continue;
+      }
+      return res;
+    } catch (error) {
+      lastError = error;
+      if (!isNetworkFailure(error) || i >= attempts) throw error;
+      await sleep(delayMs);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function npmLatest(name: string, opts: NetworkRetryOptions): Promise<string> {
+  const res = await fetchWithNetworkRetry(
+    `https://registry.npmjs.org/${name.replace("/", "%2f")}`,
+    { headers: { accept: "application/vnd.npm.install-v1+json" } },
+    opts,
+  );
   if (!res.ok) throw new Error(`npm ${res.status}`);
   const doc = (await res.json()) as NpmAbbreviated;
   const version = doc["dist-tags"]?.latest;
@@ -153,8 +214,16 @@ async function npmLatest(name: string): Promise<string> {
   return version;
 }
 
-async function cedulonDependencies(name: string, version: string): Promise<Record<string, string>> {
-  const res = await fetch(`https://registry.npmjs.org/${name.replace("/", "%2f")}/${version}`);
+async function cedulonDependencies(
+  name: string,
+  version: string,
+  opts: NetworkRetryOptions,
+): Promise<Record<string, string>> {
+  const res = await fetchWithNetworkRetry(
+    `https://registry.npmjs.org/${name.replace("/", "%2f")}/${version}`,
+    undefined,
+    opts,
+  );
   if (!res.ok) throw new Error(`npm ${res.status}`);
   const doc = (await res.json()) as NpmManifest;
   const found: Record<string, string> = {};
@@ -164,8 +233,12 @@ async function cedulonDependencies(name: string, version: string): Promise<Recor
   return found;
 }
 
-async function dataciteVersion(doi: string): Promise<string> {
-  const res = await fetch(`https://api.datacite.org/dois/${doi}`);
+async function dataciteVersion(doi: string, opts: NetworkRetryOptions): Promise<string> {
+  const res = await fetchWithNetworkRetry(
+    `https://api.datacite.org/dois/${doi}`,
+    undefined,
+    opts,
+  );
   if (!res.ok) throw new Error(`DataCite ${res.status}`);
   const doc = (await res.json()) as DataCiteDoc;
   const version = doc.data?.attributes?.version;
@@ -173,17 +246,19 @@ async function dataciteVersion(doi: string): Promise<string> {
   return version;
 }
 
-async function probeUrl(url: string): Promise<number> {
+async function probeUrl(url: string, opts: NetworkRetryOptions): Promise<number> {
   const target = probeTarget(url);
   if (target !== url) {
-    const res = await fetch(target, {
-      headers: { accept: "application/vnd.npm.install-v1+json" },
-    });
+    const res = await fetchWithNetworkRetry(
+      target,
+      { headers: { accept: "application/vnd.npm.install-v1+json" } },
+      opts,
+    );
     return res.status;
   }
-  const head = await fetch(url, { method: "HEAD" });
+  const head = await fetchWithNetworkRetry(url, { method: "HEAD" }, opts);
   if (isLiveStatus(head.status)) return head.status;
-  const get = await fetch(url, { method: "GET" });
+  const get = await fetchWithNetworkRetry(url, { method: "GET" }, opts);
   return get.status;
 }
 
@@ -191,7 +266,11 @@ function sourceLabel(error: unknown): string {
   return error instanceof Error ? error.message : "unreachable";
 }
 
-async function collectSources(declared: DeclaredFacts): Promise<{
+/** Collect third-party facts; `opts.fetch` keeps the suite off the network. */
+export async function collectSources(
+  declared: DeclaredFacts,
+  opts: NetworkRetryOptions = {},
+): Promise<{
   sources: FactSources;
   fetchProblems: string[];
 }> {
@@ -201,7 +280,7 @@ async function collectSources(declared: DeclaredFacts): Promise<{
   sources.npmVerax = {};
   for (const name of declared.veraxPackages) {
     try {
-      sources.npmVerax[name] = await npmLatest(name);
+      sources.npmVerax[name] = await npmLatest(name, opts);
     } catch (error) {
       fetchProblems.push(`${name} ${declared.veraxVersion} → ${sourceLabel(error)}`);
     }
@@ -210,7 +289,11 @@ async function collectSources(declared: DeclaredFacts): Promise<{
   sources.veraxCedulonDeps = {};
   for (const name of Object.keys(declared.veraxCedulonDeps)) {
     try {
-      sources.veraxCedulonDeps[name] = await cedulonDependencies(name, declared.veraxVersion);
+      sources.veraxCedulonDeps[name] = await cedulonDependencies(
+        name,
+        declared.veraxVersion,
+        opts,
+      );
     } catch (error) {
       fetchProblems.push(
         `${name}@${declared.veraxVersion} @cedulon/* ${declared.cedulonVersion} → ${sourceLabel(error)}`,
@@ -219,7 +302,7 @@ async function collectSources(declared: DeclaredFacts): Promise<{
   }
 
   try {
-    sources.dataciteVersion = await dataciteVersion(declared.conceptDoi);
+    sources.dataciteVersion = await dataciteVersion(declared.conceptDoi, opts);
   } catch (error) {
     fetchProblems.push(
       `${declared.conceptDoi} ${declared.veraxArchivedVersion} → ${sourceLabel(error)}`,
@@ -229,7 +312,7 @@ async function collectSources(declared: DeclaredFacts): Promise<{
   for (const url of declared.urls) {
     if (!isNpmOrGithubUrl(url)) continue;
     try {
-      sources.urlStatuses![url] = await probeUrl(url);
+      sources.urlStatuses![url] = await probeUrl(url, opts);
     } catch (error) {
       const target = probeTarget(url);
       fetchProblems.push(

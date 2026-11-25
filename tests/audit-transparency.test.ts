@@ -1,6 +1,9 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { audit } from "@cedulon/audit";
 import {
   MemoryTransparencyService,
@@ -307,6 +310,31 @@ describe("A — transparency witness on the audit path", () => {
     );
   });
 
+  it("without an issuer pin a witness that only binds the presented checkpoint raises no unattributable finding (MUST-T11-16)", () => {
+    const k = generateReceiptKeys();
+    const receipts = chainReceipts(k, ["1"]);
+    const presented = oneCheckpoint(k, receipts, 1);
+    const ts = new MemoryTransparencyService(fixtureEd25519Pems());
+    const presentedReceipt = anchorCheckpoint(ts, presented);
+    const report = audit({
+      receipts,
+      checkpoints: [presented],
+      settlements: settlementsOf(receipts),
+      inclusionReceipts: [presentedReceipt],
+      witnessTrust: { publicKeyPem: ts.publicKeyPem },
+    });
+    assert.equal(
+      report.warnings.some((w) => w.code === "witness-entry-unattributable"),
+      false,
+      `present-only unpinned witness must stay quiet: ${JSON.stringify(report.warnings)}`,
+    );
+    assert.equal(
+      report.findings.some((f) => f.code === "checkpoint-withheld"),
+      false,
+      JSON.stringify(report.findings),
+    );
+  });
+
   it("without an issuer pin a same-key withheld body is unattributable, not withheld (MUST-T11-16 requires the issuer root)", () => {
     const k = generateReceiptKeys();
     const receipts = chainReceipts(k, ["1"]);
@@ -495,6 +523,23 @@ describe("A — transparency witness on the audit path", () => {
 });
 
 describe("B — equivocation via the witness", () => {
+  it("RED: the pre-c9 MUST-T11-16 blanket 'any body is unattributable' wording is gone", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const text = readFileSync(join(root, "spec", "draft-dogru-cedulon-checkpoint-01.md"), "utf8");
+    assert.equal(
+      text.includes(
+        "Without a usable issuer pin, a witness body MUST NOT produce a withholding or equivocation verdict and MUST be reported as unattributable instead.",
+      ),
+      false,
+    );
+    assert.equal(text.includes("or any body when no usable issuer pin was supplied"), false);
+    assert.ok(
+      text.includes(
+        "a body that binds a presented checkpoint is not an accusation and MUST NOT raise a separate finding",
+      ),
+    );
+  });
+
   it("RED then GREEN: without an issuer pin a witness twin is unattributable, not equivocation (MUST-T11-16)", () => {
     const k = generateReceiptKeys();
     const a = chainReceipts(k, ["1"]);

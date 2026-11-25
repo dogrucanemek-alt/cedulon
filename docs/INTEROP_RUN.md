@@ -67,7 +67,7 @@ npm run audit
 summary	audit: balanced
 result	balanced findings=0
 guarantee	conditional
-counts	receipts	submitted=2 attested=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
+counts	receipts	submitted=2 attested=0 covering=2 in-scope=2 aborted=0 settled=2 matched=2 deferred=0 carried=0 unmatched=0 repeated=0 unreconciled=0
 counts	settlements	rows=2 matched=2 deferred=0 unmatched=0 repeated=0 unreconciled=0
 warning	unauthenticated-extract	no rail extract was supplied; the rows arrived unsigned, so the completeness guarantee is conditional
 warning	unauthenticated-issuer	no verifier-supplied issuer key; receipt and checkpoint signatures prove internal consistency, not that the named issuer produced them. Without one there is no way to tell a receipt from this issuer apart from any other, so every receipt submitted is weighed as one set and the completeness guarantee is conditional

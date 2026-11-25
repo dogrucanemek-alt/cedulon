@@ -389,12 +389,14 @@ const CHECKPOINT = signCheckpoint(
 describe("a refused object is not counted, whether or not a key is pinned", () => {
   it("RED then GREEN: with no issuer pin, a refused receipt is not in the working set and covers no settlement", () => {
     const honest = audit({ receipts: [SETTLED], checkpoints: [], settlements: [SETTLED_ROW] });
-    assert.equal(honest.counts.receipts.attested, 1);
+    assert.equal(honest.counts.receipts.attested, 0);
+    assert.equal(honest.counts.receipts.covering, 1);
     assert.equal(honest.findings.some((f) => f.code === "settlement-without-receipt"), false);
 
     const refused = { ...SETTLED, coseHex: SETTLED.coseHex! + "00" };
     const report = audit({ receipts: [refused], checkpoints: [], settlements: [SETTLED_ROW] });
     assert.equal(report.counts.receipts.attested, 0, "the refused receipt was counted as attested");
+    assert.equal(report.counts.receipts.covering, 0, "the refused receipt was counted as covering");
     assert.equal(report.counts.receipts.inScope, 0, "the refused receipt was counted in scope");
     assert.ok(
       report.findings.some((f) => f.code === "settlement-without-receipt" && f.id === "ref-s"),

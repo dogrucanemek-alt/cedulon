@@ -267,29 +267,38 @@ export type AuditScope = {
  * of these on its way to the findings; publishing them is what lets a reader
  * tell a window that excluded one row from a window that held none, which the
  * findings alone cannot say for a row that was rightly excluded without one
- * (docs/EXTERNAL_REVIEW.md, Round 5). Three identities hold on every report:
+ * (docs/EXTERNAL_REVIEW.md, Round 5). Identities that hold on every report:
  *
+ *   receipts.attested ≤ receipts.covering ≤ receipts.submitted
+ *   receipts.inScope ≤ receipts.covering
  *   receipts.inScope = receipts.aborted + receipts.settled
  *   receipts.settled = matched + deferred + carried + unmatched + repeated + unreconciled
  *   settlements.rows = matched + deferred + unmatched + repeated + unreconciled
  *
  * and `receipts.matched` equals `settlements.matched`, a match being one
- * receipt against one row.
+ * receipt against one row. Under a usable issuer pin, `attested` equals
+ * `covering`; without one, or when a stated pin cannot be read, `attested` is 0.
  */
 export type AuditCounts = {
   receipts: {
     /** Every receipt presented. */
     submitted: number;
     /**
-     * Receipts the issuer pin attests; with no issuer key stated, every
-     * submitted receipt in the profile's encoding (MUST-T4-1) that no named
-     * refusal refused. A stated pin that cannot be read attests nothing.
+     * Receipts that verify under a usable pinned issuer key. Zero when no
+     * issuer key is stated, and zero when a stated pin cannot be read.
      */
     attested: number;
     /**
-     * Attested receipts the population admits: ref on the extract, or timestamp
-     * inside its window; every attested receipt when no extract was presented,
-     * and every attested receipt when the presented one was refused, because a
+     * Receipts in the coverage set: under a usable pin, the attested set;
+     * with no pin stated, every submitted receipt in the profile's encoding
+     * (MUST-T4-1) that no named refusal refused (presented-unattested, not
+     * attested); empty when a stated pin cannot be read.
+     */
+    covering: number;
+    /**
+     * Covering receipts the population admits: ref on the extract, or timestamp
+     * inside its window; every covering receipt when no extract was presented,
+     * and every covering receipt when the presented one was refused, because a
      * refused document's window is not evidence either.
      */
     inScope: number;
@@ -752,7 +761,7 @@ export function findSettlementMatches(
 
 /** The classes the reconciliation itself assigns; the population above them is the caller's to count. */
 type MatchCounts = {
-  receipts: Omit<AuditCounts["receipts"], "submitted" | "attested" | "inScope">;
+  receipts: Omit<AuditCounts["receipts"], "submitted" | "attested" | "covering" | "inScope">;
   settlements: AuditCounts["settlements"];
 };
 
@@ -1650,6 +1659,7 @@ function emptyAuditCounts(): AuditCounts {
     receipts: {
       submitted: 0,
       attested: 0,
+      covering: 0,
       inScope: 0,
       aborted: 0,
       settled: 0,
@@ -2594,7 +2604,9 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
   const counts: AuditCounts = {
     receipts: {
       submitted: input.receipts.length,
-      attested: attested.length,
+      // Attested is only under a usable issuer root; covering is the coverage set.
+      attested: issuerPinUsable ? attested.length : 0,
+      covering: attested.length,
       inScope: inScope.length,
       ...matchCounts.receipts,
     },
@@ -2984,7 +2996,7 @@ function formatCounts(counts: AuditCounts, slots: SlotSink): string[] {
   const s = counts.settlements;
   const n = (value: unknown) => slots.nonNeg(value);
   return [
-    `counts\treceipts\tsubmitted=${n(r.submitted)} attested=${n(r.attested)} in-scope=${n(r.inScope)} aborted=${n(r.aborted)} settled=${n(r.settled)} matched=${n(r.matched)} deferred=${n(r.deferred)} carried=${n(r.carried)} unmatched=${n(r.unmatched)} repeated=${n(r.repeated)} unreconciled=${n(r.unreconciled)}`,
+    `counts\treceipts\tsubmitted=${n(r.submitted)} attested=${n(r.attested)} covering=${n(r.covering)} in-scope=${n(r.inScope)} aborted=${n(r.aborted)} settled=${n(r.settled)} matched=${n(r.matched)} deferred=${n(r.deferred)} carried=${n(r.carried)} unmatched=${n(r.unmatched)} repeated=${n(r.repeated)} unreconciled=${n(r.unreconciled)}`,
     `counts\tsettlements\trows=${n(s.rows)} matched=${n(s.matched)} deferred=${n(s.deferred)} unmatched=${n(s.unmatched)} repeated=${n(s.repeated)} unreconciled=${n(s.unreconciled)}`,
   ];
 }
@@ -3160,6 +3172,7 @@ type PlainCounts = {
   receipts: {
     submitted: unknown;
     attested: unknown;
+    covering: unknown;
     inScope: unknown;
     aborted: unknown;
     settled: unknown;
@@ -3363,6 +3376,7 @@ function snapshotCounts(raw: unknown): { counts: PlainCounts | null; inconsisten
   const receiptKeys = [
     "submitted",
     "attested",
+    "covering",
     "inScope",
     "aborted",
     "settled",
@@ -3384,6 +3398,7 @@ function snapshotCounts(raw: unknown): { counts: PlainCounts | null; inconsisten
   const receipts: PlainCounts["receipts"] = {
     submitted: undefined,
     attested: undefined,
+    covering: undefined,
     inScope: undefined,
     aborted: undefined,
     settled: undefined,
@@ -3552,7 +3567,7 @@ export function formatAudit(report: AuditReport, _receiptCount?: number): string
     } else {
       // Keep two count lines so line tags stay stable when counts could not be read.
       body.push(
-        `counts\treceipts\tsubmitted=${slots.nonNeg(undefined)} attested=${slots.nonNeg(undefined)} in-scope=${slots.nonNeg(undefined)} aborted=${slots.nonNeg(undefined)} settled=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} carried=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
+        `counts\treceipts\tsubmitted=${slots.nonNeg(undefined)} attested=${slots.nonNeg(undefined)} covering=${slots.nonNeg(undefined)} in-scope=${slots.nonNeg(undefined)} aborted=${slots.nonNeg(undefined)} settled=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} carried=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
         `counts\tsettlements\trows=${slots.nonNeg(undefined)} matched=${slots.nonNeg(undefined)} deferred=${slots.nonNeg(undefined)} unmatched=${slots.nonNeg(undefined)} repeated=${slots.nonNeg(undefined)} unreconciled=${slots.nonNeg(undefined)}`,
       );
     }

@@ -160,7 +160,7 @@ approving party claimed about itself.
 No claim binds the resolution to the deferred record's bytes, and none
 is needed. A Resolution Record carries the `requestHash` of the
 deferral unchanged, so the two records name the same request by
-content; {{MUST-RS-1}} makes the Decider re-check that hash before it
+content; `MUST-RS-1` makes the Decider re-check that hash before it
 signs. The record chain of {{CEDULON-DP}} orders the pair.
 
 A deployment MAY carry `resolves` and `approver` in a signed inputs
@@ -239,7 +239,7 @@ Given a set of records over a declared window, and the trust root of
 6. For each Re-request in the window, check that it was answered from
    the resolution named by its reference, and that the window carries
    one execution for that reference.
-7. Report the counts of {{MUST-RS-9}} and the findings below.
+7. Report the counts of `MUST-RS-9` and the findings below.
 
 The result is not a bare pass. Each deferral in the window is
 resolved, spent, open, or reported with a code.
@@ -269,18 +269,18 @@ execution, a stated window.
 
 The Decider signs what it observed. A deployment where the approving
 party writes its own channel into the record turns the channel into a
-claim about itself; {{MUST-RS-3}} exists to prevent that, and a
+claim about itself; `MUST-RS-3` exists to prevent that, and a
 verifier that cannot tell which party wrote the channel cannot rely on
 it.
 
 An operator under pressure is outside the reach of any format. What
 the format can do is make the closure attributable and countable
-afterwards, which is what {{MUST-RS-9}} is for: an unusual rate of
+afterwards, which is what `MUST-RS-9` is for: an unusual rate of
 approvals is visible without reading any payload.
 
 Clock skew between the Decider and the approving party is not a
-binding: {{MUST-RS-1}} binds by content and reference, and the window
-of {{MUST-RS-4}} is measured against the Decider's own clock. A
+binding: `MUST-RS-1` binds by content and reference, and the window
+of `MUST-RS-4` is measured against the Decider's own clock. A
 deployment that binds an approval to an action by comparing two
 clocks has a different guarantee, and a weaker one.
 
