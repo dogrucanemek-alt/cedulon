@@ -141,7 +141,7 @@ Expected stdout (four lines, all FAIL):
 ```
 missing	audit: 1 settlement without receipt → FAIL	guarantee=conditional
 amount	audit: 1 finding(s) → FAIL	guarantee=conditional
-null-ref	audit: 1 finding(s) → FAIL	guarantee=conditional
+null-ref	audit: 2 finding(s) → FAIL	guarantee=conditional
 head	audit: 1 finding(s) → FAIL	guarantee=conditional
 ```
 
@@ -150,7 +150,8 @@ pass no signed extract and no pin, so a `FAIL` here is a failure against what
 the issuer recorded. Section 8 is what raises that to unconditional.
 
 `amount` names `settlement-mismatch`. `null-ref` names
-`settled-without-ref`. `head` names `checkpoint-head-mismatch`.
+`settled-without-ref` and `receipt-without-settlement`. `head` names
+`checkpoint-head-mismatch`.
 
 ## 5. Older demos (still required)
 
@@ -176,7 +177,8 @@ audit time.
 - Two different checkpoints for one epoch are equivocation.
 - A rail settlement with no receipt fails the audit and names the gap.
 - A same-ref wrong amount is `settlement-mismatch`.
-- A settled receipt with a null rail ref is `settled-without-ref`.
+- A settled receipt with a null rail ref is `settled-without-ref`, and,
+  having no extract row, `receipt-without-settlement`.
 - A garbage `chainHeadHash` is `checkpoint-head-mismatch`.
 - A clean pair of receipts, settlements, and a checkpoint exits 0.
 

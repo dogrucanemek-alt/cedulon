@@ -83,14 +83,25 @@ them as decoder refusals rather than as signature failures.
 take the new name; `railExtractEncodeRefusal` and the audit's named-refusal
 path already surface it that way.
 
+A settled receipt with a null rail ref is reported as
+`receipt-without-settlement` as well as `settled-without-ref`, identified by
+the receipt's nonce (MUST-T10-3: a ref that is null is not on the extract).
+This holds whether the extract has no rows, has only rows for other refs, or
+was not presented, and with or without an issuer pin. It is never deferred as
+`boundary-deferred`, because no adjacent extract can name a null ref. The
+receipt was already counted in `counts.receipts.unmatched`; the counts do not
+change, but the report now carries one more failing finding for it.
+
 What breaks: any consumer that assumed `attested` counted the pinless coverage
 set, that parsed the receipts counts line without a `covering=` field, that
 treated an unpinned witness body as a failing `checkpoint-withheld` /
 `equivocation` verdict, that reconciled rows out of an extract refused by
 name, that treated a carried-key anchor without `issuerTrust` as binding, that
 expected silence from `inclusionReceipts: []`, that accepted a negative uint
-claim or a second hex spelling of a receipt / manifest / token, or that
-matched the canonical error string `non-finite number`.
+claim or a second hex spelling of a receipt / manifest / token, that
+matched the canonical error string `non-finite number`, or that expected
+`settled-without-ref` to be the only finding for a settled receipt with a
+null rail ref.
 
 ## 0.18.0: an audit that reports instead of throwing, tagged report lines, and an RFC 9162 log
 

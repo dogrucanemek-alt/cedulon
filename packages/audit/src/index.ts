@@ -315,7 +315,7 @@ export type AuditCounts = {
      * belongs to that window's report, so this one has no finding for it.
      */
     carried: number;
-    /** `receipt-without-settlement`; also a settled receipt that names no ref, which `settled-without-ref` reports. */
+    /** `receipt-without-settlement`, including a settled receipt that names no ref, which `settled-without-ref` also reports. */
     unmatched: number;
     /**
      * Its ref repeats on one side, so it was taken to the aggregate comparison
@@ -906,8 +906,8 @@ function classifySettlementMatches(
       deferred: 0,
       carried: 0,
       // A settled receipt naming no ref has nothing on the rail side it could
-      // pair with; `settled-without-ref` names it, and the class keeps the
-      // identity whole.
+      // pair with; `settled-without-ref` and `receipt-without-settlement` name
+      // it, and the class keeps the identity whole.
       unmatched: settled.length - receiptItems.length,
       repeated: receiptItems.filter((item) => skip.has(item.ref)).length,
       unreconciled: 0,
@@ -1095,6 +1095,20 @@ function classifySettlementMatches(
           detail: profile.recordWithoutRowDetail(r, ref),
         });
       }
+    }
+  }
+
+  // A null ref is on no extract (MUST-T10-3), and no adjacent row can name it,
+  // so it is never deferred; it is already counted in `unmatched` above.
+  // Spend only: without a pin a decision record reaches this walk unverified.
+  if (profile.id === SPEND_PROFILE.id) {
+    for (const r of settled) {
+      if (profile.recordRef(r) !== null) continue;
+      findings.push({
+        code: profile.codes.recordWithoutRow as FindingCode,
+        id: r.claims.nonce,
+        detail: `${profile.words.record} nonce=${r.claims.nonce} has null rail ref, so it is not on the ${profile.words.extract}`,
+      });
     }
   }
 

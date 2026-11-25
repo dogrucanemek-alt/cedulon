@@ -95,7 +95,7 @@ npm run demo:bypasses
 ```
 missing	audit: 1 settlement without receipt → FAIL	guarantee=conditional
 amount	audit: 1 finding(s) → FAIL	guarantee=conditional
-null-ref	audit: 1 finding(s) → FAIL	guarantee=conditional
+null-ref	audit: 2 finding(s) → FAIL	guarantee=conditional
 head	audit: 1 finding(s) → FAIL	guarantee=conditional
 ```
 

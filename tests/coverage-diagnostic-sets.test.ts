@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { audit } from "@cedulon/audit";
 import { buildCheckpointClaims, checkpointHash, signCheckpoint } from "@cedulon/checkpoint";
-import { generateReceiptKeys, receiptHash, signReceipt } from "@cedulon/receipts";
+import { generateReceiptKeys, receiptHash, signReceipt, signReceiptUnchecked } from "@cedulon/receipts";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -368,6 +368,7 @@ function upgrading019Failures(section: string): string[] {
     "malformed-expiryMs",
     "hex-not-hex",
     "non-finite-number",
+    "receipt-without-settlement",
     "What breaks",
     "Under a usable issuer root",
   ]) {
@@ -465,6 +466,24 @@ describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes"
       inclusionReceipts: [],
     });
     assert.ok(emptyList.warnings.some((w) => w.code === "witness-inclusion-not-exercised"));
+
+    // receipt-without-settlement on a null rail ref ← tests/audit-counts.test.ts (step 8)
+    const nullRef = signReceiptUnchecked(
+      { ...claims("unused", N_START + 600_000, "a-null", null), x402PaymentRef: null },
+      s.issuer.privateKeyPem,
+      s.issuer.publicKeyPem,
+    );
+    const noRef = audit({
+      receipts: [nullRef],
+      checkpoints: [],
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    for (const code of ["settled-without-ref", "receipt-without-settlement"]) {
+      assert.ok(
+        noRef.findings.some((f) => f.code === code && f.id === nullRef.claims.nonce),
+        `${code}: ${JSON.stringify(noRef.findings)}`,
+      );
+    }
   });
 
   it("RED: a 0.19.0 section that omitted the later caller-visible changes is caught", () => {
@@ -478,6 +497,7 @@ describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes"
     assert.ok(failures.some((f) => f.includes("malformed-timestampMs")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("hex-not-hex")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("non-finite-number")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("receipt-without-settlement")), failures.join(" | "));
   });
 
   it("RED: a 0.19.0 section that omitted the pinless witness verdict is caught", () => {

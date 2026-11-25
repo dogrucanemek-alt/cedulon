@@ -542,3 +542,93 @@ describe("Round 5: the report publishes the class counts it already computes", (
     assert.equal(c.settlements.unmatched, 1);
   });
 });
+
+/** A settled receipt with a null rail ref; the checked signer refuses to make one. */
+function nullRefReceipt(keys: Keys, at: number): SignedReceipt {
+  return signReceiptUnchecked(
+    {
+      payer: "payer",
+      payee: "payee-1",
+      amount: "1",
+      currency: "USD",
+      policyHash: TEST_HASH,
+      manifestHash: null,
+      noManifest: true,
+      x402PaymentRef: null,
+      timestampMs: at,
+      nonce: "n-noref".padEnd(16, "-"),
+      prevReceiptHash: null,
+      outcome: "settled",
+    },
+    keys.privateKeyPem,
+    keys.publicKeyPem,
+  );
+}
+
+describe("step 8: a settled receipt with a null rail ref has no extract row (MUST-T10-3)", () => {
+  const extracts = [
+    { label: "an extract with no rows", rows: [] as RailSettlement[] },
+    { label: "an extract whose only row names another ref", rows: [row("ref-other", MIDDLE)] },
+    { label: "no extract", rows: null },
+  ];
+  for (const pinned of [true, false]) {
+    for (const { label, rows } of extracts) {
+      it(`RED then GREEN: ${label}, ${pinned ? "issuer pinned" : "no issuer pin"}: settled-without-ref and receipt-without-settlement`, () => {
+        const honest = generateReceiptKeys();
+        const rail = generateExtractKeys();
+        const bad = nullRefReceipt(honest, MIDDLE);
+        const report = audit({
+          receipts: [bad],
+          checkpoints: [checkpointOver(honest, [bad])],
+          ...(rows === null ? {} : { extract: extract(rail, rows), trust: trustFor(rail) }),
+          ...(pinned ? { issuerTrust: { publicKeyPem: honest.publicKeyPem } } : {}),
+        });
+        const nonce = bad.claims.nonce;
+        assert.equal(
+          report.findings.filter((f) => f.code === "settled-without-ref" && f.id === nonce).length,
+          1,
+          JSON.stringify(report.findings),
+        );
+        const missing = report.findings.filter((f) => f.code === "receipt-without-settlement");
+        assert.equal(missing.length, 1, JSON.stringify(report.findings));
+        assert.equal(missing[0]!.id, nonce);
+        assert.match(missing[0]!.detail, new RegExp(`nonce=${nonce}`));
+        assert.equal(report.ok, false);
+        if (rows !== null && rows.length > 0) {
+          assert.equal(
+            report.findings.some((f) => f.code === "settlement-without-receipt" && f.id === "ref-other"),
+            true,
+          );
+        }
+        const c = counted(report);
+        assert.equal(c.receipts.settled, 1);
+        assert.equal(c.receipts.matched, 0);
+        assert.equal(c.receipts.unmatched, 1);
+        assert.equal(c.receipts.deferred, 0);
+      });
+    }
+  }
+
+  it("a null-ref receipt inside the closing allowance is not deferred: no adjacent row can name it", () => {
+    const honest = generateReceiptKeys();
+    const rail = generateExtractKeys();
+    const bad = nullRefReceipt(honest, CLOSING);
+    const report = audit({
+      receipts: [bad],
+      checkpoints: [checkpointOver(honest, [bad])],
+      extract: extract(rail, []),
+      issuerTrust: { publicKeyPem: honest.publicKeyPem },
+      trust: trustFor(rail),
+    });
+    const nonce = bad.claims.nonce;
+    assert.equal(report.findings.some((f) => f.code === "receipt-without-settlement" && f.id === nonce), true);
+    assert.equal(
+      [...report.findings, ...report.warnings].some((f) => f.code === "boundary-deferred"),
+      false,
+      JSON.stringify(report.warnings),
+    );
+    const c = counted(report);
+    assert.equal(c.receipts.unmatched, 1);
+    assert.equal(c.receipts.deferred, 0);
+  });
+});
