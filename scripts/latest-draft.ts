@@ -1,6 +1,8 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join, relative } from "node:path";
+
+import { runBounded } from "./bounded-run.ts";
 
 /**
  * The draft a living check should read: the newest revision in the tree.
@@ -210,6 +212,9 @@ export type LivingDraftCrHit = {
   count: number;
 };
 
+const GIT_HASH_TIMEOUT_MS = 60_000;
+const GIT_HASH_OUTPUT_BYTES = 64 * 1024;
+
 function withoutCrBeforeLf(bytes: Buffer): Buffer {
   const out: number[] = [];
   for (let i = 0; i < bytes.length; i += 1) {
@@ -229,24 +234,41 @@ function withoutCrBeforeLf(bytes: Buffer): Buffer {
  * cannot say what would be committed and refuses rather than guess.
  * `bytes` stands in for the working copy; `gitConfig` pins the conversion
  * (`["-c", "core.autocrlf=true"]`) so both checkouts can be exercised.
+ *
+ * git reads the bytes from a file in a private temporary directory, never
+ * from a stdin pipe, and every call is bounded (`runBounded`): a git that
+ * does not answer fails this check by name instead of holding the suite.
  */
-export function storedDraftBytes(
+export async function storedDraftBytes(
   root: string,
   path: string,
   options: { bytes?: Buffer; gitConfig?: string[] } = {},
-): Buffer {
+): Promise<Buffer> {
   const raw = options.bytes ?? readFileSync(path);
   const rel = relative(root, path).replace(/\\/g, "/");
-  const hash = (args: string[], input: Buffer): string =>
-    execFileSync("git", [...(options.gitConfig ?? []), "hash-object", ...args, "--stdin"], {
-      cwd: root,
-      input,
-      encoding: "utf8",
-    }).trim();
-  const stored = hash([`--path=${rel}`], raw);
-  if (hash(["--no-filters"], raw) === stored) return raw;
-  const lf = withoutCrBeforeLf(raw);
-  if (hash(["--no-filters"], lf) === stored) return lf;
+  let scratchDir: string | undefined;
+  try {
+    scratchDir = mkdtempSync(join(tmpdir(), "cedulon-stored-"));
+    const scratch = join(scratchDir, "draft");
+    const hash = async (args: string[], bytes: Buffer): Promise<string> => {
+      writeFileSync(scratch, bytes);
+      const { stdout } = await runBounded({
+        label: `git hash-object (${rel})`,
+        command: "git",
+        args: [...(options.gitConfig ?? []), "hash-object", ...args, scratch],
+        cwd: root,
+        timeoutMs: GIT_HASH_TIMEOUT_MS,
+        maxOutputBytes: GIT_HASH_OUTPUT_BYTES,
+      });
+      return stdout.toString("utf8").trim();
+    };
+    const stored = await hash([`--path=${rel}`], raw);
+    if ((await hash(["--no-filters"], raw)) === stored) return raw;
+    const lf = withoutCrBeforeLf(raw);
+    if ((await hash(["--no-filters"], lf)) === stored) return lf;
+  } finally {
+    if (scratchDir !== undefined) rmSync(scratchDir, { recursive: true, force: true });
+  }
   throw new Error(
     `${rel}: git would store neither the bytes on disk nor their LF form; the conversion is not one this check can read`,
   );
@@ -260,13 +282,13 @@ export function storedDraftBytes(
  * are not mistaken for the draft's. Optional `extra` entries stand in for
  * a temporary CR-injected copy without touching the tree.
  */
-export function livingDraftCarriageReturns(
+export async function livingDraftCarriageReturns(
   root: string,
   extra: Array<{ file: string; bytes: Buffer }> = [],
-): LivingDraftCrHit[] {
+): Promise<LivingDraftCrHit[]> {
   const hits: LivingDraftCrHit[] = [];
   for (const path of livingUnpublishedDraftPaths(root)) {
-    const bytes = storedDraftBytes(root, path);
+    const bytes = await storedDraftBytes(root, path);
     let count = 0;
     for (const b of bytes) {
       if (b === 0x0d) count += 1;

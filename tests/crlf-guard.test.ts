@@ -1,12 +1,15 @@
 import { strict as assert } from "node:assert";
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
+import { BoundedRunError, KILL_GRACE_MS, runBounded } from "../scripts/bounded-run.ts";
 import {
   BINARY_EXCEPTIONS,
+  blobsOf,
   countCarriageReturns,
   findCarriageReturns,
   isBinaryPath,
@@ -20,6 +23,65 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+/** Outer watchdog for every case that waits on a child process. */
+const WATCHDOG_MS = 180_000;
+/** Outer watchdog for the helper's own cases; each bound inside is far shorter. */
+const HELPER_WATCHDOG_MS = 20_000;
+const GIT_TIMEOUT_MS = 60_000;
+/** Every descendant a case starts ends itself after this, even if a case fails. */
+const SELF_EXIT = "setTimeout(() => process.exit(0), 60000);";
+
+async function refusal(run: Promise<unknown>): Promise<BoundedRunError> {
+  try {
+    await run;
+  } catch (err) {
+    assert.ok(err instanceof BoundedRunError, `expected a named refusal, got ${String(err)}`);
+    return err;
+  }
+  assert.fail("the call resolved; it was expected to be refused");
+}
+
+/** A process that has been ended reads as ESRCH once it has been reaped. */
+async function assertEnded(pid: number, who: string): Promise<void> {
+  const until = Date.now() + 2000;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      assert.equal((err as NodeJS.ErrnoException).code, "ESRCH", `${who} ${pid}: ${String(err)}`);
+      return;
+    }
+    if (Date.now() > until) assert.fail(`${who} ${pid} is still running after the call returned`);
+    await sleep(25);
+  }
+}
+
+function endQuietly(pid: number | undefined): void {
+  if (pid === undefined) return;
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // already gone
+  }
+}
+
+function readPid(path: string, who: string): number {
+  assert.ok(existsSync(path), `${who} never recorded its pid`);
+  const pid = Number(readFileSync(path, "utf8"));
+  assert.ok(Number.isInteger(pid) && pid > 0, `${who} recorded ${JSON.stringify(readFileSync(path, "utf8"))}`);
+  return pid;
+}
+
+/** Node source for a child that starts `grandchild` on its own stdout and records its pid. */
+function parentOf(grandchild: string, pidFile: string, then: string, detached: boolean): string {
+  return [
+    `const { spawn } = require("node:child_process");`,
+    `const g = spawn(process.execPath, ["-e", ${JSON.stringify(grandchild)}], { stdio: ["ignore", "inherit", "inherit"], detached: ${detached} });`,
+    `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(g.pid));`,
+    then,
+  ].join("\n");
+}
+
 describe("crlf-guard", () => {
   it("exceptions name a file and a reason", () => {
     assert.ok(BINARY_EXCEPTIONS.length > 0);
@@ -30,38 +92,303 @@ describe("crlf-guard", () => {
     }
   });
 
-  it("RED then GREEN: a CRLF text blob is rejected, then the tree is clean", () => {
+  it("RED then GREEN: a CRLF text blob is rejected, then the tree is clean", { timeout: WATCHDOG_MS }, async () => {
     const probe = Buffer.from("hello\r\nworld\n", "utf8");
     assert.ok(countCarriageReturns(probe) > 0);
-    const red = findCarriageReturns(root, [{ file: "tests/.crlf-guard-probe.txt", bytes: probe }]);
+    const red = await findCarriageReturns(root, [{ file: "tests/.crlf-guard-probe.txt", bytes: probe }]);
     assert.ok(
       red.some((h) => h.file === "tests/.crlf-guard-probe.txt" && h.count > 0),
       `expected a hit on the CRLF probe, got ${JSON.stringify(red)}`,
     );
-    const green = findCarriageReturns(root);
+    const green = await findCarriageReturns(root);
     assert.deepEqual(green, [], green.map((h) => `${h.file}:${h.count}`).join("\n"));
   });
 
-  it("reads spec/ and does not rewrite it", () => {
-    const spec = trackedFiles(root).filter((f) => f.startsWith("spec/"));
+  it("reads spec/ and does not rewrite it", { timeout: WATCHDOG_MS }, async () => {
+    const spec = (await trackedFiles(root)).filter((f) => f.startsWith("spec/"));
     assert.ok(spec.length > 0, "expected frozen drafts to be tracked");
     // An empty working tree is not the criterion. This scan must not
     // write; an uncommitted spec edit that was already there is not a
     // rewrite. Compare the spec diff to itself across the scan.
-    const before = execFileSync("git", ["diff", "--", "spec"], { cwd: root, encoding: "utf8" });
-    const hits = findCarriageReturns(root).filter((h) => h.file.startsWith("spec/"));
+    const specDiff = async (): Promise<string> =>
+      (
+        await runBounded({
+          label: "git diff -- spec",
+          command: "git",
+          args: ["diff", "--", "spec"],
+          cwd: root,
+          timeoutMs: GIT_TIMEOUT_MS,
+          maxOutputBytes: 64 * 1024 * 1024,
+        })
+      ).stdout.toString("utf8");
+    const before = await specDiff();
+    const hits = (await findCarriageReturns(root)).filter((h) => h.file.startsWith("spec/"));
     assert.deepEqual(hits, []);
-    const after = execFileSync("git", ["diff", "--", "spec"], { cwd: root, encoding: "utf8" });
+    const after = await specDiff();
     assert.equal(after, before);
   });
 
-  it("the gate script is the same scan (exit 0)", () => {
-    const stdout = execFileSync(
-      process.execPath,
-      ["--experimental-strip-types", "scripts/crlf-guard.ts"],
-      { cwd: root, encoding: "utf8" },
+  it("the gate script is the same scan (exit 0)", { timeout: WATCHDOG_MS }, async () => {
+    const { stdout } = await runBounded({
+      label: "crlf-guard gate",
+      command: process.execPath,
+      args: ["--experimental-strip-types", "scripts/crlf-guard.ts"],
+      cwd: root,
+      timeoutMs: 120_000,
+      maxOutputBytes: 1024 * 1024,
+    });
+    assert.match(stdout.toString("utf8"), /crlf-guard: no CR in tracked text blobs/);
+  });
+
+  it("RED then GREEN: a child that ignores SIGTERM is ended at its bound, by name", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    let pid: number | undefined;
+    try {
+      const ready = join(dir, "ready");
+      const timeoutMs = 500;
+      const started = Date.now();
+      const err = await refusal(
+        runBounded({
+          label: "SIGTERM-proof child",
+          command: process.execPath,
+          args: [
+            "-e",
+            `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(${JSON.stringify(ready)}, "1"); setInterval(() => {}, 1000); ${SELF_EXIT}`,
+          ],
+          cwd: root,
+          timeoutMs,
+          maxOutputBytes: 1024,
+        }),
+      );
+      const elapsed = Date.now() - started;
+      pid = err.pid;
+      assert.equal(err.message, `SIGTERM-proof child timed out after ${timeoutMs} ms`);
+      assert.equal(err.kind, "timeout");
+      assert.ok(existsSync(ready), "the child was ended before it installed its SIGTERM handler; the case proved nothing");
+      assert.ok(elapsed < timeoutMs + KILL_GRACE_MS + 2000, `the call took ${elapsed} ms`);
+      assert.ok(pid !== undefined, "the refusal does not name the child it ended");
+      await assertEnded(pid, "child");
+    } finally {
+      endQuietly(pid);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("RED then GREEN: a grandchild holding stdout is ended with its parent, at the bound", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    let pid: number | undefined;
+    let grandPid: number | undefined;
+    try {
+      const pidFile = join(dir, "grandchild.pid");
+      const grandchild = `process.on("SIGTERM", () => {}); setInterval(() => process.stdout.write("."), 100); ${SELF_EXIT}`;
+      const timeoutMs = 3000;
+      const started = Date.now();
+      const err = await refusal(
+        runBounded({
+          label: "parent of a stdout-holding grandchild",
+          command: process.execPath,
+          args: [
+            "-e",
+            parentOf(grandchild, pidFile, `process.on("SIGTERM", () => {}); setInterval(() => {}, 1000); ${SELF_EXIT}`, false),
+          ],
+          cwd: root,
+          timeoutMs,
+          maxOutputBytes: 1024 * 1024,
+        }),
+      );
+      const elapsed = Date.now() - started;
+      pid = err.pid;
+      grandPid = readPid(pidFile, "the grandchild");
+      assert.equal(err.message, `parent of a stdout-holding grandchild timed out after ${timeoutMs} ms`);
+      assert.ok(elapsed < timeoutMs + KILL_GRACE_MS + 2000, `the call took ${elapsed} ms`);
+      assert.ok(pid !== undefined, "the refusal does not name the child it ended");
+      await assertEnded(pid, "child");
+      await assertEnded(grandPid, "grandchild");
+    } finally {
+      endQuietly(pid);
+      endQuietly(grandPid);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("RED then GREEN: a descendant that left the tree cannot hold the call open through stdout", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    // The child exits at once; a detached grandchild keeps the child's
+    // stdout. Neither a process-group signal nor a tree kill reaches a
+    // process that has left the tree, so the call must end on its own
+    // bound by giving up the streams. The case ends the grandchild itself.
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    let grandPid: number | undefined;
+    try {
+      const pidFile = join(dir, "grandchild.pid");
+      const grandchild = `setInterval(() => {}, 1000); ${SELF_EXIT}`;
+      const timeoutMs = 1500;
+      const started = Date.now();
+      const err = await refusal(
+        runBounded({
+          label: "child with an escaped grandchild",
+          command: process.execPath,
+          args: ["-e", parentOf(grandchild, pidFile, "g.unref(); process.exit(0);", true)],
+          cwd: root,
+          timeoutMs,
+          maxOutputBytes: 1024,
+        }),
+      );
+      const elapsed = Date.now() - started;
+      grandPid = readPid(pidFile, "the grandchild");
+      assert.equal(err.message, `child with an escaped grandchild timed out after ${timeoutMs} ms`);
+      assert.ok(elapsed < timeoutMs + KILL_GRACE_MS + 2000, `the call took ${elapsed} ms`);
+    } finally {
+      endQuietly(grandPid);
+      rmSync(dir, { recursive: true, force: true });
+    }
+    if (grandPid !== undefined) await assertEnded(grandPid, "grandchild");
+  });
+
+  it("RED then GREEN: output past the limit is refused by name and the tree is ended", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    let pid: number | undefined;
+    try {
+      const timeoutMs = 10_000;
+      const started = Date.now();
+      const err = await refusal(
+        runBounded({
+          label: "chatty child",
+          command: process.execPath,
+          args: [
+            "-e",
+            `process.on("SIGTERM", () => {}); const b = Buffer.alloc(64 * 1024, 120); setInterval(() => process.stdout.write(b), 10); ${SELF_EXIT}`,
+          ],
+          cwd: root,
+          timeoutMs,
+          maxOutputBytes: 100_000,
+        }),
+      );
+      const elapsed = Date.now() - started;
+      pid = err.pid;
+      assert.equal(err.message, "chatty child exceeded 100000 bytes of output");
+      assert.equal(err.kind, "output");
+      assert.ok(elapsed < timeoutMs, `the output limit did not end the call; it took ${elapsed} ms`);
+      assert.ok(pid !== undefined, "the refusal does not name the child it ended");
+      await assertEnded(pid, "child");
+    } finally {
+      endQuietly(pid);
+    }
+  });
+
+  it("RED then GREEN: a non-zero exit is refused by name with its status and stderr", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    const err = await refusal(
+      runBounded({
+        label: "failing child",
+        command: process.execPath,
+        args: ["-e", `process.stderr.write("refused: probe input\\n"); process.exit(3);`],
+        cwd: root,
+        timeoutMs: 10_000,
+        maxOutputBytes: 1024,
+      }),
     );
-    assert.match(stdout, /crlf-guard: no CR in tracked text blobs/);
+    assert.equal(err.message, "failing child exited with status 3: refused: probe input");
+    assert.equal(err.kind, "status");
+  });
+
+  it("RED then GREEN: a command or stdin file that cannot be opened is refused by name", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    const missing = await refusal(
+      runBounded({
+        label: "absent command",
+        command: join(root, "no-such-command-for-this-case"),
+        args: [],
+        cwd: root,
+        timeoutMs: 10_000,
+        maxOutputBytes: 1024,
+      }),
+    );
+    assert.match(missing.message, /^absent command could not start: /);
+    assert.equal(missing.kind, "start");
+    const noInput = await refusal(
+      runBounded({
+        label: "child with absent input",
+        command: process.execPath,
+        args: ["-e", ""],
+        cwd: root,
+        timeoutMs: 10_000,
+        stdinPath: join(root, "no-such-input-for-this-case"),
+        maxOutputBytes: 1024,
+      }),
+    );
+    assert.match(noInput.message, /^child with absent input could not start: /);
+    assert.equal(noInput.kind, "start");
+  });
+
+  it("RED then GREEN: standard input is the named file or an immediate end, never an open pipe", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    try {
+      const input = join(dir, "input");
+      const bytes = Buffer.from([0x61, 0x0d, 0x0a, 0x00, 0xff, 0x0a]);
+      writeFileSync(input, bytes);
+      const echoed = await runBounded({
+        label: "echo child",
+        command: process.execPath,
+        args: ["-e", "process.stdin.pipe(process.stdout)"],
+        cwd: root,
+        timeoutMs: 10_000,
+        stdinPath: input,
+        maxOutputBytes: 1024,
+      });
+      assert.deepEqual(echoed.stdout, bytes);
+      const closed = await runBounded({
+        label: "stdin reader",
+        command: process.execPath,
+        args: ["-e", `process.stdin.on("data", () => {}).on("end", () => process.stdout.write("eof"))`],
+        cwd: root,
+        timeoutMs: 10_000,
+        maxOutputBytes: 1024,
+      });
+      assert.equal(closed.stdout.toString("utf8"), "eof");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("RED then GREEN: cat-file --batch fed from a request file returns the blobs the index holds, byte for byte", { timeout: WATCHDOG_MS }, async () => {
+    const files = await trackedFiles(root);
+    const blobs = await blobsOf(files, root);
+    assert.equal(blobs.size, files.length);
+    const listed = await runBounded({
+      label: "git ls-files -s",
+      command: "git",
+      args: ["ls-files", "-s", "-z"],
+      cwd: root,
+      timeoutMs: GIT_TIMEOUT_MS,
+      maxOutputBytes: 16 * 1024 * 1024,
+    });
+    const indexIds = new Map<string, string>();
+    for (const entry of listed.stdout.toString("utf8").split("\0").filter(Boolean)) {
+      const tab = entry.indexOf("\t");
+      indexIds.set(entry.slice(tab + 1).replace(/\\/g, "/"), entry.slice(0, tab).split(" ")[1]!);
+    }
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-blob-ids-"));
+    try {
+      const paths = files.map((file, i) => {
+        const path = join(dir, `b${i}`);
+        writeFileSync(path, blobs.get(file)!);
+        return path;
+      });
+      const list = join(dir, "paths");
+      writeFileSync(list, paths.join("\n") + "\n");
+      const hashed = await runBounded({
+        label: "git hash-object --stdin-paths",
+        command: "git",
+        args: ["hash-object", "--no-filters", "--stdin-paths"],
+        cwd: root,
+        timeoutMs: GIT_TIMEOUT_MS,
+        stdinPath: list,
+        maxOutputBytes: 1024 * 1024,
+      });
+      const ids = hashed.stdout.toString("utf8").trim().split("\n");
+      assert.equal(ids.length, files.length);
+      const differ = files.filter((file, i) => ids[i] !== indexIds.get(file));
+      assert.deepEqual(differ, [], `blob bytes differ from the index for ${differ.slice(0, 5).join(", ")}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // The .xml is left out on purpose: author-tools writes a non-breaking space
@@ -99,7 +426,7 @@ describe("crlf-guard", () => {
     }
   });
 
-  it("living unpublished drafts have no CR; a CR-injected copy is refused", () => {
+  it("living unpublished drafts have no CR; a CR-injected copy is refused", { timeout: WATCHDOG_MS }, async () => {
     const living = livingUnpublishedDraftPaths(root);
     assert.ok(living.length > 0, "expected at least one living unpublished draft");
     const names = living.map((p) => p.replace(/\\/g, "/").split("/").pop()!);
@@ -135,15 +462,15 @@ describe("crlf-guard", () => {
         `posted ${short(posted)} carries its archive text and must stay out of the living-unpublished set`,
       );
     }
-    assert.deepEqual(livingDraftCarriageReturns(root), []);
+    assert.deepEqual(await livingDraftCarriageReturns(root), []);
     const sample = living.find((p) =>
       p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md"),
     )!;
-    const clean = storedDraftBytes(root, sample);
+    const clean = await storedDraftBytes(root, sample);
     assert.equal(countCarriageReturns(clean), 0);
     const withCr = Buffer.from(clean.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
     assert.ok(countCarriageReturns(withCr) > 0);
-    const red = livingDraftCarriageReturns(root, [
+    const red = await livingDraftCarriageReturns(root, [
       { file: "spec/draft-dogru-cedulon-resolution-00.md.cr-probe", bytes: withCr },
     ]);
     assert.ok(
@@ -152,18 +479,18 @@ describe("crlf-guard", () => {
     );
   });
 
-  it("RED then GREEN: the living-draft check reads what git stores, not the checkout's line endings", () => {
+  it("RED then GREEN: the living-draft check reads what git stores, not the checkout's line endings", { timeout: WATCHDOG_MS }, async () => {
     const sample = livingUnpublishedDraftPaths(root).find((p) =>
       p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md"),
     )!;
-    const lf = storedDraftBytes(root, sample);
+    const lf = await storedDraftBytes(root, sample);
     assert.equal(countCarriageReturns(lf), 0);
     const crlf = Buffer.from(lf.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
     // A Windows checkout with core.autocrlf=true writes these CRLF bytes to
     // disk for an LF blob. Read raw, they look like a CR edit; that read is
     // what failed on the hosted Windows runner.
     assert.ok(countCarriageReturns(crlf) > 0);
-    const viaAutocrlf = storedDraftBytes(root, sample, {
+    const viaAutocrlf = await storedDraftBytes(root, sample, {
       bytes: crlf,
       gitConfig: ["-c", "core.autocrlf=true"],
     });
@@ -171,7 +498,7 @@ describe("crlf-guard", () => {
     assert.deepEqual(viaAutocrlf, lf);
     // Without that conversion the same bytes would be committed with CR:
     // the edit this check exists to refuse.
-    const asWritten = storedDraftBytes(root, sample, {
+    const asWritten = await storedDraftBytes(root, sample, {
       bytes: crlf,
       gitConfig: ["-c", "core.autocrlf=false"],
     });
