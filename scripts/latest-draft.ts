@@ -182,7 +182,9 @@ export function latestPostedCompanionRevision(specDir: string, name: string): st
  * yet: the newest of each publication-bound name that still has no archive
  * `.txt` beside it. Posted datatracker copies (and their frozen `.txt`)
  * stay out of this list so their on-disk bytes are not rewritten by a
- * living-source line-ending check.
+ * living-source line-ending check. `facts:check` holds this classification
+ * to the IETF archive: a draft with no `.txt` here that the archive has
+ * posted is refused.
  */
 export function livingUnpublishedDraftPaths(root: string): string[] {
   const paths = [

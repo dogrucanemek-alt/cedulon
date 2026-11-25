@@ -7,13 +7,19 @@
  * concept DOI off DataCite; asks the registry whether the named
  * packages exist, and HEAD-checks the GitHub URLs. The entry says which
  * @cedulon/* release Verax depends on, so the newest @cedulon/* on npm
- * is not the source for it.
+ * is not the source for it. Every draft source in spec/ with no archive
+ * text beside it is asked for at the IETF archive, and one the archive
+ * has posted is refused until spec/ carries its text.
  *
  * It needs the network, so it is not part of `npm test`. The
  * comparison itself is a pure function; the suite calls that with
  * fixtures and never opens a socket. npm package pages are asked at
  * the registry, not the website: the site answers robots with 403.
  */
+
+import { existsSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   CEDULON_VERSION,
@@ -262,6 +268,68 @@ async function probeUrl(url: string, opts: NetworkRetryOptions): Promise<number>
   return get.status;
 }
 
+/**
+ * `posted`: the archive has the text and spec/ does not carry it, so the
+ * tree still treats a posted revision as living. `unread`: the archive
+ * gave no answer this check can read; that is not a pass.
+ */
+export type ArchiveComparison = { posted: string[]; unread: string[] };
+
+export function archiveUrl(draft: string): string {
+  return `https://www.ietf.org/archive/id/${draft}.txt`;
+}
+
+/** Every draft source in `specDir` with no archive `.txt` beside it. */
+export function unpostedDraftNames(specDir: string): string[] {
+  return readdirSync(specDir)
+    .map((f) => /^(draft-dogru-cedulon-[a-z0-9-]+)\.md$/.exec(f))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => m[1]!)
+    .filter((name) => !existsSync(join(specDir, `${name}.txt`)))
+    .sort();
+}
+
+/**
+ * Archive answer per draft: an HTTP status, or the label of a read that
+ * failed. 404 is the only answer that passes.
+ */
+export function compareArchive(
+  drafts: readonly string[],
+  statuses: Readonly<Record<string, number | string>>,
+): ArchiveComparison {
+  const posted: string[] = [];
+  const unread: string[] = [];
+  for (const draft of drafts) {
+    const status = statuses[draft];
+    if (status === 200) {
+      posted.push(`posted at the IETF archive but not carried in spec/: ${draft}.txt`);
+    } else if (status !== 404) {
+      unread.push(`${archiveUrl(draft)} → ${status ?? "missing"}`);
+    }
+  }
+  return { posted, unread };
+}
+
+export async function collectArchiveStatuses(
+  drafts: readonly string[],
+  opts: NetworkRetryOptions = {},
+): Promise<Record<string, number | string>> {
+  const statuses: Record<string, number | string> = {};
+  for (const draft of drafts) {
+    const url = archiveUrl(draft);
+    try {
+      const head = await fetchWithNetworkRetry(url, { method: "HEAD" }, opts);
+      statuses[draft] =
+        head.status === 200 || head.status === 404
+          ? head.status
+          : (await fetchWithNetworkRetry(url, { method: "GET" }, opts)).status;
+    } catch (error) {
+      statuses[draft] = sourceLabel(error);
+    }
+  }
+  return statuses;
+}
+
 function sourceLabel(error: unknown): string {
   return error instanceof Error ? error.message : "unreachable";
 }
@@ -329,13 +397,23 @@ export async function collectSources(
 async function main(): Promise<void> {
   const declared = declaredFacts();
   const { sources, fetchProblems } = await collectSources(declared);
-  const problems = [...fetchProblems, ...compareFacts(declared, sources)];
+  const drafts = unpostedDraftNames(join(dirname(fileURLToPath(import.meta.url)), "..", "spec"));
+  const archive = compareArchive(drafts, await collectArchiveStatuses(drafts));
+  const problems = [
+    ...fetchProblems,
+    ...compareFacts(declared, sources),
+    ...archive.unread,
+    ...archive.posted,
+  ];
   if (problems.length > 0) {
     for (const line of problems) console.error(line);
     process.exitCode = 1;
     return;
   }
-  console.log(`checked ${factCount(declared)} facts against npm and DataCite`);
+  console.log(
+    `checked ${factCount(declared)} facts against npm and DataCite, ` +
+      `and ${drafts.length} unposted drafts against the IETF archive`,
+  );
 }
 
 if (import.meta.filename === process.argv[1]) {
