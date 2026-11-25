@@ -15,6 +15,7 @@ import {
 import {
   livingDraftCarriageReturns,
   livingUnpublishedDraftPaths,
+  storedDraftBytes,
 } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -121,7 +122,7 @@ describe("crlf-guard", () => {
     const sample = living.find((p) =>
       p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md"),
     )!;
-    const clean = readFileSync(sample);
+    const clean = storedDraftBytes(root, sample);
     assert.equal(countCarriageReturns(clean), 0);
     const withCr = Buffer.from(clean.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
     assert.ok(countCarriageReturns(withCr) > 0);
@@ -132,5 +133,31 @@ describe("crlf-guard", () => {
       red.some((h) => h.file.endsWith("resolution-00.md.cr-probe") && h.count > 0),
       `expected a CR hit on the probe, got ${JSON.stringify(red)}`,
     );
+  });
+
+  it("RED then GREEN: the living-draft check reads what git stores, not the checkout's line endings", () => {
+    const sample = livingUnpublishedDraftPaths(root).find((p) =>
+      p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md"),
+    )!;
+    const lf = storedDraftBytes(root, sample);
+    assert.equal(countCarriageReturns(lf), 0);
+    const crlf = Buffer.from(lf.toString("utf8").replace(/\n/g, "\r\n"), "utf8");
+    // A Windows checkout with core.autocrlf=true writes these CRLF bytes to
+    // disk for an LF blob. Read raw, they look like a CR edit; that read is
+    // what failed on the hosted Windows runner.
+    assert.ok(countCarriageReturns(crlf) > 0);
+    const viaAutocrlf = storedDraftBytes(root, sample, {
+      bytes: crlf,
+      gitConfig: ["-c", "core.autocrlf=true"],
+    });
+    assert.equal(countCarriageReturns(viaAutocrlf), 0, "autocrlf checkout must read as the LF git stores");
+    assert.deepEqual(viaAutocrlf, lf);
+    // Without that conversion the same bytes would be committed with CR:
+    // the edit this check exists to refuse.
+    const asWritten = storedDraftBytes(root, sample, {
+      bytes: crlf,
+      gitConfig: ["-c", "core.autocrlf=false"],
+    });
+    assert.ok(countCarriageReturns(asWritten) > 0, "a CR that would be committed must still be seen");
   });
 });

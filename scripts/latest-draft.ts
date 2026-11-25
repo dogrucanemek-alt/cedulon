@@ -1,5 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, relative } from "node:path";
 
 /**
  * The draft a living check should read: the newest revision in the tree.
@@ -207,11 +208,55 @@ export type LivingDraftCrHit = {
   count: number;
 };
 
+function withoutCrBeforeLf(bytes: Buffer): Buffer {
+  const out: number[] = [];
+  for (let i = 0; i < bytes.length; i += 1) {
+    if (bytes[i] === 0x0d && bytes[i + 1] === 0x0a) continue;
+    out.push(bytes[i]!);
+  }
+  return Buffer.from(out);
+}
+
 /**
- * Working-tree CR bytes in living unpublished drafts. The object-store
- * crlf-guard does not see an uncommitted CR; this check reads the files
- * a living edit actually writes. Optional `extra` entries stand in for a
- * temporary CR-injected copy without touching the tree.
+ * The bytes `git add` would store for a file under `spec/`: the working
+ * copy passed through git's own input conversion (core.autocrlf, eol
+ * attributes). A checkout that turned LF into CRLF on disk - a Windows
+ * runner with core.autocrlf=true - reads as the LF the repository holds,
+ * while a CR that would be committed as written is still seen. When git
+ * stores neither the bytes on disk nor their CRLF-to-LF form, the check
+ * cannot say what would be committed and refuses rather than guess.
+ * `bytes` stands in for the working copy; `gitConfig` pins the conversion
+ * (`["-c", "core.autocrlf=true"]`) so both checkouts can be exercised.
+ */
+export function storedDraftBytes(
+  root: string,
+  path: string,
+  options: { bytes?: Buffer; gitConfig?: string[] } = {},
+): Buffer {
+  const raw = options.bytes ?? readFileSync(path);
+  const rel = relative(root, path).replace(/\\/g, "/");
+  const hash = (args: string[], input: Buffer): string =>
+    execFileSync("git", [...(options.gitConfig ?? []), "hash-object", ...args, "--stdin"], {
+      cwd: root,
+      input,
+      encoding: "utf8",
+    }).trim();
+  const stored = hash([`--path=${rel}`], raw);
+  if (hash(["--no-filters"], raw) === stored) return raw;
+  const lf = withoutCrBeforeLf(raw);
+  if (hash(["--no-filters"], lf) === stored) return lf;
+  throw new Error(
+    `${rel}: git would store neither the bytes on disk nor their LF form; the conversion is not one this check can read`,
+  );
+}
+
+/**
+ * CR bytes that would be committed in living unpublished drafts. The
+ * object-store crlf-guard does not see an uncommitted CR, so this check
+ * reads the files a living edit actually writes - through git's input
+ * conversion (`storedDraftBytes`), so the platform's checkout line endings
+ * are not mistaken for the draft's. Optional `extra` entries stand in for
+ * a temporary CR-injected copy without touching the tree.
  */
 export function livingDraftCarriageReturns(
   root: string,
@@ -219,7 +264,7 @@ export function livingDraftCarriageReturns(
 ): LivingDraftCrHit[] {
   const hits: LivingDraftCrHit[] = [];
   for (const path of livingUnpublishedDraftPaths(root)) {
-    const bytes = readFileSync(path);
+    const bytes = storedDraftBytes(root, path);
     let count = 0;
     for (const b of bytes) {
       if (b === 0x0d) count += 1;
