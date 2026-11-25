@@ -2,7 +2,7 @@
 title: "Spend Receipts and Payment Rail Reconciliation for AI Agents"
 abbrev: Cedulon Core
 docname: draft-dogru-cedulon-core-05
-date: 2026-10-15
+date: 2026-11-25
 category: info
 ipr: trust200902
 area: sec
