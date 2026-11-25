@@ -28,6 +28,8 @@ const WATCHDOG_MS = 180_000;
 /** Outer watchdog for the helper's own cases; each bound inside is far shorter. */
 const HELPER_WATCHDOG_MS = 20_000;
 const GIT_TIMEOUT_MS = 60_000;
+/** Bound for the timing cases; a fresh Node process on a busy runner is ready well inside it. */
+const BOUND_MS = 3000;
 /** Every descendant a case starts ends itself after this, even if a case fails. */
 const SELF_EXIT = "setTimeout(() => process.exit(0), 60000);";
 
@@ -72,11 +74,35 @@ function readPid(path: string, who: string): number {
   return pid;
 }
 
-/** Node source for a child that starts `grandchild` on its own stdout and records its pid. */
-function parentOf(grandchild: string, pidFile: string, then: string, detached: boolean): string {
+/** Node source that marks a process ready; it goes after the handlers the case relies on. */
+function markReady(path: string): string {
+  return `require("node:fs").writeFileSync(${JSON.stringify(path)}, "ready");`;
+}
+
+/** A case whose process was ended before it was ready proved nothing about the bound. */
+function assertReady(path: string, who: string): void {
+  assert.ok(existsSync(path), `${who} was ended before it was ready; the case proved nothing`);
+}
+
+/** Refused at the bound: not early, and no later than the grace period plus slack. */
+function assertAtBound(elapsed: number, timeoutMs: number): void {
+  assert.ok(elapsed >= timeoutMs - 50, `the call was refused after ${elapsed} ms, before its ${timeoutMs} ms bound`);
+  assert.ok(elapsed < timeoutMs + KILL_GRACE_MS + 3000, `the call took ${elapsed} ms`);
+}
+
+type Grandchild = {
+  source: string;
+  /** Inherit the child's stdout and stderr, or hold no stream of the call at all. */
+  stdio: "inherit" | "ignore";
+  detached: boolean;
+};
+
+/** Node source for a child that starts `grandchild`, records its pid, then runs `then`. */
+function parentOf(grandchild: Grandchild, pidFile: string, then: string): string {
+  const stdio = grandchild.stdio === "inherit" ? `["ignore", "inherit", "inherit"]` : `"ignore"`;
   return [
     `const { spawn } = require("node:child_process");`,
-    `const g = spawn(process.execPath, ["-e", ${JSON.stringify(grandchild)}], { stdio: ["ignore", "inherit", "inherit"], detached: ${detached} });`,
+    `const g = spawn(process.execPath, ["-e", ${JSON.stringify(grandchild.source)}], { stdio: ${stdio}, detached: ${grandchild.detached} });`,
     `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(g.pid));`,
     then,
   ].join("\n");
@@ -145,16 +171,13 @@ describe("crlf-guard", () => {
     let pid: number | undefined;
     try {
       const ready = join(dir, "ready");
-      const timeoutMs = 500;
+      const timeoutMs = BOUND_MS;
       const started = Date.now();
       const err = await refusal(
         runBounded({
           label: "SIGTERM-proof child",
           command: process.execPath,
-          args: [
-            "-e",
-            `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(${JSON.stringify(ready)}, "1"); setInterval(() => {}, 1000); ${SELF_EXIT}`,
-          ],
+          args: ["-e", `process.on("SIGTERM", () => {}); ${markReady(ready)} setInterval(() => {}, 1000); ${SELF_EXIT}`],
           cwd: root,
           timeoutMs,
           maxOutputBytes: 1024,
@@ -164,8 +187,8 @@ describe("crlf-guard", () => {
       pid = err.pid;
       assert.equal(err.message, `SIGTERM-proof child timed out after ${timeoutMs} ms`);
       assert.equal(err.kind, "timeout");
-      assert.ok(existsSync(ready), "the child was ended before it installed its SIGTERM handler; the case proved nothing");
-      assert.ok(elapsed < timeoutMs + KILL_GRACE_MS + 2000, `the call took ${elapsed} ms`);
+      assertReady(ready, "the child");
+      assertAtBound(elapsed, timeoutMs);
       assert.ok(pid !== undefined, "the refusal does not name the child it ended");
       await assertEnded(pid, "child");
     } finally {
@@ -180,8 +203,14 @@ describe("crlf-guard", () => {
     let grandPid: number | undefined;
     try {
       const pidFile = join(dir, "grandchild.pid");
-      const grandchild = `process.on("SIGTERM", () => {}); setInterval(() => process.stdout.write("."), 100); ${SELF_EXIT}`;
-      const timeoutMs = 3000;
+      const parentReady = join(dir, "parent.ready");
+      const grandReady = join(dir, "grandchild.ready");
+      const grandchild: Grandchild = {
+        source: `process.on("SIGTERM", () => {}); ${markReady(grandReady)} setInterval(() => process.stdout.write("."), 100); ${SELF_EXIT}`,
+        stdio: "inherit",
+        detached: false,
+      };
+      const timeoutMs = BOUND_MS;
       const started = Date.now();
       const err = await refusal(
         runBounded({
@@ -189,7 +218,7 @@ describe("crlf-guard", () => {
           command: process.execPath,
           args: [
             "-e",
-            parentOf(grandchild, pidFile, `process.on("SIGTERM", () => {}); setInterval(() => {}, 1000); ${SELF_EXIT}`, false),
+            parentOf(grandchild, pidFile, `process.on("SIGTERM", () => {}); ${markReady(parentReady)} setInterval(() => {}, 1000); ${SELF_EXIT}`),
           ],
           cwd: root,
           timeoutMs,
@@ -200,7 +229,9 @@ describe("crlf-guard", () => {
       pid = err.pid;
       grandPid = readPid(pidFile, "the grandchild");
       assert.equal(err.message, `parent of a stdout-holding grandchild timed out after ${timeoutMs} ms`);
-      assert.ok(elapsed < timeoutMs + KILL_GRACE_MS + 2000, `the call took ${elapsed} ms`);
+      assertReady(parentReady, "the parent");
+      assertReady(grandReady, "the grandchild");
+      assertAtBound(elapsed, timeoutMs);
       assert.ok(pid !== undefined, "the refusal does not name the child it ended");
       await assertEnded(pid, "child");
       await assertEnded(grandPid, "grandchild");
@@ -220,14 +251,19 @@ describe("crlf-guard", () => {
     let grandPid: number | undefined;
     try {
       const pidFile = join(dir, "grandchild.pid");
-      const grandchild = `setInterval(() => {}, 1000); ${SELF_EXIT}`;
-      const timeoutMs = 1500;
+      const grandReady = join(dir, "grandchild.ready");
+      const grandchild: Grandchild = {
+        source: `${markReady(grandReady)} setInterval(() => {}, 1000); ${SELF_EXIT}`,
+        stdio: "inherit",
+        detached: true,
+      };
+      const timeoutMs = BOUND_MS;
       const started = Date.now();
       const err = await refusal(
         runBounded({
           label: "child with an escaped grandchild",
           command: process.execPath,
-          args: ["-e", parentOf(grandchild, pidFile, "g.unref(); process.exit(0);", true)],
+          args: ["-e", parentOf(grandchild, pidFile, "g.unref(); process.exit(0);")],
           cwd: root,
           timeoutMs,
           maxOutputBytes: 1024,
@@ -236,12 +272,92 @@ describe("crlf-guard", () => {
       const elapsed = Date.now() - started;
       grandPid = readPid(pidFile, "the grandchild");
       assert.equal(err.message, `child with an escaped grandchild timed out after ${timeoutMs} ms`);
-      assert.ok(elapsed < timeoutMs + KILL_GRACE_MS + 2000, `the call took ${elapsed} ms`);
+      assertReady(grandReady, "the grandchild");
+      assertAtBound(elapsed, timeoutMs);
     } finally {
       endQuietly(grandPid);
       rmSync(dir, { recursive: true, force: true });
     }
     if (grandPid !== undefined) await assertEnded(grandPid, "grandchild");
+  });
+
+  it("RED then GREEN: a quiet grandchild that ignores SIGTERM is ended at the bound when its parent goes first", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    // The parent dies of the SIGTERM; the grandchild ignores it and holds no
+    // stream of the call, so nothing but the group's SIGKILL can end it. On
+    // Windows the parent is still alive at the bound and `taskkill /T` reaches
+    // the grandchild through it.
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    let pid: number | undefined;
+    let grandPid: number | undefined;
+    try {
+      const pidFile = join(dir, "grandchild.pid");
+      const grandReady = join(dir, "grandchild.ready");
+      const grandchild: Grandchild = {
+        source: `process.on("SIGTERM", () => {}); ${markReady(grandReady)} setInterval(() => {}, 1000); ${SELF_EXIT}`,
+        stdio: "ignore",
+        detached: false,
+      };
+      const timeoutMs = BOUND_MS;
+      const started = Date.now();
+      const err = await refusal(
+        runBounded({
+          label: "parent of a quiet grandchild",
+          command: process.execPath,
+          args: ["-e", parentOf(grandchild, pidFile, `setInterval(() => {}, 1000); ${SELF_EXIT}`)],
+          cwd: root,
+          timeoutMs,
+          maxOutputBytes: 1024,
+        }),
+      );
+      const elapsed = Date.now() - started;
+      pid = err.pid;
+      grandPid = readPid(pidFile, "the grandchild");
+      assert.equal(err.message, `parent of a quiet grandchild timed out after ${timeoutMs} ms`);
+      assert.equal(err.kind, "timeout");
+      assertReady(grandReady, "the grandchild");
+      assertAtBound(elapsed, timeoutMs);
+      assert.ok(pid !== undefined, "the refusal does not name the child it ended");
+      await assertEnded(pid, "child");
+      await assertEnded(grandPid, "grandchild");
+    } finally {
+      endQuietly(pid);
+      endQuietly(grandPid);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("RED then GREEN: a quiet grandchild left by a child that succeeds is ended before the call returns", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    // The parent exits 0 once the grandchild is running, and the call
+    // succeeds. On Windows the grandchild ends with its parent because Node
+    // puts the children it starts in a kill-on-close job object; a grandchild
+    // whose root has exited is out of `taskkill /T` reach.
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    let grandPid: number | undefined;
+    try {
+      const pidFile = join(dir, "grandchild.pid");
+      const grandReady = join(dir, "grandchild.ready");
+      const grandchild: Grandchild = {
+        source: `process.on("SIGTERM", () => {}); ${markReady(grandReady)} setInterval(() => {}, 1000); ${SELF_EXIT}`,
+        stdio: "ignore",
+        detached: false,
+      };
+      const exitOnceReady = `setInterval(() => { if (require("node:fs").existsSync(${JSON.stringify(grandReady)})) process.exit(0); }, 10); ${SELF_EXIT}`;
+      const done = await runBounded({
+        label: "child that leaves a quiet grandchild",
+        command: process.execPath,
+        args: ["-e", parentOf(grandchild, pidFile, exitOnceReady)],
+        cwd: root,
+        timeoutMs: 10_000,
+        maxOutputBytes: 1024,
+      });
+      assert.equal(done.stdout.length, 0);
+      grandPid = readPid(pidFile, "the grandchild");
+      assertReady(grandReady, "the grandchild");
+      await assertEnded(grandPid, "grandchild");
+    } finally {
+      endQuietly(grandPid);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("RED then GREEN: output past the limit is refused by name and the tree is ended", { timeout: HELPER_WATCHDOG_MS }, async () => {

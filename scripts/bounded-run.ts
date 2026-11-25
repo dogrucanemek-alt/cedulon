@@ -1,12 +1,26 @@
 // A child process the suite waits on must not be able to hold it past a
 // bound of its own. The bound is this module's timer, not an inference
-// from an exit code or a signal. When it fires, or the output limit is
-// passed, the whole process tree is ended: on POSIX the child leads its
-// own process group, which gets SIGTERM and, after KILL_GRACE_MS, SIGKILL;
-// on Windows `taskkill /T /F` ends the tree. The output streams are then
-// destroyed, so a descendant still holding a pipe cannot keep the call
-// open, and the call is refused by the end of the grace period at the
-// latest. Standard input is a file or nothing, never a pipe to feed.
+// from an exit code or a signal. Two things are promised: the call settles
+// within the bound, refused by the end of KILL_GRACE_MS after it at the
+// latest, and the process group or tree this module can reach is ended.
+//
+// On POSIX the child leads its own process group. At the bound, or past
+// the output limit, the group gets SIGTERM and, after KILL_GRACE_MS,
+// SIGKILL; if the child closes first, the SIGKILL goes at once. When the
+// child closes on its own, success included, whatever is left of its
+// group gets SIGKILL: nothing would end it once the call has returned.
+// On Windows `taskkill /T /F` ends the tree while its root is alive.
+//
+// Out of reach: on POSIX a descendant that has left the group, on Windows
+// one that is no longer linked to a live root; a Job Object would need
+// native code. Such a descendant may still hold a pipe, so the output
+// streams are destroyed at the end of the grace period and the call does
+// not wait on it.
+//
+// Leading its own group has a cost on POSIX: if this process dies
+// abruptly, no signal sent to its group reaches the child, which runs on.
+//
+// Standard input is a file or nothing, never a pipe to feed.
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
@@ -156,8 +170,13 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
     });
 
     child.on("close", (code, signal) => {
+      if (settled) return;
+      if (pid !== undefined && !isWindows) signalGroup(pid, "SIGKILL");
       if (ending) {
-        settle(ending);
+        const failure = ending;
+        // The tree is ended only once taskkill has walked it.
+        if (killer && killer.exitCode === null && killer.signalCode === null) killer.once("exit", () => settle(failure));
+        else settle(failure);
         return;
       }
       if (code === 0) {
