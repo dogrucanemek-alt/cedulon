@@ -10,6 +10,7 @@ import {
   countersFromJUnit,
   countersFromNodeSummary,
   implStatusFailures,
+  reportFreshnessFailures,
   suiteAttributeCounters,
 } from "../scripts/impl-status-gate.ts";
 import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
@@ -173,6 +174,28 @@ describe("the Implementation Status count answers to a run", () => {
         suiteAttrs: { tests: 10, failures: 1, skipped: 2 },
         nodeSummary: { tests: 10, failures: 1, skipped: 2 },
       }),
+      [],
+    );
+  });
+
+  it("RED: a suite report older than the run start marker is refused", () => {
+    const startedAtMs = 1_700_000_100_000;
+    const failures = reportFreshnessFailures(startedAtMs, [
+      { path: ".suite-count.xml", mtimeMs: 1_700_000_000_000 },
+      { path: ".suite-node-summary.txt", mtimeMs: 1_700_000_200_000 },
+    ]);
+    assert.equal(failures.length, 1, failures.join(" | "));
+    assert.match(failures[0]!, /\.suite-count\.xml/);
+    assert.match(failures[0]!, /stale suite report/);
+  });
+
+  it("GREEN: reports at or after the run start marker pass freshness", () => {
+    const startedAtMs = 1_700_000_100_000;
+    assert.deepEqual(
+      reportFreshnessFailures(startedAtMs, [
+        { path: ".suite-count.xml", mtimeMs: startedAtMs },
+        { path: ".suite-node-summary.txt", mtimeMs: startedAtMs + 1 },
+      ]),
       [],
     );
   });

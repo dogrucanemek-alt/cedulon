@@ -73,7 +73,7 @@
           <li><strong>Canonical JSON encoding</strong> — RFC 8785 for everything hashed or signed that is not CBOR: the policy document, the six request fields a Decision Token binds, the Rail Extract body; and which octets are hashed.</li>
           <li><strong>Decision Token</strong> — the portable encoding of a PDP allow; COSE_Sign1 with all five labels always present.</li>
           <li><strong>Rail Extract Profile</strong> — authenticated settlement records; unsigned extract makes the guarantee conditional.</li>
-          <li><strong>Trust roots</strong> — a separate root input for every signed object; a verifier never checks an object against the key the object carries, and a missing or mismatched pin fails under its own name.</li>
+          <li><strong>Trust roots</strong> — a separate root input for every signed object. With no pin the key an object carries is checked only for internal consistency, the result is conditional, <span class="mono">attested</span> is 0 and coverage can continue; a mismatched usable pin fails under its own name.</li>
           <li><strong>Reconciliation and Epoch Checkpoints</strong> — 1:1 ref+amount+currency; half-open windows; equivocation; the verification algorithm and its finding codes.</li>
           <li><strong>Lifecycle</strong> — Manifest → Policy → Payment → Receipt → Dispute Evidence Bundle.</li>
           <li><strong>Policy Semantics</strong> — limit, velocity, scope; fail-closed default deny.</li>

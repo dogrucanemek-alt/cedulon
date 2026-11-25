@@ -54,8 +54,10 @@ This document specifies epoch checkpoints, the transparency witness
 and the anchoring of checkpoints as SCITT Signed Statements for the
 Cedulon audit layer. The spend receipt, rail-extract reconciliation
 and trust-root rules live in the companion Cedulon Core document.
-A verifier that pins a witness key can detect a withheld or rolled-back
-checkpoint; without that pin the suppression guarantee is conditional.
+A verifier that pins a witness key and holds a usable issuer root can
+detect a withheld or rolled-back checkpoint from a body that answers to
+that root (`MUST-T11-16`); without those pins the suppression guarantee
+is conditional.
 
 --- middle
 
@@ -413,7 +415,8 @@ identifiers are not an interoperability surface.
     equivocation (`MUST-T11-3`). The identifier `equivocation`
     SHOULD be used for this condition. The checkpoints compared
     here are those of the working set of {{CEDULON-CORE}} **together
-    with** any carried by verified witness receipts (step 5). A
+    with** any whose statement body verifies under a usable issuer
+    root (`MUST-T11-16`) on a verified witness receipt (step 5). A
     working set that satisfies `MUST-T11-8` (step 2) cannot raise
     this finding on its own, because its epochs are consecutive and
     no two of its members share an epoch. A copy recorded by a
@@ -456,17 +459,20 @@ identifiers are not an interoperability surface.
     warning: a witness may have been configured after the
     checkpoint was issued, and an operator's own gap is not
     evidence of concealment. For each surviving record whose
-    statement is absent from the presented chain, report that a
-    recorded checkpoint was withheld; the identifier
-    `checkpoint-withheld` SHOULD be used. This is a finding and the
-    audit MUST fail. A record that carries no statement body cannot
-    say whose statement it binds, so it MUST NOT produce this
-    finding; it is reported as an entry that could not be attributed
-    and makes the guarantee conditional, because a real withholding
-    must not be buried by removing the body (`MUST-T11-17`). Such a
-    record still establishes anchoring in the first half of this
-    step: proving that a checkpoint was logged needs only its hash. The verifier MUST NOT report a withheld
-    checkpoint as a window coverage failure (`MUST-T11-11`).
+    statement body verifies under a usable issuer root
+    (`MUST-T11-16`) and whose statement is absent from the
+    presented chain, report that a recorded checkpoint was
+    withheld; the identifier `checkpoint-withheld` SHOULD be used.
+    This is a finding and the audit MUST fail. A record that
+    carries no statement body cannot say whose statement it binds,
+    so it MUST NOT produce this finding; it is reported as an entry
+    that could not be attributed and makes the guarantee
+    conditional, because a real withholding must not be buried by
+    removing the body (`MUST-T11-17`). Such a record still
+    establishes anchoring in the first half of this step: proving
+    that a checkpoint was logged needs only its hash. The verifier
+    MUST NOT report a withheld checkpoint as a window coverage
+    failure (`MUST-T11-11`).
 
 ## Finding codes
 
@@ -517,7 +523,7 @@ The remaining T11 identities are defined here.
 | ID | Requirement |
 |---|---|
 | MUST-T11-2 | Verifiers MUST reject a checkpoint whose signature fails, whose totals do not match settled receipts in the declared window, whose `receiptCount` is wrong, or whose `chainHeadHash` is not the hash of the last in-window receipt in issuer order (the `prevReceiptHash` chain). Where the signed totals are null, MUST-T11-12 governs instead: there is no total to disagree with, the comparison is reported as skipped, and the count and chain-head checks still apply. |
-| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those of the working set of {{CEDULON-CORE}} together with those carried by verified witness receipts; a working set that satisfies MUST-T11-8 cannot raise it on its own, because its epochs are consecutive. |
+| MUST-T11-3 | Two verified checkpoints for the same epoch with different hashes MUST be reported as equivocation. The checkpoints compared are those of the working set of {{CEDULON-CORE}} together with those whose statement body verifies under a usable issuer root (`MUST-T11-16`) on a verified witness receipt; a working set that satisfies MUST-T11-8 cannot raise it on its own, because its epochs are consecutive. |
 | MUST-T11-4 | A broken checkpoint hash chain MUST fail verification. |
 | SHOULD-T11-5 | Checkpoints SHOULD be registered with a Transparency Service when one is configured. |
 | MAY-T11-6 | A test deployment MAY use an in-process append-only log as the witness. |

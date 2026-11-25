@@ -17,6 +17,7 @@ import {
   strayAnchorTargets,
   strayGenesisTargets,
   windowCoverageScopeFailures,
+  trustRootSiteFailures,
   withholdingScopeFailures,
   workspacePackages,
 } from "../scripts/core05-wording.ts";
@@ -25,6 +26,7 @@ import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const core = readFileSync(livingCoreDraftPath(root), "utf8");
 const checkpoint = readFileSync(join(root, "spec", "draft-dogru-cedulon-checkpoint-01.md"), "utf8");
+const specPage = readFileSync(join(root, "site", "spec.html"), "utf8");
 const coreRel = livingCoreDraftPath(root).slice(root.length + 1).replace(/\\/g, "/");
 
 /** Replace `from` in `text`, line breaks aside; a fixture that changes nothing is a broken fixture. */
@@ -156,8 +158,17 @@ describe("MUST-T11-8 and window-coverage run on the working set", () => {
 });
 
 describe("MUST-T11-11 withholding answers to a usable issuer root", () => {
-  it("MUST-T11-11, checkpoint-withheld and MUST-T11-16 stay consistent", () => {
+  it("abstract, steps 4/6, MUST-T11-3, MUST-T11-11, checkpoint-withheld and MUST-T11-16 stay consistent", () => {
     assert.deepEqual(withholdingScopeFailures(checkpoint), []);
+  });
+
+  it("RED: the e4bfd0d draft that withheld or equivocated on any verified witness receipt is caught", () => {
+    const old = gitShow("e4bfd0d:spec/draft-dogru-cedulon-checkpoint-01.md");
+    const failures = withholdingScopeFailures(old);
+    assert.ok(failures.some((f) => f.includes("abstract")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("step 4")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("step 6")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("MUST-T11-3")), failures.join(" | "));
   });
 
   it("RED: the ba2b3f1 rows that withheld on any verified witness receipt are caught", () => {
@@ -176,6 +187,19 @@ describe("MUST-T11-11 withholding answers to a usable issuer root", () => {
     const failures = withholdingScopeFailures(drifted);
     assert.ok(failures.some((f) => f.includes("MUST-T11-11") && f.includes("usable issuer root")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("still withholds on any verified receipt")), failures.join(" | "));
+  });
+});
+
+describe("site/spec.html separates a missing pin from a mismatched pin", () => {
+  it("the Trust roots bullet matches the issuer-root rule", () => {
+    assert.deepEqual(trustRootSiteFailures(specPage), []);
+  });
+
+  it("RED: the e4bfd0d bullet that never-checks and conflates missing with mismatched is caught", () => {
+    const old = gitShow("e4bfd0d:site/spec.html");
+    const failures = trustRootSiteFailures(old);
+    assert.ok(failures.some((f) => f.includes("never checks")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("missing pin and a mismatched pin")), failures.join(" | "));
   });
 });
 

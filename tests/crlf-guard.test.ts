@@ -101,9 +101,17 @@ describe("crlf-guard", () => {
   it("living unpublished drafts have no CR; a CR-injected copy is refused", () => {
     const living = livingUnpublishedDraftPaths(root);
     assert.ok(living.length > 0, "expected at least one living unpublished draft");
+    const names = living.map((p) => p.replace(/\\/g, "/").split("/").pop()!);
+    for (const expected of [
+      "draft-dogru-cedulon-core-05.md",
+      "draft-dogru-cedulon-checkpoint-01.md",
+      "draft-dogru-cedulon-resolution-00.md",
+    ]) {
+      assert.ok(names.includes(expected), `expected living unpublished draft ${expected}, got ${names.join(", ")}`);
+    }
     assert.ok(
-      living.some((p) => p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-resolution-00.md")),
-      "resolution-00 is living and unpublished",
+      !names.includes("draft-dogru-cedulon-decision-profile-04.md"),
+      "posted decision-profile-04 must stay out of the living-unpublished set",
     );
     assert.ok(
       !living.some((p) => p.replace(/\\/g, "/").endsWith("draft-dogru-cedulon-decision-profile-04.md")),

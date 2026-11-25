@@ -232,14 +232,51 @@ export function consecutiveEpochScopeFailures(core: string, checkpoint: string):
 // --- MUST-T11-11 / checkpoint-withheld / MUST-T11-16: withholding needs an issuer root ---
 
 /**
- * Withholding is only for a body that answers to a usable issuer root.
- * MUST-T11-11 and the checkpoint-withheld row must say so and cite
- * MUST-T11-16; MUST-T11-16 must keep the pinless body out of a
- * withholding verdict. The three places are measured together so one
- * cannot drift back to "any verified witness receipt".
+ * Withholding and equivocation via the witness are only for a body that
+ * answers to a usable issuer root. The abstract, algorithm steps 4 and 6,
+ * MUST-T11-3, MUST-T11-11, the checkpoint-withheld row and MUST-T11-16 are
+ * measured together so one cannot drift back to "any verified witness
+ * receipt".
  */
 export function withholdingScopeFailures(checkpoint: string): string[] {
   const failures: string[] = [];
+  const flat = flatten(checkpoint);
+  if (
+    !/pins a witness key and holds a usable issuer root/.test(flat) ||
+    !/body that answers to that root/.test(flat)
+  ) {
+    failures.push("checkpoint: the abstract still treats a witness pin alone as enough for withholding");
+  }
+  if (/pins a witness key can detect a withheld/.test(flat)) {
+    failures.push("checkpoint: the abstract still withholds on a witness pin alone");
+  }
+
+  const step4 = /The checkpoints compared here are those of the working set of \{\{CEDULON-CORE\}\} \*\*together with\*\* ([^.]+)\./.exec(flat);
+  if (step4 === null) {
+    failures.push("checkpoint: step 4 does not state which witness copies enter the equivocation pool");
+  } else if (!/usable issuer root/.test(step4[1]!) || !(/MUST-T11-16/.test(step4[1]!))) {
+    failures.push("checkpoint: step 4 still equivocates on any verified witness receipt");
+  }
+
+  const step6 = /For each surviving record whose ([^.]+), report that a recorded checkpoint was withheld/.exec(flat);
+  if (step6 === null) {
+    failures.push("checkpoint: step 6 does not state which surviving record produces checkpoint-withheld");
+  } else if (!/usable issuer root/.test(step6[1]!) || !(/MUST-T11-16/.test(step6[1]!))) {
+    failures.push("checkpoint: step 6 still withholds on any surviving witness record");
+  }
+
+  const t3 = tableRow(checkpoint, "MUST-T11-3");
+  if (t3 === null) {
+    failures.push("checkpoint: no MUST-T11-3 row");
+  } else {
+    if (!/usable issuer root/.test(t3) || !(/`MUST-T11-16`/.test(t3) || /MUST-T11-16/.test(t3))) {
+      failures.push("checkpoint: the MUST-T11-3 row still equivocates on any verified witness receipt");
+    }
+    if (/together with those carried by verified witness receipts/.test(t3)) {
+      failures.push("checkpoint: the MUST-T11-3 row still names verified witness receipts without an issuer root");
+    }
+  }
+
   const t11 = tableRow(checkpoint, "MUST-T11-11");
   if (t11 === null) {
     failures.push("checkpoint: no MUST-T11-11 row");
@@ -273,6 +310,33 @@ export function withholdingScopeFailures(checkpoint: string): string[] {
     failures.push("checkpoint: no MUST-T11-16 row");
   } else if (!/Without a usable issuer pin, a witness body MUST NOT produce a withholding or equivocation verdict/.test(t16)) {
     failures.push("checkpoint: the MUST-T11-16 row no longer keeps a pinless body out of withholding");
+  }
+  return failures;
+}
+
+/**
+ * The public spec page must separate a missing pin (conditional, carried key
+ * for consistency only, attested=0, coverage may continue) from a mismatched
+ * usable pin (fails). The old "never checks" / "missing or mismatched fails"
+ * sentence is the defect.
+ */
+export function trustRootSiteFailures(page: string): string[] {
+  const failures: string[] = [];
+  const flat = flatten(page.replace(/<[^>]+>/g, " "));
+  if (/never checks an object against the key the object carries/.test(flat)) {
+    failures.push("site: still says the verifier never checks a carried key");
+  }
+  if (/missing or mismatched pin fails/.test(flat)) {
+    failures.push("site: still treats a missing pin and a mismatched pin as the same failure");
+  }
+  if (!/With no pin/.test(flat) || !/internal consistency/.test(flat)) {
+    failures.push("site: does not say a missing pin checks the carried key only for internal consistency");
+  }
+  if (!/attested/.test(flat) || !(/conditional/.test(flat) && /coverage can continue/.test(flat))) {
+    failures.push("site: does not say a missing pin is conditional with attested=0 and coverage that can continue");
+  }
+  if (!/mismatched usable pin fails/.test(flat)) {
+    failures.push("site: does not say a mismatched usable pin fails");
   }
   return failures;
 }

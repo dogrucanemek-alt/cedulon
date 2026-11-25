@@ -37,12 +37,38 @@
  * have inflated.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
 
 import { livingCoreDraftPath } from "./latest-draft.ts";
 
 export type SuiteCounters = { tests: number; failures: number; skipped: number };
+
+/** Default path written at the start of `test:pre-release` and read by the gate. */
+export const SUITE_RUN_STARTED_PATH = ".suite-run-started";
+
+/**
+ * Refuse suite reports that predate the run marker. A standalone gate against
+ * leftover `.suite-count.xml` / `.suite-node-summary.txt` used to look green
+ * without a fresh run; the marker is the freshness proof.
+ */
+export function reportFreshnessFailures(
+  startedAtMs: number,
+  reports: Array<{ path: string; mtimeMs: number }>,
+): string[] {
+  if (!Number.isFinite(startedAtMs) || startedAtMs <= 0) {
+    return ["suite run start marker is not a positive timestamp"];
+  }
+  const failures: string[] = [];
+  for (const report of reports) {
+    if (report.mtimeMs < startedAtMs) {
+      failures.push(
+        `${report.path} mtime ${report.mtimeMs} is older than the run start ${startedAtMs}; refuse a stale suite report`,
+      );
+    }
+  }
+  return failures;
+}
 
 function countCaseOutcome(
   body: string,
@@ -203,7 +229,25 @@ function main(): void {
     reportPath = ".suite-count.xml",
     specPath = living,
     summaryPath = ".suite-node-summary.txt",
+    startedPath = process.env.SUITE_RUN_STARTED ?? SUITE_RUN_STARTED_PATH,
   ] = process.argv.slice(2);
+  if (!existsSync(startedPath)) {
+    console.error(
+      `impl-status: no suite run start marker at ${startedPath}; refuse default suite reports without freshness proof`,
+    );
+    process.exit(1);
+  }
+  const startedRaw = readFileSync(startedPath, "utf8").trim();
+  const startedAtMs = Number(startedRaw);
+  const reportStats = [
+    { path: reportPath, mtimeMs: existsSync(reportPath) ? statSync(reportPath).mtimeMs : 0 },
+    { path: summaryPath, mtimeMs: existsSync(summaryPath) ? statSync(summaryPath).mtimeMs : 0 },
+  ];
+  const freshness = reportFreshnessFailures(startedAtMs, reportStats);
+  if (freshness.length > 0) {
+    for (const failure of freshness) console.error(`impl-status: ${failure}`);
+    process.exit(1);
+  }
   const xml = readFileSync(reportPath, "utf8");
   const counters = countersFromJUnit(xml);
   const suiteAttrs = suiteAttributeCounters(xml);

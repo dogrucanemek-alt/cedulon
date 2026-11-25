@@ -1,11 +1,17 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { audit } from "@cedulon/audit";
 import { buildCheckpointClaims, checkpointHash, signCheckpoint } from "@cedulon/checkpoint";
 import { generateReceiptKeys, receiptHash, signReceipt } from "@cedulon/receipts";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const P_START = 1_700_000_000_000;
 const H = 3_600_000;
@@ -335,5 +341,86 @@ describe("coverage set vs diagnostic set (pin matrix)", () => {
     );
     assert.equal(report.findings.some((f) => f.code === "trust-key-unreadable"), true);
     assert.equal(report.ok, false);
+  });
+});
+
+function upgrading019Failures(section: string): string[] {
+  const failures: string[] = [];
+  for (const needle of [
+    "counts.receipts.attested",
+    "counts.receipts.covering",
+    "checkpoint-withheld",
+    "equivocation",
+    "witness-entry-unattributable",
+    "verdict change",
+    "trust-key-unreadable",
+    "audit-too-large",
+    "issuer-key-mismatch",
+  ]) {
+    if (!section.includes(needle)) failures.push(`0.19.0 section omits ${needle}`);
+  }
+  return failures;
+}
+
+describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes", () => {
+  function section019(md = readFileSync(join(root, "docs", "UPGRADING.md"), "utf8")): string {
+    const m = /## 0\.19\.0 \(prepared, not published\)\n([\s\S]*?)(?=\n## )/.exec(md);
+    assert.ok(m, "docs/UPGRADING.md has no ## 0.19.0 (prepared, not published) section");
+    return m[1]!;
+  }
+
+  it("the section title and finding codes stay bound to attested/covering and pinless witness verdicts", () => {
+    assert.deepEqual(upgrading019Failures(section019()), []);
+
+    const s = stream();
+    const pinless = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+    });
+    assert.equal(pinless.counts.receipts.attested, 0);
+    assert.equal(pinless.counts.receipts.covering, 2);
+
+    const unreadable = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: "not a key" },
+    });
+    assert.equal(unreadable.counts.receipts.attested, 0);
+    assert.equal(unreadable.counts.receipts.covering, 0);
+    assert.ok(unreadable.findings.some((f) => f.code === "trust-key-unreadable"));
+
+    const foreign = generateReceiptKeys();
+    const refused = signCheckpoint(
+      buildCheckpointClaims(1, [s.r0], P_START, N_START, null),
+      foreign.privateKeyPem,
+      foreign.publicKeyPem,
+    );
+    const rejected = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [refused, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+    });
+    assert.ok(rejected.findings.some((f) => f.code === "issuer-key-mismatch" && f.id === "epoch-1"));
+    assert.equal(
+      rejected.counts.receipts.covering,
+      rejected.counts.receipts.attested,
+      "under a usable pin covering tracks attested; a rejected checkpoint is outside both",
+    );
+  });
+
+  it("RED: the e4bfd0d 0.19.0 section that omitted the pinless witness verdict is caught", () => {
+    const oldMd = execFileSync("git", ["show", "e4bfd0d:docs/UPGRADING.md"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    const failures = upgrading019Failures(section019(oldMd));
+    assert.ok(failures.some((f) => f.includes("witness-entry-unattributable")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("verdict change")), failures.join(" | "));
   });
 });

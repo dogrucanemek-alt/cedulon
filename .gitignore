@@ -32,6 +32,7 @@ tests/_probe_*
 # cannot stand in for a run that did not happen
 .suite-count.xml
 .suite-node-summary.txt
+.suite-run-started
 
 .vercel
 .env*
