@@ -31,6 +31,7 @@ tests/_probe_*
 # written by every pre-release run; never committed, so a stale copy
 # cannot stand in for a run that did not happen
 .suite-count.xml
+.suite-node-summary.txt
 
 .vercel
 .env*

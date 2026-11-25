@@ -6,8 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   claimedCount,
+  countConsistencyFailures,
   countersFromJUnit,
+  countersFromNodeSummary,
   implStatusFailures,
+  suiteAttributeCounters,
 } from "../scripts/impl-status-gate.ts";
 import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
 
@@ -15,6 +18,27 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const specPath = livingCoreDraftPath(root);
 const spec = readFileSync(specPath, "utf8");
 
+/** Nested describes as Node's JUnit reporter emits them: parent tests= child count. */
+const nestedJUnit =
+  '<testsuites>' +
+  '<testsuite name="pin matrix" tests="4" failures="0" skipped="0">' +
+  '<testsuite name="usable pin" tests="3" failures="0" skipped="0">' +
+  '<testcase name="a1"/><testcase name="a2"/><testcase name="a3"/>' +
+  "</testsuite>" +
+  '<testsuite name="no pin" tests="3" failures="1" skipped="0">' +
+  '<testcase name="b1"><failure message="x">boom</failure></testcase>' +
+  '<testcase name="b2"/><testcase name="b3"/>' +
+  "</testsuite>" +
+  '<testsuite name="fully unreadable pin" tests="3" failures="0" skipped="1">' +
+  '<testcase name="c1"><skipped/></testcase>' +
+  '<testcase name="c2"/><testcase name="c3"/>' +
+  "</testsuite>" +
+  '<testsuite name="partially readable pin" tests="3" failures="0" skipped="0">' +
+  '<testcase name="d1"/><testcase name="d2"/>' +
+  '<testcase name="d3"><error message="e">err</error></testcase>' +
+  "</testsuite>" +
+  "</testsuite>" +
+  "</testsuites>";
 
 describe("the Implementation Status count answers to a run", () => {
   it("the sentence is still shaped the way the gate reads it", () => {
@@ -61,12 +85,71 @@ describe("the Implementation Status count answers to a run", () => {
     assert.ok(failures.some((f) => /1 failing cases/.test(f)), failures.join(" | "));
   });
 
-  it("reads a JUnit report by summing its per-file totals", () => {
-    const xml =
-      '<testsuites><testsuite name="a" tests="6" failures="0" skipped="0"/>' +
-      '<testsuite name="b" tests="4" failures="1" skipped="2"/></testsuites>';
-    assert.deepEqual(countersFromJUnit(xml), { tests: 10, failures: 1, skipped: 2 });
+  it("counts <testcase> elements; nested suite attributes must not be summed", () => {
+    // Summing every tests= attribute here yields 4+3+3+3+3 = 16; there are
+    // only 12 <testcase> elements. That is the core-05 double-count.
+    assert.deepEqual(suiteAttributeCounters(nestedJUnit), {
+      tests: 16,
+      failures: 1,
+      skipped: 1,
+    });
+    assert.deepEqual(countersFromJUnit(nestedJUnit), {
+      tests: 12,
+      failures: 2,
+      skipped: 1,
+    });
     assert.throws(() => countersFromJUnit("<testsuites/>"), /no <testsuite> element/);
+  });
+
+  it("reads a flat JUnit report by its <testcase> elements", () => {
+    const xml =
+      '<testsuites><testsuite name="a" tests="6" failures="0" skipped="0">' +
+      '<testcase name="a1"/><testcase name="a2"/><testcase name="a3"/>' +
+      '<testcase name="a4"/><testcase name="a5"/><testcase name="a6"/>' +
+      "</testsuite>" +
+      '<testsuite name="b" tests="4" failures="1" skipped="2">' +
+      '<testcase name="b1"><failure message="x">boom</failure></testcase>' +
+      '<testcase name="b2"><skipped/></testcase>' +
+      '<testcase name="b3"><skipped/></testcase>' +
+      '<testcase name="b4"/>' +
+      "</testsuite></testsuites>";
+    assert.deepEqual(countersFromJUnit(xml), { tests: 10, failures: 1, skipped: 2 });
+    assert.deepEqual(suiteAttributeCounters(xml), { tests: 10, failures: 1, skipped: 2 });
+  });
+
+  it("RED: nested suite attribute totals disagree with the <testcase> count", () => {
+    const fromCases = countersFromJUnit(nestedJUnit);
+    const suiteAttrs = suiteAttributeCounters(nestedJUnit);
+    const failures = countConsistencyFailures(fromCases, { suiteAttrs });
+    assert.equal(failures.length, 1, failures.join(" | "));
+    assert.match(failures[0]!, /<testcase> count is 12/);
+    assert.match(failures[0]!, /summing <testsuite tests> attributes yields 16/);
+    assert.match(failures[0]!, /nested <testsuite>/);
+  });
+
+  it("RED: a Node summary that disagrees with the JUnit <testcase> count is refused", () => {
+    const fromCases = countersFromJUnit(nestedJUnit);
+    const nodeSummary = countersFromNodeSummary(
+      "ℹ tests 11\nℹ suites 5\nℹ pass 9\nℹ fail 1\nℹ skipped 1\n",
+    );
+    assert.deepEqual(nodeSummary, { tests: 11, failures: 1, skipped: 1 });
+    const failures = countConsistencyFailures(fromCases, { nodeSummary });
+    assert.equal(failures.length, 1, failures.join(" | "));
+    assert.match(
+      failures[0]!,
+      /JUnit <testcase> count is 12 but the Node summary reports tests 11/,
+    );
+  });
+
+  it("GREEN: Node summary and suite attributes that match the <testcase> count pass", () => {
+    const fromCases = { tests: 10, failures: 1, skipped: 2 };
+    assert.deepEqual(
+      countConsistencyFailures(fromCases, {
+        suiteAttrs: { tests: 10, failures: 1, skipped: 2 },
+        nodeSummary: { tests: 10, failures: 1, skipped: 2 },
+      }),
+      [],
+    );
   });
 
   // The live comparison is deliberately NOT a test. The report belongs to the

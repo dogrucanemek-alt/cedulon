@@ -8,6 +8,13 @@
  * real figure was 548, and two revisions went out with nobody noticing. The
  * number was written by hand and nothing on earth compared it to a run.
  *
+ * Found 2026-11-25: summing every <testsuite tests="N"> double-counted nested
+ * describes. Node's JUnit reporter emits a parent suite whose tests attribute
+ * is the child-suite count, then emits each child with its own tests
+ * attribute; adding every attribute counted the nested cases twice. The Node
+ * summary's `tests` line and the <testcase> element count agreed; the gate
+ * did not.
+ *
  * Four ways were considered and dropped:
  *
  *  - Running the suite from inside the suite: recursion, and it doubles the
@@ -21,22 +28,57 @@
  *    and answers about a commit that is not necessarily this one.
  *
  * What is done instead: the pre-release run writes a JUnit report, and this
- * gate reads the report of that run. There is no second declaration to
- * maintain, no network, no second execution -- and it runs on all three
- * hosted runners, which is exactly the claim the sentence makes. The report
- * is not committed; a stale copy cannot stand in for a run that did not
- * happen.
+ * gate counts the <testcase> elements of that report. There is no second
+ * declaration to maintain, no network, no second execution -- and it runs on
+ * all three hosted runners, which is exactly the claim the sentence makes.
+ * The report is not committed; a stale copy cannot stand in for a run that
+ * did not happen. A cross-check refuses a total that disagrees with the same
+ * run's Node summary, or with a sum of suite attributes that nested suites
+ * have inflated.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 
 import { livingCoreDraftPath } from "./latest-draft.ts";
 
 export type SuiteCounters = { tests: number; failures: number; skipped: number };
 
-/** Sum the per-file totals of a Node test-runner JUnit report. */
+function countCaseOutcome(
+  body: string,
+): { failed: boolean; skipped: boolean } {
+  // A skipped case may still carry a failure element in some reporters; treat
+  // skip as the outcome Node's summary uses for that case.
+  if (/<skipped[\s/>]/.test(body)) return { failed: false, skipped: true };
+  if (/<failure[\s/>]/.test(body) || /<error[\s/>]/.test(body)) {
+    return { failed: true, skipped: false };
+  }
+  return { failed: false, skipped: false };
+}
+
+/**
+ * Count real cases from <testcase> elements. Nested <testsuite tests="N">
+ * attributes are not added: a parent suite's attribute can name its child
+ * suites, and summing every attribute then counts those cases twice.
+ */
 export function countersFromJUnit(xml: string): SuiteCounters {
+  if (![...xml.matchAll(/<testsuite\b/g)].length) {
+    throw new Error("no <testsuite> element in the JUnit report");
+  }
+  // Self-closing <testcase .../> and <testcase>...</testcase> both occur in
+  // Node's JUnit output; do not let [^>]* swallow the '/' of '/>'.
+  const cases = [...xml.matchAll(/<testcase\b[\s\S]*?(?:\/>|<\/testcase>)/g)];
+  const total = { tests: cases.length, failures: 0, skipped: 0 };
+  for (const c of cases) {
+    const outcome = countCaseOutcome(c[0]!);
+    if (outcome.skipped) total.skipped += 1;
+    else if (outcome.failed) total.failures += 1;
+  }
+  return total;
+}
+
+/** Sum every <testsuite tests|failures|skipped> attribute. Nested suites inflate this. */
+export function suiteAttributeCounters(xml: string): SuiteCounters {
   const suites = [...xml.matchAll(/<testsuite\s([^>]*)>/g)];
   if (suites.length === 0) throw new Error("no <testsuite> element in the JUnit report");
   const total = { tests: 0, failures: 0, skipped: 0 };
@@ -49,6 +91,51 @@ export function countersFromJUnit(xml: string): SuiteCounters {
     }
   }
   return total;
+}
+
+/**
+ * Read the Node test-runner summary block (`ℹ tests N` / `tests N`, and the
+ * matching fail / skipped lines).
+ */
+export function countersFromNodeSummary(text: string): SuiteCounters {
+  const tests = /(?:^|\n)\s*(?:ℹ\s+)?tests\s+(\d+)\s*(?:\n|$)/.exec(text);
+  if (!tests) throw new Error("no Node summary `tests` line");
+  const failures =
+    /(?:^|\n)\s*(?:ℹ\s+)?fail\s+(\d+)\s*(?:\n|$)/.exec(text) ??
+    /(?:^|\n)\s*(?:ℹ\s+)?failed\s+(\d+)\s*(?:\n|$)/.exec(text);
+  const skipped = /(?:^|\n)\s*(?:ℹ\s+)?skipped\s+(\d+)\s*(?:\n|$)/.exec(text);
+  return {
+    tests: Number(tests[1]),
+    failures: failures ? Number(failures[1]) : 0,
+    skipped: skipped ? Number(skipped[1]) : 0,
+  };
+}
+
+/**
+ * When the JUnit <testcase> total disagrees with the same run's Node summary,
+ * or with a sum of suite attributes, say why. Nested suites are the known
+ * cause of attribute-sum drift.
+ */
+export function countConsistencyFailures(
+  fromTestcases: SuiteCounters,
+  {
+    suiteAttrs,
+    nodeSummary,
+  }: { suiteAttrs?: SuiteCounters; nodeSummary?: SuiteCounters } = {},
+): string[] {
+  const failures: string[] = [];
+  if (nodeSummary && fromTestcases.tests !== nodeSummary.tests) {
+    failures.push(
+      `JUnit <testcase> count is ${fromTestcases.tests} but the Node summary reports tests ${nodeSummary.tests}`,
+    );
+  }
+  if (suiteAttrs && fromTestcases.tests !== suiteAttrs.tests) {
+    failures.push(
+      `<testcase> count is ${fromTestcases.tests} but summing <testsuite tests> attributes yields ${suiteAttrs.tests}; ` +
+        `nested <testsuite> elements inflate the attribute sum — count <testcase> elements, not suite totals`,
+    );
+  }
+  return failures;
 }
 
 /** The sentence under guard, with its line breaks flattened. */
@@ -100,13 +187,25 @@ export function implStatusFailures(
 
 function main(): void {
   const living = livingCoreDraftPath(".");
-  const [reportPath = ".suite-count.xml", specPath = living] = process.argv.slice(2);
-  const counters = countersFromJUnit(readFileSync(reportPath, "utf8"));
+  const [
+    reportPath = ".suite-count.xml",
+    specPath = living,
+    summaryPath = ".suite-node-summary.txt",
+  ] = process.argv.slice(2);
+  const xml = readFileSync(reportPath, "utf8");
+  const counters = countersFromJUnit(xml);
+  const suiteAttrs = suiteAttributeCounters(xml);
+  const nodeSummary = existsSync(summaryPath)
+    ? countersFromNodeSummary(readFileSync(summaryPath, "utf8"))
+    : undefined;
   const noSkips = Boolean(process.env.CI);
-  const failures = implStatusFailures(readFileSync(specPath, "utf8"), counters, {
-    noSkips,
-    specPath,
-  });
+  const failures = [
+    ...countConsistencyFailures(counters, { suiteAttrs, nodeSummary }),
+    ...implStatusFailures(readFileSync(specPath, "utf8"), counters, {
+      noSkips,
+      specPath,
+    }),
+  ];
   if (failures.length > 0) {
     for (const failure of failures) console.error(`impl-status: ${failure}`);
     process.exit(1);
