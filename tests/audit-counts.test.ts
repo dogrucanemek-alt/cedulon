@@ -639,7 +639,7 @@ describe("step 8: a settled receipt with a null rail ref has no extract row (MUS
   ];
   for (const { label, rows } of unreadableExtracts) {
     for (const at of [MIDDLE, CLOSING]) {
-      it(`an issuer pin that cannot be read, ${label}, ${at === MIDDLE ? "mid-window" : "inside the closing allowance"}: settled-without-ref only, the coverage set is empty`, () => {
+      it(`an issuer pin that cannot be read, ${label}, ${at === MIDDLE ? "mid-window" : "inside the closing allowance"}: no receipt-without-settlement; the coverage set is empty`, () => {
         const honest = generateReceiptKeys();
         const rail = generateExtractKeys();
         const bad = nullRefReceipt(honest, at);
@@ -672,6 +672,58 @@ describe("step 8: a settled receipt with a null rail ref has no extract row (MUS
         assert.equal(c.receipts.unmatched, 0);
         assert.equal(c.receipts.deferred, 0);
       });
+    }
+  }
+
+  // A receipt that carries its own key is refused once as issuer-key-mismatch;
+  // one that carries the pinned key is walked and its break named (step 6).
+  const refusals = [
+    { carries: "its own key", refusal: "issuer-key-mismatch" },
+    { carries: "the pinned key", refusal: "receipt-chain-break" },
+  ];
+  for (const { label, rows } of unreadableExtracts) {
+    for (const { carries, refusal } of refusals) {
+      for (const at of [MIDDLE, CLOSING]) {
+        it(`a usable issuer pin the receipt does not verify under (another key signed it, carrying ${carries}), ${label}, ${at === MIDDLE ? "mid-window" : "inside the closing allowance"}: settled-without-ref and ${refusal}, no receipt-without-settlement`, () => {
+          const honest = generateReceiptKeys();
+          const attacker = generateReceiptKeys();
+          const rail = generateExtractKeys();
+          const own = nullRefReceipt(attacker, at);
+          const bad =
+            carries === "its own key"
+              ? own
+              : signReceiptUnchecked(own.claims, attacker.privateKeyPem, honest.publicKeyPem);
+          const report = audit({
+            receipts: [bad],
+            checkpoints: [checkpointOver(honest, [])],
+            ...(rows === null ? {} : { extract: extract(rail, rows), trust: trustFor(rail) }),
+            issuerTrust: { publicKeyPem: honest.publicKeyPem },
+          });
+          const nonce = bad.claims.nonce;
+          const expected = [`${refusal}:${nonce}`, `settled-without-ref:${nonce}`];
+          if (rows !== null && rows.length > 0) expected.push("settlement-without-receipt:ref-other");
+          assert.deepEqual(
+            report.findings.map((f) => `${f.code}:${f.id}`).sort(),
+            expected.sort(),
+            JSON.stringify(report.findings),
+          );
+          assert.equal(
+            [...report.findings, ...report.warnings].some(
+              (f) => f.code === "receipt-without-settlement" || f.code === "boundary-deferred",
+            ),
+            false,
+          );
+          assert.equal(report.ok, false);
+          const c = counted(report);
+          assert.equal(c.receipts.submitted, 1);
+          assert.equal(c.receipts.attested, 0);
+          assert.equal(c.receipts.covering, 0);
+          assert.equal(c.receipts.inScope, 0);
+          assert.equal(c.receipts.settled, 0);
+          assert.equal(c.receipts.unmatched, 0);
+          assert.equal(c.receipts.deferred, 0);
+        });
+      }
     }
   }
 });

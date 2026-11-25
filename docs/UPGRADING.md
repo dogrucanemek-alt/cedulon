@@ -87,13 +87,20 @@ A settled receipt with a null rail ref is reported as
 `receipt-without-settlement` as well as `settled-without-ref`, identified by
 the receipt's nonce (MUST-T10-3: a ref that is null is not on the extract).
 This holds whether the extract has no rows, has only rows for other refs, or
-was not presented, and with a usable issuer pin or with none. It is never
-deferred as `boundary-deferred`, because no adjacent extract can name a null
-ref. The receipt was already counted in `counts.receipts.unmatched`; the
-counts do not change, but the report now carries one more failing finding for
-it. Under an issuer pin that cannot be read, the coverage set is empty, so the
-receipt never reaches the extract comparison: the report carries
-`trust-key-unreadable` and `settled-without-ref` and no
+was not presented, and with no issuer pin, or under a usable issuer pin when
+the receipt verifies under it. It is never deferred as `boundary-deferred`,
+because no adjacent extract can name a null ref. The receipt was already
+counted in `counts.receipts.unmatched`; the counts do not change, but the
+report now carries one more failing finding for it. Under a usable issuer pin
+the receipt does not verify under, because another key signed it, the receipt
+is outside the coverage set and never reaches the extract comparison: the
+report carries `settled-without-ref` and the pin's refusal of the receipt
+(`issuer-key-mismatch` when it carries its own key, `receipt-chain-break`
+when it carries the pinned key) and no `receipt-without-settlement`, the
+receipt is counted in `counts.receipts.submitted` and in no other receipt
+count, and the audit fails. Under an issuer pin that cannot be read, the
+coverage set is empty, so the receipt never reaches the extract comparison:
+the report carries `trust-key-unreadable` and `settled-without-ref` and no
 `receipt-without-settlement`, the receipt is counted in
 `counts.receipts.submitted` and in no other receipt count, and the audit
 fails.
@@ -107,7 +114,8 @@ expected silence from `inclusionReceipts: []`, that accepted a negative uint
 claim or a second hex spelling of a receipt / manifest / token, that
 matched the canonical error string `non-finite number`, or that expected
 `settled-without-ref` to be the only finding for a settled receipt with a
-null rail ref under a usable issuer pin or none.
+null rail ref with no issuer pin or under a usable issuer pin it verifies
+under.
 
 ## 0.18.0: an audit that reports instead of throwing, tagged report lines, and an RFC 9162 log
 
