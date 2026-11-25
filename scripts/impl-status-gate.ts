@@ -37,6 +37,7 @@
  * have inflated.
  */
 
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { basename } from "node:path";
 
@@ -46,6 +47,40 @@ export type SuiteCounters = { tests: number; failures: number; skipped: number }
 
 /** Default path written at the start of `test:pre-release` and read by the gate. */
 export const SUITE_RUN_STARTED_PATH = ".suite-run-started";
+
+export type SuiteRunMarker = { startedAtMs: number; sourceIdentity: string };
+
+/**
+ * Content identity of the sources the impl-status claim answers to. Uses the
+ * living core draft (the sentence under guard) so a shallow checkout still
+ * produces a stable digest without needing `git rev-parse HEAD`.
+ */
+export function sourceTreeIdentity(
+  root: string,
+  read: (path: string) => string | Buffer = (path) => readFileSync(path),
+): string {
+  const living = livingCoreDraftPath(root);
+  const rel = living.replace(/\\/g, "/").slice(root.replace(/\\/g, "/").length).replace(/^\//, "");
+  const h = createHash("sha256");
+  h.update(rel);
+  h.update("\0");
+  h.update(read(living));
+  h.update("\0");
+  return h.digest("hex");
+}
+
+/** Serialize the run-start marker (timestamp + source identity). */
+export function formatSuiteRunMarker(marker: SuiteRunMarker): string {
+  return `${marker.startedAtMs}\n${marker.sourceIdentity}\n`;
+}
+
+/** Parse a marker body. Legacy single-line timestamps have an empty identity. */
+export function parseSuiteRunMarker(raw: string): SuiteRunMarker {
+  const lines = raw.replace(/\r\n/g, "\n").trimEnd().split("\n");
+  const startedAtMs = Number(lines[0]?.trim());
+  const sourceIdentity = (lines[1] ?? "").trim();
+  return { startedAtMs, sourceIdentity };
+}
 
 /**
  * Refuse suite reports that predate the run marker. A standalone gate against
@@ -70,27 +105,43 @@ export function reportFreshnessFailures(
   return failures;
 }
 
+export function isEnoent(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "ENOENT");
+}
+
 /**
  * Read the suite-run start marker and delete it. A second standalone gate
  * against the same leftover reports then fails for want of a marker, so a
  * successful old marker+report pair cannot be replayed after the sources
  * change. The CI path (`test:pre-release`) always stamps a fresh marker
  * before the suite, so one consume per run is the intended shape.
+ *
+ * Only a missing file after the read (ENOENT) is treated as already consumed;
+ * any other unlink failure leaves the marker in place and fails the gate.
  */
-export function consumeSuiteRunMarker(startedPath: string): number {
+export function consumeSuiteRunMarker(
+  startedPath: string,
+  { unlink = unlinkSync }: { unlink?: (path: string) => void } = {},
+): SuiteRunMarker {
   if (!existsSync(startedPath)) {
     throw new Error(
       `no suite run start marker at ${startedPath}; refuse default suite reports without freshness proof`,
     );
   }
-  const startedRaw = readFileSync(startedPath, "utf8").trim();
-  const startedAtMs = Number(startedRaw);
+  const marker = parseSuiteRunMarker(readFileSync(startedPath, "utf8"));
   try {
-    unlinkSync(startedPath);
-  } catch {
-    // A missing file after the read is still a consumed marker.
+    unlink(startedPath);
+  } catch (err) {
+    if (isEnoent(err)) {
+      // A missing file after the read is still a consumed marker.
+      return marker;
+    }
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `suite run start marker at ${startedPath} could not be consumed: ${detail}`,
+    );
   }
-  return startedAtMs;
+  return marker;
 }
 
 function countCaseOutcome(
@@ -252,19 +303,50 @@ export function runImplStatusGate(args: {
   summaryPath: string;
   startedPath: string;
   noSkips?: boolean;
+  /** Repo root used to recompute the source-tree identity (defaults beside the living draft). */
+  root?: string;
+  unlink?: (path: string) => void;
 }): { ok: true; tests: number; skipped: number } | { ok: false; errors: string[] } {
-  let startedAtMs: number;
+  let marker: SuiteRunMarker;
   try {
-    startedAtMs = consumeSuiteRunMarker(args.startedPath);
+    marker = consumeSuiteRunMarker(args.startedPath, { unlink: args.unlink });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { ok: false, errors: [`impl-status: ${message}`] };
+  }
+  // Prefer an explicit root; otherwise the repo root that holds spec/.
+  const identityRoot = (() => {
+    if (args.root) return args.root;
+    const abs = args.specPath.replace(/\\/g, "/");
+    const parent = abs.replace(/\/[^/]+$/, "");
+    if (parent === "spec" || /\/spec$/i.test(parent)) {
+      const repo = parent.replace(/\/?spec$/i, "");
+      return repo === "" ? "." : repo;
+    }
+    return parent || ".";
+  })();
+  const expectedIdentity = sourceTreeIdentity(identityRoot);
+  if (!marker.sourceIdentity) {
+    return {
+      ok: false,
+      errors: [
+        "impl-status: suite run start marker carries no source-tree identity; refuse a legacy or incomplete marker",
+      ],
+    };
+  }
+  if (marker.sourceIdentity !== expectedIdentity) {
+    return {
+      ok: false,
+      errors: [
+        "impl-status: suite run start marker source-tree identity does not match the sources under audit; refuse a leftover marker after the sources changed",
+      ],
+    };
   }
   const reportStats = [
     { path: args.reportPath, mtimeMs: existsSync(args.reportPath) ? statSync(args.reportPath).mtimeMs : 0 },
     { path: args.summaryPath, mtimeMs: existsSync(args.summaryPath) ? statSync(args.summaryPath).mtimeMs : 0 },
   ];
-  const freshness = reportFreshnessFailures(startedAtMs, reportStats);
+  const freshness = reportFreshnessFailures(marker.startedAtMs, reportStats);
   if (freshness.length > 0) {
     return { ok: false, errors: freshness.map((failure) => `impl-status: ${failure}`) };
   }
@@ -300,6 +382,7 @@ function main(): void {
     specPath,
     summaryPath,
     startedPath,
+    root: ".",
     noSkips: Boolean(process.env.CI),
   });
   if (!result.ok) {

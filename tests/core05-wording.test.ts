@@ -4,8 +4,6 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { execFileSync } from "node:child_process";
-
 import {
   anchorParityFailures,
   anchorTermFailures,
@@ -27,17 +25,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const core = readFileSync(livingCoreDraftPath(root), "utf8");
 const checkpoint = readFileSync(join(root, "spec", "draft-dogru-cedulon-checkpoint-01.md"), "utf8");
 const specPage = readFileSync(join(root, "site", "spec.html"), "utf8");
-const coreRel = livingCoreDraftPath(root).slice(root.length + 1).replace(/\\/g, "/");
+const wordingRed = (...parts: string[]) =>
+  readFileSync(join(root, "tests", "fixtures", "wording-red", ...parts), "utf8");
 
 /** Replace `from` in `text`, line breaks aside; a fixture that changes nothing is a broken fixture. */
 function swap(text: string, from: string, to: string): string {
   const pattern = new RegExp(from.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"));
   assert.match(text, pattern, `fixture text not found: ${from}`);
   return text.replace(pattern, to);
-}
-
-function gitShow(revPath: string): string {
-  return execFileSync("git", ["show", revPath], { cwd: root, encoding: "utf8" });
 }
 
 describe("MUST-T11-20 names one anchor target in both documents", () => {
@@ -90,9 +85,9 @@ describe("without an anchor, genesis is the lowest epoch in the working set", ()
     assert.deepEqual(genesisParityFailures(core, checkpoint), []);
   });
 
-  it("RED: the 7f9412c drafts that named genesis over the presented chain are caught", () => {
-    const oldCore = gitShow(`7f9412c:${coreRel}`);
-    const oldCheckpoint = gitShow("7f9412c:spec/draft-dogru-cedulon-checkpoint-01.md");
+  it("RED: drafts that named genesis over the presented chain are caught", () => {
+    const oldCore = wordingRed("genesis-presented-chain-core.md");
+    const oldCheckpoint = wordingRed("genesis-presented-chain-checkpoint.md");
     const failures = genesisParityFailures(oldCore, oldCheckpoint);
     assert.ok(failures.some((f) => f.startsWith("core:")), failures.join(" | "));
     assert.ok(failures.some((f) => f.startsWith("checkpoint:")), failures.join(" | "));
@@ -125,9 +120,9 @@ describe("MUST-T11-8 and window-coverage run on the working set", () => {
     assert.deepEqual(consecutiveEpochScopeFailures(core, checkpoint), []);
   });
 
-  it("RED: the 8c80d09 drafts that scoped coverage to presented checkpoints are caught", () => {
-    const oldCore = gitShow(`8c80d09:${coreRel}`);
-    const oldCheckpoint = gitShow("8c80d09:spec/draft-dogru-cedulon-checkpoint-01.md");
+  it("RED: drafts that scoped coverage to presented checkpoints are caught", () => {
+    const oldCore = wordingRed("window-presented-scope-core.md");
+    const oldCheckpoint = wordingRed("window-presented-scope-checkpoint.md");
     const windowFailures = windowCoverageScopeFailures(oldCore, oldCheckpoint);
     assert.ok(windowFailures.some((f) => f.startsWith("checkpoint:")), windowFailures.join(" | "));
     assert.ok(windowFailures.some((f) => f.startsWith("core:")), windowFailures.join(" | "));
@@ -162,8 +157,8 @@ describe("MUST-T11-11 withholding answers to a usable issuer root", () => {
     assert.deepEqual(withholdingScopeFailures(checkpoint), []);
   });
 
-  it("RED: the e4bfd0d draft that withheld or equivocated on any verified witness receipt is caught", () => {
-    const old = gitShow("e4bfd0d:spec/draft-dogru-cedulon-checkpoint-01.md");
+  it("RED: a draft that withheld or equivocated on any verified witness receipt is caught", () => {
+    const old = wordingRed("withholding-any-verified-receipt.md");
     const failures = withholdingScopeFailures(old);
     assert.ok(failures.some((f) => f.includes("abstract")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("step 4")), failures.join(" | "));
@@ -171,8 +166,8 @@ describe("MUST-T11-11 withholding answers to a usable issuer root", () => {
     assert.ok(failures.some((f) => f.includes("MUST-T11-3")), failures.join(" | "));
   });
 
-  it("RED: the ba2b3f1 rows that withheld on any verified witness receipt are caught", () => {
-    const old = gitShow("ba2b3f1:spec/draft-dogru-cedulon-checkpoint-01.md");
+  it("RED: rows that withheld on any verified witness receipt are caught", () => {
+    const old = wordingRed("withholding-verified-receipt-rows.md");
     const failures = withholdingScopeFailures(old);
     assert.ok(failures.some((f) => f.includes("MUST-T11-11")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("checkpoint-withheld")), failures.join(" | "));
@@ -195,8 +190,8 @@ describe("site/spec.html separates a missing pin from a mismatched pin", () => {
     assert.deepEqual(trustRootSiteFailures(specPage), []);
   });
 
-  it("RED: the e4bfd0d bullet that never-checks and conflates missing with mismatched is caught", () => {
-    const old = gitShow("e4bfd0d:site/spec.html");
+  it("RED: a Trust roots bullet that never-checks and conflates missing with mismatched is caught", () => {
+    const old = wordingRed("trust-roots-never-checks.html");
     const failures = trustRootSiteFailures(old);
     assert.ok(failures.some((f) => f.includes("never checks")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("missing pin and a mismatched pin")), failures.join(" | "));

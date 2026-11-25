@@ -29,9 +29,12 @@ stated pin that cannot be read reports `trust-key-unreadable`, keeps
 `attested` and `covering` at 0, and still names decoder refusals on the
 diagnostic set rather than falling back to carried keys. Bound checks still
 throw `audit-too-large` before the safety net turns other surprises into
-`presented-object-malformed`. `auditWindows` anchors window i>0 on the last
-coverage-set checkpoint of window i-1, never on a refused or merely
-diagnostic one.
+`presented-object-malformed`. Under a usable issuer root, `auditWindows`
+anchors window i>0 on the last coverage-set checkpoint of window i-1,
+never on a refused or merely diagnostic one. Without a usable issuer
+root the prior window does not become an anchor: as with an
+`anchorCheckpoint` presented with no `issuerTrust`, the chain is walked
+from genesis.
 
 A presented object refused by name (decoder / shape / hex) is not coverage:
 it leaves `covering` (and under a usable pin, `attested`), covers no

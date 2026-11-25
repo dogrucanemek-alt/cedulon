@@ -11,9 +11,11 @@ import {
   countConsistencyFailures,
   countersFromJUnit,
   countersFromNodeSummary,
+  formatSuiteRunMarker,
   implStatusFailures,
   reportFreshnessFailures,
   runImplStatusGate,
+  sourceTreeIdentity,
   suiteAttributeCounters,
 } from "../scripts/impl-status-gate.ts";
 import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
@@ -21,6 +23,7 @@ import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const specPath = livingCoreDraftPath(root);
 const spec = readFileSync(specPath, "utf8");
+const sourceIdentity = sourceTreeIdentity(root);
 
 /** Nested describes as Node's JUnit reporter emits them: parent tests= child count. */
 const nestedJUnit =
@@ -213,7 +216,11 @@ describe("the Implementation Status count answers to a run", () => {
     const reportPath = join(dir, ".suite-count.xml");
     const summaryPath = join(dir, ".suite-node-summary.txt");
     const startedAtMs = Date.now() - 1_000;
-    writeFileSync(startedPath, `${startedAtMs}\n`, "utf8");
+    writeFileSync(
+      startedPath,
+      formatSuiteRunMarker({ startedAtMs, sourceIdentity }),
+      "utf8",
+    );
     const cases = Array.from({ length: total }, (_, i) => `<testcase name="t${i}"/>`).join("");
     writeFileSync(
       reportPath,
@@ -231,6 +238,7 @@ describe("the Implementation Status count answers to a run", () => {
         summaryPath,
         startedPath,
         specPath,
+        root,
         noSkips: false,
       });
       assert.equal(first.ok, true, first.ok ? "" : first.errors.join(" | "));
@@ -240,6 +248,7 @@ describe("the Implementation Status count answers to a run", () => {
         summaryPath,
         startedPath,
         specPath,
+        root,
         noSkips: false,
       });
       assert.equal(second.ok, false, "a replay of the same marker+reports must fail");
@@ -248,6 +257,105 @@ describe("the Implementation Status count answers to a run", () => {
         second.ok ? "unexpected ok" : second.errors.join(" | "),
       );
       assert.throws(() => consumeSuiteRunMarker(startedPath), /no suite run start marker/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("RED: a non-ENOENT unlink failure fails the gate", () => {
+    const { total } = claimedCount(spec);
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-impl-status-unlink-"));
+    const startedPath = join(dir, ".suite-run-started");
+    const reportPath = join(dir, ".suite-count.xml");
+    const summaryPath = join(dir, ".suite-node-summary.txt");
+    const startedAtMs = Date.now() - 1_000;
+    writeFileSync(
+      startedPath,
+      formatSuiteRunMarker({ startedAtMs, sourceIdentity }),
+      "utf8",
+    );
+    const cases = Array.from({ length: total }, (_, i) => `<testcase name="t${i}"/>`).join("");
+    writeFileSync(
+      reportPath,
+      `<testsuites><testsuite name="all" tests="${total}" failures="0" skipped="0">${cases}</testsuite></testsuites>\n`,
+      "utf8",
+    );
+    writeFileSync(
+      summaryPath,
+      `ℹ tests ${total}\nℹ suites 1\nℹ pass ${total}\nℹ fail 0\nℹ skipped 0\n`,
+      "utf8",
+    );
+    try {
+      const busy = Object.assign(new Error("resource busy"), { code: "EBUSY" });
+      const result = runImplStatusGate({
+        reportPath,
+        summaryPath,
+        startedPath,
+        specPath,
+        root,
+        noSkips: false,
+        unlink: () => {
+          throw busy;
+        },
+      });
+      assert.equal(result.ok, false, "unlink EBUSY must fail the gate");
+      assert.ok(
+        result.ok === false && result.errors.some((e) => /could not be consumed/.test(e)),
+        result.ok ? "unexpected ok" : result.errors.join(" | "),
+      );
+      assert.equal(existsSync(startedPath), true, "marker must remain when unlink fails");
+      assert.throws(
+        () =>
+          consumeSuiteRunMarker(startedPath, {
+            unlink: () => {
+              throw busy;
+            },
+          }),
+        /could not be consumed/,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("RED: an unconsumed marker whose source identity no longer matches is refused", () => {
+    const { total } = claimedCount(spec);
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-impl-status-identity-"));
+    const startedPath = join(dir, ".suite-run-started");
+    const reportPath = join(dir, ".suite-count.xml");
+    const summaryPath = join(dir, ".suite-node-summary.txt");
+    const startedAtMs = Date.now() - 1_000;
+    // Marker stamped against a different source tree; reports are otherwise fresh.
+    writeFileSync(
+      startedPath,
+      formatSuiteRunMarker({ startedAtMs, sourceIdentity: "0".repeat(64) }),
+      "utf8",
+    );
+    const cases = Array.from({ length: total }, (_, i) => `<testcase name="t${i}"/>`).join("");
+    writeFileSync(
+      reportPath,
+      `<testsuites><testsuite name="all" tests="${total}" failures="0" skipped="0">${cases}</testsuite></testsuites>\n`,
+      "utf8",
+    );
+    writeFileSync(
+      summaryPath,
+      `ℹ tests ${total}\nℹ suites 1\nℹ pass ${total}\nℹ fail 0\nℹ skipped 0\n`,
+      "utf8",
+    );
+    try {
+      const result = runImplStatusGate({
+        reportPath,
+        summaryPath,
+        startedPath,
+        specPath,
+        root,
+        noSkips: false,
+      });
+      assert.equal(result.ok, false, "stale source identity must fail");
+      assert.ok(
+        result.ok === false && result.errors.some((e) => /source-tree identity/.test(e)),
+        result.ok ? "unexpected ok" : result.errors.join(" | "),
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

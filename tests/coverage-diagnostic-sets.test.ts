@@ -1,6 +1,5 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
 import { strict as assert } from "node:assert";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -370,8 +369,15 @@ function upgrading019Failures(section: string): string[] {
     "hex-not-hex",
     "non-finite-number",
     "What breaks",
+    "Under a usable issuer root",
   ]) {
     if (!section.includes(needle)) failures.push(`0.19.0 section omits ${needle}`);
+  }
+  if (
+    /`auditWindows` anchors window i>0 on the last\s+coverage-set checkpoint of window i-1/.test(section) &&
+    !/Under a usable issuer root,\s*`auditWindows` anchors window i>0/.test(section)
+  ) {
+    failures.push("0.19.0 section still lets auditWindows anchor without a usable issuer root");
   }
   return failures;
 }
@@ -461,11 +467,11 @@ describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes"
     assert.ok(emptyList.warnings.some((w) => w.code === "witness-inclusion-not-exercised"));
   });
 
-  it("RED: the 0a5f8bb 0.19.0 section that omitted the later caller-visible changes is caught", () => {
-    const oldMd = execFileSync("git", ["show", "0a5f8bb:docs/UPGRADING.md"], {
-      cwd: root,
-      encoding: "utf8",
-    });
+  it("RED: a 0.19.0 section that omitted the later caller-visible changes is caught", () => {
+    const oldMd = readFileSync(
+      join(root, "tests", "fixtures", "wording-red", "upgrading-019-incomplete-later.md"),
+      "utf8",
+    );
     const failures = upgrading019Failures(section019(oldMd));
     assert.ok(failures.some((f) => f.includes("settlement-comparison-skipped")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("witness-inclusion-not-exercised")), failures.join(" | "));
@@ -474,11 +480,11 @@ describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes"
     assert.ok(failures.some((f) => f.includes("non-finite-number")), failures.join(" | "));
   });
 
-  it("RED: the e4bfd0d 0.19.0 section that omitted the pinless witness verdict is caught", () => {
-    const oldMd = execFileSync("git", ["show", "e4bfd0d:docs/UPGRADING.md"], {
-      cwd: root,
-      encoding: "utf8",
-    });
+  it("RED: a 0.19.0 section that omitted the pinless witness verdict is caught", () => {
+    const oldMd = readFileSync(
+      join(root, "tests", "fixtures", "wording-red", "upgrading-019-before-witness-verdict.md"),
+      "utf8",
+    );
     const failures = upgrading019Failures(section019(oldMd));
     assert.ok(failures.some((f) => f.includes("witness-entry-unattributable")), failures.join(" | "));
     assert.ok(failures.some((f) => f.includes("verdict change")), failures.join(" | "));

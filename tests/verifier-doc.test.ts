@@ -109,11 +109,11 @@ describe("run-as-verifier doc", () => {
     assert.deepEqual(failures, []);
   });
 
-  it("RED: the 0a5f8bb pin paragraph that excluded the receipt chain wholesale is caught", () => {
-    const oldDoc = execFileSync("git", ["show", "0a5f8bb:docs/RUN_AS_VERIFIER.md"], {
-      cwd: root,
-      encoding: "utf8",
-    });
+  it("RED: a pin paragraph that excluded the receipt chain wholesale is caught", () => {
+    const oldDoc = readFileSync(
+      join(root, "tests", "fixtures", "wording-red", "verifier-pin-excludes-receipt-chain.md"),
+      "utf8",
+    );
     const failures = pinParagraphFailures(oldDoc);
     assert.ok(
       failures.some((f) => /receipt chain|wholesale|coverage-dependent/i.test(f)),

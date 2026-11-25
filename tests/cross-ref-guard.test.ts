@@ -1,5 +1,4 @@
 import { strict as assert } from "node:assert";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -14,11 +13,8 @@ import {
 import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const coreRel = livingCoreDraftPath(root).slice(root.length + 1).replace(/\\/g, "/");
-
-function gitShow(revPath: string): string {
-  return execFileSync("git", ["show", revPath], { cwd: root, encoding: "utf8" });
-}
+const wordingRed = (...parts: string[]) =>
+  readFileSync(join(root, "tests", "fixtures", "wording-red", ...parts), "utf8");
 
 describe("publication cross-references resolve", () => {
   it("every {{x}} in the living publication drafts resolves to an anchor or bibliography key", () => {
@@ -33,8 +29,8 @@ describe("publication cross-references resolve", () => {
     );
   });
 
-  it("RED: the 03462b7 core draft's {{refusal-names}} is caught", () => {
-    const oldCore = gitShow(`03462b7:${coreRel}`);
+  it("RED: a core draft that cites {{refusal-names}} is caught", () => {
+    const oldCore = wordingRed("cross-ref-refusal-names.md");
     const hits = crossRefFailures(oldCore, "draft-dogru-cedulon-core-05.md");
     assert.ok(
       hits.some((h) => h.ref === "refusal-names"),
@@ -42,15 +38,13 @@ describe("publication cross-references resolve", () => {
     );
   });
 
-  it("RED: the pre-c9 resolution draft's {{MUST-RS-1}} is caught once side drafts are in scope", () => {
-    const oldResolution = gitShow("HEAD:spec/draft-dogru-cedulon-resolution-00.md");
-    // Before this turn the living file still used braced requirement ids.
-    // Reconstruct that shape against the current file when HEAD already
-    // carries the backtick form (worktree mid-edit): inject the old cite.
-    const probe =
-      oldResolution.includes("{{MUST-RS-1}}")
-        ? oldResolution
-        : oldResolution.replace("`MUST-RS-1`", "{{MUST-RS-1}}");
+  it("RED: a resolution draft that cites {{MUST-RS-1}} is caught once side drafts are in scope", () => {
+    const living = readFileSync(join(root, "spec", "draft-dogru-cedulon-resolution-00.md"), "utf8");
+    // Reconstruct the braced cite against the living file when it already
+    // carries the backtick form.
+    const probe = living.includes("{{MUST-RS-1}}")
+      ? living
+      : living.replace("`MUST-RS-1`", "{{MUST-RS-1}}");
     assert.ok(probe.includes("{{MUST-RS-1}}"), "fixture must hold the braced cite");
     const hits = crossRefFailures(probe, "draft-dogru-cedulon-resolution-00.md");
     assert.ok(
