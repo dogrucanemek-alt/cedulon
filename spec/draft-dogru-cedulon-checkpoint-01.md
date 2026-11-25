@@ -2,7 +2,7 @@
 title: "Cedulon Checkpoints: Epoch Witnesses and Transparency"
 abbrev: Cedulon Checkpoints
 docname: draft-dogru-cedulon-checkpoint-01
-date: 2026-10-26
+date: 2026-11-25
 category: info
 ipr: trust200902
 area: sec
