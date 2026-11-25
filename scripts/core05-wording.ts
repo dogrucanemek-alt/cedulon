@@ -62,23 +62,23 @@ export function section(text: string, heading: string): string | null {
   return flatten((end < 0 ? rest : rest.slice(0, end)).join("\n"));
 }
 
-// --- MUST-T11-20: the checkpoint an anchor precedes ---
+// --- MUST-T11-20 and genesis: one target, the working set ---
 
-const ATTESTED_TARGET = /lowest epoch (?:is taken )?in the attested set/;
+const WORKING_SET_TARGET = /lowest epoch (?:is taken )?in the working set/;
 const NO_ANCHOR = /^Without (?:a valid |an )anchor\b/;
 
 /**
  * Sentences about an anchor that name the checkpoint it meets by "lowest
  * epoch" or "first checkpoint" without placing that checkpoint in the
- * attested set. A sentence about the chain without an anchor is about the
- * genesis checkpoint, not the anchor's target, and is not counted.
+ * working set. A sentence about the chain without an anchor is about the
+ * genesis checkpoint, not the anchor's target, and is not counted here.
  */
 export function strayAnchorTargets(text: string): string[] {
   return sentences(text).filter(
     (s) =>
       /\banchor/i.test(s) &&
       /lowest epoch|first (?:presented )?checkpoint/i.test(s) &&
-      !ATTESTED_TARGET.test(s) &&
+      !WORKING_SET_TARGET.test(s) &&
       !NO_ANCHOR.test(s),
   );
 }
@@ -86,23 +86,23 @@ export function strayAnchorTargets(text: string): string[] {
 /**
  * What a document says the anchor target is. Two documents carry the same
  * MUST-T11-20 when both define the anchor as preceding the checkpoint with
- * the lowest epoch in the attested set, both state that this checkpoint is
+ * the lowest epoch in the working set, both state that this checkpoint is
  * then not a genesis checkpoint, and neither names any other target.
  */
 export function anchorTargetFailures(text: string, label: string): string[] {
   const failures: string[] = [];
   const all = sentences(text);
-  if (!all.some((s) => /immediately preceding the (?:presented )?checkpoint with the lowest epoch in the attested set/.test(s))) {
-    failures.push(`${label}: the anchor is not defined as preceding the checkpoint with the lowest epoch in the attested set`);
+  if (!all.some((s) => /immediately preceding the (?:presented )?checkpoint with the lowest epoch in the working set/.test(s))) {
+    failures.push(`${label}: the anchor is not defined as preceding the checkpoint with the lowest epoch in the working set`);
   }
-  if (!all.some((s) => /checkpoint with the lowest epoch in the attested set is not a genesis checkpoint/.test(s))) {
-    failures.push(`${label}: no sentence says the lowest-epoch checkpoint of the attested set is not a genesis checkpoint under a valid anchor`);
+  if (!all.some((s) => /checkpoint with the lowest epoch in the working set is not a genesis checkpoint/.test(s))) {
+    failures.push(`${label}: no sentence says the lowest-epoch checkpoint of the working set is not a genesis checkpoint under a valid anchor`);
   }
   if (!all.some((s) => /`MUST-T11-20`/.test(s) && /\banchor/.test(s))) {
     failures.push(`${label}: MUST-T11-20 is not cited beside the anchor rule`);
   }
   for (const s of strayAnchorTargets(text)) {
-    failures.push(`${label}: names an anchor target outside the attested set: "${s}"`);
+    failures.push(`${label}: names an anchor target outside the working set: "${s}"`);
   }
   return failures;
 }
@@ -116,8 +116,8 @@ export function anchorParityFailures(core: string, checkpoint: string): string[]
   const row = tableRow(checkpoint, "MUST-T11-20");
   if (row === null) {
     failures.push("checkpoint: no MUST-T11-20 row");
-  } else if (!/the checkpoint with the lowest epoch in the attested set of \{\{CEDULON-CORE\}\} MUST be chained to the anchor's checkpoint hash/.test(row)) {
-    failures.push("checkpoint: the MUST-T11-20 row does not chain the lowest-epoch checkpoint of the attested set of {{CEDULON-CORE}} to the anchor");
+  } else if (!/the checkpoint with the lowest epoch in the working set of \{\{CEDULON-CORE\}\} MUST be chained to the anchor's checkpoint hash/.test(row)) {
+    failures.push("checkpoint: the MUST-T11-20 row does not chain the lowest-epoch checkpoint of the working set of {{CEDULON-CORE}} to the anchor");
   }
   if (!/`MUST-T11-20` of \{\{CEDULON-CHECKPOINT\}\}/.test(flatten(core))) {
     failures.push("core: the anchor rule does not cite MUST-T11-20 of {{CEDULON-CHECKPOINT}}");
@@ -126,6 +126,47 @@ export function anchorParityFailures(core: string, checkpoint: string): string[]
     failures.push("core: the attested set the companion cites is not defined");
   }
   return failures;
+}
+
+/**
+ * Sentences that place the genesis checkpoint somewhere other than the
+ * lowest epoch in the working set - the old "first in a presented chain"
+ * and "presented checkpoint with the lowest epoch" wordings, and any
+ * without-anchor genesis sentence that omits the working set.
+ */
+export function strayGenesisTargets(text: string): string[] {
+  return sentences(text).filter(
+    (s) =>
+      /genesis checkpoint/i.test(s) &&
+      !WORKING_SET_TARGET.test(s) &&
+      (/Without (?:a valid |an )anchor/i.test(s) ||
+        /first checkpoint in a presented chain/i.test(s) ||
+        /presented checkpoint with the lowest epoch/i.test(s)),
+  );
+}
+
+/**
+ * What a document says the genesis checkpoint is when no valid anchor is
+ * presented: the checkpoint with the lowest epoch in the working set.
+ */
+export function genesisTargetFailures(text: string, label: string): string[] {
+  const failures: string[] = [];
+  const all = sentences(text);
+  if (!all.some((s) => /genesis checkpoint/i.test(s) && WORKING_SET_TARGET.test(s))) {
+    failures.push(`${label}: no sentence places the genesis checkpoint at the lowest epoch in the working set`);
+  }
+  for (const s of strayGenesisTargets(text)) {
+    failures.push(`${label}: names a genesis target outside the working set: "${s}"`);
+  }
+  return failures;
+}
+
+/** Both drafts place genesis over the working set, the same set the anchor precedes. */
+export function genesisParityFailures(core: string, checkpoint: string): string[] {
+  return [
+    ...genesisTargetFailures(core, "core"),
+    ...genesisTargetFailures(checkpoint, "checkpoint"),
+  ];
 }
 
 // --- MUST-T4-19: the decoder floor ---

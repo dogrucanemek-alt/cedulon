@@ -4,13 +4,17 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { execFileSync } from "node:child_process";
+
 import {
   anchorParityFailures,
   anchorTermFailures,
   decoderFloorFailures,
   encodingTermFailures,
+  genesisParityFailures,
   publishedPackagesFailures,
   strayAnchorTargets,
+  strayGenesisTargets,
   workspacePackages,
 } from "../scripts/core05-wording.ts";
 import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
@@ -18,6 +22,7 @@ import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const core = readFileSync(livingCoreDraftPath(root), "utf8");
 const checkpoint = readFileSync(join(root, "spec", "draft-dogru-cedulon-checkpoint-01.md"), "utf8");
+const coreRel = livingCoreDraftPath(root).slice(root.length + 1).replace(/\\/g, "/");
 
 /** Replace `from` in `text`, line breaks aside; a fixture that changes nothing is a broken fixture. */
 function swap(text: string, from: string, to: string): string {
@@ -26,32 +31,36 @@ function swap(text: string, from: string, to: string): string {
   return text.replace(pattern, to);
 }
 
+function gitShow(revPath: string): string {
+  return execFileSync("git", ["show", revPath], { cwd: root, encoding: "utf8" });
+}
+
 describe("MUST-T11-20 names one anchor target in both documents", () => {
-  it("the core document and the checkpoint companion both take the lowest epoch in the attested set", () => {
+  it("the core document and the checkpoint companion both take the lowest epoch in the working set", () => {
     assert.deepEqual(anchorParityFailures(core, checkpoint), []);
   });
 
   it("RED: a MUST-T11-20 row that chains the lowest presented checkpoint is caught", () => {
     const drifted = swap(
       checkpoint,
-      "the checkpoint with the lowest epoch in the attested set of {{CEDULON-CORE}} MUST be chained",
+      "the checkpoint with the lowest epoch in the working set of {{CEDULON-CORE}} MUST be chained",
       "the presented checkpoint with the lowest epoch MUST be chained",
     );
     const failures = anchorParityFailures(core, drifted);
     assert.ok(failures.some((f) => f.startsWith("checkpoint: the MUST-T11-20 row")), failures.join(" | "));
-    assert.ok(failures.some((f) => f.includes("names an anchor target outside the attested set")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("names an anchor target outside the working set")), failures.join(" | "));
   });
 
   it("RED: an anchor defined against the lowest presented checkpoint is caught in either document", () => {
     const cp = swap(
       checkpoint,
-      "preceding the checkpoint with the lowest epoch in the attested set,",
-      "preceding the presented checkpoint with the lowest epoch,",
+      "preceding the checkpoint with the lowest epoch in the working set.",
+      "preceding the presented checkpoint with the lowest epoch.",
     );
     assert.ok(anchorParityFailures(core, cp).some((f) => f.startsWith("checkpoint: the anchor is not defined")));
     const co = swap(
       core,
-      "immediately preceding the presented checkpoint with the lowest epoch in the attested set.",
+      "immediately preceding the checkpoint with the lowest epoch in the working set.",
       "immediately preceding the first presented checkpoint.",
     );
     const failures = anchorParityFailures(co, checkpoint);
@@ -67,6 +76,40 @@ describe("MUST-T11-20 names one anchor target in both documents", () => {
     assert.equal(
       strayAnchorTargets("With a valid anchor the presented checkpoint with the lowest epoch is not a genesis checkpoint.").length,
       1,
+    );
+  });
+});
+
+describe("without an anchor, genesis is the lowest epoch in the working set", () => {
+  it("both documents place the genesis checkpoint in the working set", () => {
+    assert.deepEqual(genesisParityFailures(core, checkpoint), []);
+  });
+
+  it("RED: the 7f9412c drafts that named genesis over the presented chain are caught", () => {
+    const oldCore = gitShow(`7f9412c:${coreRel}`);
+    const oldCheckpoint = gitShow("7f9412c:spec/draft-dogru-cedulon-checkpoint-01.md");
+    const failures = genesisParityFailures(oldCore, oldCheckpoint);
+    assert.ok(failures.some((f) => f.startsWith("core:")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.startsWith("checkpoint:")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("outside the working set") || f.includes("no sentence places")), failures.join(" | "));
+  });
+
+  it("RED: a genesis sentence that names the first presented checkpoint is caught", () => {
+    assert.equal(
+      strayGenesisTargets("Without an anchor, the first checkpoint in a presented chain is the genesis checkpoint.").length,
+      1,
+    );
+    assert.equal(
+      strayGenesisTargets(
+        "Without an anchor checkpoint it is anchored at its genesis: the presented checkpoint with the lowest epoch is the genesis checkpoint of CEDULON-CHECKPOINT.",
+      ).length,
+      1,
+    );
+    assert.deepEqual(
+      strayGenesisTargets(
+        "Without an anchor, the checkpoint with the lowest epoch in the working set is the genesis checkpoint of the chain.",
+      ),
+      [],
     );
   });
 });

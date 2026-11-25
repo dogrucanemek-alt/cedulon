@@ -1257,8 +1257,11 @@ export function findCheckpointTotalMismatches(
     }
   }
   // Spec walk is epoch order; remap the break index to the presented array.
+  // The walk is over the working set: a refused checkpoint, named above,
+  // counts for nothing, so it is neither the genesis checkpoint nor a link.
   const byEpoch = checkpoints
     .map((cp, presentedIndex) => ({ cp, presentedIndex }))
+    .filter((row) => coseDecodeRefusalHex(row.cp.coseHex) === null)
     .sort((a, b) => a.cp.claims.epoch - b.cp.claims.epoch);
   const chain = findCheckpointChainBreak(
     byEpoch.map((row) => row.cp),
@@ -2232,7 +2235,8 @@ function auditDetailedBody(input: AuditInput): AuditDetailed {
     }
   }
   // Without a pin a refused checkpoint still reaches the totals walk, which
-  // names it, and covers no window, counts nothing, and anchors nothing.
+  // names it, and covers no window, counts nothing, anchors nothing, and is
+  // no link of the checkpoint chain.
   const attestedCheckpoints = attestsCheckpoint
     ? input.checkpoints.filter((cp) => attestsCheckpoint!(cp))
     : input.checkpoints.filter((cp) => coseDecodeRefusalHex(cp.coseHex) === null);

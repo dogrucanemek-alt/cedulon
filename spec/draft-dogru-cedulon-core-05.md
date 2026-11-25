@@ -1376,14 +1376,17 @@ receipts and no checkpoints rests on the extract alone
 
 A stream of receipts usually begins before the window under audit,
 and its chain has to be anchored somewhere. Without an anchor
-checkpoint it is anchored at its genesis: the presented checkpoint
-with the lowest epoch is the genesis checkpoint of
-{{CEDULON-CHECKPOINT}}, the first receipt's `prevReceiptHash` is null
-(step 6), and auditing window N means presenting every receipt and
-checkpoint from the stream's first. An audit MAY instead present an
-anchor checkpoint (`MUST-T11-20` of {{CEDULON-CHECKPOINT}}): the
-issuer-signed epoch checkpoint immediately preceding the presented
-checkpoint with the lowest epoch in the attested set. An anchor
+checkpoint it is anchored at its genesis: the checkpoint with the
+lowest epoch in the working set, which under a usable pinned issuer
+key is the attested set, is the genesis checkpoint of
+{{CEDULON-CHECKPOINT}} and its `prevCheckpointHash` is null, and a
+presented checkpoint outside the working set does not change which
+checkpoint that is, whatever its epoch. The first receipt's
+`prevReceiptHash` is then null (step 6), and auditing window N means
+presenting every receipt and checkpoint from the stream's first. An audit MAY instead present an anchor
+checkpoint (`MUST-T11-20` of {{CEDULON-CHECKPOINT}}): the
+issuer-signed epoch checkpoint immediately preceding the checkpoint
+with the lowest epoch in the working set. An anchor
 checkpoint is a checkpoint of this issuer's own chain; it is not the
 Transparency Service of {{transparency-service}}, and registering a
 statement with one anchors no chain here. `MUST-T11-20` makes an
@@ -1397,15 +1400,16 @@ reported as `unauthenticated-issuer`, identified by `anchor`. A
 stated issuer pin that cannot be read likewise leaves it unused.
 Under a usable pin, one that does not verify is `issuer-key-mismatch`,
 identified by `anchor`, and anchors nothing; and because the lowest
-epoch is taken in the attested set, a checkpoint that does not answer
+epoch is taken in the working set, which under that pin is the
+attested set, a checkpoint that does not answer
 to the pin cannot make an anchor checkpoint adjacent. The anchor
 checkpoint is valid when, in addition, its `epoch` is one less than
 that checkpoint's, its `endMs` equals that checkpoint's `startMs`, and
 that checkpoint's `prevCheckpointHash` equals the anchor checkpoint's
 hash; a failure of any of these is reported as `window-coverage`,
 identified by `anchor`, and the anchor checkpoint anchors nothing.
-With a valid anchor checkpoint, the presented checkpoint with the
-lowest epoch in the attested set is not a genesis checkpoint and its
+With a valid anchor checkpoint, the checkpoint with the lowest epoch
+in the working set is not a genesis checkpoint and its
 `prevCheckpointHash` is checked against the anchor checkpoint rather
 than against null, and the first receipt's `prevReceiptHash` is
 checked against the anchor checkpoint's `chainHeadHash` (step 6). The
@@ -2312,7 +2316,7 @@ Coverage:
   registry checks are a separate job, deliberately excluded, so "the
   suite" names exactly what was measured - on three hosted runners,
   each as a non-root user: Linux, macOS and Windows. At the commit
-  this revision describes, all three assert every case, 1012 of 1012,
+  this revision describes, all three assert every case, 1019 of 1019,
   with none skipped. A local Windows run without symbolic-link
   privilege skips four POSIX-mode cases with a stated reason rather
   than passing silently.
