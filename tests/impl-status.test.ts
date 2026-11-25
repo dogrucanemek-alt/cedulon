@@ -1,16 +1,19 @@
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
   claimedCount,
+  consumeSuiteRunMarker,
   countConsistencyFailures,
   countersFromJUnit,
   countersFromNodeSummary,
   implStatusFailures,
   reportFreshnessFailures,
+  runImplStatusGate,
   suiteAttributeCounters,
 } from "../scripts/impl-status-gate.ts";
 import { livingCoreDraftPath } from "../scripts/latest-draft.ts";
@@ -198,6 +201,56 @@ describe("the Implementation Status count answers to a run", () => {
       ]),
       [],
     );
+  });
+
+  it("RED: a second standalone gate against the same marker+reports fails", () => {
+    // A successful old marker and matching reports used to stay green on a
+    // second standalone call after the sources changed; the marker is now
+    // single-use so the second call has no freshness proof.
+    const { total } = claimedCount(spec);
+    const dir = mkdtempSync(join(tmpdir(), "cedulon-impl-status-"));
+    const startedPath = join(dir, ".suite-run-started");
+    const reportPath = join(dir, ".suite-count.xml");
+    const summaryPath = join(dir, ".suite-node-summary.txt");
+    const startedAtMs = Date.now() - 1_000;
+    writeFileSync(startedPath, `${startedAtMs}\n`, "utf8");
+    const cases = Array.from({ length: total }, (_, i) => `<testcase name="t${i}"/>`).join("");
+    writeFileSync(
+      reportPath,
+      `<testsuites><testsuite name="all" tests="${total}" failures="0" skipped="0">${cases}</testsuite></testsuites>\n`,
+      "utf8",
+    );
+    writeFileSync(
+      summaryPath,
+      `ℹ tests ${total}\nℹ suites 1\nℹ pass ${total}\nℹ fail 0\nℹ skipped 0\n`,
+      "utf8",
+    );
+    try {
+      const first = runImplStatusGate({
+        reportPath,
+        summaryPath,
+        startedPath,
+        specPath,
+        noSkips: false,
+      });
+      assert.equal(first.ok, true, first.ok ? "" : first.errors.join(" | "));
+      assert.equal(existsSync(startedPath), false, "the marker must be consumed on first use");
+      const second = runImplStatusGate({
+        reportPath,
+        summaryPath,
+        startedPath,
+        specPath,
+        noSkips: false,
+      });
+      assert.equal(second.ok, false, "a replay of the same marker+reports must fail");
+      assert.ok(
+        second.ok === false && second.errors.some((e) => /no suite run start marker/.test(e)),
+        second.ok ? "unexpected ok" : second.errors.join(" | "),
+      );
+      assert.throws(() => consumeSuiteRunMarker(startedPath), /no suite run start marker/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // The live comparison is deliberately NOT a test. The report belongs to the

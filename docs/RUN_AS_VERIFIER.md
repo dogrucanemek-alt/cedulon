@@ -275,9 +275,15 @@ in use. A list nothing can be read from attests nothing at all, so every
 settlement comes back uncovered - a broken setting withholds trust rather than
 falling back to accepting whatever the objects carry.
 
-Everything the pins reject is then left out of every inference that depends on
-who signed: totals, checkpoint head, receipt chain, window coverage, the
-countersignature questions, and redaction notices all read the attested set.
+Everything the pins reject is then left out of the coverage-dependent
+inferences that depend on who signed: totals, checkpoint head, window
+coverage, the countersignature questions, and redaction notices all read the
+attested (coverage) set. One deliberate exception is the receipt-chain walk:
+a receipt whose carried key names a pin but whose signature does not verify
+under that pin is dropped from coverage, yet still walked so the report can
+name `receipt-chain-break` (signature failed) — see the issuer pin matrix
+below. Dropping it from the walk entirely would leave only checkpoint totals
+to notice the break.
 What the receipts say about themselves splits into two questions with two
 different subjects. A defect keyed by the offending receipt - a settled receipt
 naming no rail ref - accuses nobody else, so it is reported whoever signed it,

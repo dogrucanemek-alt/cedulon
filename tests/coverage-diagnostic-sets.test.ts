@@ -344,6 +344,11 @@ describe("coverage set vs diagnostic set (pin matrix)", () => {
   });
 });
 
+/**
+ * Each needle is a caller-visible 0.19.0 change. The GREEN test below binds
+ * every needle to a live finding code, field, refusal, or warning the suite
+ * already measures (see the assert block that follows the needle check).
+ */
 function upgrading019Failures(section: string): string[] {
   const failures: string[] = [];
   for (const needle of [
@@ -356,6 +361,15 @@ function upgrading019Failures(section: string): string[] {
     "trust-key-unreadable",
     "audit-too-large",
     "issuer-key-mismatch",
+    "settlement-comparison-skipped",
+    "unauthenticated-issuer",
+    "witness-inclusion-not-exercised",
+    "malformed-timestampMs",
+    "malformed-expiresAtMs",
+    "malformed-expiryMs",
+    "hex-not-hex",
+    "non-finite-number",
+    "What breaks",
   ]) {
     if (!section.includes(needle)) failures.push(`0.19.0 section omits ${needle}`);
   }
@@ -369,7 +383,7 @@ describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes"
     return m[1]!;
   }
 
-  it("the section title and finding codes stay bound to attested/covering and pinless witness verdicts", () => {
+  it("the section stays bound to every caller-visible 0.19.0 change the code makes", () => {
     assert.deepEqual(upgrading019Failures(section019()), []);
 
     const s = stream();
@@ -412,6 +426,52 @@ describe("UPGRADING 0.19.0 names the counter and verdict changes the code makes"
       rejected.counts.receipts.attested,
       "under a usable pin covering tracks attested; a rejected checkpoint is outside both",
     );
+
+    // settlement-comparison-skipped ← tests/refusal-names.test.ts (named extract body)
+    const dirtyExtract = {
+      body: { ...s.extract.body, settlements: s.extract.body.settlements, extra: Infinity },
+      signature: "x",
+      publicKeyPem: "y",
+    };
+    const skipped = audit({ receipts: [], checkpoints: [], extract: dirtyExtract as never });
+    assert.ok(skipped.warnings.some((w) => w.code === "settlement-comparison-skipped"));
+
+    // unauthenticated-issuer on anchor ← tests/audit-transparency.test.ts
+    const noRoot = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      anchorCheckpoint: s.cpPrev,
+    });
+    assert.ok(
+      noRoot.warnings.some((w) => w.code === "unauthenticated-issuer" && w.id === "anchor"),
+    );
+
+    // witness-inclusion-not-exercised ← tests/audit-transparency.test.ts
+    const emptyList = audit({
+      receipts: [s.r0, s.r1],
+      checkpoints: [s.cpPrev, s.cpN],
+      extract: s.extract,
+      trust: s.trust,
+      issuerTrust: { publicKeyPem: s.issuer.publicKeyPem },
+      witnessTrust: { publicKeyPem: s.issuer.publicKeyPem },
+      inclusionReceipts: [],
+    });
+    assert.ok(emptyList.warnings.some((w) => w.code === "witness-inclusion-not-exercised"));
+  });
+
+  it("RED: the 0a5f8bb 0.19.0 section that omitted the later caller-visible changes is caught", () => {
+    const oldMd = execFileSync("git", ["show", "0a5f8bb:docs/UPGRADING.md"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    const failures = upgrading019Failures(section019(oldMd));
+    assert.ok(failures.some((f) => f.includes("settlement-comparison-skipped")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("witness-inclusion-not-exercised")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("malformed-timestampMs")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("hex-not-hex")), failures.join(" | "));
+    assert.ok(failures.some((f) => f.includes("non-finite-number")), failures.join(" | "));
   });
 
   it("RED: the e4bfd0d 0.19.0 section that omitted the pinless witness verdict is caught", () => {

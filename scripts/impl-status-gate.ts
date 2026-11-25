@@ -37,7 +37,7 @@
  * have inflated.
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { basename } from "node:path";
 
 import { livingCoreDraftPath } from "./latest-draft.ts";
@@ -68,6 +68,29 @@ export function reportFreshnessFailures(
     }
   }
   return failures;
+}
+
+/**
+ * Read the suite-run start marker and delete it. A second standalone gate
+ * against the same leftover reports then fails for want of a marker, so a
+ * successful old marker+report pair cannot be replayed after the sources
+ * change. The CI path (`test:pre-release`) always stamps a fresh marker
+ * before the suite, so one consume per run is the intended shape.
+ */
+export function consumeSuiteRunMarker(startedPath: string): number {
+  if (!existsSync(startedPath)) {
+    throw new Error(
+      `no suite run start marker at ${startedPath}; refuse default suite reports without freshness proof`,
+    );
+  }
+  const startedRaw = readFileSync(startedPath, "utf8").trim();
+  const startedAtMs = Number(startedRaw);
+  try {
+    unlinkSync(startedPath);
+  } catch {
+    // A missing file after the read is still a consumed marker.
+  }
+  return startedAtMs;
 }
 
 function countCaseOutcome(
@@ -223,6 +246,47 @@ export function implStatusFailures(
   return failures;
 }
 
+export function runImplStatusGate(args: {
+  reportPath: string;
+  specPath: string;
+  summaryPath: string;
+  startedPath: string;
+  noSkips?: boolean;
+}): { ok: true; tests: number; skipped: number } | { ok: false; errors: string[] } {
+  let startedAtMs: number;
+  try {
+    startedAtMs = consumeSuiteRunMarker(args.startedPath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, errors: [`impl-status: ${message}`] };
+  }
+  const reportStats = [
+    { path: args.reportPath, mtimeMs: existsSync(args.reportPath) ? statSync(args.reportPath).mtimeMs : 0 },
+    { path: args.summaryPath, mtimeMs: existsSync(args.summaryPath) ? statSync(args.summaryPath).mtimeMs : 0 },
+  ];
+  const freshness = reportFreshnessFailures(startedAtMs, reportStats);
+  if (freshness.length > 0) {
+    return { ok: false, errors: freshness.map((failure) => `impl-status: ${failure}`) };
+  }
+  const xml = readFileSync(args.reportPath, "utf8");
+  const counters = countersFromJUnit(xml);
+  const suiteAttrs = suiteAttributeCounters(xml);
+  const nodeSummary = existsSync(args.summaryPath)
+    ? countersFromNodeSummary(readFileSync(args.summaryPath, "utf8"))
+    : undefined;
+  const failures = [
+    ...countConsistencyFailures(counters, { suiteAttrs, nodeSummary }),
+    ...implStatusFailures(readFileSync(args.specPath, "utf8"), counters, {
+      noSkips: args.noSkips,
+      specPath: args.specPath,
+    }),
+  ];
+  if (failures.length > 0) {
+    return { ok: false, errors: failures.map((failure) => `impl-status: ${failure}`) };
+  }
+  return { ok: true, tests: counters.tests, skipped: counters.skipped };
+}
+
 function main(): void {
   const living = livingCoreDraftPath(".");
   const [
@@ -231,43 +295,19 @@ function main(): void {
     summaryPath = ".suite-node-summary.txt",
     startedPath = process.env.SUITE_RUN_STARTED ?? SUITE_RUN_STARTED_PATH,
   ] = process.argv.slice(2);
-  if (!existsSync(startedPath)) {
-    console.error(
-      `impl-status: no suite run start marker at ${startedPath}; refuse default suite reports without freshness proof`,
-    );
+  const result = runImplStatusGate({
+    reportPath,
+    specPath,
+    summaryPath,
+    startedPath,
+    noSkips: Boolean(process.env.CI),
+  });
+  if (!result.ok) {
+    for (const failure of result.errors) console.error(failure);
     process.exit(1);
   }
-  const startedRaw = readFileSync(startedPath, "utf8").trim();
-  const startedAtMs = Number(startedRaw);
-  const reportStats = [
-    { path: reportPath, mtimeMs: existsSync(reportPath) ? statSync(reportPath).mtimeMs : 0 },
-    { path: summaryPath, mtimeMs: existsSync(summaryPath) ? statSync(summaryPath).mtimeMs : 0 },
-  ];
-  const freshness = reportFreshnessFailures(startedAtMs, reportStats);
-  if (freshness.length > 0) {
-    for (const failure of freshness) console.error(`impl-status: ${failure}`);
-    process.exit(1);
-  }
-  const xml = readFileSync(reportPath, "utf8");
-  const counters = countersFromJUnit(xml);
-  const suiteAttrs = suiteAttributeCounters(xml);
-  const nodeSummary = existsSync(summaryPath)
-    ? countersFromNodeSummary(readFileSync(summaryPath, "utf8"))
-    : undefined;
-  const noSkips = Boolean(process.env.CI);
-  const failures = [
-    ...countConsistencyFailures(counters, { suiteAttrs, nodeSummary }),
-    ...implStatusFailures(readFileSync(specPath, "utf8"), counters, {
-      noSkips,
-      specPath,
-    }),
-  ];
-  if (failures.length > 0) {
-    for (const failure of failures) console.error(`impl-status: ${failure}`);
-    process.exit(1);
-  }
-  const skips = counters.skipped > 0 ? `, ${counters.skipped} skipped locally` : ", none skipped";
-  console.log(`impl-status: the sentence and the run agree - ${counters.tests} cases${skips}`);
+  const skips = result.skipped > 0 ? `, ${result.skipped} skipped locally` : ", none skipped";
+  console.log(`impl-status: the sentence and the run agree - ${result.tests} cases${skips}`);
 }
 
 if (import.meta.filename === process.argv[1]) main();
