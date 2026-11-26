@@ -1,10 +1,10 @@
 import { strict as assert } from "node:assert";
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { KILL_GRACE_MS, runBounded } from "../scripts/bounded-run.ts";
 import { ROOT_PREFIX, TOOL_ENTRIES, runInTempRoot, signalExitCode, tempRootEnv } from "../scripts/with-temp-root.ts";
 import { tempDir } from "./helpers/temp-dir.ts";
 
@@ -30,6 +30,34 @@ function childEnv(base: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEn
   return { ...out, ...extra };
 }
 
+/**
+ * Bound on one Node process a case here starts: the wrapper, or a test
+ * runner. Measured on Windows at 0.25 s for the wrapper running the guard.
+ */
+const CHILD_TIMEOUT_MS = 30_000;
+
+/** The `{ timeout }` of a case that starts `calls` such processes one after another. */
+function caseTimeout(calls: number): number {
+  return calls * CHILD_TIMEOUT_MS + KILL_GRACE_MS + 10_000;
+}
+
+type ChildRun = { status: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string };
+
+/** Run `node <args>`, bounded, and return how it ended and what it printed. */
+async function runNode(label: string, args: readonly string[], env: NodeJS.ProcessEnv): Promise<ChildRun> {
+  const run = await runBounded({
+    label,
+    command: process.execPath,
+    args: [...args],
+    cwd: root,
+    env,
+    timeoutMs: CHILD_TIMEOUT_MS,
+    maxOutputBytes: 1024 * 1024,
+    returnStatus: true,
+  });
+  return { status: run.status, signal: run.signal, stdout: run.stdout.toString("utf8"), stderr: run.stderr.toString("utf8") };
+}
+
 /** Run `node -e <code>` through the wrapper CLI; see wrappedNode. */
 function wrapped(base: string, code: string, extra: NodeJS.ProcessEnv = {}) {
   return wrappedNode(base, ["-e", code], extra);
@@ -40,15 +68,11 @@ function wrapped(base: string, code: string, extra: NodeJS.ProcessEnv = {}) {
  * `base`. Returns the wrapper's exit status and signal, its output, and the
  * root it reported opening.
  */
-function wrappedNode(base: string, args: readonly string[], extra: NodeJS.ProcessEnv = {}) {
-  const run = spawnSync(process.execPath, ["--experimental-strip-types", wrapper, "--", ...args], {
-    cwd: root,
-    env: childEnv(base, extra),
-    encoding: "utf8",
-  });
+async function wrappedNode(base: string, args: readonly string[], extra: NodeJS.ProcessEnv = {}) {
+  const run = await runNode("with-temp-root wrapper", ["--experimental-strip-types", wrapper, "--", ...args], childEnv(base, extra));
   const opened = /^with-temp-root: running in (.+)$/m.exec(run.stderr)?.[1]?.trim();
   assert.ok(opened, `the wrapper did not say which root it opened:\n${run.stderr}`);
-  return { status: run.status, signal: run.signal, stdout: run.stdout, stderr: run.stderr, opened };
+  return { ...run, opened };
 }
 
 function assertRootGone(base: string, opened: string): void {
@@ -68,9 +92,9 @@ const leaveTwo = [
 ].join(" ");
 
 describe("with-temp-root runs a command in a temp root of its own", () => {
-  it("RED: a child that leaves a file and a directory in the root is refused by name, with 1", (t) => {
+  it("RED: a child that leaves a file and a directory in the root is refused by name, with 1", { timeout: caseTimeout(1) }, async (t) => {
     const base = tempDir(t, "cedulon-wrap-");
-    const run = wrapped(base, leaveTwo);
+    const run = await wrapped(base, leaveTwo);
     assert.equal(run.status, 1, `a run that left two entries passed:\n${run.stderr}`);
     assert.match(run.stderr, /the run left 2 entries in its temp root/);
     const named = run.stderr.split(/\r?\n/).filter((line) => line.startsWith("  "));
@@ -78,9 +102,9 @@ describe("with-temp-root runs a command in a temp root of its own", () => {
     assertRootGone(base, run.opened);
   });
 
-  it("GREEN: a child that removes what it made exits 0", (t) => {
+  it("GREEN: a child that removes what it made exits 0", { timeout: caseTimeout(1) }, async (t) => {
     const base = tempDir(t, "cedulon-wrap-");
-    const run = wrapped(
+    const run = await wrapped(
       base,
       "const p = require('node:path').join(require('node:os').tmpdir(), 'x'); require('node:fs').writeFileSync(p, ''); require('node:fs').rmSync(p);",
     );
@@ -89,24 +113,24 @@ describe("with-temp-root runs a command in a temp root of its own", () => {
     assertRootGone(base, run.opened);
   });
 
-  it("a child's own exit code is kept: 3 stays 3", (t) => {
+  it("a child's own exit code is kept: 3 stays 3", { timeout: caseTimeout(1) }, async (t) => {
     const base = tempDir(t, "cedulon-wrap-");
-    const run = wrapped(base, "process.exit(3)");
+    const run = await wrapped(base, "process.exit(3)");
     assert.equal(run.status, 3, run.stderr);
     assertRootGone(base, run.opened);
   });
 
-  it("a failing child that also leaves an entry keeps its code, and the entry is still named", (t) => {
+  it("a failing child that also leaves an entry keeps its code, and the entry is still named", { timeout: caseTimeout(1) }, async (t) => {
     const base = tempDir(t, "cedulon-wrap-");
-    const run = wrapped(base, `${leaveTwo} process.exit(3);`);
+    const run = await wrapped(base, `${leaveTwo} process.exit(3);`);
     assert.equal(run.status, 3, run.stderr);
     assert.match(run.stderr, /the run left 2 entries in its temp root/);
     assertRootGone(base, run.opened);
   });
 
-  it("the child's os.tmpdir() is the root", (t) => {
+  it("the child's os.tmpdir() is the root", { timeout: caseTimeout(1) }, async (t) => {
     const base = tempDir(t, "cedulon-wrap-");
-    const run = wrapped(
+    const run = await wrapped(
       base,
       "const e = process.env; process.stdout.write(JSON.stringify({ tmpdir: require('node:os').tmpdir(), TMPDIR: e.TMPDIR, TEMP: e.TEMP, TMP: e.TMP, CEDULON_TEMP_ROOT: e.CEDULON_TEMP_ROOT }));",
     );
@@ -166,10 +190,10 @@ function cachedModule(dir: string): string {
 }
 
 describe("Node's compile cache stays out of the root", () => {
-  it("RED: a child that turns the compile cache on leaves nothing in the root, and exits 0", (t) => {
+  it("RED: a child that turns the compile cache on leaves nothing in the root, and exits 0", { timeout: caseTimeout(1) }, async (t) => {
     const base = tempDir(t, "cedulon-wrap-");
     const outside = tempDir(t, "cedulon-module-");
-    const run = wrapped(base, turnCacheOn, { CEDULON_CACHED_MODULE: cachedModule(outside) });
+    const run = await wrapped(base, turnCacheOn, { CEDULON_CACHED_MODULE: cachedModule(outside) });
     assert.equal(run.status, 0, `the compile cache was left in the root:\n${run.stderr}`);
     const seen = JSON.parse(run.stdout) as { status: number; disable: string | null; statuses: Record<string, number> };
     assert.equal(seen.status, seen.statuses.DISABLED, "the child could still turn the compile cache on");
@@ -177,11 +201,11 @@ describe("Node's compile cache stays out of the root", () => {
     assertRootGone(base, run.opened);
   });
 
-  it("a NODE_COMPILE_CACHE set outside is left alone: the cache is written there, and the root stays empty", (t) => {
+  it("a NODE_COMPILE_CACHE set outside is left alone: the cache is written there, and the root stays empty", { timeout: caseTimeout(1) }, async (t) => {
     const base = tempDir(t, "cedulon-wrap-");
     const outside = tempDir(t, "cedulon-cache-");
     const cache = join(outside, "cache");
-    const run = wrapped(base, turnCacheOn, { NODE_COMPILE_CACHE: cache, CEDULON_CACHED_MODULE: cachedModule(outside) });
+    const run = await wrapped(base, turnCacheOn, { NODE_COMPILE_CACHE: cache, CEDULON_CACHED_MODULE: cachedModule(outside) });
     assert.equal(run.status, 0, run.stderr);
     const seen = JSON.parse(run.stdout) as {
       status: number;
@@ -270,9 +294,9 @@ describe("a child ended by a signal", () => {
 
   const killSelf = "process.kill(process.pid, 'SIGTERM'); setTimeout(() => {}, 10000);";
 
-  it("POSIX: the wrapper ends on the child's signal after its cleanup; Windows: the exit code Windows gave is kept", (t) => {
+  it("POSIX: the wrapper ends on the child's signal after its cleanup; Windows: the exit code Windows gave is kept", { timeout: caseTimeout(1) }, async (t) => {
     const base = tempDir(t, "cedulon-wrap-");
-    const run = wrapped(base, `${leaveTwo} ${killSelf}`);
+    const run = await wrapped(base, `${leaveTwo} ${killSelf}`);
     assert.match(run.stderr, /the run left 2 entries in its temp root/);
     if (process.platform === "win32") {
       // Windows has no signals in an exit status: a process that kills
@@ -327,29 +351,29 @@ describe("the suite runs inside a temp root of its own", () => {
 
   // The guard is a test in the run it guards, so it is red however the
   // runner was started outside the wrapper; no command line is read.
-  it("RED then GREEN: tests/temp-root-active.test.ts refuses a runner started outside with-temp-root, and passes one inside", (t) => {
+  it("RED then GREEN: tests/temp-root-active.test.ts refuses a runner started outside with-temp-root, and passes one inside", { timeout: caseTimeout(4) }, async (t) => {
     const runner = ["--experimental-strip-types", "--test", "--test-reporter=tap", guard];
-    const outside = (env: NodeJS.ProcessEnv) => spawnSync(process.execPath, runner, { cwd: root, env, encoding: "utf8" });
+    const outside = (env: NodeJS.ProcessEnv) => runNode("test runner outside with-temp-root", runner, env);
     const refusal = (run: { stdout: string; stderr: string }) =>
       /the suite must run through scripts\/with-temp-root\.ts: ([^'"\r\n]+)/.exec(`${run.stdout}${run.stderr}`)?.[1];
 
     const base = tempDir(t, "cedulon-wrap-");
     const { CEDULON_TEMP_ROOT: _, ...unset } = childEnv(base);
-    const notSet = outside(unset);
+    const notSet = await outside(unset);
     assert.equal(notSet.status, 1, `a runner with no CEDULON_TEMP_ROOT passed:\n${notSet.stdout}${notSet.stderr}`);
     assert.equal(refusal(notSet), "CEDULON_TEMP_ROOT is not set", notSet.stdout);
 
-    const notOpened = outside(childEnv(base));
+    const notOpened = await outside(childEnv(base));
     assert.equal(notOpened.status, 1, `a temp directory with-temp-root did not open passed:\n${notOpened.stdout}`);
     assert.match(refusal(notOpened) ?? "", /^.+cedulon-wrap-\w+ is not a root it opened$/, notOpened.stdout);
 
     const stale = join(tempDir(t, "cedulon-stale-"), `${ROOT_PREFIX}stale`);
     mkdirSync(stale);
-    const elsewhere = outside(childEnv(base, { CEDULON_TEMP_ROOT: stale }));
+    const elsewhere = await outside(childEnv(base, { CEDULON_TEMP_ROOT: stale }));
     assert.equal(elsewhere.status, 1, `a CEDULON_TEMP_ROOT that is not os.tmpdir() passed:\n${elsewhere.stdout}`);
     assert.match(refusal(elsewhere) ?? "", /^os\.tmpdir\(\) is .+, not CEDULON_TEMP_ROOT .+stale$/, elsewhere.stdout);
 
-    const inside = wrappedNode(base, runner);
+    const inside = await wrappedNode(base, runner);
     assert.equal(inside.status, 0, `the guard refused a run inside with-temp-root:\n${inside.stdout}${inside.stderr}`);
     assert.match(inside.stdout, /^# pass 1$/m);
     assertRootGone(base, inside.opened);

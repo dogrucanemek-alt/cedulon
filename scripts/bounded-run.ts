@@ -57,6 +57,13 @@ export type BoundedRunOptions = {
   /** Limit on stdout and stderr together. */
   maxOutputBytes: number;
   env?: NodeJS.ProcessEnv;
+  /**
+   * For a call whose exit status is what it reads: a child that exits
+   * non-zero, or is ended by a signal of its own, resolves with that status
+   * instead of being refused. The bound, the output limit and the group
+   * signal apply as they do without it.
+   */
+  returnStatus?: boolean;
   /** For tests only: stands in for process.kill on the POSIX group path. */
   signal?: GroupKill;
   /**
@@ -75,7 +82,13 @@ export type GroupSignalState = {
   platform: NodeJS.Platform;
 };
 
-export type BoundedRunResult = { stdout: Buffer; stderr: Buffer };
+export type BoundedRunResult = {
+  stdout: Buffer;
+  stderr: Buffer;
+  /** The child's exit code; null when a signal ended it. */
+  status: number | null;
+  signal: NodeJS.Signals | null;
+};
 
 export type BoundedRunFailure = "timeout" | "output" | "status" | "start" | "kill";
 
@@ -127,7 +140,8 @@ export function signalGroup(
   }
 }
 
-function taskkillTree(pid: number): ChildProcess {
+/** Windows: ends the tree rooted at `pid` while that root is alive. Returns the taskkill process. */
+export function taskkillTree(pid: number): ChildProcess {
   const command = process.env.SystemRoot ? join(process.env.SystemRoot, "System32", "taskkill.exe") : "taskkill";
   const killer = spawn(command, ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
   killer.on("error", () => {
@@ -179,6 +193,9 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
       if (unsignalled === undefined) unsignalled = code;
     };
 
+    let status: number | null = null;
+    let endSignal: NodeJS.Signals | null = null;
+
     const settle = (failure: BoundedRunError | undefined): void => {
       if (settled) return;
       settled = true;
@@ -192,7 +209,7 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
           : new BoundedRunError("kill", message, pid);
       }
       if (refused) reject(refused);
-      else resolve({ stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) });
+      else resolve({ stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr), status, signal: endSignal });
     };
 
     const end = (failure: BoundedRunError): void => {
@@ -255,7 +272,9 @@ export function runBounded(options: BoundedRunOptions): Promise<BoundedRunResult
         else settle(failure);
         return;
       }
-      if (code === 0) {
+      status = code;
+      endSignal = signal;
+      if (code === 0 || options.returnStatus) {
         settle(undefined);
         return;
       }

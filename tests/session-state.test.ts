@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { chmodSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, type TestContext } from "node:test";
@@ -7,7 +6,11 @@ import { describe, it, type TestContext } from "node:test";
 // The package entry starts a stdio server on import; the session is the unit
 // under test here.
 import { CedulonSession } from "../packages/mcp-server/src/session.ts";
+import { KILL_GRACE_MS, runBounded } from "../scripts/bounded-run.ts";
 import { tempDir } from "./helpers/temp-dir.ts";
+
+/** One `icacls` call (Windows only), measured at 0.05 s. */
+const ICACLS_TIMEOUT_MS = 30_000;
 
 function tempStatePath(t: TestContext): string {
   return join(tempDir(t, "cedulon-state-"), "nested", "state.json");
@@ -155,7 +158,7 @@ describe("session state file", () => {
     }
   });
 
-  it("RED then GREEN: a state file that exists but cannot be read is refused, not started over", (t) => {
+  it("RED then GREEN: a state file that exists but cannot be read is refused, not started over", { timeout: 2 * ICACLS_TIMEOUT_MS + KILL_GRACE_MS + 10_000 }, async (t) => {
     // Any read error was taken to mean "no state yet". A file that a virus
     // scanner holds open, or whose permissions changed, then started the
     // server with no receipts and a newly generated key, and the first save
@@ -170,15 +173,18 @@ describe("session state file", () => {
     const before = readFileSync(statePath, "utf8");
 
     const user = process.env.USERNAME ?? "";
+    const icacls = async (label: string, args: string[]): Promise<void> => {
+      await runBounded({ label, command: "icacls", args, cwd: dir, timeoutMs: ICACLS_TIMEOUT_MS, maxOutputBytes: 64 * 1024 });
+    };
     const deny = () =>
       process.platform === "win32"
-        ? execFileSync("icacls", [statePath, "/deny", `${user}:(RD)`], { stdio: "ignore" })
+        ? icacls("icacls /deny on the state file", [statePath, "/deny", `${user}:(RD)`])
         : chmodSync(statePath, 0o000);
     const allow = () =>
       process.platform === "win32"
-        ? execFileSync("icacls", [statePath, "/remove:d", user], { stdio: "ignore" })
+        ? icacls("icacls /remove:d on the state file", [statePath, "/remove:d", user])
         : chmodSync(statePath, 0o600);
-    deny();
+    await deny();
     try {
       let readable = true;
       try {
@@ -193,7 +199,7 @@ describe("session state file", () => {
       assert.throws(() => new CedulonSession({ statePath }), /cedulon-state-unreadable/);
       assert.throws(() => first.reload(), /cedulon-state-unreadable/);
     } finally {
-      allow();
+      await allow();
     }
     assert.equal(readFileSync(statePath, "utf8"), before, "the state file was rewritten while it could not be read");
 

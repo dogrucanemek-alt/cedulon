@@ -1,14 +1,17 @@
 import { strict as assert } from "node:assert";
-import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { KILL_GRACE_MS, runBounded } from "../scripts/bounded-run.ts";
 import { tempRootEnv } from "../scripts/with-temp-root.ts";
 import { removeTempDir, tempDir } from "./helpers/temp-dir.ts";
 
 const helper = join(dirname(fileURLToPath(import.meta.url)), "helpers", "temp-dir.ts");
+/** One `node --test` run of a one-case file, measured on Windows at 0.2 s. */
+const CHILD_RUN_TIMEOUT_MS = 30_000;
+const CHILD_CASE_TIMEOUT_MS = CHILD_RUN_TIMEOUT_MS + KILL_GRACE_MS + 10_000;
 
 /** A context whose after-hooks the case runs itself, to look at the directory before and after. */
 function heldContext(): { after: (fn: () => void) => void; runAfter: () => void } {
@@ -73,7 +76,7 @@ describe("a cleanup failure turns a real node --test run red", () => {
    * its own `node --test` process with `base` as its temp directory, and
    * return the TAP it printed.
    */
-  function runChild(base: string, rm: string | undefined) {
+  async function runChild(base: string, rm: string | undefined): Promise<{ status: number | null; stdout: string; stderr: string }> {
     const file = join(base, "cleanup.test.mts");
     writeFileSync(
       file,
@@ -87,16 +90,22 @@ describe("a cleanup failure turns a real node --test run red", () => {
       ].join("\n"),
     );
     const { NODE_TEST_CONTEXT: _, ...env } = process.env;
-    return spawnSync(process.execPath, ["--experimental-strip-types", "--test", "--test-reporter=tap", file], {
+    const run = await runBounded({
+      label: "node --test on a one-case tempDir file",
+      command: process.execPath,
+      args: ["--experimental-strip-types", "--test", "--test-reporter=tap", file],
       cwd: base,
       env: tempRootEnv(env, base),
-      encoding: "utf8",
+      timeoutMs: CHILD_RUN_TIMEOUT_MS,
+      maxOutputBytes: 1024 * 1024,
+      returnStatus: true,
     });
+    return { status: run.status, stdout: run.stdout.toString("utf8"), stderr: run.stderr.toString("utf8") };
   }
 
-  it("RED: a directory that cannot be removed fails the test that opened it", (t) => {
+  it("RED: a directory that cannot be removed fails the test that opened it", { timeout: CHILD_CASE_TIMEOUT_MS }, async (t) => {
     const base = tempDir(t, "cedulon-after-");
-    const run = runChild(
+    const run = await runChild(
       base,
       `() => { throw Object.assign(new Error("resource busy or locked"), { code: "EBUSY" }); }`,
     );
@@ -106,9 +115,9 @@ describe("a cleanup failure turns a real node --test run red", () => {
     assert.match(run.stdout, /^# fail 1$/m);
   });
 
-  it("GREEN: the same test with a removal that works passes and leaves only its own file", (t) => {
+  it("GREEN: the same test with a removal that works passes and leaves only its own file", { timeout: CHILD_CASE_TIMEOUT_MS }, async (t) => {
     const base = tempDir(t, "cedulon-after-");
-    const run = runChild(base, undefined);
+    const run = await runChild(base, undefined);
     assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
     assert.match(run.stdout, /^ok 1 - opens a directory with tempDir$/m);
     assert.match(run.stdout, /^# fail 0$/m);

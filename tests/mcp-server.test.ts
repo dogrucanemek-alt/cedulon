@@ -1,16 +1,115 @@
 import assert from "node:assert/strict";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { generateExtractKeys, signRailExtract } from "@cedulon/x402-adapter";
+import { type GroupKill, KILL_GRACE_MS, signalGroup, taskkillTree } from "../scripts/bounded-run.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const serverEntry = join(root, "packages", "mcp-server", "src", "index.ts");
 const packageVersion: string = JSON.parse(
   readFileSync(join(root, "packages", "mcp-server", "package.json"), "utf8"),
 ).version;
+
+const isWindows = process.platform === "win32";
+
+/** Bound on one JSON-RPC request. */
+const REQUEST_TIMEOUT_MS = 8_000;
+/**
+ * How long close() waits for the server to exit once its stdin is closed,
+ * before it ends the tree. Measured on Windows at 12 ms.
+ */
+const CLOSE_EXIT_MS = 30_000;
+
+/** The `{ timeout }` of a case that sends `requests` requests and closes one server. */
+function caseTimeout(requests: number, exitWaitMs = CLOSE_EXIT_MS): number {
+  return requests * REQUEST_TIMEOUT_MS + exitWaitMs + 3 * KILL_GRACE_MS + 10_000;
+}
+
+/** A stand-in server: it answers every request, and ignores both its stdin closing and SIGTERM. */
+const STUBBORN_SERVER = [
+  `process.on("SIGTERM", () => {});`,
+  `process.stdin.on("data", (b) => {`,
+  `  for (const line of b.toString("utf8").split("\\n").filter(Boolean)) {`,
+  `    const m = JSON.parse(line);`,
+  `    if (m.id !== undefined) process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: m.id, result: {} }) + "\\n");`,
+  `  }`,
+  `});`,
+  `setInterval(() => {}, 1000);`,
+  `setTimeout(() => process.exit(0), 60000);`,
+].join("\n");
+
+/** A stand-in tree killer: it ends no tree, never exits on its own, and ignores SIGTERM. */
+const HUNG_KILLER = [
+  `process.on("SIGTERM", () => {});`,
+  `setInterval(() => {}, 1000);`,
+  `setTimeout(() => process.exit(0), 60000);`,
+].join("\n");
+
+/** A stand-in tree killer that ends no tree and never exits, even once it is sent a signal. */
+class StuckKiller extends EventEmitter {
+  readonly pid = undefined;
+  readonly exitCode = null;
+  readonly signalCode = null;
+  readonly signals: Array<NodeJS.Signals | number | undefined> = [];
+  unrefed = false;
+
+  kill(signal?: NodeJS.Signals | number): boolean {
+    this.signals.push(signal);
+    return true;
+  }
+
+  unref(): void {
+    this.unrefed = true;
+  }
+}
+
+/**
+ * Resolves true once `proc` has exited, or has failed to start, as its own
+ * events report it; false after `ms`. An error once it has started is a
+ * failed signal, so the bound still applies.
+ */
+function endsWithin(proc: ChildProcess, ms: number): Promise<boolean> {
+  if (proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (ended: boolean): void => {
+      clearTimeout(timer);
+      proc.off("exit", onEnd);
+      proc.off("close", onEnd);
+      proc.off("error", onError);
+      resolve(ended);
+    };
+    const onEnd = (): void => done(true);
+    const onError = (): void => {
+      if (proc.pid === undefined) done(true);
+    };
+    const timer = setTimeout(() => done(false), ms);
+    proc.on("exit", onEnd);
+    proc.on("close", onEnd);
+    proc.on("error", onError);
+  });
+}
+
+/**
+ * Waits KILL_GRACE_MS for the process ending a tree to exit. One still
+ * running is sent SIGKILL and waited on for KILL_GRACE_MS more; one running
+ * after that is unref()'d, so that it cannot hold the suite. Returns why the
+ * tree may not have been ended.
+ */
+async function awaitTreeKiller(killer: ChildProcess): Promise<string | undefined> {
+  if (await endsWithin(killer, KILL_GRACE_MS)) {
+    return killer.pid === undefined ? "its tree killer could not start" : undefined;
+  }
+  killer.kill("SIGKILL");
+  if (await endsWithin(killer, KILL_GRACE_MS)) {
+    return `its tree killer had not exited ${KILL_GRACE_MS} ms after it started, and was ended`;
+  }
+  killer.unref();
+  return `its tree killer had not exited ${KILL_GRACE_MS} ms after it started, nor ${KILL_GRACE_MS} ms after it was ended, and was let go`;
+}
 
 const TOOL_NAMES = [
   "cedulon_spend",
@@ -29,6 +128,21 @@ type JsonRpc = {
   params?: unknown;
 };
 
+type StdioRpcOptions = {
+  env?: NodeJS.ProcessEnv;
+  /** Node arguments for the server; the mcp-server entry unless a case stands in its own. */
+  args?: readonly string[];
+  /** Names the server in close()'s refusal. */
+  label?: string;
+  exitWaitMs?: number;
+  /** For tests only: stands in for ending the tree; returns why the tree may not have been ended, if it may not. */
+  endTree?: (pid: number) => Promise<string | undefined>;
+  /** For tests only: stands in for `taskkill /T /F`, on every platform, as the process that ends the tree. */
+  killer?: (pid: number) => ChildProcess;
+  /** For tests only: stands in for process.kill, which every signal sent by number goes through. */
+  signal?: GroupKill;
+};
+
 class StdioRpc {
   private buf = Buffer.alloc(0);
   private nextId = 1;
@@ -37,13 +151,30 @@ class StdioRpc {
     { resolve: (v: JsonRpc) => void; reject: (e: Error) => void }
   >();
   private readonly child: ChildProcessWithoutNullStreams;
+  private readonly label: string;
+  private readonly exitWaitMs: number;
+  private readonly endTree: (pid: number) => Promise<string | undefined>;
+  private readonly startKiller: ((pid: number) => ChildProcess) | undefined;
+  private readonly signal: GroupKill;
 
-  constructor(env: NodeJS.ProcessEnv = {}) {
-    this.child = spawn(process.execPath, ["--experimental-strip-types", "--conditions=development", serverEntry], {
+  constructor({ env = {}, args, label = "mcp-server", exitWaitMs = CLOSE_EXIT_MS, endTree, killer, signal }: StdioRpcOptions = {}) {
+    this.label = label;
+    this.exitWaitMs = exitWaitMs;
+    this.endTree = endTree ?? ((pid) => this.endTreeOf(pid));
+    this.startKiller = killer;
+    this.signal = signal ?? ((p, s) => void process.kill(p, s));
+    // On POSIX the server leads its own process group, so close() can end
+    // what it started with it.
+    this.child = spawn(process.execPath, [...(args ?? ["--experimental-strip-types", "--conditions=development", serverEntry])], {
       cwd: root,
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "pipe"],
+      detached: !isWindows,
+      windowsHide: true,
     });
+    // A write to a server that has exited fails here; the exit handler
+    // below already rejects what was pending.
+    this.child.stdin.on("error", () => {});
     this.child.stdout.on("data", (chunk: Buffer) => this.onData(chunk));
     this.child.stderr.on("data", () => {
       /* protocol must stay on stdout; ignore logs */
@@ -77,7 +208,7 @@ class StdioRpc {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`timeout waiting for ${method}`));
-      }, 8_000);
+      }, REQUEST_TIMEOUT_MS);
       this.pending.set(id, {
         resolve: (v) => {
           clearTimeout(timer);
@@ -108,8 +239,87 @@ class StdioRpc {
     return { isError: Boolean(result.isError), body: JSON.parse(text as string) };
   }
 
-  close(): void {
-    this.child.kill();
+  get pid(): number | undefined {
+    return this.child.pid;
+  }
+
+  /** The server has exited and its exit has been seen. */
+  get exited(): boolean {
+    return this.child.exitCode !== null || this.child.signalCode !== null;
+  }
+
+  get exitCode(): number | null {
+    return this.child.exitCode;
+  }
+
+  /**
+   * Close stdin and wait up to exitWaitMs for the server to exit. If it does
+   * not, end its tree: SIGKILL to the process group it leads on POSIX,
+   * `taskkill /T /F` on Windows, both from scripts/bounded-run.ts. The
+   * taskkill process is itself bounded, as awaitTreeKiller describes. A
+   * server still running KILL_GRACE_MS after that is refused by name. On
+   * POSIX the group is sent SIGKILL once the server has exited, as
+   * runBounded does, so nothing it started outlives the case.
+   */
+  async close(): Promise<void> {
+    const pid = this.child.pid;
+    if (pid === undefined) return;
+    this.child.stdin.end();
+    if (!(await this.waitForExit(this.exitWaitMs))) {
+      const unended = await this.endTree(pid);
+      if (!(await this.waitForExit(KILL_GRACE_MS))) {
+        this.child.stdout.destroy();
+        this.child.stderr.destroy();
+        this.child.unref();
+        const why = unended === undefined ? "" : `; ${unended}`;
+        throw new Error(
+          `${this.label} (pid ${pid}) is still running ${this.exitWaitMs} ms after its stdin closed and ${KILL_GRACE_MS} ms after its tree was ended${why}`,
+        );
+      }
+    }
+    if (!isWindows) {
+      const leftover = signalGroup(pid, "SIGKILL", this.signal, {
+        leaderReaped: true,
+        platform: process.platform,
+      });
+      if (leftover !== undefined) throw new Error(`${this.label} (pid ${pid}) exited, and its process group could not be signalled: ${leftover}`);
+    }
+  }
+
+  /**
+   * Ends a server close() left running, through its own child object. A
+   * server whose exit has been seen is not signalled: it has been reaped, and
+   * its PID may name another process by now. Returns whether a signal was sent.
+   */
+  endQuietly(): boolean {
+    if (this.exited) return false;
+    return this.child.kill("SIGKILL");
+  }
+
+  /** Resolves true once the server's own exit event has been seen; false after `ms`. */
+  waitForExit(ms: number): Promise<boolean> {
+    if (this.exited) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const onExit = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      const timer = setTimeout(() => {
+        this.child.off("exit", onExit);
+        resolve(false);
+      }, ms);
+      this.child.once("exit", onExit);
+    });
+  }
+
+  /** Ends the tree the server leads; returns why the tree may not have been ended. */
+  private async endTreeOf(pid: number): Promise<string | undefined> {
+    if (isWindows || this.startKiller !== undefined) return awaitTreeKiller((this.startKiller ?? taskkillTree)(pid));
+    const code = signalGroup(pid, "SIGKILL", this.signal, {
+      leaderReaped: this.exited,
+      platform: process.platform,
+    });
+    return code === undefined ? undefined : `its process group could not be signalled: ${code}`;
   }
 
   private write(msg: unknown): void {
@@ -142,7 +352,7 @@ class StdioRpc {
 }
 
 describe("mcp-server stdio JSON-RPC", () => {
-  it("introduces itself as the version it ships as", async () => {
+  it("introduces itself as the version it ships as", { timeout: caseTimeout(1) }, async () => {
     // 0.2.1 went to npm announcing 0.2.0, because the version was written out
     // a second time in the source and only the manifest was bumped. Clients see
     // this string, and so does cedulon_status.
@@ -154,11 +364,11 @@ describe("mcp-server stdio JSON-RPC", () => {
       assert.equal(info.name, "cedulon");
       assert.equal(info.version, packageVersion);
     } finally {
-      rpc.close();
+      await rpc.close();
     }
   });
 
-  it("the mcpb manifest lists the tools the server actually exposes", async () => {
+  it("the mcpb manifest lists the tools the server actually exposes", { timeout: caseTimeout(2) }, async () => {
     // The bundle ships a tool list of its own, which a desktop host shows
     // before anything runs. A tool renamed here and not there would advertise
     // something the server does not answer to.
@@ -172,11 +382,11 @@ describe("mcp-server stdio JSON-RPC", () => {
       assert.deepEqual(manifest.tools.map((t: { name: string }) => t.name).sort(), actual);
       assert.equal(manifest.version, packageVersion);
     } finally {
-      rpc.close();
+      await rpc.close();
     }
   });
 
-  it("initialize then tools/list exposes five named schemas", async () => {
+  it("initialize then tools/list exposes five named schemas", { timeout: caseTimeout(2) }, async () => {
     const rpc = new StdioRpc();
     try {
       const init = await rpc.handshake();
@@ -193,11 +403,11 @@ describe("mcp-server stdio JSON-RPC", () => {
         assert.equal((tool.inputSchema as { type?: string } | undefined)?.type, "object");
       }
     } finally {
-      rpc.close();
+      await rpc.close();
     }
   });
 
-  it("every tool carries the annotations the directory requires", async () => {
+  it("every tool carries the annotations the directory requires", { timeout: caseTimeout(2) }, async () => {
     // The Anthropic connector directory rejects a submission whose tools lack
     // a title and the applicable read-only or destructive hint. Reading them
     // off the wire is what a reviewer's client does.
@@ -228,11 +438,11 @@ describe("mcp-server stdio JSON-RPC", () => {
         }
       }
     } finally {
-      rpc.close();
+      await rpc.close();
     }
   });
 
-  it("spend allow returns a signed receipt; over-limit is deny", async () => {
+  it("spend allow returns a signed receipt; over-limit is deny", { timeout: caseTimeout(4) }, async () => {
     const rpc = new StdioRpc();
     try {
       await rpc.handshake();
@@ -274,11 +484,11 @@ describe("mcp-server stdio JSON-RPC", () => {
       assert.equal(verifyBody.receipt, true);
       assert.equal(verifyBody.countersignature, null);
     } finally {
-      rpc.close();
+      await rpc.close();
     }
   });
 
-  it("audit is balanced after allow, and flags an injected bypass extract", async () => {
+  it("audit is balanced after allow, and flags an injected bypass extract", { timeout: caseTimeout(4) }, async () => {
     const rpc = new StdioRpc();
     try {
       await rpc.handshake();
@@ -315,11 +525,11 @@ describe("mcp-server stdio JSON-RPC", () => {
         true,
       );
     } finally {
-      rpc.close();
+      await rpc.close();
     }
   });
 
-  it("audit over a presented extract names the scope it was computed over, and refuses rows added beside it", async () => {
+  it("audit over a presented extract names the scope it was computed over, and refuses rows added beside it", { timeout: caseTimeout(19) }, async () => {
     const rpc = new StdioRpc();
     try {
       await rpc.handshake();
@@ -524,11 +734,11 @@ describe("mcp-server stdio JSON-RPC", () => {
       assert.equal(exported.isError, false);
       assert.equal("scope" in (exported.body as object), false);
     } finally {
-      rpc.close();
+      await rpc.close();
     }
   });
 
-  it("RED then GREEN: audit results and the ledger export carry the class counts", async () => {
+  it("RED then GREEN: audit results and the ledger export carry the class counts", { timeout: caseTimeout(5) }, async () => {
     type Counts = {
       receipts: Record<string, number>;
       settlements: Record<string, number>;
@@ -611,11 +821,11 @@ describe("mcp-server stdio JSON-RPC", () => {
       assert.equal(exported.isError, false);
       assert.deepEqual((exported.body as { counts?: unknown }).counts, ownCounts);
     } finally {
-      rpc.close();
+      await rpc.close();
     }
   });
 
-  it("status reports version, policy, receipt count, and chain head", async () => {
+  it("status reports version, policy, receipt count, and chain head", { timeout: caseTimeout(4) }, async () => {
     const rpc = new StdioRpc();
     try {
       await rpc.handshake();
@@ -643,7 +853,165 @@ describe("mcp-server stdio JSON-RPC", () => {
       assert.equal(afterBody.receiptCount, 1);
       assert.equal(typeof afterBody.chainHead, "string");
     } finally {
-      rpc.close();
+      await rpc.close();
     }
+  });
+});
+
+describe("closing the stdio server leaves no process behind", () => {
+  it("close() lets a server that exits when its stdin closes exit on its own, and waits for it", { timeout: caseTimeout(1) }, async () => {
+    const rpc = new StdioRpc();
+    try {
+      await rpc.handshake();
+      const started = Date.now();
+      await rpc.close();
+      const elapsed = Date.now() - started;
+      assert.equal(rpc.exited, true, "close() returned before the server exited");
+      assert.equal(rpc.exitCode, 0, "the server was ended rather than left to exit");
+      assert.ok(elapsed < CLOSE_EXIT_MS, `the server took ${elapsed} ms to exit once its stdin closed`);
+    } finally {
+      rpc.endQuietly();
+    }
+  });
+
+  it("RED then GREEN: close() ends a server that ignores its stdin closing and SIGTERM at its bound, and returns once it has exited", { timeout: caseTimeout(1, 1000) }, async () => {
+    const exitWaitMs = 1000;
+    const rpc = new StdioRpc({ args: ["-e", STUBBORN_SERVER], label: "stubborn server", exitWaitMs });
+    try {
+      // Answered only once its SIGTERM handler is in place.
+      await rpc.request("ping", {});
+      const started = Date.now();
+      await rpc.close();
+      const elapsed = Date.now() - started;
+      assert.equal(rpc.exited, true, "close() returned before the server exited");
+      assert.ok(elapsed >= exitWaitMs - 50, `close() ended the server after ${elapsed} ms, before its ${exitWaitMs} ms wait`);
+      assert.ok(elapsed < exitWaitMs + 3 * KILL_GRACE_MS + 3000, `close() took ${elapsed} ms`);
+    } finally {
+      rpc.endQuietly();
+    }
+  });
+
+  it("RED then GREEN: a server still running after its tree was ended is refused by name", { timeout: caseTimeout(1, 1000) }, async () => {
+    const exitWaitMs = 1000;
+    const rpc = new StdioRpc({
+      args: ["-e", STUBBORN_SERVER],
+      label: "stubborn server",
+      exitWaitMs,
+      endTree: async () => undefined,
+    });
+    const pid = rpc.pid;
+    try {
+      await rpc.request("ping", {});
+      const started = Date.now();
+      await assert.rejects(
+        async () => rpc.close(),
+        new Error(
+          `stubborn server (pid ${pid}) is still running ${exitWaitMs} ms after its stdin closed and ${KILL_GRACE_MS} ms after its tree was ended`,
+        ),
+      );
+      const elapsed = Date.now() - started;
+      assert.ok(elapsed >= exitWaitMs + KILL_GRACE_MS - 50, `close() gave up after ${elapsed} ms`);
+    } finally {
+      rpc.endQuietly();
+    }
+    assert.equal(await rpc.waitForExit(2000), true, "the server is still running after it was ended");
+  });
+
+  it("RED then GREEN: close() ends a tree killer that has not exited at its bound, and waits for it", { timeout: caseTimeout(1, 1000) }, async () => {
+    const exitWaitMs = 1000;
+    const killers: ChildProcess[] = [];
+    const rpc = new StdioRpc({
+      args: ["-e", STUBBORN_SERVER],
+      label: "stubborn server",
+      exitWaitMs,
+      killer: () => {
+        const killer = spawn(process.execPath, ["-e", HUNG_KILLER], { stdio: "ignore", windowsHide: true });
+        killer.on("error", () => {});
+        killers.push(killer);
+        return killer;
+      },
+    });
+    try {
+      await rpc.request("ping", {});
+      const started = Date.now();
+      const refusal = await rpc.close().then(
+        () => undefined,
+        (err: unknown) => err,
+      );
+      const elapsed = Date.now() - started;
+      assert.equal(killers.length, 1, "close() did not start one tree killer");
+      const [killer] = killers;
+      assert.ok(killer.exitCode !== null || killer.signalCode !== null, "the tree killer is still running after close() returned");
+      assert.ok(elapsed < exitWaitMs + 3 * KILL_GRACE_MS + 3000, `close() took ${elapsed} ms`);
+      // The stand-in ends no tree, so the server is still running, and is refused by name.
+      assert.ok(refusal instanceof Error, "close() returned with the server still running");
+      assert.equal(
+        refusal.message,
+        `stubborn server (pid ${rpc.pid}) is still running ${exitWaitMs} ms after its stdin closed and ${KILL_GRACE_MS} ms after its tree was ended; its tree killer had not exited ${KILL_GRACE_MS} ms after it started, and was ended`,
+      );
+    } finally {
+      for (const killer of killers) if (killer.exitCode === null && killer.signalCode === null) killer.kill("SIGKILL");
+      rpc.endQuietly();
+    }
+    assert.equal(await rpc.waitForExit(2000), true, "the server is still running after it was ended");
+  });
+
+  it("RED then GREEN: close() lets go of a tree killer that has not exited even once it was ended, and returns at its bound", { timeout: caseTimeout(1, 1000) }, async () => {
+    const exitWaitMs = 1000;
+    const stuck = new StuckKiller();
+    const rpc = new StdioRpc({
+      args: ["-e", STUBBORN_SERVER],
+      label: "stubborn server",
+      exitWaitMs,
+      killer: () => stuck as unknown as ChildProcess,
+    });
+    try {
+      await rpc.request("ping", {});
+      const started = Date.now();
+      const refusal = await rpc.close().then(
+        () => undefined,
+        (err: unknown) => err,
+      );
+      const elapsed = Date.now() - started;
+      assert.deepEqual(stuck.signals, ["SIGKILL"], "the tree killer was not ended at its bound");
+      assert.equal(stuck.unrefed, true, "a tree killer that is still running holds the event loop");
+      assert.ok(elapsed < exitWaitMs + 3 * KILL_GRACE_MS + 3000, `close() took ${elapsed} ms`);
+      assert.ok(refusal instanceof Error, "close() returned with the server still running");
+      assert.equal(
+        refusal.message,
+        `stubborn server (pid ${rpc.pid}) is still running ${exitWaitMs} ms after its stdin closed and ${KILL_GRACE_MS} ms after its tree was ended; its tree killer had not exited ${KILL_GRACE_MS} ms after it started, nor ${KILL_GRACE_MS} ms after it was ended, and was let go`,
+      );
+    } finally {
+      rpc.endQuietly();
+    }
+    assert.equal(await rpc.waitForExit(2000), true, "the server is still running after it was ended");
+  });
+
+  it("RED then GREEN: a server that has exited is not signalled again", { timeout: caseTimeout(1) }, async () => {
+    const sent: Array<[number, NodeJS.Signals]> = [];
+    const rpc = new StdioRpc({
+      // Records every signal sent by number; only a group signal is passed on.
+      signal: (target, signal) => {
+        sent.push([target, signal]);
+        if (target < 0) process.kill(target, signal);
+      },
+    });
+    const pid = rpc.pid;
+    assert.ok(pid !== undefined, "the server never started");
+    try {
+      await rpc.handshake();
+      await rpc.close();
+      assert.equal(rpc.exited, true, "close() returned before the server exited");
+    } finally {
+      rpc.endQuietly();
+    }
+    assert.equal(rpc.endQuietly(), false, "a server whose exit was seen was signalled");
+    assert.deepEqual(
+      sent.filter(([target]) => target === pid),
+      [],
+      `a signal went to pid ${pid} after the server had exited`,
+    );
+    // On POSIX, close() sends what is left of the group SIGKILL, by its group ID, once.
+    assert.deepEqual(sent, isWindows ? [] : [[-pid, "SIGKILL"]]);
   });
 });

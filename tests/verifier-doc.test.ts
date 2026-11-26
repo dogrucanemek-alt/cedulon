@@ -1,11 +1,11 @@
 import { strict as assert } from "node:assert";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { documentedRuns } from "./doc-runs.ts";
+import { KILL_GRACE_MS } from "../scripts/bounded-run.ts";
+import { DOCUMENTED_COMMAND_TIMEOUT_MS, documentedRuns, runDocumentedCommand } from "./doc-runs.ts";
 
 // docs/RUN_AS_VERIFIER.md prints the exact stdout an outside verifier should
 // see, and outside verifiers have been pointed at it. Those blocks are a second
@@ -61,21 +61,10 @@ describe("run-as-verifier doc", () => {
   });
 
   for (const { command, expected } of runs) {
-    it(`${command} prints what the doc says`, () => {
-      const script = command.replace(/^npm run /, "");
-      assert.match(script, /^[a-z:]+$/, "only npm scripts are run from the doc");
-      let stdout: string;
-      try {
-        stdout = execFileSync("npm", ["run", script, "--silent"], {
-          cwd: root,
-          encoding: "utf8",
-          shell: process.platform === "win32",
-        });
-      } catch (e) {
-        // The bypass demos exit non-zero by design; their stdout is the subject.
-        stdout = (e as { stdout?: string }).stdout ?? "";
-      }
-      assert.equal(stdout.trim().replace(/\r\n/g, "\n"), expected);
+    it(`${command} prints what the doc says`, { timeout: DOCUMENTED_COMMAND_TIMEOUT_MS + KILL_GRACE_MS + 10_000 }, async () => {
+      assert.match(command, /^npm run [a-z:]+$/, "only npm scripts are run from the doc");
+      // The bypass demos exit non-zero by design; their stdout is the subject.
+      assert.equal(await runDocumentedCommand(command, root), expected);
     });
   }
 
