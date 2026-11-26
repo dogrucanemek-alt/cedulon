@@ -1,8 +1,10 @@
 /**
- * The one place a test opens a directory under the operating system's temp
- * directory. Every directory opened here is removed when the test that opened
- * it ends, passed or failed. Before this, a single suite run left 78
- * `cedulon-*` entries behind.
+ * How a test opens a directory under the temp directory. Every directory
+ * opened here is removed when the test that opened it ends, passed or failed.
+ * Before this, a single suite run left 78 `cedulon-*` entries behind.
+ *
+ * The suite runs in a temp root of its own (scripts/with-temp-root.ts), which
+ * refuses the run if anything is left in it, however it got there.
  */
 import { chmodSync, existsSync, lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,9 +22,9 @@ type RemoveOptions = { rm?: typeof rmSync };
  * a leak whatever the assertions said, and a quiet pass is how the leaks piled
  * up unseen.
  */
-export function tempDir(t: Pick<TestContext, "after">, prefix: string): string {
+export function tempDir(t: Pick<TestContext, "after">, prefix: string, options: RemoveOptions = {}): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
-  t.after(() => removeTempDir(dir));
+  t.after(() => removeTempDir(dir, options));
   return dir;
 }
 
