@@ -1,10 +1,12 @@
 import { strict as assert } from "node:assert";
 import { createRequire } from "node:module";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { KILL_GRACE_MS, runBounded } from "../scripts/bounded-run.ts";
+import { npmCli } from "./helpers/npm-cli.ts";
 
 // These two packages used to point main/exports at ./src/index.ts. That
 // resolves inside the workspace and nowhere else, so a packed install
@@ -14,17 +16,23 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const names = ["base-extract", "mcp-guard"] as const;
+/** `npm pack --dry-run` of one workspace, measured on Windows at 0.5 s. */
+const PACK_TIMEOUT_MS = 30_000;
 
 function readPkg(name: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(root, "packages", name, "package.json"), "utf8"));
 }
 
-function packFiles(name: string): string[] {
-  const raw = execFileSync("npm", ["pack", "-w", `@cedulon/${name}`, "--dry-run", "--json"], {
+async function packFiles(name: string): Promise<string[]> {
+  const label = `npm pack -w @cedulon/${name} --dry-run`;
+  const { stdout } = await runBounded({
+    label,
+    ...npmCli(label, "npm", ["pack", "-w", `@cedulon/${name}`, "--dry-run", "--json"]),
     cwd: root,
-    encoding: "utf8",
-    shell: process.platform === "win32",
+    timeoutMs: PACK_TIMEOUT_MS,
+    maxOutputBytes: 1024 * 1024,
   });
+  const raw = stdout.toString("utf8");
   // npm 10.9 returns an array here where earlier versions returned an object
   // keyed by package name. Reading only one shape made the check depend on the
   // npm that happened to be installed.
@@ -54,8 +62,8 @@ describe("unpublished packages are packable", () => {
       assert.equal((pkg.publishConfig as { access: string }).access, "public");
     });
 
-    it(`${name} tarball lists no raw TypeScript sources`, () => {
-      const files = packFiles(name);
+    it(`${name} tarball lists no raw TypeScript sources`, { timeout: PACK_TIMEOUT_MS + KILL_GRACE_MS + 10_000 }, async () => {
+      const files = await packFiles(name);
       const rawTs = files.filter((p) => p.endsWith(".ts") && !p.endsWith(".d.ts"));
       assert.deepEqual(rawTs, [], `${name} tarball contains source: ${rawTs.join(", ")}`);
       assert.ok(

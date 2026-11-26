@@ -662,6 +662,97 @@ describe("crlf-guard", () => {
     assert.equal(err.kind, "status");
   });
 
+  it("RED then GREEN: a call that asks for its exit status gets a non-zero one back with its output; one that does not is still refused", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    const exitThree = {
+      command: process.execPath,
+      args: ["-e", `process.stdout.write("partial"); process.stderr.write("refused: probe input\\n"); process.exit(3);`],
+      cwd: root,
+      timeoutMs: 10_000,
+      maxOutputBytes: 1024,
+    };
+    const err = await refusal(runBounded({ label: "failing child", ...exitThree }));
+    assert.equal(err.message, "failing child exited with status 3: refused: probe input");
+    assert.equal(err.kind, "status");
+
+    const read = await runBounded({ label: "failing child read for its status", ...exitThree, returnStatus: true });
+    assert.deepEqual(
+      { status: read.status, signal: read.signal, stdout: read.stdout.toString("utf8"), stderr: read.stderr.toString("utf8") },
+      { status: 3, signal: null, stdout: "partial", stderr: "refused: probe input\n" },
+    );
+
+    const ok = await runBounded({ label: "passing child read for its status", ...exitThree, args: ["-e", `process.stdout.write("done")`], returnStatus: true });
+    assert.deepEqual({ status: ok.status, signal: ok.signal, stdout: ok.stdout.toString("utf8") }, { status: 0, signal: null, stdout: "done" });
+  });
+
+  it("RED then GREEN: asking for the exit status lifts neither the bound, nor the output limit, nor the group signal", { timeout: HELPER_WATCHDOG_MS }, async () => {
+    const pids: number[] = [];
+    try {
+      const timeoutMs = 1000;
+      const started = Date.now();
+      const timedOut = await refusal(
+        runBounded({
+          label: "child read for its status at its bound",
+          command: process.execPath,
+          args: ["-e", `setInterval(() => {}, 1000); ${SELF_EXIT}`],
+          cwd: root,
+          timeoutMs,
+          maxOutputBytes: 1024,
+          returnStatus: true,
+        }),
+      );
+      assert.ok(timedOut.pid !== undefined, "the refusal does not name the child it ended");
+      pids.push(timedOut.pid);
+      assert.equal(timedOut.kind, "timeout");
+      assert.equal(timedOut.message, `child read for its status at its bound timed out after ${timeoutMs} ms`);
+      assertAtBound(Date.now() - started, timeoutMs);
+
+      const chatty = await refusal(
+        runBounded({
+          label: "chatty child read for its status",
+          command: process.execPath,
+          args: ["-e", `const b = Buffer.alloc(64 * 1024, 120); setInterval(() => process.stdout.write(b), 10); ${SELF_EXIT}`],
+          cwd: root,
+          timeoutMs: 10_000,
+          maxOutputBytes: 100_000,
+          returnStatus: true,
+        }),
+      );
+      assert.ok(chatty.pid !== undefined, "the refusal does not name the child it ended");
+      pids.push(chatty.pid);
+      assert.equal(chatty.kind, "output");
+      assert.equal(chatty.message, "chatty child read for its status exceeded 100000 bytes of output");
+
+      // On Windows the tree is ended with taskkill and no group signal is
+      // sent, so there the status comes back and the fake is never called.
+      const label = "child read for its status whose group cannot be signalled";
+      const calls: KillCall[] = [];
+      const run = runBounded({
+        label,
+        command: process.execPath,
+        args: ["-e", "process.exit(3)"],
+        cwd: root,
+        timeoutMs: 10_000,
+        maxOutputBytes: 1024,
+        returnStatus: true,
+        signal: failingKill("EPERM", calls),
+        platform: "linux",
+      });
+      if (isWindows) {
+        assert.equal((await run).status, 3);
+        assert.deepEqual(calls, []);
+      } else {
+        const err = await refusal(run);
+        assert.ok(err.pid !== undefined, "the refusal does not name the child");
+        assert.equal(err.kind, "kill");
+        assert.equal(err.message, `${label} could not signal its process group ${err.pid}: EPERM`);
+        assert.deepEqual(calls, [[-err.pid, "SIGKILL"]]);
+      }
+    } finally {
+      for (const pid of pids) endQuietly(pid);
+    }
+    for (const pid of pids) await assertEnded(pid, "child");
+  });
+
   it("RED then GREEN: a command or stdin file that cannot be opened is refused by name", { timeout: HELPER_WATCHDOG_MS }, async () => {
     const missing = await refusal(
       runBounded({

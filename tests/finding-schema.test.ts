@@ -1,12 +1,16 @@
 import { strict as assert } from "node:assert";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { FINDING_CODES, FINDING_OBJECT_VERSION, toFindingObject } from "@cedulon/audit";
-import { documentedRuns, runDocumentedCommand } from "./doc-runs.ts";
+import { KILL_GRACE_MS, runBounded } from "../scripts/bounded-run.ts";
+import { DOCUMENTED_COMMAND_TIMEOUT_MS, documentedRuns, runDocumentedCommand } from "./doc-runs.ts";
+import { npmCli } from "./helpers/npm-cli.ts";
+
+/** `npm run audit -- --json`, measured on Windows at 0.3 s. */
+const AUDIT_JSON_TIMEOUT_MS = 30_000;
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const schema = JSON.parse(
@@ -128,20 +132,24 @@ describe("finding object schema", () => {
     assert.ok(check({ ...finding, needs: { evidence: "receipts", ref: "r", rowFromMs: 1.5 } }).some((e) => /expected integer/.test(e)));
   });
 
-  it("audit --json matches the schema and leaves human output alone", () => {
-    const human = runDocumentedCommand("npm run audit", root);
+  const auditTimeout = DOCUMENTED_COMMAND_TIMEOUT_MS + AUDIT_JSON_TIMEOUT_MS + KILL_GRACE_MS + 10_000;
+  it("audit --json matches the schema and leaves human output alone", { timeout: auditTimeout }, async () => {
+    const human = await runDocumentedCommand("npm run audit", root);
     const verifier = documentedRuns(
       readFileSync(join(root, "docs", "RUN_AS_VERIFIER.md"), "utf8"),
     ).find((r) => r.command === "npm run audit");
     assert.ok(verifier);
     assert.equal(human, verifier.expected);
 
-    const raw = execFileSync("npm", ["run", "audit", "--silent", "--", "--json"], {
+    const label = "npm run audit -- --json";
+    const { stdout } = await runBounded({
+      label,
+      ...npmCli(label, "npm", ["run", "audit", "--silent", "--", "--json"]),
       cwd: root,
-      encoding: "utf8",
-      shell: process.platform === "win32",
+      timeoutMs: AUDIT_JSON_TIMEOUT_MS,
+      maxOutputBytes: 1024 * 1024,
     });
-    const parsed = JSON.parse(raw) as ReturnType<typeof toFindingObject>;
+    const parsed = JSON.parse(stdout.toString("utf8")) as ReturnType<typeof toFindingObject>;
     assertSchema(parsed);
     assert.equal(parsed.ok, true);
     assert.equal(parsed.guarantee, "conditional");

@@ -1,11 +1,12 @@
 import { strict as assert } from "node:assert";
-import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { describe, it, type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
+import { BoundedRunError, KILL_GRACE_MS, runBounded } from "../scripts/bounded-run.ts";
 import { latestDraftPath } from "../scripts/latest-draft.ts";
+import { npmCli } from "./helpers/npm-cli.ts";
 import { tempDir } from "./helpers/temp-dir.ts";
 
 import {
@@ -40,15 +41,53 @@ function tarEntries(buf: Buffer): { name: string; body: Buffer }[] {
 }
 
 
-function tarballText(t: TestContext, pkg: string, version: string): string | { skipped: string } {
+/**
+ * One registry call. Measured on Windows at 1.5 s for `npm pack` and 1.0 s
+ * for `npm view`; the bound stays at the 60 s these calls always had, since
+ * the far side is someone else's service.
+ */
+const NETWORK_TIMEOUT_MS = 60_000;
+/** The grace period and the case's own work, on top of its registry calls. */
+const CASE_SLACK_MS = KILL_GRACE_MS + 10_000;
+
+const OFFLINE = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|network|ECONNREFUSED|registry\.npmjs/i;
+
+/**
+ * Run npm against the registry. A non-zero exit comes back as an Error whose
+ * message carries npm's whole stderr, which is what the offline and 404
+ * checks read; a call that reaches its bound comes back as `{ timedOut }`.
+ */
+async function npmRegistry(label: string, args: string[]): Promise<string | { timedOut: string }> {
+  try {
+    const run = await runBounded({
+      label,
+      ...npmCli(label, "npm", args),
+      cwd: root,
+      timeoutMs: NETWORK_TIMEOUT_MS,
+      maxOutputBytes: 4 * 1024 * 1024,
+      returnStatus: true,
+    });
+    if (run.status !== 0) {
+      throw new Error(`${label} exited with status ${run.status ?? run.signal}: ${run.stderr.toString("utf8")}`);
+    }
+    return run.stdout.toString("utf8");
+  } catch (err) {
+    if (err instanceof BoundedRunError && err.kind === "timeout") return { timedOut: err.message };
+    throw err;
+  }
+}
+
+async function tarballText(t: TestContext, pkg: string, version: string): Promise<string | { skipped: string }> {
   const dir = tempDir(t, "cedulon-published-as-");
   try {
-    execFileSync("npm", ["pack", `${pkg}@${version}`, "--prefer-online", "--pack-destination", dir], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 60_000,
-      shell: process.platform === "win32",
-    });
+    const packed = await npmRegistry(`npm pack ${pkg}@${version}`, [
+      "pack",
+      `${pkg}@${version}`,
+      "--prefer-online",
+      "--pack-destination",
+      dir,
+    ]);
+    if (typeof packed !== "string") return { skipped: packed.timedOut };
     const tgz = join(dir, `${pkg.replace(/^@/, "").replace("/", "-")}-${version}.tgz`);
         // Read the archive here rather than shelling out to tar. GNU tar reads
         // the "C:" of a Windows path as a remote host name and fails; the tar
@@ -63,10 +102,15 @@ function tarballText(t: TestContext, pkg: string, version: string): string | { s
         return text;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const offline = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|network|ECONNREFUSED|registry\.npmjs/i.test(msg);
-    if (offline) return { skipped: msg };
+    if (OFFLINE.test(msg)) return { skipped: msg };
     throw err;
   }
+}
+
+/** The distinct package@version tarballs the draft's published-as list asks for. */
+function publishedTarballs(): number {
+  const claims = publishedClaims(readFileSync(DRAFT, "utf8"));
+  return new Set(claims.map((c) => `${PUBLISHED_MARKERS[c.id]?.package}@${c.version}`)).size;
 }
 
 describe("published-as claims", () => {
@@ -91,7 +135,7 @@ describe("published-as claims", () => {
     assert.match(unknown.detail, /no catalogued marker/);
   });
 
-  it("the draft's 'published as' list is in the tarball at that version", async (t) => {
+  it("the draft's 'published as' list is in the tarball at that version", { timeout: publishedTarballs() * NETWORK_TIMEOUT_MS + CASE_SLACK_MS }, async (t) => {
     const md = readFileSync(DRAFT, "utf8");
     const claims = publishedClaims(md);
     assert.ok(claims.length > 0, "Implementation Status no longer names a published-as version");
@@ -105,7 +149,7 @@ describe("published-as claims", () => {
       const key = `${marker.package}@${claim.version}`;
       let text = cache.get(key);
       if (!text) {
-        const packed = tarballText(t, marker.package, claim.version);
+        const packed = await tarballText(t, marker.package, claim.version);
         if (typeof packed !== "string") {
           t.skip(`published-as guard skipped: npm pack failed (${packed.skipped})`);
           return;
@@ -118,7 +162,7 @@ describe("published-as claims", () => {
     }
   });
 
-  it("the workspace version is on npm only after it is published", (t) => {
+  it("the workspace version is on npm only after it is published", { timeout: NETWORK_TIMEOUT_MS + CASE_SLACK_MS }, async (t) => {
     // The draft's published-as list is pinned to 0.4.0 and stays green against
     // that tarball. This tree is ahead of npm. Packing the workspace version
     // must fail until that version exists; greening this by packing 0.4.0 or
@@ -128,7 +172,7 @@ describe("published-as claims", () => {
         version: string;
       }
     ).version;
-    const packed = tarballText(t, "@cedulon/audit", version);
+    const packed = await tarballText(t, "@cedulon/audit", version);
     assert.equal(
       typeof packed,
       "string",
@@ -178,7 +222,7 @@ describe("published-as claims", () => {
     assert.equal(agrees.state, "agrees");
   });
 
-  it("RED then GREEN: STATUS published-on-npm is the workspace version is on npm latest for every public package", (t) => {
+  it("RED then GREEN: STATUS published-on-npm is the workspace version is on npm latest for every public package", { timeout: publicPackageNames().length * NETWORK_TIMEOUT_MS + CASE_SLACK_MS }, async (t) => {
     // Offline stale-claims.ts reads this number from STATUS itself.
     // This test is the floor: the number STATUS names must be the
     // one npm actually serves as latest, and every public package
@@ -190,7 +234,7 @@ describe("published-as claims", () => {
     const latestByPackage = new Map<string, string>();
     let publishedEverywhere: Set<string> | undefined;
     for (const name of names) {
-      const viewed = npmViewPublished(name);
+      const viewed = await npmViewPublished(name);
       if ("skipped" in viewed) {
         t.skip(`STATUS↔npm latest skipped: npm view failed (${viewed.skipped})`);
         return;
@@ -309,18 +353,14 @@ function publicPackageNames(): string[] {
   return names.sort();
 }
 
-function npmViewPublished(pkg: string): { latest: string; versions: string[] } | { skipped: string } {
-  // Same npm CLI path as tarballText (execFileSync, timeout, win32
-  // shell, offline skip). Two questions in one call: the latest
+async function npmViewPublished(pkg: string): Promise<{ latest: string; versions: string[] } | { skipped: string }> {
+  // Same npm call as tarballText (npmRegistry: bounded, no shell,
+  // offline skip). Two questions in one call: the latest
   // dist-tag (today's claim) and the version list (what was ever
   // published, which a pinned commit may name without being latest).
   try {
-    const out = execFileSync("npm", ["view", pkg, "dist-tags.latest", "versions", "--json"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 60_000,
-      shell: process.platform === "win32",
-    });
+    const out = await npmRegistry(`npm view ${pkg}`, ["view", pkg, "dist-tags.latest", "versions", "--json"]);
+    if (typeof out !== "string") return { skipped: out.timedOut };
     const parsed = JSON.parse(out) as unknown;
     const row = (Array.isArray(parsed) ? parsed[0] : parsed) as
       | { "dist-tags.latest"?: string; versions?: string[] | string }
@@ -340,8 +380,7 @@ function npmViewPublished(pkg: string): { latest: string; versions: string[] } |
     if (/E404|404 Not Found/.test(msg)) {
       throw new Error(`${pkg} is a public workspace package and npm has never published it (404)`);
     }
-    const offline = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|network|ECONNREFUSED|registry\.npmjs/i.test(msg);
-    if (offline) return { skipped: msg };
+    if (OFFLINE.test(msg)) return { skipped: msg };
     throw err;
   }
 }

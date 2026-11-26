@@ -4,8 +4,9 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { KILL_GRACE_MS } from "../scripts/bounded-run.ts";
 import { latestDraftPath } from "../scripts/latest-draft.ts";
-import { documentedRuns, runDocumentedCommand } from "./doc-runs.ts";
+import { DOCUMENTED_COMMAND_TIMEOUT_MS, documentedRuns, runDocumentedCommand } from "./doc-runs.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const doc = readFileSync(join(root, "docs", "INTEROP_RUN.md"), "utf8");
@@ -67,8 +68,8 @@ describe("interop-run doc", () => {
   });
 
   for (const { command, expected } of required) {
-    it(`${command} prints what the doc says`, () => {
-      const stdout = runDocumentedCommand(command, root);
+    it(`${command} prints what the doc says`, { timeout: DOCUMENTED_COMMAND_TIMEOUT_MS + KILL_GRACE_MS + 10_000 }, async () => {
+      const stdout = await runDocumentedCommand(command, root);
       assert.equal(stdout, expected);
     });
   }
