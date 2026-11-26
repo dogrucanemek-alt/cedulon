@@ -15,6 +15,12 @@
  * said. The directory is then removed. Other runs have roots of their own and
  * are never seen.
  *
+ * The child also gets CEDULON_TEMP_ROOT naming that directory, and
+ * tests/temp-root-active.test.ts refuses a run whose os.tmpdir() is not such
+ * a root, however the runner was started. That guard protects only the runs
+ * that list it: a developer who runs a single test file directly is not
+ * protected.
+ *
  * Usage: node --experimental-strip-types scripts/with-temp-root.ts -- <arguments for node>
  *
  * The command is this Node binary with the given arguments; no shell is
@@ -39,6 +45,9 @@ export const TOOL_ENTRIES: Readonly<Record<string, string>> = {};
 
 const TEMP_VARIABLES: readonly string[] = ["TMPDIR", "TEMP", "TMP"];
 
+/** Names the root in the child, for tests/temp-root-active.test.ts. */
+const TEMP_ROOT_VARIABLE = "CEDULON_TEMP_ROOT";
+
 /**
  * npm 11 and 12 call module.enableCompileCache() as they start. Without
  * NODE_COMPILE_CACHE, Node puts that cache in os.tmpdir()/node-compile-cache,
@@ -52,12 +61,12 @@ const COMPILE_CACHE = "NODE_COMPILE_CACHE";
 const DISABLE_COMPILE_CACHE = "NODE_DISABLE_COMPILE_CACHE";
 
 /**
- * `env` with TMPDIR, TEMP and TMP all set to `dir`, and Node's compile cache
- * kept out of it. Node reads TMPDIR on POSIX and TEMP, then TMP, on Windows;
- * setting all three is safe on both. Windows names are case-insensitive, so
- * there a differently cased copy of a variable set here is dropped rather
- * than left to shadow it. POSIX names are not, and `Temp` or `tmp` there is a
- * variable of its own that is kept.
+ * `env` with TMPDIR, TEMP, TMP and CEDULON_TEMP_ROOT all set to `dir`, and
+ * Node's compile cache kept out of it. Node reads TMPDIR on POSIX and TEMP,
+ * then TMP, on Windows; setting all three is safe on both. Windows names are
+ * case-insensitive, so there a differently cased copy of a variable set here
+ * is dropped rather than left to shadow it. POSIX names are not, and `Temp`
+ * or `tmp` there is a variable of its own that is kept.
  */
 export function tempRootEnv(
   env: NodeJS.ProcessEnv,
@@ -67,6 +76,7 @@ export function tempRootEnv(
   const sameName = platform === "win32" ? (key: string, name: string) => key.toUpperCase() === name : (key: string, name: string) => key === name;
   const set: Record<string, string> = {};
   for (const name of TEMP_VARIABLES) set[name] = dir;
+  set[TEMP_ROOT_VARIABLE] = dir;
   const ownCache = Object.entries(env).some(([key, value]) => sameName(key, COMPILE_CACHE) && value !== undefined && value !== "");
   if (!ownCache) set[DISABLE_COMPILE_CACHE] = "1";
   const out: NodeJS.ProcessEnv = {};
@@ -82,7 +92,7 @@ export function signalExitCode(signal: NodeJS.Signals): number {
 }
 
 /** What is left directly under `root`, relative to it, directories with a trailing slash. */
-export function leftEntries(root: string, allowed: Readonly<Record<string, string>> = TOOL_ENTRIES): string[] {
+function leftEntries(root: string, allowed: Readonly<Record<string, string>> = TOOL_ENTRIES): string[] {
   return readdirSync(root)
     .filter((name) => !Object.hasOwn(allowed, name))
     .sort()

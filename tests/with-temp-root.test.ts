@@ -1,15 +1,16 @@
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { TOOL_ENTRIES, runInTempRoot, signalExitCode, tempRootEnv } from "../scripts/with-temp-root.ts";
+import { ROOT_PREFIX, TOOL_ENTRIES, runInTempRoot, signalExitCode, tempRootEnv } from "../scripts/with-temp-root.ts";
 import { tempDir } from "./helpers/temp-dir.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const wrapper = join(root, "scripts", "with-temp-root.ts");
+const guard = join(root, "tests", "temp-root-active.test.ts");
 
 const COMPILE_CACHE_VARIABLES = ["NODE_COMPILE_CACHE", "NODE_DISABLE_COMPILE_CACHE"];
 
@@ -29,13 +30,18 @@ function childEnv(base: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEn
   return { ...out, ...extra };
 }
 
+/** Run `node -e <code>` through the wrapper CLI; see wrappedNode. */
+function wrapped(base: string, code: string, extra: NodeJS.ProcessEnv = {}) {
+  return wrappedNode(base, ["-e", code], extra);
+}
+
 /**
- * Run `node -e <code>` through the wrapper CLI, which opens its root under
+ * Run `node <args>` through the wrapper CLI, which opens its root under
  * `base`. Returns the wrapper's exit status and signal, its output, and the
  * root it reported opening.
  */
-function wrapped(base: string, code: string, extra: NodeJS.ProcessEnv = {}) {
-  const run = spawnSync(process.execPath, ["--experimental-strip-types", wrapper, "--", "-e", code], {
+function wrappedNode(base: string, args: readonly string[], extra: NodeJS.ProcessEnv = {}) {
+  const run = spawnSync(process.execPath, ["--experimental-strip-types", wrapper, "--", ...args], {
     cwd: root,
     env: childEnv(base, extra),
     encoding: "utf8",
@@ -102,15 +108,15 @@ describe("with-temp-root runs a command in a temp root of its own", () => {
     const base = tempDir(t, "cedulon-wrap-");
     const run = wrapped(
       base,
-      "const e = process.env; process.stdout.write(JSON.stringify({ tmpdir: require('node:os').tmpdir(), TMPDIR: e.TMPDIR, TEMP: e.TEMP, TMP: e.TMP }));",
+      "const e = process.env; process.stdout.write(JSON.stringify({ tmpdir: require('node:os').tmpdir(), TMPDIR: e.TMPDIR, TEMP: e.TEMP, TMP: e.TMP, CEDULON_TEMP_ROOT: e.CEDULON_TEMP_ROOT }));",
     );
     assert.equal(run.status, 0, run.stderr);
     const seen = JSON.parse(run.stdout) as Record<string, string>;
     // Node reads TMPDIR on POSIX and TEMP, then TMP, on Windows.
     assert.equal(seen.tmpdir, run.opened, `${process.platform}: os.tmpdir() in the child is not the root`);
     assert.deepEqual(
-      { TMPDIR: seen.TMPDIR, TEMP: seen.TEMP, TMP: seen.TMP },
-      { TMPDIR: run.opened, TEMP: run.opened, TMP: run.opened },
+      { TMPDIR: seen.TMPDIR, TEMP: seen.TEMP, TMP: seen.TMP, CEDULON_TEMP_ROOT: seen.CEDULON_TEMP_ROOT },
+      { TMPDIR: run.opened, TEMP: run.opened, TMP: run.opened, CEDULON_TEMP_ROOT: run.opened },
     );
     assertRootGone(base, run.opened);
   });
@@ -219,26 +225,39 @@ describe("Node's compile cache stays out of the root", () => {
 });
 
 describe("tempRootEnv drops differently cased temp variables on Windows only", () => {
-  it("POSIX keeps Temp and tmp, which are variables of their own there", () => {
-    const env = tempRootEnv({ Temp: "a", tmp: "b", TMPDIR: "x", PATH: "p" }, "/r", "linux");
+  it("POSIX keeps Temp, tmp and cedulon_temp_root, which are variables of their own there", () => {
+    const env = tempRootEnv(
+      { Temp: "a", tmp: "b", cedulon_temp_root: "c", TMPDIR: "x", CEDULON_TEMP_ROOT: "y", PATH: "p" },
+      "/r",
+      "linux",
+    );
     assert.deepEqual(
-      { Temp: env.Temp, tmp: env.tmp, TMPDIR: env.TMPDIR, TEMP: env.TEMP, TMP: env.TMP, PATH: env.PATH },
-      { Temp: "a", tmp: "b", TMPDIR: "/r", TEMP: "/r", TMP: "/r", PATH: "p" },
+      {
+        Temp: env.Temp,
+        tmp: env.tmp,
+        cedulon_temp_root: env.cedulon_temp_root,
+        TMPDIR: env.TMPDIR,
+        TEMP: env.TEMP,
+        TMP: env.TMP,
+        CEDULON_TEMP_ROOT: env.CEDULON_TEMP_ROOT,
+        PATH: env.PATH,
+      },
+      { Temp: "a", tmp: "b", cedulon_temp_root: "c", TMPDIR: "/r", TEMP: "/r", TMP: "/r", CEDULON_TEMP_ROOT: "/r", PATH: "p" },
     );
   });
 
-  it("Windows drops Temp and tmp, which would name the same variables as TEMP and TMP", () => {
-    const env = tempRootEnv({ Temp: "a", tmp: "b", Path: "p" }, "C:\\r", "win32");
+  it("Windows drops Temp, tmp and Cedulon_Temp_Root, which would name the same variables as TEMP, TMP and CEDULON_TEMP_ROOT", () => {
+    const env = tempRootEnv({ Temp: "a", tmp: "b", Cedulon_Temp_Root: "c", Path: "p" }, "C:\\r", "win32");
     assert.deepEqual(
-      Object.keys(env).filter((key) => ["TMPDIR", "TEMP", "TMP"].includes(key.toUpperCase())).sort(),
-      ["TEMP", "TMP", "TMPDIR"],
+      Object.keys(env)
+        .filter((key) => ["TMPDIR", "TEMP", "TMP", "CEDULON_TEMP_ROOT"].includes(key.toUpperCase()))
+        .sort(),
+      ["CEDULON_TEMP_ROOT", "TEMP", "TMP", "TMPDIR"],
     );
-    assert.deepEqual({ TEMP: env.TEMP, TMP: env.TMP, TMPDIR: env.TMPDIR, Path: env.Path }, {
-      TEMP: "C:\\r",
-      TMP: "C:\\r",
-      TMPDIR: "C:\\r",
-      Path: "p",
-    });
+    assert.deepEqual(
+      { TEMP: env.TEMP, TMP: env.TMP, TMPDIR: env.TMPDIR, CEDULON_TEMP_ROOT: env.CEDULON_TEMP_ROOT, Path: env.Path },
+      { TEMP: "C:\\r", TMP: "C:\\r", TMPDIR: "C:\\r", CEDULON_TEMP_ROOT: "C:\\r", Path: "p" },
+    );
   });
 });
 
@@ -289,61 +308,6 @@ describe("a child ended by a signal", () => {
   });
 });
 
-/** A shell command line split at ;, |, || and && outside quotes. */
-function shellCommands(line: string): string[] {
-  const out: string[] = [];
-  let current = "";
-  let quote: string | null = null;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]!;
-    if (quote !== null) {
-      if (ch === quote) quote = null;
-      current += ch;
-    } else if (ch === '"' || ch === "'") {
-      quote = ch;
-      current += ch;
-    } else if (ch === ";" || ch === "|" || ch === "&") {
-      out.push(current);
-      current = "";
-      if (line[i + 1] === ch) i++;
-    } else {
-      current += ch;
-    }
-  }
-  out.push(current);
-  return out.map((command) => command.trim().replace(/\s+/g, " ")).filter((command) => command !== "");
-}
-
-const RUNNER_FLAG = /(?:^|\s)--test(?=\s|$)/;
-
-/** A command that starts Node's test runner, `node --test` or `node ... --test`, other than through with-temp-root. */
-function startsRunnerOutsideRoot(command: string): boolean {
-  const flag = command.search(RUNNER_FLAG);
-  if (flag < 0 || !/(?:^|\s)node(?:\.exe)?\s/.test(command.slice(0, flag + 1))) return false;
-  const wrapperAt = command.search(/(?:^|\s)scripts\/with-temp-root\.ts -- /);
-  return wrapperAt < 0 || wrapperAt > flag;
-}
-
-/**
- * Every command in `text` that starts the test runner outside with-temp-root,
- * with the line it starts on. A line ending in a backslash is read with the
- * next, and a YAML `run:` key in front of a command is not part of it.
- */
-function unwrappedRunnerCalls(text: string): Array<{ line: number; command: string }> {
-  const lines = text.split("\n").map((line) => line.replace(/\r$/, ""));
-  const hits: Array<{ line: number; command: string }> = [];
-  for (let i = 0; i < lines.length; i++) {
-    const start = i;
-    let logical = lines[i]!;
-    while (logical.endsWith("\\") && i + 1 < lines.length) logical = `${logical.slice(0, -1)} ${lines[++i]!}`;
-    logical = logical.trim().replace(/^(?:-\s+)?run:\s*/, "");
-    for (const command of shellCommands(logical)) {
-      if (startsRunnerOutsideRoot(command)) hits.push({ line: start + 1, command });
-    }
-  }
-  return hits;
-}
-
 describe("the suite runs inside a temp root of its own", () => {
   it("test:all and test:pre-release run node --test through with-temp-root, and nothing else", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { scripts: Record<string, string> };
@@ -361,51 +325,33 @@ describe("the suite runs inside a temp root of its own", () => {
     }
   });
 
-  it("RED: a workflow step that starts the test runner itself is caught, at its line", () => {
-    const probe = readFileSync(
-      join(root, "tests", "fixtures", "wording-red", "test-runner-outside-temp-root.yml.txt"),
-      "utf8",
-    );
-    assert.deepEqual(unwrappedRunnerCalls(probe), [
-      {
-        line: 13,
-        command:
-          'node --experimental-strip-types --test --test-name-pattern "76|80|81" tests/trust-root-pass6.test.ts tests/trust-root-pass7.test.ts',
-      },
-    ]);
-  });
+  // The guard is a test in the run it guards, so it is red however the
+  // runner was started outside the wrapper; no command line is read.
+  it("RED then GREEN: tests/temp-root-active.test.ts refuses a runner started outside with-temp-root, and passes one inside", (t) => {
+    const runner = ["--experimental-strip-types", "--test", "--test-reporter=tap", guard];
+    const outside = (env: NodeJS.ProcessEnv) => spawnSync(process.execPath, runner, { cwd: root, env, encoding: "utf8" });
+    const refusal = (run: { stdout: string; stderr: string }) =>
+      /the suite must run through scripts\/with-temp-root\.ts: ([^'"\r\n]+)/.exec(`${run.stdout}${run.stderr}`)?.[1];
 
-  it("the test-runner check reads commands, not lines: what it passes and what it refuses", () => {
-    const refused = [
-      "node --test tests/a.test.ts",
-      "npm run build:packages && node --experimental-strip-types --test tests/a.test.ts",
-      'node --experimental-strip-types --test --test-name-pattern="a|b" tests/a.test.ts',
-      "node --test tests/a.test.ts && node --experimental-strip-types scripts/with-temp-root.ts -- -e 0",
-      "- run: node --test tests/a.test.ts",
-    ];
-    for (const text of refused) assert.equal(unwrappedRunnerCalls(text).length, 1, text);
-    const passed = [
-      "node --experimental-strip-types scripts/with-temp-root.ts -- --experimental-strip-types --test tests/a.test.ts",
-      'node --experimental-strip-types scripts/with-temp-root.ts -- --test --test-skip-pattern="a|b" tests/a.test.ts',
-      "node -e \"console.log('--test')\"",
-      "node --experimental-strip-types --test-reporter=spec tests/a.test.ts",
-      "npm run test:pre-release",
-    ];
-    for (const text of passed) assert.deepEqual(unwrappedRunnerCalls(text), [], text);
-  });
+    const base = tempDir(t, "cedulon-wrap-");
+    const { CEDULON_TEMP_ROOT: _, ...unset } = childEnv(base);
+    const notSet = outside(unset);
+    assert.equal(notSet.status, 1, `a runner with no CEDULON_TEMP_ROOT passed:\n${notSet.stdout}${notSet.stderr}`);
+    assert.equal(refusal(notSet), "CEDULON_TEMP_ROOT is not set", notSet.stdout);
 
-  it("no workflow and no package.json script starts the test runner outside with-temp-root", () => {
-    const found: string[] = [];
-    const workflows = join(root, ".github", "workflows");
-    for (const name of readdirSync(workflows).filter((file) => /\.ya?ml$/.test(file)).sort()) {
-      for (const hit of unwrappedRunnerCalls(readFileSync(join(workflows, name), "utf8"))) {
-        found.push(`.github/workflows/${name}:${hit.line}: ${hit.command}`);
-      }
-    }
-    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { scripts: Record<string, string> };
-    for (const [name, script] of Object.entries(pkg.scripts)) {
-      for (const hit of unwrappedRunnerCalls(script)) found.push(`package.json scripts["${name}"]: ${hit.command}`);
-    }
-    assert.deepEqual(found, []);
+    const notOpened = outside(childEnv(base));
+    assert.equal(notOpened.status, 1, `a temp directory with-temp-root did not open passed:\n${notOpened.stdout}`);
+    assert.match(refusal(notOpened) ?? "", /^.+cedulon-wrap-\w+ is not a root it opened$/, notOpened.stdout);
+
+    const stale = join(tempDir(t, "cedulon-stale-"), `${ROOT_PREFIX}stale`);
+    mkdirSync(stale);
+    const elsewhere = outside(childEnv(base, { CEDULON_TEMP_ROOT: stale }));
+    assert.equal(elsewhere.status, 1, `a CEDULON_TEMP_ROOT that is not os.tmpdir() passed:\n${elsewhere.stdout}`);
+    assert.match(refusal(elsewhere) ?? "", /^os\.tmpdir\(\) is .+, not CEDULON_TEMP_ROOT .+stale$/, elsewhere.stdout);
+
+    const inside = wrappedNode(base, runner);
+    assert.equal(inside.status, 0, `the guard refused a run inside with-temp-root:\n${inside.stdout}${inside.stderr}`);
+    assert.match(inside.stdout, /^# pass 1$/m);
+    assertRootGone(base, inside.opened);
   });
 });
