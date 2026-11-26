@@ -1,7 +1,6 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 import { strict as assert } from "node:assert";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
@@ -160,14 +159,14 @@ describe("trust roots, third pass", () => {
     assert.equal(result.reason, "amount-not-positive");
   });
 
-  it("56 RED then GREEN: the session says whether the file holding its key is protected", () => {
+  it("56 RED then GREEN: the session says whether the file holding its key is protected", (t) => {
     // The mode call succeeds on Windows and protects nothing there. A server
     // that stores a private key has to say which of those two it did, rather
     // than leaving the operator to infer protection from the absence of an error.
     const inMemory = new CedulonSession({ statePath: null });
     assert.equal(inMemory.status().stateProtection, "in-memory");
 
-    const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-prot-")), "state.json");
+    const statePath = join(tempDir(t, "cedulon-prot-"), "state.json");
     const onDisk = new CedulonSession({ statePath });
     // Nothing has been written yet, and "there is no file" is its own answer.
     assert.equal(onDisk.status().stateProtection, "absent");

@@ -1,8 +1,7 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 
 import { CedulonSession, type SpendArgs } from "../packages/mcp-server/src/session.ts";
 import {
@@ -11,6 +10,7 @@ import {
   type ExternalRail,
   type JournalEntry,
 } from "../packages/mcp-server/src/journal.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 
 const NOW = 1_700_000_000_000;
 
@@ -18,8 +18,8 @@ function nonce(label: string): string {
   return label.padEnd(16, "-");
 }
 
-function statePath(): string {
-  return join(mkdtempSync(join(tmpdir(), "cedulon-journal-")), "state.json");
+function statePath(t: TestContext): string {
+  return join(tempDir(t, "cedulon-journal-"), "state.json");
 }
 
 function spendArgs(n: string, amount = "1"): SpendArgs {
@@ -81,8 +81,8 @@ describe("journal fold is a pure function", () => {
 });
 
 describe("external submit order and crash recovery", () => {
-  it("RED then GREEN: a crash between submitted and the rail leaves indeterminate; the nonce stays burned", () => {
-    const path = statePath();
+  it("RED then GREEN: a crash between submitted and the rail leaves indeterminate; the nonce stays burned", (t) => {
+    const path = statePath(t);
     const first = new CedulonSession({ statePath: path });
     const n = nonce("crash");
     const rail = new MockExternalRail("crash");
@@ -99,8 +99,8 @@ describe("external submit order and crash recovery", () => {
     assert.equal(restarted.receipts.length, 0, "no receipt is cut for a journal-only indeterminate");
   });
 
-  it("RED then GREEN: a crash after prepared, before submitted, recovers as failed and releases the reserve", () => {
-    const path = statePath();
+  it("RED then GREEN: a crash after prepared, before submitted, recovers as failed and releases the reserve", (t) => {
+    const path = statePath(t);
     const first = new CedulonSession({ statePath: path });
     const n = nonce("prep");
     assert.throws(
@@ -118,8 +118,8 @@ describe("external submit order and crash recovery", () => {
     assert.equal(restarted.spend(spendArgs(n), NOW + 1).ok, true, "the nonce can be spent after a pre-submit fail");
   });
 
-  it("a crash before prepared leaves no journal and no reserve", () => {
-    const path = statePath();
+  it("a crash before prepared leaves no journal and no reserve", (t) => {
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     const n = nonce("none");
     assert.deepEqual(journalOf(session), []);
@@ -127,8 +127,8 @@ describe("external submit order and crash recovery", () => {
     assert.equal(session.spend(spendArgs(n), NOW).ok, true);
   });
 
-  it("RED then GREEN: recovery is idempotent — a second open does not append again", () => {
-    const path = statePath();
+  it("RED then GREEN: recovery is idempotent — a second open does not append again", (t) => {
+    const path = statePath(t);
     const first = new CedulonSession({ statePath: path });
     const n = nonce("idem");
     assert.throws(() => submitExternal(first, spendArgs(n), new MockExternalRail("crash"), NOW), /cedulon-rail-crash/);
@@ -148,8 +148,8 @@ describe("external submit order and crash recovery", () => {
     assert.deepEqual(foldJournal(journalOf(third)), foldJournal(afterFirst));
   });
 
-  it("a rail that answers failed releases the reserve and cuts no receipt", () => {
-    const path = statePath();
+  it("a rail that answers failed releases the reserve and cuts no receipt", (t) => {
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     const n = nonce("fail");
     const out = submitExternal(session, spendArgs(n), new MockExternalRail("failed"), NOW);
@@ -160,8 +160,8 @@ describe("external submit order and crash recovery", () => {
     assert.equal(session.spend(spendArgs(n), NOW + 1).ok, true);
   });
 
-  it("RED then GREEN: a generic rail throw on retry is state-io", () => {
-    const path = statePath();
+  it("RED then GREEN: a generic rail throw on retry is state-io", (t) => {
+    const path = statePath(t);
     const first = new CedulonSession({ statePath: path });
     const n = nonce("io");
     assert.throws(() => submitExternal(first, spendArgs(n), new MockExternalRail("crash"), NOW), /cedulon-rail-crash/);
@@ -181,12 +181,12 @@ describe("external submit order and crash recovery", () => {
     assert.equal((out as { reason: string }).reason, "state-io");
   });
 
-  it("RED then GREEN: a rail that throws leaves the payment indeterminate in this session, not stuck", () => {
+  it("RED then GREEN: a rail that throws leaves the payment indeterminate in this session, not stuck", (t) => {
     // A payment handed to a rail the issuer does not control, with no answer
     // back, is indeterminate (MUST-T12-4). The live session wrote `submitted`
     // and stopped there; only a restart folded it into `indeterminate`, so
     // retry and resolve answered not-indeterminate until the server restarted.
-    const path = statePath();
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     const n = nonce("throw");
     const throwing: ExternalRail = {
@@ -223,8 +223,8 @@ describe("external submit order and crash recovery", () => {
     assert.equal(settled.ok, true, "the payment stayed stuck until a restart");
   });
 
-  it("a rail that answers settled cuts a settled receipt on the existing wire", () => {
-    const path = statePath();
+  it("a rail that answers settled cuts a settled receipt on the existing wire", (t) => {
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     const n = nonce("ok");
     const out = submitExternal(session, spendArgs(n), new MockExternalRail("settled"), NOW);
@@ -240,8 +240,8 @@ describe("external submit order and crash recovery", () => {
 });
 
 describe("a state file written before the journal still loads", () => {
-  it("RED then GREEN: a fixture without a journal field spends as it did", () => {
-    const path = statePath();
+  it("RED then GREEN: a fixture without a journal field spends as it did", (t) => {
+    const path = statePath(t);
     const first = new CedulonSession({ statePath: path });
     const n0 = nonce("old0");
     assert.equal(first.spend(spendArgs(n0), NOW).ok, true);

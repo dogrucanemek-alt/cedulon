@@ -1,7 +1,7 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 import { strict as assert } from "node:assert";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 
@@ -187,12 +187,12 @@ describe("trust roots, sixth pass", () => {
     assert.equal(report.guarantee, "conditional");
   });
 
-  it("75 RED then GREEN: owner-only means every directory on the way, not just the last one", () => {
+  it("75 RED then GREEN: owner-only means every directory on the way, not just the last one", (t) => {
     // Mode 0600 says who can open the file and the parent says who can replace
     // it - but a grandparent anyone can write lets the parent itself be renamed
     // away, taking the private key with it and putting a decoy in its place.
     if (process.platform === "win32") {
-      const path = join(mkdtempSync(join(tmpdir(), "cedulon-grand-")), "state.json");
+      const path = join(tempDir(t, "cedulon-grand-"), "state.json");
       const session = new CedulonSession({ statePath: path });
       assert.equal(
         session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-") }, 1).ok,
@@ -200,7 +200,7 @@ describe("trust roots, sixth pass", () => {
       );
       assert.equal(session.status().stateProtection, "encrypted-at-rest");
     } else {
-      const grand = mkdtempSync(join(tmpdir(), "cedulon-grand-"));
+      const grand = tempDir(t, "cedulon-grand-");
       const parent = join(grand, "inner");
       mkdirSync(parent, { mode: 0o700 });
       const statePath = join(parent, "state.json");
@@ -223,7 +223,7 @@ describe("trust roots, sixth pass", () => {
   it("76 RED then GREEN: a symlink is refused when saving, and so is a symlinked directory", (t) => {
     // A path checked once at startup is a path an attacker can replace at any
     // point after startup, and the directory was never checked at all.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-link2-"));
+    const dir = tempDir(t, "cedulon-link2-");
     const real = join(dir, "real");
     mkdirSync(real, { mode: 0o700 });
     const linkedDir = join(dir, "linked");
@@ -245,7 +245,7 @@ describe("trust roots, sixth pass", () => {
       "a symlinked directory decides the destination just as well as a symlinked file",
     );
 
-    const plain = mkdtempSync(join(tmpdir(), "cedulon-link3-"));
+    const plain = tempDir(t, "cedulon-link3-");
     const statePath = join(plain, "state.json");
     const session = new CedulonSession({ statePath });
     assert.equal(
@@ -263,12 +263,12 @@ describe("trust roots, sixth pass", () => {
     );
   });
 
-  it("77 RED then GREEN: a second writer is refused while the first holds the file", () => {
+  it("77 RED then GREEN: a second writer is refused while the first holds the file", (t) => {
     // The fingerprint check reads and then writes, and two writers that read
     // before either wrote both saw an unchanged file. Measured over ten
     // concurrent pairs, six lost a receipt with both sides reporting success.
     // Holding the write behind an exclusive lock closes the window.
-    const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-lock-")), "state.json");
+    const statePath = join(tempDir(t, "cedulon-lock-"), "state.json");
     const session = new CedulonSession({ statePath });
     assert.equal(
       session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-") }, 1).ok,
@@ -298,12 +298,12 @@ describe("trust roots, sixth pass", () => {
 });
 
 describe("trust roots, seventh pass", () => {
-  it("78 RED then GREEN: a payment is not made when its receipt cannot be recorded", () => {
+  it("78 RED then GREEN: a payment is not made when its receipt cannot be recorded", (t) => {
     // The order was settle, then append, then save. A save that failed left the
     // rail ledger holding a settlement whose receipt existed only in memory -
     // restart the server and it is a settlement with no receipt, which is the
     // single condition this whole project exists to make impossible.
-    const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-order-")), "state.json");
+    const statePath = join(tempDir(t, "cedulon-order-"), "state.json");
     const first = new CedulonSession({ statePath });
     assert.equal(
       first.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "s0".padEnd(16, "-") }, 1).ok,

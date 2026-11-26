@@ -33,6 +33,7 @@ tests/_probe_*
 .suite-count.xml
 .suite-node-summary.txt
 .suite-run-started
+.suite-temp-entries
 
 .vercel
 .env*

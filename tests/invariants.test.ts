@@ -1,10 +1,10 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 
 import { CedulonSession } from "../packages/mcp-server/src/session.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 
 const SEED = 20260829;
 
@@ -19,8 +19,8 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function statePath(): string {
-  return join(mkdtempSync(join(tmpdir(), "cedulon-inv-")), "state.json");
+function statePath(t: TestContext): string {
+  return join(tempDir(t, "cedulon-inv-"), "state.json");
 }
 
 function nonce(i: number): string {
@@ -76,8 +76,8 @@ function assertInvariants(session: CedulonSession, path: string, accepted: strin
 }
 
 describe("spend sequence invariants", () => {
-  it("RED: a rejected spend that leaves a ledger row fails the no-trace invariant", () => {
-    const path = statePath();
+  it("RED: a rejected spend that leaves a ledger row fails the no-trace invariant", (t) => {
+    const path = statePath(t);
     const session = new CedulonSession({
       statePath: path,
       policy: {
@@ -105,14 +105,14 @@ describe("spend sequence invariants", () => {
     );
   });
 
-  it("RED: the same nonce appearing twice in the accepted set fails uniqueness", () => {
-    const path = statePath();
+  it("RED: the same nonce appearing twice in the accepted set fails uniqueness", (t) => {
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     assert.equal(session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: nonce(0) }, 1).ok, true);
     assert.throws(() => assertInvariants(session, path, [nonce(0), nonce(0)], []), /accepted spends|settled twice/);
   });
 
-  it("quota does not depend on the order of a refused and an accepted spend", () => {
+  it("quota does not depend on the order of a refused and an accepted spend", (t) => {
     const policy = {
       maxAmount: 10n,
       maxCumulative: 10n,
@@ -123,7 +123,7 @@ describe("spend sequence invariants", () => {
       allowedTools: undefined,
     };
     const run = (first: "deny" | "allow") => {
-      const session = new CedulonSession({ statePath: statePath(), policy });
+      const session = new CedulonSession({ statePath: statePath(t), policy });
       const deny = { amount: "1", currency: "USD", payee: "nope", nonce: nonce(1) };
       const allow = { amount: "1", currency: "USD", payee: "payee-1", nonce: nonce(2) };
       if (first === "deny") {
@@ -139,10 +139,10 @@ describe("spend sequence invariants", () => {
     assert.equal(run("allow"), 1);
   });
 
-  it("random spend sequences keep the invariants, including after reload", () => {
+  it("random spend sequences keep the invariants, including after reload", (t) => {
     const rand = mulberry32(SEED);
     for (let trial = 0; trial < 24; trial += 1) {
-      const path = statePath();
+      const path = statePath(t);
       const session = new CedulonSession({
         statePath: path,
         policy: {
@@ -157,7 +157,7 @@ describe("spend sequence invariants", () => {
       });
       const accepted: string[] = [];
       const rejected: string[] = [];
-      let t = 1;
+      let now = 1;
       for (let i = 0; i < 12; i += 1) {
         const roll = rand();
         const n = nonce(trial * 100 + i);
@@ -169,8 +169,8 @@ describe("spend sequence invariants", () => {
               : roll < 0.35 && accepted.length > 0
                 ? { amount: "1", currency: "USD", payee: "payee-1", nonce: accepted[0]! }
                 : { amount: "1", currency: "USD", payee: "payee-1", nonce: n };
-        const out = session.spend(args, t);
-        t += 1;
+        const out = session.spend(args, now);
+        now += 1;
         if (out.ok) accepted.push(args.nonce);
         else if (!accepted.includes(args.nonce)) rejected.push(args.nonce);
       }

@@ -1,12 +1,12 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 import { latestDraftPath } from "../scripts/latest-draft.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 
 import {
   PUBLISHED_MARKERS,
@@ -40,8 +40,8 @@ function tarEntries(buf: Buffer): { name: string; body: Buffer }[] {
 }
 
 
-function tarballText(pkg: string, version: string): string | { skipped: string } {
-  const dir = mkdtempSync(join(tmpdir(), "cedulon-published-as-"));
+function tarballText(t: TestContext, pkg: string, version: string): string | { skipped: string } {
+  const dir = tempDir(t, "cedulon-published-as-");
   try {
     execFileSync("npm", ["pack", `${pkg}@${version}`, "--prefer-online", "--pack-destination", dir], {
       encoding: "utf8",
@@ -66,8 +66,6 @@ function tarballText(pkg: string, version: string): string | { skipped: string }
     const offline = /ENOTFOUND|EAI_AGAIN|ETIMEDOUT|network|ECONNREFUSED|registry\.npmjs/i.test(msg);
     if (offline) return { skipped: msg };
     throw err;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -107,7 +105,7 @@ describe("published-as claims", () => {
       const key = `${marker.package}@${claim.version}`;
       let text = cache.get(key);
       if (!text) {
-        const packed = tarballText(marker.package, claim.version);
+        const packed = tarballText(t, marker.package, claim.version);
         if (typeof packed !== "string") {
           t.skip(`published-as guard skipped: npm pack failed (${packed.skipped})`);
           return;
@@ -120,7 +118,7 @@ describe("published-as claims", () => {
     }
   });
 
-  it("the workspace version is on npm only after it is published", () => {
+  it("the workspace version is on npm only after it is published", (t) => {
     // The draft's published-as list is pinned to 0.4.0 and stays green against
     // that tarball. This tree is ahead of npm. Packing the workspace version
     // must fail until that version exists; greening this by packing 0.4.0 or
@@ -130,7 +128,7 @@ describe("published-as claims", () => {
         version: string;
       }
     ).version;
-    const packed = tarballText("@cedulon/audit", version);
+    const packed = tarballText(t, "@cedulon/audit", version);
     assert.equal(
       typeof packed,
       "string",

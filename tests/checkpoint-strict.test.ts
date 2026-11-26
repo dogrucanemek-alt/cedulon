@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+
+import { tempDir } from "./helpers/temp-dir.ts";
 
 import { audit, auditWindows, findWindowCoverage } from "@cedulon/audit";
 import {
@@ -213,40 +214,35 @@ describe("findWindowCoverage does not invent a length rule the draft omits", () 
 });
 
 describe("export does not throw when a stored checkpoint has dirty coseHex", () => {
-  it("a persisted checkpoint whose coseHex gains a zz suffix exports hash null with the hard finding", () => {
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-export-dirty-"));
-    const statePath = join(dir, "state.json");
-    try {
-      const writer = new CedulonSession({ statePath });
-      assert.equal(
-        writer.spend(
-          { amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-"), tool: "spend" },
-          1,
-        ).ok,
-        true,
-      );
-      const clean = writer.exportLedger();
-      assert.equal(clean.checkpoints.length, 1);
-      assert.equal(typeof clean.checkpoints[0].hash, "string");
+  it("a persisted checkpoint whose coseHex gains a zz suffix exports hash null with the hard finding", (t) => {
+    const statePath = join(tempDir(t, "cedulon-export-dirty-"), "state.json");
+    const writer = new CedulonSession({ statePath });
+    assert.equal(
+      writer.spend(
+        { amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-"), tool: "spend" },
+        1,
+      ).ok,
+      true,
+    );
+    const clean = writer.exportLedger();
+    assert.equal(clean.checkpoints.length, 1);
+    assert.equal(typeof clean.checkpoints[0].hash, "string");
 
-      const saved = JSON.parse(readFileSync(statePath, "utf8")) as {
-        checkpoints: Array<{ coseHex: string }>;
-      };
-      assert.equal(saved.checkpoints.length, 1);
-      saved.checkpoints[0].coseHex = `${saved.checkpoints[0].coseHex}zz`;
-      writeFileSync(statePath, JSON.stringify(saved));
+    const saved = JSON.parse(readFileSync(statePath, "utf8")) as {
+      checkpoints: Array<{ coseHex: string }>;
+    };
+    assert.equal(saved.checkpoints.length, 1);
+    saved.checkpoints[0].coseHex = `${saved.checkpoints[0].coseHex}zz`;
+    writeFileSync(statePath, JSON.stringify(saved));
 
-      const loaded = new CedulonSession({ statePath });
-      let exported!: ReturnType<CedulonSession["exportLedger"]>;
-      assert.doesNotThrow(() => {
-        exported = loaded.exportLedger();
-      });
-      assert.equal(exported.checkpoints.length, 1);
-      assert.equal(exported.checkpoints[0].hash, null);
-      assert.equal(hasHexRefusal(exported.findings), true, JSON.stringify(exported.findings));
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const loaded = new CedulonSession({ statePath });
+    let exported!: ReturnType<CedulonSession["exportLedger"]>;
+    assert.doesNotThrow(() => {
+      exported = loaded.exportLedger();
+    });
+    assert.equal(exported.checkpoints.length, 1);
+    assert.equal(exported.checkpoints[0].hash, null);
+    assert.equal(hasHexRefusal(exported.findings), true, JSON.stringify(exported.findings));
   });
 });
 

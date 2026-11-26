@@ -1,14 +1,14 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 
 import { CedulonSession } from "../packages/mcp-server/src/session.ts";
 import { generateReceiptKeys, verifyReceipt } from "@cedulon/receipts";
+import { tempDir } from "./helpers/temp-dir.ts";
 
-function statePath(): string {
-  return join(mkdtempSync(join(tmpdir(), "cedulon-dpapi-")), "state.json");
+function statePath(t: TestContext): string {
+  return join(tempDir(t, "cedulon-dpapi-"), "state.json");
 }
 
 function spend(session: CedulonSession, n: string, t = 1) {
@@ -32,8 +32,8 @@ function writeBareState(path: string, keys: Record<string, string>): Buffer {
 }
 
 describe("DPAPI protects the private key field, not the file", () => {
-  it("RED then GREEN: a Windows save stores a blob and no PEM; POSIX is unchanged", () => {
-    const path = statePath();
+  it("RED then GREEN: a Windows save stores a blob and no PEM; POSIX is unchanged", (t) => {
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     assert.equal(spend(session, "n0").ok, true);
     const raw = readFileSync(path, "utf8");
@@ -54,8 +54,8 @@ describe("DPAPI protects the private key field, not the file", () => {
     }
   });
 
-  it("RED then GREEN: a new session loads the blob and can sign", () => {
-    const path = statePath();
+  it("RED then GREEN: a new session loads the blob and can sign", (t) => {
+    const path = statePath(t);
     const first = new CedulonSession({ statePath: path });
     assert.equal(spend(first, "n0").ok, true);
     const restarted = new CedulonSession({
@@ -73,8 +73,8 @@ describe("DPAPI protects the private key field, not the file", () => {
     }
   });
 
-  it("RED then GREEN: a bad blob is refused by name and the file is not replaced", () => {
-    const path = statePath();
+  it("RED then GREEN: a bad blob is refused by name and the file is not replaced", (t) => {
+    const path = statePath(t);
     const pub = generateReceiptKeys().publicKeyPem;
     const before = writeBareState(path, {
       receiptPublicPem: pub,
@@ -84,11 +84,11 @@ describe("DPAPI protects the private key field, not the file", () => {
     assert.deepEqual(readFileSync(path), before, "a refused open must not mint a replacement key");
   });
 
-  it("RED then GREEN: once a blob is on disk, a later save cannot write the PEM", async () => {
+  it("RED then GREEN: once a blob is on disk, a later save cannot write the PEM", async (t) => {
     if (process.platform !== "win32") {
       return;
     }
-    const path = statePath();
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     assert.equal(spend(session, "n0").ok, true);
     const { setProtectForTests } = await import("../packages/mcp-server/src/dpapi.ts");
@@ -107,21 +107,21 @@ describe("DPAPI protects the private key field, not the file", () => {
     }
   });
 
-  it("POSIX never spawns PowerShell", async () => {
+  it("POSIX never spawns PowerShell", async (t) => {
     if (process.platform === "win32") {
       return;
     }
     const { dpapiSpawnCount, resetDpapiSpawnCount } = await import("../packages/mcp-server/src/dpapi.ts");
     resetDpapiSpawnCount();
-    const path = statePath();
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     assert.equal(spend(session, "n0").ok, true);
     new CedulonSession({ statePath: path, keys: session.keys, policy: session.engine.policy });
     assert.equal(dpapiSpawnCount(), 0);
   });
 
-  it("RED then GREEN: a clear PEM file still loads; Windows upgrades it on the first save", () => {
-    const path = statePath();
+  it("RED then GREEN: a clear PEM file still loads; Windows upgrades it on the first save", (t) => {
+    const path = statePath(t);
     const keys = generateReceiptKeys();
     writeBareState(path, {
       receiptPublicPem: keys.publicKeyPem,
