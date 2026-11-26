@@ -1,0 +1,15 @@
+# Prior shape of the posix-nonroot job: it started the test runner itself,
+# outside with-temp-root, so nothing its cases left in the temp directory
+# was ever seen.
+name: posix-nonroot
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm run build:packages
+      - name: lock and io cases as a non-root user
+        run: |
+          node --experimental-strip-types --test --test-name-pattern "76|80|81" \
+            tests/trust-root-pass6.test.ts \
+            tests/trust-root-pass7.test.ts
