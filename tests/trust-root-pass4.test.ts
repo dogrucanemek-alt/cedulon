@@ -1,7 +1,7 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 import { strict as assert } from "node:assert";
-import { mkdtempSync, chmodSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
@@ -240,11 +240,11 @@ describe("trust roots, fourth pass", () => {
     );
   });
 
-  it("60 RED then GREEN: state protection is measured on the file, not guessed from the platform", () => {
+  it("60 RED then GREEN: state protection is measured on the file, not guessed from the platform", (t) => {
     // The claim was derived from process.platform, so on a mount that ignores
     // POSIX modes - a Windows drive seen from WSL - the server reported
     // owner-only over a world-readable file holding its private key.
-    const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-mode-")), "state.json");
+    const statePath = join(tempDir(t, "cedulon-mode-"), "state.json");
     const session = new CedulonSession({ statePath });
     assert.equal(
       session.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "n0".padEnd(16, "-") }, 1).ok,
@@ -262,10 +262,10 @@ describe("trust roots, fourth pass", () => {
     }
   });
 
-  it("61 RED then GREEN: a second writer cannot silently drop the first writer's receipt", () => {
+  it("61 RED then GREEN: a second writer cannot silently drop the first writer's receipt", (t) => {
     // Both sessions loaded the same state, both appended, and the later rename
     // won. Atomic writes stop a torn file; they do not stop a lost one.
-    const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-race-")), "state.json");
+    const statePath = join(tempDir(t, "cedulon-race-"), "state.json");
     const first = new CedulonSession({ statePath });
     assert.equal(
       first.spend({ amount: "1", currency: "USD", payee: "payee-1", nonce: "seed".padEnd(16, "-") }, 1).ok,

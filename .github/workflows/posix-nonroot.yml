@@ -12,6 +12,8 @@ on:
       - "packages/mcp-server/**"
       - "tests/trust-root-pass6.test.ts"
       - "tests/trust-root-pass7.test.ts"
+      - "scripts/with-temp-root.ts"
+      - "tests/temp-root-active.test.ts"
       - ".github/workflows/posix-nonroot.yml"
 
 permissions:
@@ -37,6 +39,8 @@ jobs:
       - run: npm run build:packages
       - name: lock and io cases as a non-root user
         run: |
-          node --experimental-strip-types --test --test-name-pattern "76|80|81" \
+          node --experimental-strip-types scripts/with-temp-root.ts -- \
+            --experimental-strip-types --test --test-name-pattern "76|80|81|is inside the temp root with-temp-root opened" \
             tests/trust-root-pass6.test.ts \
-            tests/trust-root-pass7.test.ts
+            tests/trust-root-pass7.test.ts \
+            tests/temp-root-active.test.ts

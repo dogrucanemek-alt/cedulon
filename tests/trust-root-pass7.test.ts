@@ -1,9 +1,9 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 import { strict as assert } from "node:assert";
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 
 import { audit } from "@cedulon/audit";
 import { buildCheckpointClaims, signCheckpoint } from "@cedulon/checkpoint";
@@ -17,8 +17,8 @@ const WINDOW_END = NOW + 3_600_000;
 
 type Keys = { privateKeyPem: string; publicKeyPem: string };
 
-function statePathIn(prefix: string): string {
-  return join(mkdtempSync(join(tmpdir(), prefix)), "state.json");
+function statePathIn(t: TestContext, prefix: string): string {
+  return join(tempDir(t, prefix), "state.json");
 }
 
 function spend(session: CedulonSession, nonce: string, nowMs: number) {
@@ -47,12 +47,12 @@ function receiptFor(keys: Keys, ref: string, i: number): SignedReceipt {
 }
 
 describe("settle and record are one operation", () => {
-  it("80 RED then GREEN: a write that fails leaves no settlement behind, in memory or on disk", () => {
+  it("80 RED then GREEN: a write that fails leaves no settlement behind, in memory or on disk", (t) => {
     // The conflict path was fixed by checking before settling. The I/O path was
     // not: writeFileSync or renameSync throwing left the payment complete in
     // memory with the disk still holding the old state - and the next successful
     // save then wrote out a payment the caller had been told failed.
-    const statePath = statePathIn("cedulon-io-");
+    const statePath = statePathIn(t, "cedulon-io-");
     const session = new CedulonSession({ statePath });
     assert.equal(spend(session, "a0", 1).ok, true);
 
@@ -88,11 +88,11 @@ describe("settle and record are one operation", () => {
     );
   });
 
-  it("81 RED then GREEN: a refused payment does not spend the quota it never used", () => {
+  it("81 RED then GREEN: a refused payment does not spend the quota it never used", (t) => {
     // evaluate() takes the nonce and the slot before anything is written, so a
     // failure after that point charged the payer for a payment that never
     // happened - and with maxPayments reached, the next honest one is refused.
-    const statePath = statePathIn("cedulon-quota-");
+    const statePath = statePathIn(t, "cedulon-quota-");
     const session = new CedulonSession({
       statePath,
       policy: {
@@ -125,10 +125,10 @@ describe("settle and record are one operation", () => {
     assert.equal(spend(session, "q2", 3).ok, true, "the payer still has the payment they paid for");
   });
 
-  it("82 RED then GREEN: after a conflict the session can be reloaded instead of wedged", () => {
+  it("82 RED then GREEN: after a conflict the session can be reloaded instead of wedged", (t) => {
     // A conflict is permanent today: lastSeenState stays stale and every later
     // spend is refused with no way back except restarting the process.
-    const statePath = statePathIn("cedulon-reload-");
+    const statePath = statePathIn(t, "cedulon-reload-");
     const first = new CedulonSession({ statePath });
     assert.equal(spend(first, "r0", 1).ok, true);
 
@@ -145,7 +145,7 @@ describe("settle and record are one operation", () => {
   });
 
   it("83 RED then GREEN: the lock path is guarded like the state path, and stale temp files go", (t) => {
-    const statePath = statePathIn("cedulon-lock2-");
+    const statePath = statePathIn(t, "cedulon-lock2-");
     const session = new CedulonSession({ statePath });
     assert.equal(spend(session, "l0", 1).ok, true);
 
@@ -178,8 +178,8 @@ describe("settle and record are one operation", () => {
     assert.throws(() => spend(session, "l2", 3), /cedulon-state-symlink/);
   });
 
-  it("84 RED then GREEN: a lock held by a live foreign process says whose it is", () => {
-    const statePath = statePathIn("cedulon-lockmsg-");
+  it("84 RED then GREEN: a lock held by a live foreign process says whose it is", (t) => {
+    const statePath = statePathIn(t, "cedulon-lockmsg-");
     const session = new CedulonSession({ statePath });
     assert.equal(spend(session, "m0", 1).ok, true);
     writeFileSync(`${statePath}.lock`, JSON.stringify({ pid: process.ppid }), { flag: "wx" });
@@ -290,10 +290,10 @@ describe("settle and record are one operation", () => {
 });
 
 describe("the MCP audit tool can be given the roots", () => {
-  it("87 RED then GREEN: cedulon_audit accepts the pins, so its answer can be unconditional", () => {
+  it("87 RED then GREEN: cedulon_audit accepts the pins, so its answer can be unconditional", (t) => {
     // The tool called audit() with no roots at all, so every answer it could
     // give was conditional and no caller had any way to change that.
-    const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-mcpaudit-")), "state.json");
+    const statePath = statePathIn(t, "cedulon-mcpaudit-");
     const session = new CedulonSession({ statePath });
     assert.equal(spend(session, "t0", 1).ok, true);
 

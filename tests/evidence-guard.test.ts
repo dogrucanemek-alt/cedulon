@@ -1,8 +1,7 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 
 import { CedulonSession, type SpendArgs } from "../packages/mcp-server/src/session.ts";
 import {
@@ -12,14 +11,16 @@ import {
 } from "../packages/mcp-server/src/journal.ts";
 import { generateExtractKeys, signRailExtract, type SignedRailExtract } from "@cedulon/x402-adapter";
 
+import { tempDir } from "./helpers/temp-dir.ts";
+
 const NOW = 1_700_000_000_000;
 
 function nonce(label: string): string {
   return label.padEnd(16, "-");
 }
 
-function statePath(): string {
-  return join(mkdtempSync(join(tmpdir(), "cedulon-evidence-")), "state.json");
+function statePath(t: TestContext): string {
+  return join(tempDir(t, "cedulon-evidence-"), "state.json");
 }
 
 function spendArgs(n: string, amount = "1"): SpendArgs {
@@ -61,8 +62,8 @@ function resolveIndeterminate(session: CedulonSession, n: string, evidence: Reso
   return fn.call(session, n, evidence, nowMs);
 }
 
-function crashToIndeterminate(n: string, submittedAt = NOW) {
-  const path = statePath();
+function crashToIndeterminate(t: TestContext, n: string, submittedAt = NOW) {
+  const path = statePath(t);
   const first = new CedulonSession({ statePath: path });
   assert.throws(
     () => first.submitExternal(spendArgs(n), new MockExternalRail("crash"), submittedAt),
@@ -97,9 +98,9 @@ function coveringExtract(
 }
 
 describe("K4 — retry is forbidden unless the rail declares idempotent submit", () => {
-  it("RED then GREEN: a non-idempotent retry never reaches submit", () => {
+  it("RED then GREEN: a non-idempotent retry never reaches submit", (t) => {
     const n = nonce("k4no");
-    const { session } = crashToIndeterminate(n);
+    const { session } = crashToIndeterminate(t, n);
     const rail = new MockExternalRail("settled");
     assert.equal(rail.idempotentSubmit, false);
     const out = retryIndeterminate(session, n, rail, NOW + 1);
@@ -110,8 +111,8 @@ describe("K4 — retry is forbidden unless the rail declares idempotent submit",
     assert.equal(lastPhase(session, n), "indeterminate");
   });
 
-  it("RED then GREEN: retry on a settled nonce is not-indeterminate and does not call the rail", () => {
-    const path = statePath();
+  it("RED then GREEN: retry on a settled nonce is not-indeterminate and does not call the rail", (t) => {
+    const path = statePath(t);
     const session = new CedulonSession({ statePath: path });
     const n = nonce("k4set");
     assert.equal(session.submitExternal(spendArgs(n), new MockExternalRail("settled"), NOW).ok, true);
@@ -124,9 +125,9 @@ describe("K4 — retry is forbidden unless the rail declares idempotent submit",
 });
 
 describe("K5 — extract evidence exits from indeterminate", () => {
-  it("RED then GREEN: an unpinned extract is not evidence; the phase stays indeterminate", () => {
+  it("RED then GREEN: an unpinned extract is not evidence; the phase stays indeterminate", (t) => {
     const n = nonce("nopin");
-    const { session } = crashToIndeterminate(n);
+    const { session } = crashToIndeterminate(t, n);
     const signedBy = generateExtractKeys();
     const held = generateExtractKeys();
     const extract = coveringExtract(n, signedBy, [], { start: NOW, end: NOW + 10 });
@@ -137,9 +138,9 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal(session.engine.store.usedNonces.has(n), true);
   });
 
-  it("RED then GREEN: a window that does not cover submitted atMs is window-not-covering (end exclusive)", () => {
+  it("RED then GREEN: a window that does not cover submitted atMs is window-not-covering (end exclusive)", (t) => {
     const n = nonce("win");
-    const { session } = crashToIndeterminate(n, NOW);
+    const { session } = crashToIndeterminate(t, n, NOW);
     const rail = generateExtractKeys();
     // Half-open: NOW is not in [NOW - 10, NOW).
     const extract = coveringExtract(n, rail, [], { start: NOW - 10, end: NOW });
@@ -155,14 +156,14 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal((released as { released?: true }).released, true);
   });
 
-  it("RED then GREEN: absence has to cover every submit, not only the last one", () => {
+  it("RED then GREEN: absence has to cover every submit, not only the last one", (t) => {
     // Submitted at NOW, retried at NOW + 100, both times with no answer. The
     // rail may have taken either attempt. An extract that covers only the
     // retry and shows nothing proves nothing about the first, and releasing
     // on it hands back the authority for a payment that may have moved
     // (MUST-T12-4).
     const n = nonce("twosub");
-    const { session, path, keys, policy } = crashToIndeterminate(n, NOW);
+    const { session, path, keys, policy } = crashToIndeterminate(t, n, NOW);
     assert.throws(
       () => retryIndeterminate(session, n, new MockExternalRail("crash", { idempotentSubmit: true }), NOW + 100),
       /cedulon-rail-crash/,
@@ -186,7 +187,7 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     // A nonce the rail refused is free, and its earlier submit belongs to the
     // reserve that ended there. Only the submits since the latest reserve
     // count; an earlier use must not make a covering extract fall short.
-    const reusePath = statePath();
+    const reusePath = statePath(t);
     const reuseFirst = new CedulonSession({ statePath: reusePath });
     const m = nonce("reused");
     assert.equal(reuseFirst.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW).ok, false);
@@ -201,9 +202,9 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal(freed.ok, true, "a submit from the nonce's earlier, failed use held back a covering extract");
   });
 
-  it("RED then GREEN: a matching extract row cuts a late settled receipt; audit is clean", () => {
+  it("RED then GREEN: a matching extract row cuts a late settled receipt; audit is clean", (t) => {
     const n = nonce("hit");
-    const path = statePath();
+    const path = statePath(t);
     const first = new CedulonSession({ statePath: path });
     const earlier = nonce("early");
     assert.equal(first.spend(spendArgs(earlier), NOW + 5_000).ok, true);
@@ -242,9 +243,9 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.deepEqual(report.findings, [], report.findings.map((f) => `${f.code}: ${f.detail}`).join("\n"));
   });
 
-  it("RED then GREEN: a covering extract with no row releases the nonce", () => {
+  it("RED then GREEN: a covering extract with no row releases the nonce", (t) => {
     const n = nonce("miss");
-    const { session } = crashToIndeterminate(n);
+    const { session } = crashToIndeterminate(t, n);
     const rail = generateExtractKeys();
     const extract = coveringExtract(n, rail, [], { start: NOW, end: NOW + 10 });
     const out = resolveIndeterminate(session, n, { extract, railKeyPem: rail.publicKeyPem }, NOW + 1);
@@ -256,9 +257,9 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal(session.spend(spendArgs(n), NOW + 2).ok, true);
   });
 
-  it("RED then GREEN: a row whose amount differs is evidence-mismatch; the phase stays", () => {
+  it("RED then GREEN: a row whose amount differs is evidence-mismatch; the phase stays", (t) => {
     const n = nonce("amt");
-    const { session } = crashToIndeterminate(n);
+    const { session } = crashToIndeterminate(t, n);
     const rail = generateExtractKeys();
     const extract = coveringExtract(
       n,
@@ -274,14 +275,14 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     assert.equal(session.receipts.length, 0);
   });
 
-  it("RED then GREEN: a reservation released after its window closed does not refund the next window", () => {
+  it("RED then GREEN: a reservation released after its window closed does not refund the next window", (t) => {
     // The reserve was taken in one window. By the time the extract proves the
     // payment never happened, the window has rolled and the counters belong
     // to payments made since. Taking the old reserve off them gave the new
     // window one payment more than maxPayments allows.
     const WINDOW = 60_000;
     const policy = { ...new CedulonSession({ statePath: null }).engine.policy, maxPayments: 1, windowMs: WINDOW };
-    const path = statePath();
+    const path = statePath(t);
     const first = new CedulonSession({ statePath: path, policy });
     const n = nonce("oldwin");
     assert.throws(
@@ -308,7 +309,7 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     // A nonce the rail refused is free again, and its second reserve is in the
     // window it was taken in. Reading the first reserve's time instead left the
     // second one on the counters: a window that paid nothing refused a payment.
-    const reused = new CedulonSession({ statePath: statePath(), policy });
+    const reused = new CedulonSession({ statePath: statePath(t), policy });
     const m = nonce("reuse");
     assert.equal(reused.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW).ok, false);
     assert.equal(reused.submitExternal(spendArgs(m), new MockExternalRail("failed"), NOW + WINDOW).ok, false);
@@ -318,7 +319,7 @@ describe("K5 — extract evidence exits from indeterminate", () => {
     // A journal with no prepared row for the nonce (a file written before the
     // journal had one) does not say when the reserve was made. Unknown is not
     // "now": read that way, the release refunds the current window.
-    const legacyPath = statePath();
+    const legacyPath = statePath(t);
     const legacyFirst = new CedulonSession({ statePath: legacyPath, policy });
     const k = nonce("noprep");
     assert.throws(

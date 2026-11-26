@@ -1,9 +1,10 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { tempDir } from "./helpers/temp-dir.ts";
 
 import {
   claimedCount,
@@ -206,12 +207,12 @@ describe("the Implementation Status count answers to a run", () => {
     );
   });
 
-  it("RED: a second standalone gate against the same marker+reports fails", () => {
+  it("RED: a second standalone gate against the same marker+reports fails", (t) => {
     // A successful old marker and matching reports used to stay green on a
     // second standalone call after the sources changed; the marker is now
     // single-use so the second call has no freshness proof.
     const { total } = claimedCount(spec);
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-impl-status-"));
+    const dir = tempDir(t, "cedulon-impl-status-");
     const startedPath = join(dir, ".suite-run-started");
     const reportPath = join(dir, ".suite-count.xml");
     const summaryPath = join(dir, ".suite-node-summary.txt");
@@ -232,39 +233,35 @@ describe("the Implementation Status count answers to a run", () => {
       `ℹ tests ${total}\nℹ suites 1\nℹ pass ${total}\nℹ fail 0\nℹ skipped 0\n`,
       "utf8",
     );
-    try {
-      const first = runImplStatusGate({
-        reportPath,
-        summaryPath,
-        startedPath,
-        specPath,
-        root,
-        noSkips: false,
-      });
-      assert.equal(first.ok, true, first.ok ? "" : first.errors.join(" | "));
-      assert.equal(existsSync(startedPath), false, "the marker must be consumed on first use");
-      const second = runImplStatusGate({
-        reportPath,
-        summaryPath,
-        startedPath,
-        specPath,
-        root,
-        noSkips: false,
-      });
-      assert.equal(second.ok, false, "a replay of the same marker+reports must fail");
-      assert.ok(
-        second.ok === false && second.errors.some((e) => /no suite run start marker/.test(e)),
-        second.ok ? "unexpected ok" : second.errors.join(" | "),
-      );
-      assert.throws(() => consumeSuiteRunMarker(startedPath), /no suite run start marker/);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const first = runImplStatusGate({
+      reportPath,
+      summaryPath,
+      startedPath,
+      specPath,
+      root,
+      noSkips: false,
+    });
+    assert.equal(first.ok, true, first.ok ? "" : first.errors.join(" | "));
+    assert.equal(existsSync(startedPath), false, "the marker must be consumed on first use");
+    const second = runImplStatusGate({
+      reportPath,
+      summaryPath,
+      startedPath,
+      specPath,
+      root,
+      noSkips: false,
+    });
+    assert.equal(second.ok, false, "a replay of the same marker+reports must fail");
+    assert.ok(
+      second.ok === false && second.errors.some((e) => /no suite run start marker/.test(e)),
+      second.ok ? "unexpected ok" : second.errors.join(" | "),
+    );
+    assert.throws(() => consumeSuiteRunMarker(startedPath), /no suite run start marker/);
   });
 
-  it("RED: a non-ENOENT unlink failure fails the gate", () => {
+  it("RED: a non-ENOENT unlink failure fails the gate", (t) => {
     const { total } = claimedCount(spec);
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-impl-status-unlink-"));
+    const dir = tempDir(t, "cedulon-impl-status-unlink-");
     const startedPath = join(dir, ".suite-run-started");
     const reportPath = join(dir, ".suite-count.xml");
     const summaryPath = join(dir, ".suite-node-summary.txt");
@@ -285,42 +282,38 @@ describe("the Implementation Status count answers to a run", () => {
       `ℹ tests ${total}\nℹ suites 1\nℹ pass ${total}\nℹ fail 0\nℹ skipped 0\n`,
       "utf8",
     );
-    try {
-      const busy = Object.assign(new Error("resource busy"), { code: "EBUSY" });
-      const result = runImplStatusGate({
-        reportPath,
-        summaryPath,
-        startedPath,
-        specPath,
-        root,
-        noSkips: false,
-        unlink: () => {
-          throw busy;
-        },
-      });
-      assert.equal(result.ok, false, "unlink EBUSY must fail the gate");
-      assert.ok(
-        result.ok === false && result.errors.some((e) => /could not be consumed/.test(e)),
-        result.ok ? "unexpected ok" : result.errors.join(" | "),
-      );
-      assert.equal(existsSync(startedPath), true, "marker must remain when unlink fails");
-      assert.throws(
-        () =>
-          consumeSuiteRunMarker(startedPath, {
-            unlink: () => {
-              throw busy;
-            },
-          }),
-        /could not be consumed/,
-      );
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const busy = Object.assign(new Error("resource busy"), { code: "EBUSY" });
+    const result = runImplStatusGate({
+      reportPath,
+      summaryPath,
+      startedPath,
+      specPath,
+      root,
+      noSkips: false,
+      unlink: () => {
+        throw busy;
+      },
+    });
+    assert.equal(result.ok, false, "unlink EBUSY must fail the gate");
+    assert.ok(
+      result.ok === false && result.errors.some((e) => /could not be consumed/.test(e)),
+      result.ok ? "unexpected ok" : result.errors.join(" | "),
+    );
+    assert.equal(existsSync(startedPath), true, "marker must remain when unlink fails");
+    assert.throws(
+      () =>
+        consumeSuiteRunMarker(startedPath, {
+          unlink: () => {
+            throw busy;
+          },
+        }),
+      /could not be consumed/,
+    );
   });
 
-  it("RED: an unconsumed marker whose source identity no longer matches is refused", () => {
+  it("RED: an unconsumed marker whose source identity no longer matches is refused", (t) => {
     const { total } = claimedCount(spec);
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-impl-status-identity-"));
+    const dir = tempDir(t, "cedulon-impl-status-identity-");
     const startedPath = join(dir, ".suite-run-started");
     const reportPath = join(dir, ".suite-count.xml");
     const summaryPath = join(dir, ".suite-node-summary.txt");
@@ -342,23 +335,19 @@ describe("the Implementation Status count answers to a run", () => {
       `ℹ tests ${total}\nℹ suites 1\nℹ pass ${total}\nℹ fail 0\nℹ skipped 0\n`,
       "utf8",
     );
-    try {
-      const result = runImplStatusGate({
-        reportPath,
-        summaryPath,
-        startedPath,
-        specPath,
-        root,
-        noSkips: false,
-      });
-      assert.equal(result.ok, false, "stale source identity must fail");
-      assert.ok(
-        result.ok === false && result.errors.some((e) => /source-tree identity/.test(e)),
-        result.ok ? "unexpected ok" : result.errors.join(" | "),
-      );
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const result = runImplStatusGate({
+      reportPath,
+      summaryPath,
+      startedPath,
+      specPath,
+      root,
+      noSkips: false,
+    });
+    assert.equal(result.ok, false, "stale source identity must fail");
+    assert.ok(
+      result.ok === false && result.errors.some((e) => /source-tree identity/.test(e)),
+      result.ok ? "unexpected ok" : result.errors.join(" | "),
+    );
   });
 
   // The live comparison is deliberately NOT a test. The report belongs to the

@@ -1,9 +1,10 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { tempDir } from "./helpers/temp-dir.ts";
 
 import {
   archiveUrl,
@@ -148,25 +149,21 @@ describe("facts-check holds the unposted drafts in spec/ to the IETF archive", (
     });
   });
 
-  it("asks about every draft source in spec/ that has no archive text beside it", () => {
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-archive-"));
-    try {
-      writeFileSync(join(dir, "draft-dogru-cedulon-core-05.md"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-core-05.txt"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-core-06.md"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-09.md"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-09.xml"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-10.md"), "");
-      writeFileSync(join(dir, "idnits-09.txt"), "");
-      writeFileSync(join(dir, "notes.md"), "");
-      assert.deepEqual(unpostedDraftNames(dir), [
-        "draft-dogru-cedulon-09",
-        "draft-dogru-cedulon-10",
-        "draft-dogru-cedulon-core-06",
-      ]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  it("asks about every draft source in spec/ that has no archive text beside it", (t) => {
+    const dir = tempDir(t, "cedulon-archive-");
+    writeFileSync(join(dir, "draft-dogru-cedulon-core-05.md"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-core-05.txt"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-core-06.md"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-09.md"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-09.xml"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-10.md"), "");
+    writeFileSync(join(dir, "idnits-09.txt"), "");
+    writeFileSync(join(dir, "notes.md"), "");
+    assert.deepEqual(unpostedDraftNames(dir), [
+      "draft-dogru-cedulon-09",
+      "draft-dogru-cedulon-10",
+      "draft-dogru-cedulon-core-06",
+    ]);
   });
 
   it("every living unpublished draft is one the archive is asked about", () => {

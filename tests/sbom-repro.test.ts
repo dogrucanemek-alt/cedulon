@@ -1,12 +1,13 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
 import { gunzipSync } from "node:zlib";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { tempDir } from "./helpers/temp-dir.ts";
 
 function tarMemberNames(tgz: Buffer): string[] {
   const raw = gunzipSync(tgz);
@@ -72,33 +73,29 @@ function rawHint(): string {
   return "empty files list — npm pack --json shape changed";
 }
 
-  it("two real tarballs have the same file list; mtime is why the archives may differ", () => {
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-pack-"));
-    try {
-      const pack = () =>
-        execFileSync("npm", ["pack", "-w", "@cedulon/cose", `--pack-destination=${dir}`], {
-          cwd: root,
-          encoding: "utf8",
-          shell: process.platform === "win32",
-        }).trim();
-      const firstName = pack();
-      // npm overwrites the same filename; rename the first so the second is distinct.
-      const firstPath = join(dir, firstName.split(/[\\/]/).pop() ?? firstName);
-      const saved = join(dir, "first.tgz");
-      writeFileSync(saved, readFileSync(firstPath));
-      const secondName = pack();
-      const secondPath = join(dir, secondName.split(/[\\/]/).pop() ?? secondName);
-      const a = tarMemberNames(readFileSync(saved));
-      const b = tarMemberNames(readFileSync(secondPath));
-      assert.deepEqual(a, b, "tarball file lists differ");
-      assert.ok(a.length > 0);
-      const hashA = createHash("sha256").update(readFileSync(saved)).digest("hex");
-      const hashB = createHash("sha256").update(readFileSync(secondPath)).digest("hex");
-      // Archive bytes may differ: ustar stores mtime. The members are the claim.
-      void hashA;
-      void hashB;
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  it("two real tarballs have the same file list; mtime is why the archives may differ", (t) => {
+    const dir = tempDir(t, "cedulon-pack-");
+    const pack = () =>
+      execFileSync("npm", ["pack", "-w", "@cedulon/cose", `--pack-destination=${dir}`], {
+        cwd: root,
+        encoding: "utf8",
+        shell: process.platform === "win32",
+      }).trim();
+    const firstName = pack();
+    // npm overwrites the same filename; rename the first so the second is distinct.
+    const firstPath = join(dir, firstName.split(/[\\/]/).pop() ?? firstName);
+    const saved = join(dir, "first.tgz");
+    writeFileSync(saved, readFileSync(firstPath));
+    const secondName = pack();
+    const secondPath = join(dir, secondName.split(/[\\/]/).pop() ?? secondName);
+    const a = tarMemberNames(readFileSync(saved));
+    const b = tarMemberNames(readFileSync(secondPath));
+    assert.deepEqual(a, b, "tarball file lists differ");
+    assert.ok(a.length > 0);
+    const hashA = createHash("sha256").update(readFileSync(saved)).digest("hex");
+    const hashB = createHash("sha256").update(readFileSync(secondPath)).digest("hex");
+    // Archive bytes may differ: ustar stores mtime. The members are the claim.
+    void hashA;
+    void hashB;
   });
 });

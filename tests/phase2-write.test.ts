@@ -1,7 +1,7 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
@@ -84,8 +84,8 @@ describe("phase 2 write path (dry-run, fail-closed)", () => {
     }
   });
 
-  it("both gates plus a file key can call a sender (injected, no network)", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-write-"));
+  it("both gates plus a file key can call a sender (injected, no network)", async (t) => {
+    const dir = tempDir(t, "cedulon-write-");
     const keyFile = join(dir, ".write-key");
     writeFileSync(keyFile, "fixture-key\n");
     const result = await executeWrite(

@@ -1,7 +1,7 @@
 import { TEST_HASH } from "./hash-fixtures.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 import { strict as assert } from "node:assert";
-import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 
@@ -239,10 +239,10 @@ describe("trust roots, fifth pass", () => {
     assert.equal(stripped.guarantee, "conditional");
   });
 
-  it("68 RED then GREEN: a state file is only owner-only if its directory is too", () => {
+  it("68 RED then GREEN: a state file is only owner-only if its directory is too", (t) => {
     // Mode 0600 on the file says who can open it. A world-writable directory says
     // who can replace it, which reaches the same private key by another route.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-dir-"));
+    const dir = tempDir(t, "cedulon-dir-");
     const statePath = join(dir, "nested", "state.json");
     const session = new CedulonSession({ statePath });
     assert.equal(
@@ -263,11 +263,11 @@ describe("trust roots, fifth pass", () => {
     }
   });
 
-  it("69 RED then GREEN: a missing state file is not the same answer as an unprotected one", () => {
+  it("69 RED then GREEN: a missing state file is not the same answer as an unprotected one", (t) => {
     // "The file has no protection" and "there is no file" are different facts and
     // used to share a string. An operator acting on the first would be chasing a
     // permission problem that does not exist.
-    const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-absent-")), "state.json");
+    const statePath = join(tempDir(t, "cedulon-absent-"), "state.json");
     const session = new CedulonSession({ statePath });
     assert.equal(session.status().stateProtection, "absent", "nothing has been written yet");
 
@@ -285,7 +285,7 @@ describe("trust roots, fifth pass", () => {
     // A symlink at the state path is read through on load, so an attacker who can
     // place one decides what this server starts up believing. Refusing the path
     // outright is the only answer that does not depend on write ordering.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-link-"));
+    const dir = tempDir(t, "cedulon-link-");
     const real = join(dir, "real.json");
     const link = join(dir, "state.json");
     writeFileSync(real, "{}\n", { mode: 0o600 });

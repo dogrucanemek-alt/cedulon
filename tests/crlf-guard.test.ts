@@ -1,10 +1,11 @@
 import { strict as assert } from "node:assert";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+
+import { tempDir } from "./helpers/temp-dir.ts";
 
 import { BoundedRunError, KILL_GRACE_MS, runBounded, signalGroup } from "../scripts/bounded-run.ts";
 import {
@@ -187,8 +188,8 @@ describe("crlf-guard", () => {
     assert.match(stdout.toString("utf8"), /crlf-guard: no CR in tracked text blobs/);
   });
 
-  it("RED then GREEN: a child that ignores SIGTERM is ended at its bound, by name", { timeout: HELPER_WATCHDOG_MS }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+  it("RED then GREEN: a child that ignores SIGTERM is ended at its bound, by name", { timeout: HELPER_WATCHDOG_MS }, async (t) => {
+    const dir = tempDir(t, "cedulon-bounded-");
     let pid: number | undefined;
     try {
       const ready = join(dir, "ready");
@@ -214,12 +215,11 @@ describe("crlf-guard", () => {
       await assertEnded(pid, "child");
     } finally {
       endQuietly(pid);
-      rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("RED then GREEN: a grandchild holding stdout is ended with its parent, at the bound", { timeout: HELPER_WATCHDOG_MS }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+  it("RED then GREEN: a grandchild holding stdout is ended with its parent, at the bound", { timeout: HELPER_WATCHDOG_MS }, async (t) => {
+    const dir = tempDir(t, "cedulon-bounded-");
     let pid: number | undefined;
     let grandPid: number | undefined;
     try {
@@ -259,16 +259,15 @@ describe("crlf-guard", () => {
     } finally {
       endQuietly(pid);
       endQuietly(grandPid);
-      rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("RED then GREEN: a descendant that left the tree cannot hold the call open through stdout", { timeout: HELPER_WATCHDOG_MS }, async () => {
+  it("RED then GREEN: a descendant that left the tree cannot hold the call open through stdout", { timeout: HELPER_WATCHDOG_MS }, async (t) => {
     // The child exits at once; a detached grandchild keeps the child's
     // stdout. Neither a process-group signal nor a tree kill reaches a
     // process that has left the tree, so the call must end on its own
     // bound by giving up the streams. The case ends the grandchild itself.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    const dir = tempDir(t, "cedulon-bounded-");
     let grandPid: number | undefined;
     try {
       const pidFile = join(dir, "grandchild.pid");
@@ -297,17 +296,16 @@ describe("crlf-guard", () => {
       assertAtBound(elapsed, timeoutMs);
     } finally {
       endQuietly(grandPid);
-      rmSync(dir, { recursive: true, force: true });
     }
     if (grandPid !== undefined) await assertEnded(grandPid, "grandchild");
   });
 
-  it("RED then GREEN: a quiet grandchild that ignores SIGTERM is ended at the bound when its parent goes first", { timeout: HELPER_WATCHDOG_MS }, async () => {
+  it("RED then GREEN: a quiet grandchild that ignores SIGTERM is ended at the bound when its parent goes first", { timeout: HELPER_WATCHDOG_MS }, async (t) => {
     // The parent dies of the SIGTERM; the grandchild ignores it and holds no
     // stream of the call, so nothing but the group's SIGKILL can end it. On
     // Windows the parent is still alive at the bound and `taskkill /T` reaches
     // the grandchild through it.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    const dir = tempDir(t, "cedulon-bounded-");
     let pid: number | undefined;
     let grandPid: number | undefined;
     try {
@@ -343,16 +341,15 @@ describe("crlf-guard", () => {
     } finally {
       endQuietly(pid);
       endQuietly(grandPid);
-      rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("RED then GREEN: when a child that leaves a quiet grandchild succeeds, the group is sent SIGKILL when the call returns and the grandchild ends shortly after", { timeout: HELPER_WATCHDOG_MS }, async () => {
+  it("RED then GREEN: when a child that leaves a quiet grandchild succeeds, the group is sent SIGKILL when the call returns and the grandchild ends shortly after", { timeout: HELPER_WATCHDOG_MS }, async (t) => {
     // The parent exits 0 once the grandchild is running, and the call
     // succeeds. On Windows the grandchild ends with its parent because Node
     // puts the children it starts in a kill-on-close job object; a grandchild
     // whose root has exited is out of `taskkill /T` reach.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
+    const dir = tempDir(t, "cedulon-bounded-");
     let grandPid: number | undefined;
     try {
       const pidFile = join(dir, "grandchild.pid");
@@ -377,7 +374,6 @@ describe("crlf-guard", () => {
       await assertEnded(grandPid, "grandchild");
     } finally {
       endQuietly(grandPid);
-      rmSync(dir, { recursive: true, force: true });
     }
   });
 
@@ -694,37 +690,33 @@ describe("crlf-guard", () => {
     assert.equal(noInput.kind, "start");
   });
 
-  it("RED then GREEN: standard input is the named file or an immediate end, never an open pipe", { timeout: HELPER_WATCHDOG_MS }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-bounded-"));
-    try {
-      const input = join(dir, "input");
-      const bytes = Buffer.from([0x61, 0x0d, 0x0a, 0x00, 0xff, 0x0a]);
-      writeFileSync(input, bytes);
-      const echoed = await runBounded({
-        label: "echo child",
-        command: process.execPath,
-        args: ["-e", "process.stdin.pipe(process.stdout)"],
-        cwd: root,
-        timeoutMs: 10_000,
-        stdinPath: input,
-        maxOutputBytes: 1024,
-      });
-      assert.deepEqual(echoed.stdout, bytes);
-      const closed = await runBounded({
-        label: "stdin reader",
-        command: process.execPath,
-        args: ["-e", `process.stdin.on("data", () => {}).on("end", () => process.stdout.write("eof"))`],
-        cwd: root,
-        timeoutMs: 10_000,
-        maxOutputBytes: 1024,
-      });
-      assert.equal(closed.stdout.toString("utf8"), "eof");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  it("RED then GREEN: standard input is the named file or an immediate end, never an open pipe", { timeout: HELPER_WATCHDOG_MS }, async (t) => {
+    const dir = tempDir(t, "cedulon-bounded-");
+    const input = join(dir, "input");
+    const bytes = Buffer.from([0x61, 0x0d, 0x0a, 0x00, 0xff, 0x0a]);
+    writeFileSync(input, bytes);
+    const echoed = await runBounded({
+      label: "echo child",
+      command: process.execPath,
+      args: ["-e", "process.stdin.pipe(process.stdout)"],
+      cwd: root,
+      timeoutMs: 10_000,
+      stdinPath: input,
+      maxOutputBytes: 1024,
+    });
+    assert.deepEqual(echoed.stdout, bytes);
+    const closed = await runBounded({
+      label: "stdin reader",
+      command: process.execPath,
+      args: ["-e", `process.stdin.on("data", () => {}).on("end", () => process.stdout.write("eof"))`],
+      cwd: root,
+      timeoutMs: 10_000,
+      maxOutputBytes: 1024,
+    });
+    assert.equal(closed.stdout.toString("utf8"), "eof");
   });
 
-  it("RED then GREEN: cat-file --batch fed from a request file returns the blobs the index holds, byte for byte", { timeout: WATCHDOG_MS }, async () => {
+  it("RED then GREEN: cat-file --batch fed from a request file returns the blobs the index holds, byte for byte", { timeout: WATCHDOG_MS }, async (t) => {
     const files = await trackedFiles(root);
     const blobs = await blobsOf(files, root);
     assert.equal(blobs.size, files.length);
@@ -741,31 +733,27 @@ describe("crlf-guard", () => {
       const tab = entry.indexOf("\t");
       indexIds.set(entry.slice(tab + 1).replace(/\\/g, "/"), entry.slice(0, tab).split(" ")[1]!);
     }
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-blob-ids-"));
-    try {
-      const paths = files.map((file, i) => {
-        const path = join(dir, `b${i}`);
-        writeFileSync(path, blobs.get(file)!);
-        return path;
-      });
-      const list = join(dir, "paths");
-      writeFileSync(list, paths.join("\n") + "\n");
-      const hashed = await runBounded({
-        label: "git hash-object --stdin-paths",
-        command: "git",
-        args: ["hash-object", "--no-filters", "--stdin-paths"],
-        cwd: root,
-        timeoutMs: GIT_TIMEOUT_MS,
-        stdinPath: list,
-        maxOutputBytes: 1024 * 1024,
-      });
-      const ids = hashed.stdout.toString("utf8").trim().split("\n");
-      assert.equal(ids.length, files.length);
-      const differ = files.filter((file, i) => ids[i] !== indexIds.get(file));
-      assert.deepEqual(differ, [], `blob bytes differ from the index for ${differ.slice(0, 5).join(", ")}`);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const dir = tempDir(t, "cedulon-blob-ids-");
+    const paths = files.map((file, i) => {
+      const path = join(dir, `b${i}`);
+      writeFileSync(path, blobs.get(file)!);
+      return path;
+    });
+    const list = join(dir, "paths");
+    writeFileSync(list, paths.join("\n") + "\n");
+    const hashed = await runBounded({
+      label: "git hash-object --stdin-paths",
+      command: "git",
+      args: ["hash-object", "--no-filters", "--stdin-paths"],
+      cwd: root,
+      timeoutMs: GIT_TIMEOUT_MS,
+      stdinPath: list,
+      maxOutputBytes: 1024 * 1024,
+    });
+    const ids = hashed.stdout.toString("utf8").trim().split("\n");
+    assert.equal(ids.length, files.length);
+    const differ = files.filter((file, i) => ids[i] !== indexIds.get(file));
+    assert.deepEqual(differ, [], `blob bytes differ from the index for ${differ.slice(0, 5).join(", ")}`);
   });
 
   // The .xml is left out on purpose: author-tools writes a non-breaking space

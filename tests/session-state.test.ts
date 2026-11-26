@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 
 // The package entry starts a stdio server on import; the session is the unit
 // under test here.
 import { CedulonSession } from "../packages/mcp-server/src/session.ts";
+import { tempDir } from "./helpers/temp-dir.ts";
 
-function tempStatePath(): string {
-  return join(mkdtempSync(join(tmpdir(), "cedulon-state-")), "nested", "state.json");
+function tempStatePath(t: TestContext): string {
+  return join(tempDir(t, "cedulon-state-"), "nested", "state.json");
 }
 
 function spendOnce(session: CedulonSession, nonce: string) {
@@ -18,10 +18,10 @@ function spendOnce(session: CedulonSession, nonce: string) {
 }
 
 describe("session state file", () => {
-  it("40 RED then GREEN: the state file holding the private key is not world-readable", () => {
+  it("40 RED then GREEN: the state file holding the private key is not world-readable", (t) => {
     // POSIX: the PEM is in the file and the mode is the whole protection.
     // Windows: the PEM is a CurrentUser DPAPI blob, measured, not a mode bit.
-    const statePath = tempStatePath();
+    const statePath = tempStatePath(t);
     const session = new CedulonSession({ statePath });
     assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
 
@@ -44,11 +44,11 @@ describe("session state file", () => {
     }
   });
 
-  it("41 RED then GREEN: a save that fails midway cannot leave a truncated state file", () => {
+  it("41 RED then GREEN: a save that fails midway cannot leave a truncated state file", (t) => {
     // writeFileSync truncates first and then writes. A crash in between leaves a
     // short file, and the next start reads it as the whole ledger. Writing to a
     // temporary name and renaming makes the swap atomic.
-    const statePath = tempStatePath();
+    const statePath = tempStatePath(t);
     const first = new CedulonSession({ statePath });
     assert.equal(spendOnce(first, "n0".padEnd(16, "-")).ok, true);
     assert.equal(spendOnce(first, "n1".padEnd(16, "-")).ok, true);
@@ -67,8 +67,8 @@ describe("session state file", () => {
     assert.throws(() => new CedulonSession({ statePath }), /state/i);
   });
 
-  it("RED then GREEN: a state file that repeats a member name is json-duplicate-key", () => {
-    const statePath = tempStatePath();
+  it("RED then GREEN: a state file that repeats a member name is json-duplicate-key", (t) => {
+    const statePath = tempStatePath(t);
     const session = new CedulonSession({ statePath });
     assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
     const honest = readFileSync(statePath, "utf8");
@@ -76,20 +76,20 @@ describe("session state file", () => {
     assert.throws(() => new CedulonSession({ statePath }), /json-duplicate-key/);
   });
 
-  it("RED then GREEN: a lock file that repeats a member name is json-duplicate-key", () => {
-    const statePath = tempStatePath();
+  it("RED then GREEN: a lock file that repeats a member name is json-duplicate-key", (t) => {
+    const statePath = tempStatePath(t);
     const session = new CedulonSession({ statePath });
     assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
     writeFileSync(`${statePath}.lock`, '{"pid":1,"pid":1}');
     assert.throws(() => spendOnce(session, "n1".padEnd(16, "-")), /json-duplicate-key/);
   });
 
-  it("RED then GREEN: a lock file its holder is still writing is held, not abandoned", () => {
+  it("RED then GREEN: a lock file its holder is still writing is held, not abandoned", (t) => {
     // The claim is an exclusive create followed by a write of the pid, and a
     // second server can arrive in between. It read an empty file, called the
     // holder gone, removed the lock and took it: two writers, the same
     // prevReceiptHash, and the later rename erased the other receipt.
-    const statePath = tempStatePath();
+    const statePath = tempStatePath(t);
     const session = new CedulonSession({ statePath });
     assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
     const lockPath = `${statePath}.lock`;
@@ -130,7 +130,7 @@ describe("session state file", () => {
     // ancestor then throws cedulon-state-symlink and the suite falls over.
     // A leaf that is a symlink is still refused (case 70). A directory the
     // caller linked themselves is still refused (case 76).
-    const real = mkdtempSync(join(tmpdir(), "cedulon-real-"));
+    const real = tempDir(t, "cedulon-real-");
     const link = `${real}-link`;
     try {
       symlinkSync(real, link, "dir");
@@ -145,14 +145,13 @@ describe("session state file", () => {
     const prev = process.env.TMPDIR;
     process.env.TMPDIR = link;
     try {
-      const statePath = join(mkdtempSync(join(tmpdir(), "cedulon-state-")), "nested", "state.json");
+      const statePath = tempStatePath(t);
       const session = new CedulonSession({ statePath });
       assert.equal(spendOnce(session, "n0".padEnd(16, "-")).ok, true);
     } finally {
       if (prev === undefined) delete process.env.TMPDIR;
       else process.env.TMPDIR = prev;
       rmSync(link, { recursive: true, force: true });
-      rmSync(real, { recursive: true, force: true });
     }
   });
 
@@ -162,7 +161,7 @@ describe("session state file", () => {
     // server with no receipts and a newly generated key, and the first save
     // renamed over the file: measured on Windows, three receipts and the
     // signing key gone. Only a file that is not there is a fresh start.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-unreadable-"));
+    const dir = tempDir(t, "cedulon-unreadable-");
     assert.throws(() => new CedulonSession({ statePath: dir }), /cedulon-state-unreadable/);
 
     const statePath = join(dir, "state.json");

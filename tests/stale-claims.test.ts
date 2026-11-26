@@ -1,10 +1,10 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { tempDir } from "./helpers/temp-dir.ts";
 import { COUNTED_SPLITS } from "../conformance/counted-splits.ts";
 import { loadVectors } from "../conformance/run.ts";
 import {
@@ -758,23 +758,19 @@ describe("claims that describe something outside their own file", () => {
     }
   });
 
-  it("RED then GREEN: a companion's posted revision is its newest archive text, and an opened revision with no text is not posted", () => {
+  it("RED then GREEN: a companion's posted revision is its newest archive text, and an opened revision with no text is not posted", (t) => {
     // Same discipline as the core: posted means the archive text is carried
     // beside the source. Shown on a synthetic spec/ so the fixture does not
     // pin a live revision number.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-spec-"));
-    try {
-      assert.throws(() => latestPostedCompanionRevision(dir, "decision-profile"), /no draft-dogru-cedulon-decision-profile-NN\.txt/);
-      writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-01.md"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-01.txt"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-02.md"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-08.txt"), "");
-      assert.equal(latestPostedCompanionRevision(dir, "decision-profile"), "01");
-      writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-02.txt"), "");
-      assert.equal(latestPostedCompanionRevision(dir, "decision-profile"), "02");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const dir = tempDir(t, "cedulon-spec-");
+    assert.throws(() => latestPostedCompanionRevision(dir, "decision-profile"), /no draft-dogru-cedulon-decision-profile-NN\.txt/);
+    writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-01.md"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-01.txt"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-02.md"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-08.txt"), "");
+    assert.equal(latestPostedCompanionRevision(dir, "decision-profile"), "01");
+    writeFileSync(join(dir, "draft-dogru-cedulon-decision-profile-02.txt"), "");
+    assert.equal(latestPostedCompanionRevision(dir, "decision-profile"), "02");
   });
 
   it("the site names the Zenodo deposit of the newest posted draft, not an older one", () => {
@@ -808,26 +804,22 @@ describe("claims that describe something outside their own file", () => {
     assert.throws(() => assertDepositLineNamesPosted(gone, newest), /no longer names the deposit of a posted revision/);
   });
 
-  it("RED then GREEN: the newest posted revision is the newest archive text, and an opened revision with no text is not posted", () => {
+  it("RED then GREEN: the newest posted revision is the newest archive text, and an opened revision with no text is not posted", (t) => {
     // What "posted" means to the tree: the archive text is carried beside the
     // source. This is a discipline, not a datatracker query, and the fixture
     // shows both edges of it on a synthetic spec/ rather than the live one: a
     // .md with no .txt is opened and not posted; a .txt dropped in before
     // posting would read as posted, which is why the render stays out of the
     // tree until the posting day.
-    const dir = mkdtempSync(join(tmpdir(), "cedulon-spec-"));
-    try {
-      assert.throws(() => latestPostedRevision(dir), /no draft-dogru-cedulon-NN\.txt/);
-      writeFileSync(join(dir, "draft-dogru-cedulon-07.md"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-07.txt"), "");
-      writeFileSync(join(dir, "draft-dogru-cedulon-08.md"), "");
-      assert.equal(latestDraftRevision(dir), "08");
-      assert.equal(latestPostedRevision(dir), "07");
-      writeFileSync(join(dir, "draft-dogru-cedulon-08.txt"), "");
-      assert.equal(latestPostedRevision(dir), "08");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const dir = tempDir(t, "cedulon-spec-");
+    assert.throws(() => latestPostedRevision(dir), /no draft-dogru-cedulon-NN\.txt/);
+    writeFileSync(join(dir, "draft-dogru-cedulon-07.md"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-07.txt"), "");
+    writeFileSync(join(dir, "draft-dogru-cedulon-08.md"), "");
+    assert.equal(latestDraftRevision(dir), "08");
+    assert.equal(latestPostedRevision(dir), "07");
+    writeFileSync(join(dir, "draft-dogru-cedulon-08.txt"), "");
+    assert.equal(latestPostedRevision(dir), "08");
   });
 
   it("no status page cites a requirement the draft does not define, or calls a closed gap open", () => {
